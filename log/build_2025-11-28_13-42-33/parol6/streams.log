@@ -1,0 +1,61 @@
+[0.017s] Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /workspace/PAROL6 -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6
+[0.184s] -- The C compiler identification is GNU 11.4.0
+[0.302s] -- The CXX compiler identification is GNU 11.4.0
+[0.315s] -- Detecting C compiler ABI info
+[0.404s] -- Detecting C compiler ABI info - done
+[0.411s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.411s] -- Detecting C compile features
+[0.413s] -- Detecting C compile features - done
+[0.418s] -- Detecting CXX compiler ABI info
+[0.514s] -- Detecting CXX compiler ABI info - done
+[0.523s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.523s] -- Detecting CXX compile features
+[0.523s] -- Detecting CXX compile features - done
+[0.549s] -- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.744s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.830s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.990s] -- Configuring done
+[0.994s] -- Generating done
+[0.996s] -- Build files have been written to: /workspace/build/parol6
+[1.002s] Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /workspace/PAROL6 -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6
+[1.004s] Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /workspace/build/parol6 -- -j16 -l16
+[1.055s] Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /workspace/build/parol6 -- -j16 -l16
+[1.068s] Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /workspace/build/parol6
+[1.078s] -- Install configuration: ""
+[1.078s] -- Execute custom install script
+[1.079s] -- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.csv
+[1.091s] -- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.urdf
+[1.104s] -- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_gazebo.urdf
+[1.115s] -- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_ignition.urdf
+[1.128s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/Movit_RViz_launch.py
+[1.141s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/display.launch.old
+[1.153s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.old
+[1.166s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.py
+[1.178s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo_classic.launch.py
+[1.190s] -- Symlinking: /workspace/install/parol6/share/parol6/launch/ignition.launch.py
+[1.202s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L1.STL
+[1.214s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L2.STL
+[1.227s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L3.STL
+[1.240s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L4.STL
+[1.252s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L5.STL
+[1.264s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/L6.STL
+[1.275s] -- Symlinking: /workspace/install/parol6/share/parol6/meshes/base_link.STL
+[1.287s] -- Symlinking: /workspace/install/parol6/share/parol6/config/joint_names_PAROL6.yaml
+[1.297s] -- Symlinking: /workspace/install/parol6/share/parol6/config/joint_trajectroy_controller.yaml
+[1.308s] -- Symlinking: /workspace/install/parol6/share/parol6/config/ros2_controllers.yaml
+[1.321s] -- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/package_run_dependencies/parol6
+[1.333s] -- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/parent_prefix_path/parol6
+[1.345s] -- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.sh
+[1.356s] -- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.dsv
+[1.366s] -- Symlinking: /workspace/install/parol6/share/parol6/environment/path.sh
+[1.378s] -- Symlinking: /workspace/install/parol6/share/parol6/environment/path.dsv
+[1.390s] -- Symlinking: /workspace/install/parol6/share/parol6/local_setup.bash
+[1.401s] -- Symlinking: /workspace/install/parol6/share/parol6/local_setup.sh
+[1.413s] -- Symlinking: /workspace/install/parol6/share/parol6/local_setup.zsh
+[1.425s] -- Symlinking: /workspace/install/parol6/share/parol6/local_setup.dsv
+[1.437s] -- Symlinking: /workspace/install/parol6/share/parol6/package.dsv
+[1.450s] -- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/packages/parol6
+[1.461s] -- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config.cmake
+[1.471s] -- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config-version.cmake
+[1.483s] -- Symlinking: /workspace/install/parol6/share/parol6/package.xml
+[1.496s] Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /workspace/build/parol6
