@@ -97,21 +97,6 @@ Welcome to the PAROL6 Robot documentation! This index will help you find the inf
 
 ---
 
-### 7. **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Extending the Project
-**Best for:** Adding new nodes, sensors, or dependencies
-
-**Contents:**
-- Project structure
-- Managing dependencies
-- Creating new ROS 2 nodes (Python/C++)
-- Connecting sensors (Kinect, Realsense)
-- Visualizing with rqt_graph
-- Best practices
-
-**Start here if:** You want to write code or add hardware
-
----
-
 ## 🚀 Quick Navigation
 
 ### I want to...

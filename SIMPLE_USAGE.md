@@ -4,14 +4,12 @@
 
 ### **Start Gazebo (Terminal 1):**
 ```bash
-### **Start Gazebo (Terminal 1):**
-```bash
-./start_ignition.sh
+./start.sh
 ```
 This automatically:
 - ✅ Starts Docker container
 - ✅ Builds the workspace
-- ✅ Launches Ignition Gazebo with the robot
+- ✅ Launches Gazebo with the robot
 - ✅ Loads all controllers
 
 **Wait for Gazebo window to appear!**
@@ -44,7 +42,7 @@ Cleanly shuts down all components.
 ### First Time Setup (One Time Only):
 ```bash
 cd /home/kareem/Desktop/PAROL6_URDF
-./start_ignition.sh
+./start.sh
 ```
 
 Wait ~30 seconds, then you'll see:
@@ -54,7 +52,7 @@ Wait ~30 seconds, then you'll see:
 ### Daily Usage:
 ```bash
 # Start your work session
-./start_ignition.sh
+./start.sh
 
 # ... do your work ...
 
@@ -66,7 +64,7 @@ Wait ~30 seconds, then you'll see:
 
 ## 🎮 **Using the Robot**
 
-Once `./start_ignition.sh` finishes:
+Once `./start.sh` finishes:
 
 1. **In RViz window:**
    - Find "MotionPlanning" panel (left side)
@@ -107,7 +105,7 @@ docker exec parol6_dev bash -c "
   source /workspace/install/setup.bash && \
   ros2 topic pub --once /parol6_arm_controller/joint_trajectory \
     trajectory_msgs/msg/JointTrajectory \
-    '{joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6], 
+    '{joint_names: [L1, L2, L3, L4, L5, L6], 
       points: [{positions: [0.5, -0.5, 0.5, 0.0, 0.0, 0.0], 
                 time_from_start: {sec: 3}}]}'
 "
@@ -120,7 +118,7 @@ docker exec parol6_dev bash -c "
 ### Problem: "Container already running"
 ```bash
 ./stop.sh
-./start_ignition.sh
+./start.sh
 ```
 
 ### Problem: "No module named 'moveit_configs_utils'"
@@ -132,7 +130,7 @@ docker exec parol6_dev bash -c "
 ```bash
 # On host machine:
 xhost +local:docker
-./start_ignition.sh
+./start.sh
 ```
 
 ### Problem: "Build fails"
@@ -146,7 +144,7 @@ cat /tmp/parol6_build.log
 # Full reset:
 ./stop.sh
 docker system prune -f
-./start_ignition.sh
+./start.sh
 ```
 
 ---

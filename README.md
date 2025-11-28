@@ -55,7 +55,7 @@ docker exec parol6_dev bash -c "
   source /workspace/install/setup.bash && \
   ros2 topic pub --once /parol6_arm_controller/joint_trajectory \
     trajectory_msgs/msg/JointTrajectory \
-    '{joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6], 
+    '{joint_names: [L1, L2, L3, L4, L5, L6], 
       points: [{positions: [0.5, -0.5, 0.5, 0.0, 0.0, 0.0], 
                 time_from_start: {sec: 3}}]}'
 "
@@ -67,17 +67,17 @@ docker exec parol6_dev bash -c "
 
 | Property | Value |
 |----------|-------|
-| **Joints** | joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6 (6-DOF) |
+| **Joints** | L1, L2, L3, L4, L5, L6 (6-DOF) |
 | **Planning Group** | `parol6_arm` |
 | **Named Poses** | `home`, `ready` |
 
 ### Joint Limits:
-- **joint_L1** (base): -1.7 to 1.7 rad
-- **joint_L2** (shoulder): -0.98 to 1.0 rad  
-- **joint_L3** (elbow): -2.0 to 1.3 rad
-- **joint_L4** (wrist pitch): -2.0 to 2.0 rad
-- **joint_L5** (wrist roll): -2.1 to 2.1 rad
-- **joint_L6** (end effector): continuous
+- **L1** (base): -1.7 to 1.7 rad
+- **L2** (shoulder): -0.98 to 1.0 rad  
+- **L3** (elbow): -2.0 to 1.3 rad
+- **L4** (wrist pitch): -2.0 to 2.0 rad
+- **L5** (wrist roll): -2.1 to 2.1 rad
+- **L6** (end effector): continuous
 
 ---
 
@@ -86,13 +86,13 @@ docker exec parol6_dev bash -c "
 ### Problem: Container already running
 ```bash
 ./stop.sh
-./start_ignition.sh
+./start.sh
 ```
 
 ### Problem: Windows don't appear
 ```bash
 xhost +local:docker
-./start_ignition.sh
+./start.sh
 ```
 
 ### Problem: "No module named 'moveit_configs_utils'"
