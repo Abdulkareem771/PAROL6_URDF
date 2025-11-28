@@ -1,0 +1,146 @@
+[0.000000] (-) TimerEvent: {}
+[0.000524] (parol6) JobQueued: {'identifier': 'parol6', 'dependencies': OrderedDict()}
+[0.000604] (parol6_moveit_config) JobQueued: {'identifier': 'parol6_moveit_config', 'dependencies': OrderedDict([('parol6', '/workspace/install/parol6')])}
+[0.000635] (parol6) JobStarted: {'identifier': 'parol6'}
+[0.015388] (parol6) JobProgress: {'identifier': 'parol6', 'progress': 'cmake'}
+[0.015854] (parol6) Command: {'cmd': ['/usr/bin/cmake', '/workspace/PAROL6', '-DAMENT_CMAKE_SYMLINK_INSTALL=1', '-DCMAKE_INSTALL_PREFIX=/workspace/install/parol6'], 'cwd': '/workspace/build/parol6', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/workspace/build/parol6'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.095474] (parol6) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.099681] (-) TimerEvent: {}
+[0.148858] (parol6) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.159740] (parol6) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.199822] (-) TimerEvent: {}
+[0.228564] (parol6) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.234073] (parol6) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.234710] (parol6) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.235355] (parol6) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.238979] (parol6) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.299912] (-) TimerEvent: {}
+[0.313730] (parol6) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.319640] (parol6) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.319918] (parol6) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.320282] (parol6) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.336122] (parol6) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.400044] (-) TimerEvent: {}
+[0.500357] (-) TimerEvent: {}
+[0.546503] (parol6) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.600468] (-) TimerEvent: {}
+[0.604767] (parol6) StdoutLine: {'line': b'-- Override CMake install command with custom implementation using symlinks instead of copying resources\n'}
+[0.700593] (-) TimerEvent: {}
+[0.728452] (parol6) StdoutLine: {'line': b'-- Configuring done\n'}
+[0.731932] (parol6) StdoutLine: {'line': b'-- Generating done\n'}
+[0.732926] (parol6) StdoutLine: {'line': b'-- Build files have been written to: /workspace/build/parol6\n'}
+[0.738216] (parol6) CommandEnded: {'returncode': 0}
+[0.739519] (parol6) JobProgress: {'identifier': 'parol6', 'progress': 'build'}
+[0.739859] (parol6) Command: {'cmd': ['/usr/bin/cmake', '--build', '/workspace/build/parol6', '--', '-j16', '-l16'], 'cwd': '/workspace/build/parol6', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/workspace/build/parol6'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.778479] (parol6) CommandEnded: {'returncode': 0}
+[0.778985] (parol6) JobProgress: {'identifier': 'parol6', 'progress': 'install'}
+[0.787674] (parol6) Command: {'cmd': ['/usr/bin/cmake', '--install', '/workspace/build/parol6'], 'cwd': '/workspace/build/parol6', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/workspace/build/parol6'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.794644] (parol6) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[0.795041] (parol6) StdoutLine: {'line': b'-- Execute custom install script\n'}
+[0.795438] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.csv\n'}
+[0.800670] (-) TimerEvent: {}
+[0.803409] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.urdf\n'}
+[0.811882] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_gazebo.urdf\n'}
+[0.819900] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_ignition.urdf\n'}
+[0.828420] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/Movit_RViz_launch.py\n'}
+[0.837204] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/display.launch.old\n'}
+[0.845596] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.old\n'}
+[0.855200] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.py\n'}
+[0.864068] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo_classic.launch.py\n'}
+[0.872641] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/launch/ignition.launch.py\n'}
+[0.881493] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L1.STL\n'}
+[0.890352] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L2.STL\n'}
+[0.899086] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L3.STL\n'}
+[0.900748] (-) TimerEvent: {}
+[0.907313] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L4.STL\n'}
+[0.915386] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L5.STL\n'}
+[0.923683] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L6.STL\n'}
+[0.932029] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/meshes/base_link.STL\n'}
+[0.940711] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/config/joint_names_PAROL6.yaml\n'}
+[0.949738] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/config/joint_trajectroy_controller.yaml\n'}
+[0.959012] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/config/ros2_controllers.yaml\n'}
+[0.967552] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/package_run_dependencies/parol6\n'}
+[0.976429] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/parent_prefix_path/parol6\n'}
+[0.984624] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.sh\n'}
+[0.993387] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.dsv\n'}
+[1.000843] (-) TimerEvent: {}
+[1.001087] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/environment/path.sh\n'}
+[1.009199] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/environment/path.dsv\n'}
+[1.017035] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.bash\n'}
+[1.026171] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.sh\n'}
+[1.034665] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.zsh\n'}
+[1.043845] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.dsv\n'}
+[1.052536] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/package.dsv\n'}
+[1.061035] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/packages/parol6\n'}
+[1.069833] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config.cmake\n'}
+[1.078992] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config-version.cmake\n'}
+[1.087266] (parol6) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6/share/parol6/package.xml\n'}
+[1.097370] (parol6) CommandEnded: {'returncode': 0}
+[1.100924] (-) TimerEvent: {}
+[1.116759] (parol6) JobEnded: {'identifier': 'parol6', 'rc': 0}
+[1.117243] (parol6_moveit_config) JobStarted: {'identifier': 'parol6_moveit_config'}
+[1.122618] (parol6_moveit_config) JobProgress: {'identifier': 'parol6_moveit_config', 'progress': 'cmake'}
+[1.123666] (parol6_moveit_config) Command: {'cmd': ['/usr/bin/cmake', '/workspace/parol6_moveit_config', '-DAMENT_CMAKE_SYMLINK_INSTALL=1', '-DCMAKE_INSTALL_PREFIX=/workspace/install/parol6_moveit_config'], 'cwd': '/workspace/build/parol6_moveit_config', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble'), ('PWD', '/workspace/build/parol6_moveit_config'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble')]), 'shell': False}
+[1.176779] (parol6_moveit_config) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[1.201048] (-) TimerEvent: {}
+[1.225268] (parol6_moveit_config) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[1.232691] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[1.298075] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[1.301132] (-) TimerEvent: {}
+[1.303922] (parol6_moveit_config) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[1.304632] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[1.304782] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[1.307038] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[1.387375] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[1.392841] (parol6_moveit_config) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[1.393067] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[1.393420] (parol6_moveit_config) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[1.398446] (parol6_moveit_config) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[1.401224] (-) TimerEvent: {}
+[1.501496] (-) TimerEvent: {}
+[1.550509] (parol6_moveit_config) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[1.601656] (-) TimerEvent: {}
+[1.630365] (parol6_moveit_config) StdoutLine: {'line': b'-- Override CMake install command with custom implementation using symlinks instead of copying resources\n'}
+[1.701776] (-) TimerEvent: {}
+[1.744394] (parol6_moveit_config) StdoutLine: {'line': b'-- Configuring done\n'}
+[1.747390] (parol6_moveit_config) StdoutLine: {'line': b'-- Generating done\n'}
+[1.749004] (parol6_moveit_config) StdoutLine: {'line': b'-- Build files have been written to: /workspace/build/parol6_moveit_config\n'}
+[1.754388] (parol6_moveit_config) CommandEnded: {'returncode': 0}
+[1.754928] (parol6_moveit_config) JobProgress: {'identifier': 'parol6_moveit_config', 'progress': 'build'}
+[1.755852] (parol6_moveit_config) Command: {'cmd': ['/usr/bin/cmake', '--build', '/workspace/build/parol6_moveit_config', '--', '-j16', '-l16'], 'cwd': '/workspace/build/parol6_moveit_config', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble'), ('PWD', '/workspace/build/parol6_moveit_config'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble')]), 'shell': False}
+[1.795364] (parol6_moveit_config) CommandEnded: {'returncode': 0}
+[1.796005] (parol6_moveit_config) JobProgress: {'identifier': 'parol6_moveit_config', 'progress': 'install'}
+[1.796164] (parol6_moveit_config) Command: {'cmd': ['/usr/bin/cmake', '--install', '/workspace/build/parol6_moveit_config'], 'cwd': '/workspace/build/parol6_moveit_config', 'env': OrderedDict([('HOSTNAME', '7761843f63a6'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble'), ('PWD', '/workspace/build/parol6_moveit_config'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/workspace/install/parol6:/opt/ros/humble')]), 'shell': False}
+[1.801879] (-) TimerEvent: {}
+[1.804558] (parol6_moveit_config) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[1.805001] (parol6_moveit_config) StdoutLine: {'line': b'-- Execute custom install script\n'}
+[1.805455] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/joint_limits.yaml\n'}
+[1.814649] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/kinematics.yaml\n'}
+[1.823375] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/moveit_controllers.yaml\n'}
+[1.832542] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ompl_planning.yaml\n'}
+[1.841195] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/parol6.srdf\n'}
+[1.849879] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ros2_controllers.yaml\n'}
+[1.859420] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/__pycache__/demo.launch.cpython-310.pyc\n'}
+[1.867868] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/demo.launch.py\n'}
+[1.876253] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/move_group.launch.py\n'}
+[1.884978] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/rviz/moveit.rviz\n'}
+[1.894414] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/ament_index/resource_index/package_run_dependencies/parol6_moveit_config\n'}
+[1.901965] (-) TimerEvent: {}
+[1.903489] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/ament_index/resource_index/parent_prefix_path/parol6_moveit_config\n'}
+[1.912485] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/environment/ament_prefix_path.sh\n'}
+[1.920892] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/environment/ament_prefix_path.dsv\n'}
+[1.929178] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/environment/path.sh\n'}
+[1.938029] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/environment/path.dsv\n'}
+[1.946320] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/local_setup.bash\n'}
+[1.955218] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/local_setup.sh\n'}
+[1.963957] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/local_setup.zsh\n'}
+[1.972949] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/local_setup.dsv\n'}
+[1.981579] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/package.dsv\n'}
+[1.989727] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/ament_index/resource_index/packages/parol6_moveit_config\n'}
+[1.998218] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/cmake/parol6_moveit_configConfig.cmake\n'}
+[2.002043] (-) TimerEvent: {}
+[2.006253] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/cmake/parol6_moveit_configConfig-version.cmake\n'}
+[2.013828] (parol6_moveit_config) StdoutLine: {'line': b'-- Symlinking: /workspace/install/parol6_moveit_config/share/parol6_moveit_config/package.xml\n'}
+[2.023180] (parol6_moveit_config) CommandEnded: {'returncode': 0}
+[2.032885] (parol6_moveit_config) JobEnded: {'identifier': 'parol6_moveit_config', 'rc': 0}
+[2.033414] (-) EventReactorShutdown: {}
