@@ -1,0 +1,37 @@
+-- Install configuration: ""
+-- Execute custom install script
+-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.csv
+-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6.urdf
+-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_gazebo.urdf
+-- Symlinking: /workspace/install/parol6/share/parol6/urdf/PAROL6_ignition.urdf
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/Movit_RViz_launch.py
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/display.launch.old
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.old
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo.launch.py
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/gazebo_classic.launch.py
+-- Symlinking: /workspace/install/parol6/share/parol6/launch/ignition.launch.py
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L1.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L2.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L3.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L4.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L5.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/L6.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/meshes/base_link.STL
+-- Symlinking: /workspace/install/parol6/share/parol6/config/joint_names_PAROL6.yaml
+-- Symlinking: /workspace/install/parol6/share/parol6/config/joint_trajectroy_controller.yaml
+-- Symlinking: /workspace/install/parol6/share/parol6/config/ros2_controllers.yaml
+-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/package_run_dependencies/parol6
+-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/parent_prefix_path/parol6
+-- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.sh
+-- Symlinking: /workspace/install/parol6/share/parol6/environment/ament_prefix_path.dsv
+-- Symlinking: /workspace/install/parol6/share/parol6/environment/path.sh
+-- Symlinking: /workspace/install/parol6/share/parol6/environment/path.dsv
+-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.bash
+-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.sh
+-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.zsh
+-- Symlinking: /workspace/install/parol6/share/parol6/local_setup.dsv
+-- Symlinking: /workspace/install/parol6/share/parol6/package.dsv
+-- Symlinking: /workspace/install/parol6/share/ament_index/resource_index/packages/parol6
+-- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config.cmake
+-- Symlinking: /workspace/install/parol6/share/parol6/cmake/parol6Config-version.cmake
+-- Symlinking: /workspace/install/parol6/share/parol6/package.xml

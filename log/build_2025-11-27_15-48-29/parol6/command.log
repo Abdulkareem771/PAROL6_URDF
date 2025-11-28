@@ -1,2 +1,0 @@
-Invoking command in '/workspace/build/parol6': /usr/bin/cmake /workspace/PAROL6 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6
-Invoked command in '/workspace/build/parol6' returned '1': /usr/bin/cmake /workspace/PAROL6 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6

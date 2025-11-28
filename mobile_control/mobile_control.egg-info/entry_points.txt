@@ -1,0 +1,3 @@
+[console_scripts]
+mobile_bridge = mobile_bridge:main
+

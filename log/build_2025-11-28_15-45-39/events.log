@@ -1,0 +1,41 @@
+[0.000000] (-) TimerEvent: {}
+[0.000580] (mobile_control) JobQueued: {'identifier': 'mobile_control', 'dependencies': OrderedDict()}
+[0.000629] (parol6) JobQueued: {'identifier': 'parol6', 'dependencies': OrderedDict()}
+[0.000660] (parol6_moveit_config) JobQueued: {'identifier': 'parol6_moveit_config', 'dependencies': OrderedDict([('parol6', '/workspace/install/parol6')])}
+[0.000682] (parol6) JobStarted: {'identifier': 'parol6'}
+[0.006633] (mobile_control) JobStarted: {'identifier': 'mobile_control'}
+[0.010464] (parol6) JobProgress: {'identifier': 'parol6', 'progress': 'cmake'}
+[0.010940] (parol6) Command: {'cmd': ['/usr/bin/cmake', '/workspace/PAROL6', '-DAMENT_CMAKE_SYMLINK_INSTALL=1', '-DCMAKE_INSTALL_PREFIX=/workspace/install/parol6'], 'cwd': '/workspace/build/parol6', 'env': OrderedDict([('HOSTNAME', 'Kareem-Legion5'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('DISPLAY', ':1'), ('LANG', 'C.UTF-8'), ('XAUTHORITY', '/tmp/.docker.xauth'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/workspace/build/parol6'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.012298] (mobile_control) JobProgress: {'identifier': 'mobile_control', 'progress': 'cmake'}
+[0.012591] (mobile_control) Command: {'cmd': ['/usr/bin/cmake', '/workspace/src/mobile_control', '-DCATKIN_INSTALL_INTO_PREFIX_ROOT=0', '-DCATKIN_SYMLINK_INSTALL=ON', '-DCMAKE_INSTALL_PREFIX=/workspace/install/mobile_control'], 'cwd': '/workspace/build/mobile_control', 'env': OrderedDict([('HOSTNAME', 'Kareem-Legion5'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('DISPLAY', ':1'), ('LANG', 'C.UTF-8'), ('XAUTHORITY', '/tmp/.docker.xauth'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/workspace/build/mobile_control'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1')]), 'shell': False}
+[0.018691] (mobile_control) StderrLine: {'line': b'CMake Error: The source directory "/workspace/src/mobile_control" does not appear to contain CMakeLists.txt.\n'}
+[0.018832] (mobile_control) StderrLine: {'line': b'Specify --help for usage, or press the help button on the CMake GUI.\n'}
+[0.020006] (mobile_control) CommandEnded: {'returncode': 1}
+[0.027365] (mobile_control) JobEnded: {'identifier': 'mobile_control', 'rc': 1}
+[0.077970] (parol6) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.101095] (-) TimerEvent: {}
+[0.131113] (parol6) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.141991] (parol6) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.201228] (-) TimerEvent: {}
+[0.205408] (parol6) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.210901] (parol6) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.211454] (parol6) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.212059] (parol6) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.215119] (parol6) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.286626] (parol6) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.292409] (parol6) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.292627] (parol6) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.292932] (parol6) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.301307] (-) TimerEvent: {}
+[0.307850] (parol6) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.401417] (-) TimerEvent: {}
+[0.444712] (parol6) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.501660] (-) TimerEvent: {}
+[0.502482] (parol6) StdoutLine: {'line': b'-- Override CMake install command with custom implementation using symlinks instead of copying resources\n'}
+[0.601775] (-) TimerEvent: {}
+[0.623843] (parol6) StdoutLine: {'line': b'-- Configuring done\n'}
+[0.626432] (parol6) StdoutLine: {'line': b'-- Generating done\n'}
+[0.627725] (parol6) StdoutLine: {'line': b'-- Build files have been written to: /workspace/build/parol6\n'}
+[0.631229] (parol6) JobEnded: {'identifier': 'parol6', 'rc': 'SIGINT'}
+[0.641682] (parol6_moveit_config) JobSkipped: {'identifier': 'parol6_moveit_config'}
+[0.641737] (-) EventReactorShutdown: {}

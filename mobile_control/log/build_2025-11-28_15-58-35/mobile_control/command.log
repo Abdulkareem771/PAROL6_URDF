@@ -1,0 +1,2 @@
+Invoking command in '/workspace/mobile_control/build/mobile_control': /usr/bin/cmake /workspace/mobile_control/src/mobile_control -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/workspace/mobile_control/install/mobile_control
+Invoked command in '/workspace/mobile_control/build/mobile_control' returned '1': /usr/bin/cmake /workspace/mobile_control/src/mobile_control -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCATKIN_SYMLINK_INSTALL=ON -DCMAKE_INSTALL_PREFIX=/workspace/mobile_control/install/mobile_control
