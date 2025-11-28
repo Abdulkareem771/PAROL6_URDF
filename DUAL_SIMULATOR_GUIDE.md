@@ -35,7 +35,7 @@ PAROL6/launch/
 
 ## 🚀 **How to Use**
 
-### **Option 1: Manual Gazebo (RECOMMENDED - You said this works!)**
+### **Option 1: Manual Gazebo
 
 ```bash
 ./start_gazebo_manual.sh
@@ -52,18 +52,19 @@ This will:
    ros2 launch parol6 gazebo_classic.launch.py
    ```
 
-**Why this works:** Mimics your successful manual execution.
+**Why this works:** Has problems
 
 ---
 
-### **Option 2: Ignition Gazebo**
+### **Option 2: Ignition Gazebo**(Recommended)
 
 ```bash
 ./start_ign_simple.sh
 ```
+then in a seperate terminal run: 
+./add_moveit.sh
 
-**Status:** Robot spawns but controllers don't load (ign_ros2_control issue).
-
+**Status:** Working successfully
 ---
 
 ## 🔧 **Key Differences**
@@ -106,7 +107,7 @@ This will:
 
 ## 📋 **Next Steps**
 
-### **Immediate: Test Manual Gazebo**
+### **Immediate: Test Manual Gazebo**(Not Recommended)
 
 1. Run:
    ```bash
@@ -144,9 +145,9 @@ The issue is `ign_ros2_control` plugin not loading. Possible fixes:
 
 ## 🎯 **Recommended Path Forward**
 
-1. ✅ **Try manual Gazebo** (most likely to work)
+1. ✅ **Try ignition Gazebo** (most likely to work)
 2. ✅ **If it works, use it!**
-3. ⏭️ **Optionally debug Ignition later**
+3. ⏭️ **Optionally debug classic later**
 
 The goal is to **get you working ASAP**, not to make everything perfect.
 
