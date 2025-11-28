@@ -56,12 +56,12 @@ class RobotBridge(Node):
     
     def send_joint_positions(self, positions, duration=2.0):
         """Send joint trajectory goal"""
-        if not self._action_client.wait_for_server(timeout_sec=2.0):
+        if not self._action_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error('Action server not available')
             return False
         
         goal_msg = FollowJointTrajectory.Goal()
-        goal_msg.trajectory.joint_names = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6']
+        goal_msg.trajectory.joint_names = ['joint_L1', 'joint_L2', 'joint_L3', 'joint_L4', 'joint_L5', 'joint_L6']
         
         point = JointTrajectoryPoint()
         point.positions = positions
