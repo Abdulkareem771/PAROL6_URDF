@@ -1,0 +1,25 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Docker
+.dockerenv
+
+# Temporary files
+tmp/
+.DS_Store
