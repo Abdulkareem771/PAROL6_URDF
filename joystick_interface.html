@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAROL6 Robot - Joystick Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            touch-action: manipulation;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .control-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .control-panel {
+                grid-template-columns: 1fr;
+            }
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .joystick-container {
+            text-align: center;
+            position: relative;
+        }
+        
+        #joystick {
+            width: 200px;
+            height: 200px;
+            background: #f0f0f0;
+            border-radius: 50%;
+            margin: 20px auto;
+            position: relative;
+            border: 3px solid #333;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .joystick-handle {
+            width: 60px;
+            height: 60px;
+            background: #667eea;
+            border-radius: 50%;
+            position: absolute;
+            top: 70px;
+            left: 70px;
+            cursor: move;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .control-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: #667eea;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        button:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .home-btn {
+            background: #4CAF50;
+        }
+        
+        .stop-btn {
+            background: #f44336;
+        }
+        
+        .status-panel {
+            margin-top: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .mode-switcher {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            background: #6c757d;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+        }
+        
+        .coordinates {
+            margin-top: 10px;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .instructions {
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 PAROL6 Robot Control</h1>
+            <p>Joystick Control Interface</p>
+        </div>
+        
+        <div class="mode-switcher">
+            <button class="mode-btn active" onclick="switchMode('joystick')">🎮 Joystick Control</button>
+            <button class="mode-btn" onclick="switchMode('joints')">🔧 Joint Control</button>
+        </div>
+        
+        <div class="control-panel">
+            <div class="card joystick-container" id="joystick-card">
+                <h2>🎮 Joystick Control</h2>
+                <p>Drag the handle to control robot movement</p>
+                <p class="instructions">On mobile: Touch and drag the blue circle</p>
+                
+                <div id="joystick">
+                    <div class="joystick-handle" id="joystick-handle"></div>
+                </div>
+                
+                <div class="coordinates">
+                    <div>X: <span id="coord-x">0.00</span></div>
+                    <div>Y: <span id="coord-y">0.00</span></div>
+                    <div>Z: <span id="coord-z">0.00</span></div>
+                </div>
+                
+                <div class="control-buttons">
+                    <button class="home-btn" onclick="sendHome()">🏠 Home Position</button>
+                    <button class="stop-btn" onclick="emergencyStop()">🛑 Emergency Stop</button>
+                </div>
+            </div>
+            
+            <div class="card status-panel">
+                <h2>📊 Robot Status</h2>
+                <div id="status-display">
+                    <div class="status-item">
+                        <span>Connection:</span>
+                        <span id="connection-status">🔴 Disconnected</span>
+                    </div>
+                    <div id="joint-status">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card" id="joints-card" style="display: none;">
+            <h2>🔧 Joint Control</h2>
+            <div id="sliders-container">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Joystick functionality
+        const joystick = document.getElementById('joystick');
+        const handle = document.getElementById('joystick-handle');
+        const coordX = document.getElementById('coord-x');
+        const coordY = document.getElementById('coord-y');
+        const coordZ = document.getElementById('coord-z');
+        
+        let isDragging = false;
+        let currentX = 0, currentY = 0;
+        const maxDistance = 70; // Maximum distance from center
+        
+        // Improved event handlers for mobile
+        function startDrag(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            isDragging = true;
+            
+            // Add active class for visual feedback
+            handle.classList.add('active');
+            
+            // Trigger first drag update
+            if (e.type === 'touchstart') {
+                drag(e);
+            }
+        }
+        
+        function drag(e) {
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let clientX, clientY;
+            
+            if (e.type === 'mousemove') {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            } else if (e.type === 'touchmove') {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+            
+            // Calculate position relative to center
+            let deltaX = clientX - centerX;
+            let deltaY = clientY - centerY;
+            
+            // Limit to joystick bounds
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance > maxDistance) {
+                deltaX = (deltaX / distance) * maxDistance;
+                deltaY = (deltaY / distance) * maxDistance;
+            }
+            
+            // Update handle position
+            handle.style.left = (70 + deltaX) + 'px';
+            handle.style.top = (70 + deltaY) + 'px';
+            
+            // Normalize coordinates (-1 to 1)
+            currentX = deltaX / maxDistance;
+            currentY = -deltaY / maxDistance; // Invert Y axis
+            
+            // Update coordinate display
+            coordX.textContent = currentX.toFixed(2);
+            coordY.textContent = currentY.toFixed(2);
+            
+            // Send movement command
+            sendJoystickCommand(currentX, currentY);
+        }
+        
+        function stopDrag() {
+            isDragging = false;
+            
+            // Remove active class
+            handle.classList.remove('active');
+            
+            // Return to center with animation
+            handle.style.transition = 'all 0.3s ease';
+            handle.style.left = '70px';
+            handle.style.top = '70px';
+            
+            // Reset coordinates
+            currentX = 0;
+            currentY = 0;
+            coordX.textContent = '0.00';
+            coordY.textContent = '0.00';
+            
+            // Stop movement
+            sendJoystickCommand(0, 0);
+            
+            // Remove transition after animation
+            setTimeout(() => {
+                handle.style.transition = '';
+            }, 300);
+        }
+        
+        // Add event listeners for both mouse and touch
+        handle.addEventListener('mousedown', startDrag);
+        handle.addEventListener('touchstart', startDrag, { passive: false });
+        
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('touchend', stopDrag);
+        
+        // Prevent context menu on joystick
+        joystick.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        function sendJoystickCommand(x, y) {
+            // Convert joystick coordinates to robot movement
+            fetch('/api/joystick', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    x: x,
+                    y: y,
+                    z: 0
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Joystick command sent:', data);
+            })
+            .catch(error => {
+                console.error('Error sending joystick command:', error);
+            });
+        }
+        
+        function sendHome() {
+            fetch('/api/home', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Home command sent:', data);
+                // Visual feedback
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '✅ Done';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                }, 1000);
+            });
+        }
+        
+        function emergencyStop() {
+            fetch('/api/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Emergency stop:', data);
+                // Visual feedback
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '🛑 Stopped';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                }, 1000);
+            });
+        }
+        
+        function switchMode(mode) {
+            const joystickBtn = document.querySelector('.mode-btn:nth-child(1)');
+            const jointsBtn = document.querySelector('.mode-btn:nth-child(2)');
+            const joystickCard = document.getElementById('joystick-card');
+            const jointsCard = document.getElementById('joints-card');
+            
+            if (mode === 'joystick') {
+                joystickBtn.classList.add('active');
+                jointsBtn.classList.remove('active');
+                joystickCard.style.display = 'block';
+                jointsCard.style.display = 'none';
+            } else {
+                joystickBtn.classList.remove('active');
+                jointsBtn.classList.add('active');
+                joystickCard.style.display = 'none';
+                jointsCard.style.display = 'block';
+                // TODO: Load joint sliders here
+            }
+        }
+        
+        // Status update function
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusElement = document.getElementById('connection-status');
+                    const jointStatusElement = document.getElementById('joint-status');
+                    
+                    if (data.connected) {
+                        statusElement.innerHTML = '🟢 Connected';
+                        statusElement.style.color = 'green';
+                        
+                        // Update joint status
+                        let html = '';
+                        data.joints.forEach((position, index) => {
+                            const jointName = data.joint_names[index] || ;
+                            const degrees = (position * 180 / Math.PI).toFixed(1);
+                            html += ;
+                        });
+                        jointStatusElement.innerHTML = html;
+                    } else {
+                        statusElement.innerHTML = '🔴 Disconnected';
+                        statusElement.style.color = 'red';
+                        jointStatusElement.innerHTML = '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                    document.getElementById('connection-status').innerHTML = '🔴 Error';
+                    document.getElementById('connection-status').style.color = 'red';
+                });
+        }
+        
+        // Initialize
+        updateStatus();
+        setInterval(updateStatus, 1000);
+        
+        // Prevent pull-to-refresh on mobile
+        document.body.addEventListener('touchmove', function(e) {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>
