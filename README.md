@@ -3,6 +3,7 @@
 **One-page guide to get you started fast!**
 
 > **✨ Now using `parol6-ultimate:latest` image with Gazebo, Ignition, and MoveIt pre-installed!**
+> **📱 NEW: Mobile control via web interface!**
 
 ---
 
@@ -20,6 +21,31 @@ Wait for Ignition Gazebo window to appear with the robot.
 ```
 
 **That's it!** Now you have Ignition Gazebo + MoveIt + RViz running.
+
+---
+
+## 📱 **Mobile Control (NEW!)**
+
+Control the robot from your phone, tablet, or any web browser!
+
+### Terminal 3: Start Mobile Bridge
+```bash
+./start_mobile_bridge.sh
+```
+
+### Open Web Interface
+- **On same computer:** http://localhost:5000
+- **From phone/tablet:** http://YOUR_IP:5000
+
+Find your IP: `hostname -I | awk '{print $1}'`
+
+**Features:**
+- 🎚️ Touch-friendly sliders for all 6 joints
+- 📊 Real-time position feedback
+- 🏠 One-click home position
+- 📱 Fully mobile responsive
+
+See `MOBILE_CONTROL_GUIDE.md` for full documentation.
 
 ---
 
