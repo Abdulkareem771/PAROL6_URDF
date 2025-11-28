@@ -45,5 +45,5 @@ parol6_arm:
     - TRRT
     - PRM
     - PRMstar
-  projection_evaluator: joints(L1,L2)
+  projection_evaluator: joints(joint_L1,joint_L2)
   longest_valid_segment_fraction: 0.005
