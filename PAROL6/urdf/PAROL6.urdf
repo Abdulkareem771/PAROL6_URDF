@@ -411,7 +411,6 @@
         <param name="max">1.7</param>
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_L2">
@@ -420,7 +419,6 @@
         <param name="max">1.0</param>
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_L3">
@@ -429,7 +427,6 @@
         <param name="max">1.3</param>
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_L4">
@@ -438,7 +435,6 @@
         <param name="max">2.0</param>
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
 
     <joint name="joint_L5">
@@ -447,7 +443,6 @@
         <param name="max">2.1</param>
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
 
     <!-- CORRECTED: Removed the invalid 'type' attribute from the joint tag in ros2_control -->
@@ -456,13 +451,12 @@
         <!-- For continuous joints, position limits (min/max) are not necessary in the command interface -->
       </command_interface>
       <state_interface name="position"/>
-      <state_interface name="velocity"/>
     </joint>
   </ros2_control>
 
   <gazebo>
-    <plugin filename="libign_ros2_control-system.so" name="ign_ros2_control::IgnitionROS2ControlPlugin">
-      <parameters>package://parol6/config/ros2_controllers.yaml</parameters>
+    <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>/workspace/install/parol6/share/parol6/config/ros2_controllers.yaml</parameters>
       <robot_param>robot_description</robot_param>
       <robot_param_node>robot_state_publisher</robot_param_node>
     </plugin>
