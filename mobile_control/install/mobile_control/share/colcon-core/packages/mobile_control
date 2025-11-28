@@ -1,1 +1,1 @@
-geometry_msgs:rclpy:rosbridge_server:sensor_msgs:std_msgs:web_video_server
+rclpy:std_msgs:trajectory_msgs

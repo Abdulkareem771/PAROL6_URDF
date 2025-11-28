@@ -1,0 +1,25 @@
+[0.995s] Invoking command in '/workspace/mobile_control/build/mobile_control': PYTHONPATH=/workspace/mobile_control/build/mobile_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /workspace/mobile_control/build/mobile_control/build --no-deps symlink_data
+[1.329s] running develop
+[1.594s] running egg_info
+[1.594s] creating mobile_control.egg-info
+[1.594s] writing mobile_control.egg-info/PKG-INFO
+[1.595s] writing dependency_links to mobile_control.egg-info/dependency_links.txt
+[1.595s] writing entry points to mobile_control.egg-info/entry_points.txt
+[1.595s] writing requirements to mobile_control.egg-info/requires.txt
+[1.595s] writing top-level names to mobile_control.egg-info/top_level.txt
+[1.595s] writing manifest file 'mobile_control.egg-info/SOURCES.txt'
+[1.597s] reading manifest file 'mobile_control.egg-info/SOURCES.txt'
+[1.598s] writing manifest file 'mobile_control.egg-info/SOURCES.txt'
+[1.599s] running build_ext
+[1.599s] Creating /workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages/mobile-control.egg-link (link to .)
+[1.600s] Installing robot_bridge script to /workspace/mobile_control/install/mobile_control/lib/mobile_control
+[1.601s] 
+[1.601s] Installed /workspace/mobile_control/build/mobile_control
+[1.601s] running symlink_data
+[1.601s] creating /workspace/mobile_control/install/mobile_control/share/ament_index
+[1.601s] creating /workspace/mobile_control/install/mobile_control/share/ament_index/resource_index
+[1.601s] creating /workspace/mobile_control/install/mobile_control/share/ament_index/resource_index/packages
+[1.601s] symbolically linking /workspace/mobile_control/build/mobile_control/resource/mobile_control -> /workspace/mobile_control/install/mobile_control/share/ament_index/resource_index/packages
+[1.601s] symbolically linking /workspace/mobile_control/build/mobile_control/package.xml -> /workspace/mobile_control/install/mobile_control/share/mobile_control
+[1.602s] creating /workspace/mobile_control/install/mobile_control/share/mobile_control/launch
+[1.649s] Invoked command in '/workspace/mobile_control/build/mobile_control' returned '0': PYTHONPATH=/workspace/mobile_control/build/mobile_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /workspace/mobile_control/build/mobile_control/build --no-deps symlink_data

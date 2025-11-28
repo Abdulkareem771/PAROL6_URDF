@@ -1,6 +1,9 @@
 package.xml
-robot_bridge.py
+setup.cfg
 setup.py
+mobile_control/__init__.py
+mobile_control/mobile_bridge.py
+mobile_control/robot_bridge.py
 mobile_control.egg-info/PKG-INFO
 mobile_control.egg-info/SOURCES.txt
 mobile_control.egg-info/dependency_links.txt

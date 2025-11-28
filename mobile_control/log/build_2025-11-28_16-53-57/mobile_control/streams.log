@@ -1,0 +1,17 @@
+[0.790s] Invoking command in '/workspace/mobile_control/build/mobile_control': PYTHONPATH=/workspace/mobile_control/build/mobile_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /workspace/mobile_control/build/mobile_control/build --no-deps symlink_data
+[1.099s] running develop
+[1.354s] running egg_info
+[1.354s] writing mobile_control.egg-info/PKG-INFO
+[1.354s] writing dependency_links to mobile_control.egg-info/dependency_links.txt
+[1.354s] writing entry points to mobile_control.egg-info/entry_points.txt
+[1.354s] writing requirements to mobile_control.egg-info/requires.txt
+[1.354s] writing top-level names to mobile_control.egg-info/top_level.txt
+[1.356s] reading manifest file 'mobile_control.egg-info/SOURCES.txt'
+[1.357s] writing manifest file 'mobile_control.egg-info/SOURCES.txt'
+[1.358s] running build_ext
+[1.359s] Creating /workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages/mobile-control.egg-link (link to .)
+[1.359s] Installing robot_bridge script to /workspace/mobile_control/install/mobile_control/lib/mobile_control
+[1.360s] 
+[1.360s] Installed /workspace/mobile_control/build/mobile_control
+[1.360s] running symlink_data
+[1.400s] Invoked command in '/workspace/mobile_control/build/mobile_control' returned '0': PYTHONPATH=/workspace/mobile_control/build/mobile_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /workspace/mobile_control/build/mobile_control/build --no-deps symlink_data

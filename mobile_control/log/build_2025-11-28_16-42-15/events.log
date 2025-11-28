@@ -1,0 +1,35 @@
+[0.000000] (-) TimerEvent: {}
+[0.000215] (mobile_control) JobQueued: {'identifier': 'mobile_control', 'dependencies': OrderedDict()}
+[0.000600] (mobile_control) JobStarted: {'identifier': 'mobile_control'}
+[0.099600] (-) TimerEvent: {}
+[0.199834] (-) TimerEvent: {}
+[0.300062] (-) TimerEvent: {}
+[0.400276] (-) TimerEvent: {}
+[0.500511] (-) TimerEvent: {}
+[0.600752] (-) TimerEvent: {}
+[0.701031] (-) TimerEvent: {}
+[0.782267] (mobile_control) Command: {'cmd': ['/usr/bin/python3', '-W', 'ignore:setup.py install is deprecated', '-W', 'ignore:easy_install command is deprecated', 'setup.py', 'develop', '--editable', '--build-directory', '/workspace/mobile_control/build/mobile_control/build', '--no-deps', 'symlink_data'], 'cwd': '/workspace/mobile_control/build/mobile_control', 'env': {'HOSTNAME': 'Kareem-Legion5', 'SHLVL': '1', 'LD_LIBRARY_PATH': '/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib', 'HOME': '/root', 'OLDPWD': '/workspace', 'ROS_PYTHON_VERSION': '3', 'ROS_DISTRO': 'humble', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'ROS_LOCALHOST_ONLY': '0', 'QT_X11_NO_MITSHM': '1', 'PATH': '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'DISPLAY': ':1', 'LANG': 'C.UTF-8', 'XAUTHORITY': '/tmp/.docker.xauth', 'AMENT_PREFIX_PATH': '/opt/ros/humble', 'PWD': '/workspace/mobile_control/build/mobile_control', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/workspace/mobile_control/build/mobile_control/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages', 'COLCON': '1'}, 'shell': False}
+[0.801148] (-) TimerEvent: {}
+[0.901364] (-) TimerEvent: {}
+[1.001584] (-) TimerEvent: {}
+[1.095359] (mobile_control) StdoutLine: {'line': b'running develop\n'}
+[1.101685] (-) TimerEvent: {}
+[1.201940] (-) TimerEvent: {}
+[1.302141] (-) TimerEvent: {}
+[1.334237] (mobile_control) StdoutLine: {'line': b'running egg_info\n'}
+[1.334803] (mobile_control) StdoutLine: {'line': b'writing mobile_control.egg-info/PKG-INFO\n'}
+[1.335151] (mobile_control) StdoutLine: {'line': b'writing dependency_links to mobile_control.egg-info/dependency_links.txt\n'}
+[1.335247] (mobile_control) StdoutLine: {'line': b'writing entry points to mobile_control.egg-info/entry_points.txt\n'}
+[1.335330] (mobile_control) StdoutLine: {'line': b'writing requirements to mobile_control.egg-info/requires.txt\n'}
+[1.335528] (mobile_control) StdoutLine: {'line': b'writing top-level names to mobile_control.egg-info/top_level.txt\n'}
+[1.337266] (mobile_control) StdoutLine: {'line': b"reading manifest file 'mobile_control.egg-info/SOURCES.txt'\n"}
+[1.338019] (mobile_control) StdoutLine: {'line': b"writing manifest file 'mobile_control.egg-info/SOURCES.txt'\n"}
+[1.339514] (mobile_control) StdoutLine: {'line': b'running build_ext\n'}
+[1.339775] (mobile_control) StdoutLine: {'line': b'Creating /workspace/mobile_control/install/mobile_control/lib/python3.10/site-packages/mobile-control.egg-link (link to .)\n'}
+[1.340558] (mobile_control) StdoutLine: {'line': b'Installing robot_bridge script to /workspace/mobile_control/install/mobile_control/lib/mobile_control\n'}
+[1.340882] (mobile_control) StdoutLine: {'line': b'\n'}
+[1.340980] (mobile_control) StdoutLine: {'line': b'Installed /workspace/mobile_control/build/mobile_control\n'}
+[1.341110] (mobile_control) StdoutLine: {'line': b'running symlink_data\n'}
+[1.375073] (mobile_control) CommandEnded: {'returncode': 0}
+[1.388091] (mobile_control) JobEnded: {'identifier': 'mobile_control', 'rc': 0}
+[1.388724] (-) EventReactorShutdown: {}

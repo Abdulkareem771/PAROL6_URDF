@@ -1,3 +1,4 @@
 [console_scripts]
 mobile_bridge = mobile_bridge:main
+robot_bridge = robot_bridge:main
 
