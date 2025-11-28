@@ -1,0 +1,39 @@
+# Configuration for the ros2_control controller manager
+controller_manager:
+  ros__parameters:
+    update_rate: 100 # Hz
+
+    # Define the Joint Trajectory Controller for the 6-DoF arm
+    parol6_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    
+    # Define a simple broadcaster for reading all joint states
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+# Configuration parameters for the Joint Trajectory Controller
+parol6_arm_controller:
+  ros__parameters:
+    joints:
+      - joint_L1
+      - joint_L2
+      - joint_L3
+      - joint_L4
+      - joint_L5
+      - joint_L6
+    
+    # Command and state interfaces must match what is defined in the URDF <ros2_control> block
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+      
+    # PID gains (crucial for Gazebo simulation accuracy)
+    gains:
+      joint_L1: {p: 100.0, i: 0.01, d: 10.0}
+      joint_L2: {p: 100.0, i: 0.01, d: 10.0}
+      joint_L3: {p: 100.0, i: 0.01, d: 10.0}
+      joint_L4: {p: 50.0, i: 0.01, d: 5.0}
+      joint_L5: {p: 20.0, i: 0.01, d: 2.0}
+      joint_L6: {p: 10.0, i: 0.01, d: 1.0}

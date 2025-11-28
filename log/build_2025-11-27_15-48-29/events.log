@@ -1,0 +1,55 @@
+[0.000000] (-) TimerEvent: {}
+[0.000251] (parol6) JobQueued: {'identifier': 'parol6', 'dependencies': OrderedDict()}
+[0.000327] (parol6_moveit_config) JobQueued: {'identifier': 'parol6_moveit_config', 'dependencies': OrderedDict([('parol6', '/workspace/install/parol6')])}
+[0.000385] (parol6) JobStarted: {'identifier': 'parol6'}
+[0.016180] (parol6) JobProgress: {'identifier': 'parol6', 'progress': 'cmake'}
+[0.016710] (parol6) Command: {'cmd': ['/usr/bin/cmake', '/workspace/PAROL6', '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache', '-DCMAKE_INSTALL_PREFIX=/workspace/install/parol6'], 'cwd': '/workspace/build/parol6', 'env': OrderedDict([('USER', 'developer'), ('HOSTNAME', '24bc9ad0e87f'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/opt/mujoco-3.2.7/bin:'), ('HOME', '/home/developer'), ('OLDPWD', '/workspace'), ('ROS_PYTHON_VERSION', '3'), ('GROUP', 'developer'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('TERM', 'xterm'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/opt/mujoco-3.2.7/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('MUJOCO_DIR', '/opt/mujoco-3.2.7'), ('DISPLAY', ':0'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('WITHIN_DEV', '1'), ('PWD', '/workspace/build/parol6'), ('LC_ALL', 'C.UTF-8'), ('USER_WS', '/home/developer/ws'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('MUJOCO_VERSION', '3.2.7')]), 'shell': False}
+[0.041967] (parol6) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.099327] (-) TimerEvent: {}
+[0.196969] (parol6) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.199419] (-) TimerEvent: {}
+[0.299720] (-) TimerEvent: {}
+[0.367125] (parol6) StderrLine: {'line': b"Error parsing '/workspace/PAROL6/package.xml':\n"}
+[0.367360] (parol6) StderrLine: {'line': b'Traceback (most recent call last):\n'}
+[0.367490] (parol6) StderrLine: {'line': b'  File "/usr/lib/python3/dist-packages/catkin_pkg/package.py", line 610, in parse_package_string\n'}
+[0.367943] (parol6) StderrLine: {'line': b'    root = dom.parseString(data)\n'}
+[0.368067] (parol6) StderrLine: {'line': b'  File "/usr/lib/python3.10/xml/dom/minidom.py", line 2000, in parseString\n'}
+[0.369075] (parol6) StderrLine: {'line': b'    return expatbuilder.parseString(string)\n'}
+[0.369170] (parol6) StderrLine: {'line': b'  File "/usr/lib/python3.10/xml/dom/expatbuilder.py", line 925, in parseString\n'}
+[0.369983] (parol6) StderrLine: {'line': b'    return builder.parseString(string)\n'}
+[0.370268] (parol6) StderrLine: {'line': b'  File "/usr/lib/python3.10/xml/dom/expatbuilder.py", line 223, in parseString\n'}
+[0.370451] (parol6) StderrLine: {'line': b'    parser.Parse(string, True)\n'}
+[0.370560] (parol6) StderrLine: {'line': b'xml.parsers.expat.ExpatError: mismatched tag: line 36, column 4\n'}
+[0.370632] (parol6) StderrLine: {'line': b'\n'}
+[0.370697] (parol6) StderrLine: {'line': b'During handling of the above exception, another exception occurred:\n'}
+[0.370760] (parol6) StderrLine: {'line': b'\n'}
+[0.370822] (parol6) StderrLine: {'line': b'Traceback (most recent call last):\n'}
+[0.370884] (parol6) StderrLine: {'line': b'  File "/opt/ros/humble/share/ament_cmake_core/cmake/core/package_xml_2_cmake.py", line 150, in <module>\n'}
+[0.370947] (parol6) StderrLine: {'line': b'    main()\n'}
+[0.371008] (parol6) StderrLine: {'line': b'  File "/opt/ros/humble/share/ament_cmake_core/cmake/core/package_xml_2_cmake.py", line 53, in main\n'}
+[0.371072] (parol6) StderrLine: {'line': b'    raise e\n'}
+[0.371132] (parol6) StderrLine: {'line': b'  File "/opt/ros/humble/share/ament_cmake_core/cmake/core/package_xml_2_cmake.py", line 49, in main\n'}
+[0.371191] (parol6) StderrLine: {'line': b'    package = parse_package_string(\n'}
+[0.371261] (parol6) StderrLine: {'line': b'  File "/usr/lib/python3/dist-packages/catkin_pkg/package.py", line 612, in parse_package_string\n'}
+[0.371323] (parol6) StderrLine: {'line': b"    raise InvalidPackage('The manifest contains invalid XML:\\n%s' % ex, filename)\n"}
+[0.371386] (parol6) StderrLine: {'line': b"catkin_pkg.package.InvalidPackage: Error(s) in package '/workspace/PAROL6/package.xml':\n"}
+[0.371455] (parol6) StderrLine: {'line': b'The manifest contains invalid XML:\n'}
+[0.371524] (parol6) StderrLine: {'line': b'mismatched tag: line 36, column 4\n'}
+[0.378551] (parol6) StderrLine: {'line': b'\x1b[31mCMake Error at /opt/ros/humble/share/ament_cmake_core/cmake/core/ament_package_xml.cmake:95 (message):\n'}
+[0.378816] (parol6) StderrLine: {'line': b'  execute_process(/usr/bin/python3\n'}
+[0.378902] (parol6) StderrLine: {'line': b'  /opt/ros/humble/share/ament_cmake_core/cmake/core/package_xml_2_cmake.py\n'}
+[0.378977] (parol6) StderrLine: {'line': b'  /workspace/PAROL6/package.xml\n'}
+[0.379048] (parol6) StderrLine: {'line': b'  /workspace/build/parol6/ament_cmake_core/package.cmake) returned error code\n'}
+[0.379117] (parol6) StderrLine: {'line': b'  1\n'}
+[0.379190] (parol6) StderrLine: {'line': b'Call Stack (most recent call first):\n'}
+[0.379261] (parol6) StderrLine: {'line': b'  /opt/ros/humble/share/ament_cmake_core/cmake/core/ament_package_xml.cmake:49 (_ament_package_xml)\n'}
+[0.379333] (parol6) StderrLine: {'line': b'  /opt/ros/humble/share/ament_cmake_core/cmake/core/ament_package.cmake:63 (ament_package_xml)\n'}
+[0.379407] (parol6) StderrLine: {'line': b'  CMakeLists.txt:10 (ament_package)\n'}
+[0.379497] (parol6) StderrLine: {'line': b'\n'}
+[0.379557] (parol6) StderrLine: {'line': b'\x1b[0m\n'}
+[0.379617] (parol6) StdoutLine: {'line': b'-- Configuring incomplete, errors occurred!\n'}
+[0.379708] (parol6) StdoutLine: {'line': b'See also "/workspace/build/parol6/CMakeFiles/CMakeOutput.log".\n'}
+[0.382590] (parol6) CommandEnded: {'returncode': 1}
+[0.383253] (parol6) JobEnded: {'identifier': 'parol6', 'rc': 1}
+[0.393962] (parol6_moveit_config) JobSkipped: {'identifier': 'parol6_moveit_config'}
+[0.394052] (-) EventReactorShutdown: {}

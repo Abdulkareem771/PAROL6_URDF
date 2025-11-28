@@ -1,0 +1,6 @@
+Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /workspace/PAROL6 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6
+Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /workspace/PAROL6 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/workspace/install/parol6
+Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /workspace/build/parol6 -- -j16 -l16
+Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /workspace/build/parol6 -- -j16 -l16
+Invoking command in '/workspace/build/parol6': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /workspace/build/parol6
+Invoked command in '/workspace/build/parol6' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /workspace/build/parol6

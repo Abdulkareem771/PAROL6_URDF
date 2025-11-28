@@ -1,0 +1,16 @@
+# Stage 1: ar4_gazebo as the source for missing packages
+FROM ar4_gazebo:latest as gazebo_base
+
+# Stage 2: Start from your parol6-robot and copy everything from ar4_gazebo
+FROM parol6-robot:latest
+
+# Copy ALL files from ar4_gazebo into parol6-robot
+# This brings in the missing Gazebo and MoveIt packages
+COPY --from=gazebo_base / /
+
+# Preserve your workspace and environment
+WORKDIR /workspace
+
+# Ensure your bashrc is set up (no downloads - just file operations)
+RUN echo "source /opt/ros/humble/setup.bash" >> /home/developer/.bashrc && \
+    echo "Combined parol6-robot + ar4_gazebo image" > /IMAGE_INFO.txt

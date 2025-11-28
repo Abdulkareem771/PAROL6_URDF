@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Defines groups, end-effectors, and self-collision rules for MoveIt planning. -->
+<robot name="parol6">
+
+    <!-- VIRTUAL JOINT: Defines a connection between the planning scene and the robot's base. -->
+    <virtual_joint name="fixed_base" type="fixed" parent_frame="world" child_link="base_link"/>
+
+    <!-- GROUP: 'parol6_arm' - Main manipulation group (6-DoF arm) -->
+    <group name="parol6_arm">
+        <chain base_link="base_link" tip_link="L6"/>
+    </group>
+
+    <!-- END EFFECTOR: 'hand' - Defines the tool mounted on the end of the arm. -->
+    <!-- This is a placeholder for a gripper or tool. It's parent is the last arm link, L6. -->
+    <end_effector name="hand" parent_link="L6" group="parol6_arm"/>
+
+    <!-- DISABLE COLLISIONS: Pairs of links that are safe to ignore for collision checking. -->
+    <!-- These are critical for reducing CPU load and preventing false positive collisions. -->
+    
+    <!-- Link L1 (base) and Link L3 (forearm) are typically far enough apart. -->
+    <disable_collisions link1="base_link" link2="L3" reason="Never"/>
+    <disable_collisions link1="base_link" link2="L4" reason="Never"/>
+    <disable_collisions link1="base_link" link2="L5" reason="Never"/>
+    <disable_collisions link1="base_link" link2="L6" reason="Never"/>
+
+    <!-- Link L1 and L2 are consecutive, usually handled by proximity but explicitly ignored here. -->
+    <disable_collisions link1="L1" link2="L2" reason="Adjacent"/>
+    
+    <!-- Link L2 and L4/L5/L6 are typically far apart unless the arm is highly self-colliding. -->
+    <disable_collisions link1="L2" link2="L4" reason="Never"/>
+    <disable_collisions link1="L2" link2="L5" reason="Never"/>
+    <disable_collisions link1="L2" link2="L6" reason="Never"/>
+    
+    <!-- Link L3 and L4 are consecutive. -->
+    <disable_collisions link1="L3" link2="L4" reason="Adjacent"/>
+    
+    <!-- Link L4 and L6 are typically far apart. -->
+    <disable_collisions link1="L4" link2="L6" reason="Never"/>
+
+    <!-- Link L5 and L6 are consecutive. -->
+    <disable_collisions link1="L5" link2="L6" reason="Adjacent"/>
+
+</robot>
