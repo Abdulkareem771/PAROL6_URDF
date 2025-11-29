@@ -1,0 +1,14 @@
+
+<!-- Xbox Controller Dependencies -->
+<depend>sensor_msgs</depend>
+<depend>std_msgs</depend>
+<depend>joy</depend>
+<exec_depend>python3-pygame</exec_depend>
+<exec_depend>python3-yaml</exec_depend>
+
+<!-- Xbox Controller Dependencies -->
+<depend>sensor_msgs</depend>
+<depend>std_msgs</depend>
+<depend>joy</depend>
+<exec_depend>python3-pygame</exec_depend>
+<exec_depend>python3-yaml</exec_depend>

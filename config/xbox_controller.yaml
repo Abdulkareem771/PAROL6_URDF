@@ -1,0 +1,21 @@
+axes:
+  left_stick_x: 0
+  left_stick_y: 1
+  right_stick_x: 3
+  right_stick_y: 4
+  left_trigger: 2
+  right_trigger: 5
+
+buttons:
+  a: 0
+  b: 1
+  x: 2
+  y: 3
+  start: 7
+  back: 6
+  lb: 4
+  rb: 5
+
+parameters:
+  deadzone: 0.1
+  sensitivity: 0.5
