@@ -1,31 +1,31 @@
 # PAROL6 Project Handoff - Industrial Edition 🏭
 
 ## 🚨 CRITICAL STATUS
-**Current State:** WORKING (Industrial Controller Implemented)
-**Last Action:** Replaced basic controller with `xbox_industrial_controller.py` to fix lag and stability issues.
+**Current State:** WORKING (Industrial Controller with Slew Rate Limiter)
+**Last Action:** Implemented Slew Rate Limiter to fix "Home Button Crash".
 
 ## 🎯 Your Mission
 You are the Lead Robotics Engineer for the PAROL6 project. Your goal is to ensure this robot is **factory-ready**.
 
 ## 🏗️ Architecture: The "Industrial" Pattern
 
-We moved away from simple "callback-based" control to a **Fixed-Rate Control Loop**.
+We use a **Fixed-Rate Control Loop** with **Slew Rate Limiting**.
 
 ### Why?
-1.  **Stability**: Callbacks fire whenever messages arrive (jittery). A fixed loop (10Hz) ensures steady command flow.
-2.  **Safety**: We integrate target position independently of current state during motion. This prevents "stuck" joints where the robot refuses to move because it thinks it's at a limit.
-3.  **Responsiveness**: We use a "streaming" approach where we update the target continuously but only send goals at a controlled rate.
+1.  **Stability**: Callbacks fire whenever messages arrive (jittery). A fixed loop (20Hz) ensures steady command flow.
+2.  **Safety**: We integrate target position independently of current state during motion.
+3.  **Smoothness**: The **Slew Rate Limiter** ensures that even if the user requests a sudden jump (like pressing "Home"), the robot smoothly ramps to that position at `max_speed`.
 
 ### Key File: `xbox_industrial_controller.py`
 This is the **ONLY** controller you should be using.
 
 **Logic Flow:**
-1.  **Init**: Sync `target_joints` with `current_joints` (once).
-2.  **Loop (10Hz)**:
-    *   Read Joystick (`joy_cmd`).
-    *   `target_joints += joy_cmd * sensitivity`.
-    *   **Clamp** `target_joints` to URDF limits.
-    *   Send `FollowJointTrajectory` goal (async).
+1.  **Init**: Sync `commanded_joints` with `current_joints` (once).
+2.  **Loop (20Hz)**:
+    *   **Input**: Update `commanded_joints` based on Joystick (velocity) or Buttons (step change).
+    *   **Clamp**: Ensure `commanded_joints` are within URDF limits.
+    *   **Slew Limit**: Move `trajectory_joints` towards `commanded_joints` by at most `max_speed * dt`.
+    *   **Output**: Send `trajectory_joints` as a `FollowJointTrajectory` goal (async).
 
 ## 🛠️ Environment & Tools
 
@@ -45,40 +45,40 @@ Everything runs here.
 
 ### 1. "Elbow Falls Down" / Gravity Collapse
 *   **Cause**: Controller aborted goal and switched to idle (0 effort).
-*   **Fix**: The new `xbox_industrial_controller.py` sends continuous goals to "hold" position even when sticks are released.
-*   **Check**: `ros2 topic echo /parol6_arm_controller/follow_joint_trajectory/_action/status` - look for ABORTED (4) or REJECTED (5).
+*   **Fix**: The new controller sends continuous goals to "hold" position.
 
-### 2. "Base Stuck"
-*   **Cause**: Target position variable got synced to a "stuck" physical value.
-*   **Fix**: The new controller **does not** sync to `joint_states` while moving. It trusts its internal `target_joints` integrator.
+### 2. "Stuck after Home"
+*   **Cause**: Step input caused velocity limit violation.
+*   **Fix**: Slew Rate Limiter ramps the value smoothly.
 
 ### 3. "Lagging"
-*   **Cause**: Flooding the action server with 100Hz+ updates.
-*   **Fix**: The new controller runs at a fixed **10Hz** (configurable via `control_rate`).
+*   **Cause**: Flooding the action server.
+*   **Fix**: Fixed rate loop (20Hz).
 
 ## 🎛️ Tuning Parameters (In Python Code)
 
-You can adjust these in `xbox_industrial_controller.py`:
+You can adjust these in `xbox_industrial_controller.py` or via ROS params:
 
 ```python
-self.declare_parameter('sensitivity', 0.05)      # Speed
+self.declare_parameter('sensitivity', 0.05)      # Joystick Speed
 self.declare_parameter('deadzone', 0.15)         # Stick threshold
-self.declare_parameter('control_rate', 10.0)     # Hz
-self.declare_parameter('trajectory_duration', 0.2) # Smoothness
+self.declare_parameter('max_speed', 0.8)         # Rad/s (Global limit)
+self.declare_parameter('control_rate', 20.0)     # Hz
+self.declare_parameter('trajectory_lookahead', 0.1) # Seconds
 ```
 
 ## 🔮 Future Roadmap (For DeepSeek)
 
-1.  **GUI Integration**:
-    *   Create an `rqt` plugin or use `rqt_reconfigure` to adjust sensitivity at runtime.
-    *   The current controller uses ROS parameters, so `ros2 param set` works!
+1.  **MoveIt Servo Integration (The "Right Way")**:
+    *   **Goal**: Use `moveit_servo` for collision avoidance and singularity handling.
+    *   **Blocker**: `ros-humble-moveit-servo` is NOT installed in the container.
+    *   **Action**: You need to update the Dockerfile or install it manually if permissions allow.
 
-2.  **Real Hardware**:
-    *   This controller sends `FollowJointTrajectory`. It works for **both** Sim and Real Hardware (if the real robot driver exposes the same action server).
+2.  **GUI Integration**:
+    *   Use `rqt` > Dynamic Reconfigure to tune parameters live.
 
-3.  **Inverse Kinematics (IK)**:
-    *   Currently we do **Joint Space** control (moving individual joints).
-    *   Next step: Implement **Cartesian Control** (moving X, Y, Z) using MoveIt's `Servo` package.
+3.  **Real Hardware**:
+    *   This controller sends `FollowJointTrajectory`. It works for **both** Sim and Real Hardware.
 
 ## 📝 Git & Handoff
 *   **Branch**: `xbox-controller`
