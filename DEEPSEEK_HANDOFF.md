@@ -2,87 +2,66 @@
 
 ## 🚨 CRITICAL STATUS
 **Current State:** WORKING (Industrial Controller with Slew Rate Limiter)
-**Last Action:** Implemented Slew Rate Limiter to fix "Home Button Crash".
+**Next Goal:** Implement **MoveIt Servo** (The "Right Way")
 
 ## 🎯 Your Mission
-You are the Lead Robotics Engineer for the PAROL6 project. Your goal is to ensure this robot is **factory-ready**.
+You are the Lead Robotics Engineer for the PAROL6 project.
+The user wants to switch from the custom Python controller to **MoveIt Servo** for professional-grade control (collision avoidance, singularities, etc.).
 
-## 🏗️ Architecture: The "Industrial" Pattern
+## 🏗️ Architecture: The "Industrial" Pattern (Current)
+We currently use `xbox_industrial_controller.py` which mimics industrial safety features:
+*   **Fixed-Rate Loop (20Hz)**
+*   **Slew Rate Limiter** (Smooth ramping)
+*   **Independent Target Integration**
 
-We use a **Fixed-Rate Control Loop** with **Slew Rate Limiting**.
+## 🚀 The "Right Way": MoveIt Servo (Next Steps)
 
-### Why?
-1.  **Stability**: Callbacks fire whenever messages arrive (jittery). A fixed loop (20Hz) ensures steady command flow.
-2.  **Safety**: We integrate target position independently of current state during motion.
-3.  **Smoothness**: The **Slew Rate Limiter** ensures that even if the user requests a sudden jump (like pressing "Home"), the robot smoothly ramps to that position at `max_speed`.
+I have prepared the configuration files, but the package is missing.
 
-### Key File: `xbox_industrial_controller.py`
-This is the **ONLY** controller you should be using.
+### 1. Files Created
+*   `parol6_moveit_config/config/parol6_servo.yaml`: Configuration for Servo.
+*   `parol6_moveit_config/launch/servo.launch.py`: Launch file.
 
-**Logic Flow:**
-1.  **Init**: Sync `commanded_joints` with `current_joints` (once).
-2.  **Loop (20Hz)**:
-    *   **Input**: Update `commanded_joints` based on Joystick (velocity) or Buttons (step change).
-    *   **Clamp**: Ensure `commanded_joints` are within URDF limits.
-    *   **Slew Limit**: Move `trajectory_joints` towards `commanded_joints` by at most `max_speed * dt`.
-    *   **Output**: Send `trajectory_joints` as a `FollowJointTrajectory` goal (async).
+### 2. The Blocker
+The Docker container `parol6_dev` does **NOT** have `ros-humble-moveit-servo` installed.
+`apt-get install` failed due to permission/source issues.
+
+### 3. Your Tasks
+1.  **Install MoveIt Servo**:
+    *   Try to fix `apt-get` in the container.
+    *   OR build `moveit_servo` from source in the workspace.
+    *   OR ask the user to update the Docker image.
+2.  **Launch Servo**:
+    ```bash
+    ros2 launch parol6_moveit_config servo.launch.py
+    ```
+3.  **Connect Xbox**:
+    *   You will need a node that publishes `Twist` messages to `~/delta_twist_cmds` or `Joint` messages to `~/delta_joint_cmds`.
+    *   The current `xbox_industrial_controller.py` can be adapted to publish these instead of Action Goals.
 
 ## 🛠️ Environment & Tools
 
 ### Docker Container (`parol6_dev`)
-Everything runs here.
 *   **Source**: `source /opt/ros/humble/setup.bash`
-*   **Workspace**: `/workspace` (mapped to host `~/Desktop/PAROL6_URDF`)
+*   **Workspace**: `/workspace`
 
 ### Simulation (`Ignition Gazebo`)
 *   **Launch**: `./start_ignition.sh`
-*   **Check**: Ensure "Controllers loaded" message appears.
 
-### Controller Launch
-*   **Command**: `./start_xbox_action.sh`
+### Current Controller
+*   **Command**: `./start_xbox_action.sh` (Uses `xbox_industrial_controller.py`)
 
-## 🐛 Troubleshooting Guide (Advanced)
+## 🐛 Troubleshooting Guide (Current Controller)
 
-### 1. "Elbow Falls Down" / Gravity Collapse
-*   **Cause**: Controller aborted goal and switched to idle (0 effort).
+### 1. "Elbow Falls Down"
 *   **Fix**: The new controller sends continuous goals to "hold" position.
 
 ### 2. "Stuck after Home"
-*   **Cause**: Step input caused velocity limit violation.
 *   **Fix**: Slew Rate Limiter ramps the value smoothly.
-
-### 3. "Lagging"
-*   **Cause**: Flooding the action server.
-*   **Fix**: Fixed rate loop (20Hz).
-
-## 🎛️ Tuning Parameters (In Python Code)
-
-You can adjust these in `xbox_industrial_controller.py` or via ROS params:
-
-```python
-self.declare_parameter('sensitivity', 0.05)      # Joystick Speed
-self.declare_parameter('deadzone', 0.15)         # Stick threshold
-self.declare_parameter('max_speed', 0.8)         # Rad/s (Global limit)
-self.declare_parameter('control_rate', 20.0)     # Hz
-self.declare_parameter('trajectory_lookahead', 0.1) # Seconds
-```
-
-## 🔮 Future Roadmap (For DeepSeek)
-
-1.  **MoveIt Servo Integration (The "Right Way")**:
-    *   **Goal**: Use `moveit_servo` for collision avoidance and singularity handling.
-    *   **Blocker**: `ros-humble-moveit-servo` is NOT installed in the container.
-    *   **Action**: You need to update the Dockerfile or install it manually if permissions allow.
-
-2.  **GUI Integration**:
-    *   Use `rqt` > Dynamic Reconfigure to tune parameters live.
-
-3.  **Real Hardware**:
-    *   This controller sends `FollowJointTrajectory`. It works for **both** Sim and Real Hardware.
 
 ## 📝 Git & Handoff
 *   **Branch**: `xbox-controller`
-*   **Commit**: Ensure you commit `xbox_industrial_controller.py` and `start_xbox_action.sh`.
+*   **Commit**: Ensure you commit the new MoveIt config files.
 
 ---
 **You are ready. The factory is waiting.** 🏭
