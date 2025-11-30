@@ -1,19 +1,20 @@
-servo:
-  publish_period: 0.01
-  command_out_topic: /parol6_arm_controller/joint_trajectory
-  scale:
-    linear: 0.1
-    angular: 0.3
-    joint: 0.5
-  move_group_name: parol6_arm
-  planning_frame: link_base
-  ee_frame_name: link_tool0
-  check_collisions: true
-  collision_check_rate: 10.0
-  joint_limits:
-    joint_L1: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
-    joint_L2: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
-    joint_L3: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
-    joint_L4: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
-    joint_L5: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
-    joint_L6: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+/servo_node:
+  ros__parameters:
+    publish_period: 0.01
+    command_out_topic: /parol6_arm_controller/joint_trajectory
+    scale:
+      linear: 0.1
+      angular: 0.3
+      joint: 0.5
+    move_group_name: parol6_arm
+    planning_frame: link_base
+    ee_frame_name: link_tool0
+    check_collisions: true
+    collision_check_rate: 10.0
+    joint_limits:
+      joint_L1: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+      joint_L2: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+      joint_L3: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+      joint_L4: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+      joint_L5: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}
+      joint_L6: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 3.0}

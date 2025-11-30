@@ -1,1 +1,35 @@
-/workspace/parol6_moveit_config/config/ros2_controllers.yaml
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    parol6_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+parol6_arm_controller:
+  ros__parameters:
+    joints:
+      - joint_L1
+      - joint_L2
+      - joint_L3
+      - joint_L4
+      - joint_L5
+      - joint_L6
+    
+    command_interfaces:
+      - position
+    
+    state_interfaces:
+      - position
+      - velocity
+    
+    state_publish_rate: 50.0
+    action_monitor_rate: 20.0
+    
+    allow_partial_joints_goal: false
+    
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 0.0

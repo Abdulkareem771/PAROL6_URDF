@@ -10,6 +10,10 @@ __pycache__/
 *.so
 .Python
 
+#docker image container
+
+parol6-ultimate-with-servo.tar.gz
+
 # MoveIt source dependencies (should not be committed)
 moveit2/
 moveit_msgs/

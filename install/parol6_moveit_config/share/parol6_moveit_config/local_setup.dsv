@@ -1,1 +1,2 @@
-/workspace/build/parol6_moveit_config/ament_cmake_environment_hooks/local_setup.dsv
+source;share/parol6_moveit_config/environment/ament_prefix_path.sh
+source;share/parol6_moveit_config/environment/path.sh
