@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     ros-humble-moveit-configs-utils \
     ros-humble-moveit-ros-move-group \
     ros-humble-moveit-ros-visualization \
+    ros-humble-moveit-servo \
+    ros-humble-joy \
+    ros-humble-joint-state-publisher \
     ros-humble-rviz2 \
     gazebo \
     && rm -rf /var/lib/apt/lists/*

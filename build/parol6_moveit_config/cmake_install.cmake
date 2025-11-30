@@ -46,6 +46,15 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   include("/workspace/build/parol6_moveit_config/ament_cmake_symlink_install/ament_cmake_symlink_install.cmake")
 endif()
 
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/parol6_moveit_config" TYPE DIRECTORY FILES
+    "/workspace/parol6_moveit_config/config"
+    "/workspace/parol6_moveit_config/launch"
+    "/workspace/parol6_moveit_config/rviz"
+    "/workspace/parol6_moveit_config/scripts"
+    USE_SOURCE_PERMISSIONS)
+endif()
+
 if(CMAKE_INSTALL_COMPONENT)
   set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")
 else()

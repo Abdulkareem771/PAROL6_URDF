@@ -1,0 +1,4 @@
+/workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/servo_with_joy.launch.py
+/workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/servo_control.launch.py
+/workspace/install/parol6_moveit_config/share/parol6_moveit_config/scripts/xbox_to_servo.py
+/workspace/install/parol6_moveit_config/share/parol6_moveit_config/scripts/example_controller.py

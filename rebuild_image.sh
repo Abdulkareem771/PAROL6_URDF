@@ -8,7 +8,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     Rebuilding Docker Image with Gazebo Classic             ║${NC}"
+echo -e "${BLUE}║  Rebuilding Docker Image with MoveIt Servo & Xbox Support   ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -33,7 +33,7 @@ if [ $? -eq 0 ]; then
     echo -e "${GREEN}║          ✓ Docker Image Rebuilt Successfully!               ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}Gazebo Classic is now permanently installed in the image!${NC}"
+    echo -e "${BLUE}MoveIt Servo and Xbox controller support are now permanently installed!${NC}"
     echo ""
     echo -e "${GREEN}You can now run:${NC}"
     echo "  ./start.sh"

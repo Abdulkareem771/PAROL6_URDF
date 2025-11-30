@@ -310,9 +310,6 @@ message(STATUS "Execute custom install script")
 
 # begin of custom install code
 
-# install(DIRECTORY "config" "launch" "rviz" "DESTINATION" "share/parol6_moveit_config")
-ament_cmake_symlink_install_directory("/workspace/parol6_moveit_config" DIRECTORY "config" "launch" "rviz" "DESTINATION" "share/parol6_moveit_config")
-
 # install(FILES "/workspace/build/parol6_moveit_config/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/parol6_moveit_config" "DESTINATION" "share/ament_index/resource_index/package_run_dependencies")
 ament_cmake_symlink_install_files("/workspace/parol6_moveit_config" FILES "/workspace/build/parol6_moveit_config/ament_cmake_index/share/ament_index/resource_index/package_run_dependencies/parol6_moveit_config" "DESTINATION" "share/ament_index/resource_index/package_run_dependencies")
 

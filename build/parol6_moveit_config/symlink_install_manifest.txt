@@ -1,13 +1,3 @@
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/joint_limits.yaml
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/kinematics.yaml
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/moveit_controllers.yaml
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ompl_planning.yaml
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/parol6.srdf
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ros2_controllers.yaml
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/__pycache__/demo.launch.cpython-310.pyc
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/demo.launch.py
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/launch/move_group.launch.py
-/workspace/install/parol6_moveit_config/share/parol6_moveit_config/rviz/moveit.rviz
 /workspace/install/parol6_moveit_config/share/ament_index/resource_index/package_run_dependencies/parol6_moveit_config
 /workspace/install/parol6_moveit_config/share/ament_index/resource_index/parent_prefix_path/parol6_moveit_config
 /workspace/install/parol6_moveit_config/share/parol6_moveit_config/environment/ament_prefix_path.sh
