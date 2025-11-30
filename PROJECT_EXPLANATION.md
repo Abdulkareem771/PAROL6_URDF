@@ -238,28 +238,131 @@ This function runs every time you move a joystick.
 
 ---
 
-## 🔗 How It All Connects (Node Graph)
+## 🔗 6. System Architecture (Node Graph)
 
-Here is how the data flows through the system:
+Here is a visual representation of how the nodes communicate. This is what you would see if you ran `rqt_graph`.
 
 ```mermaid
-graph LR
-    A[Xbox Controller] -->|USB| B(Linux Kernel)
-    B -->|/dev/input/js0| C[joy_node]
-    C -->|/joy Topic| D[xbox_direct_control.py]
-    D -->|FollowJointTrajectory Action| E[ros2_control]
-    E -->|Motor Commands| F[Gazebo Simulator]
-    F -->|Visuals| G[RViz]
+graph TD
+    subgraph Hardware
+        Xbox[Xbox Controller]
+    end
+
+    subgraph "ROS 2 Nodes"
+        JoyNode[joy_node]
+        DirectControl[xbox_direct_control]
+        MoveGroup[move_group]
+        RSP[robot_state_publisher]
+        RViz[rviz2]
+    end
+
+    subgraph "Simulation (Gazebo)"
+        Gazebo[Gazebo / ros2_control]
+    end
+
+    %% Connections
+    Xbox -->|USB /dev/input/js0| JoyNode
+    JoyNode -->|/joy| DirectControl
+    
+    DirectControl -->|/parol6_arm_controller/follow_joint_trajectory| Gazebo
+    
+    Gazebo -->|/joint_states| RSP
+    Gazebo -->|/joint_states| DirectControl
+    Gazebo -->|/joint_states| MoveGroup
+    
+    RSP -->|/robot_description| MoveGroup
+    RSP -->|/robot_description| RViz
+    RSP -->|/tf, /tf_static| RViz
+    
+    MoveGroup -->|/move_group/goal| Gazebo
 ```
 
-1.  **You** push the Xbox Joystick.
-2.  **`joy_node`** (ROS Driver) reads Linux input and publishes a `Joy` message to the topic `/joy`.
-3.  **`xbox_direct_control.py`** receives the `/joy` message.
-    *   It calculates new joint angles.
-    *   It sends a `FollowJointTrajectory` action goal to `/parol6_arm_controller`.
-4.  **`ros2_control`** (running in Gazebo) receives the goal.
-5.  **Gazebo** simulates the motors moving to those angles.
-6.  **RViz** sees the updated joint states and updates the 3D model.
+---
+
+## 📋 7. System Reference
+
+This section lists all the "moving parts" of your system. This is crucial for debugging.
+
+### 🟢 Active Nodes
+| Node Name | Description | Package |
+|-----------|-------------|---------|
+| `joy_node` | Reads joystick input from Linux. | `joy` |
+| `xbox_direct_control` | **Your Script**. Converts joystick -> robot commands. | (Custom) |
+| `move_group` | The MoveIt "Brain". Handles planning & collision checking. | `moveit_ros_move_group` |
+| `ros2_control_node` | Runs inside Gazebo. Simulates the motor drivers. | `controller_manager` |
+| `robot_state_publisher` | Broadcasts the position of every robot link (TF). | `robot_state_publisher` |
+| `rviz2` | Visualization GUI. | `rviz2` |
+
+### 📨 Key Topics (Data Streams)
+| Topic Name | Message Type | Purpose |
+|------------|--------------|---------|
+| `/joy` | `sensor_msgs/Joy` | Raw buttons and axis data from Xbox. |
+| `/joint_states` | `sensor_msgs/JointState` | Current angle of every joint. |
+| `/robot_description` | `std_msgs/String` | The URDF XML content. |
+| `/tf` | `tf2_msgs/TFMessage` | Dynamic transforms (moving parts). |
+| `/tf_static` | `tf2_msgs/TFMessage` | Static transforms (fixed parts). |
+
+### 🛠️ Key Services (Functions)
+| Service Name | Type | Purpose |
+|--------------|------|---------|
+| `/compute_ik` | `GetPositionIK` | Calculate joint angles for a given XYZ position. |
+| `/plan_kinematic_path` | `GetMotionPlan` | Generate a collision-free path from A to B. |
+
+### 🎬 Key Actions (Long-Running Tasks)
+| Action Name | Type | Purpose |
+|-------------|------|---------|
+| `/parol6_arm_controller/follow_joint_trajectory` | `FollowJointTrajectory` | Move the robot along a path (used by your script). |
+| `/move_group` | `MoveGroup` | High-level MoveIt command (e.g., "Go to Home"). |
+
+---
+
+## 🎓 8. How to Expand: Building Robust Robotics
+
+You mentioned you want to build a **robust** system for your thesis. Here is the roadmap to go from "Direct Control" to "Intelligent Robotics".
+
+### A. Switch to MoveIt (The "Right" Way)
+Currently, `xbox_direct_control.py` moves the robot blindly. If there is a wall, it will hit it. To fix this, you should use the **MoveIt MoveGroup Interface**.
+
+**What to do:**
+1.  Create a new Python script (e.g., `smart_planner.py`).
+2.  Use the `moveit_commander` library (Python) or `moveit_cpp` (C++).
+3.  Instead of calculating joint angles yourself, you say: "Go to [X, Y, Z]".
+4.  MoveIt will:
+    *   Check for collisions.
+    *   Plan a smooth path around obstacles.
+    *   Execute the path.
+
+**Code Snippet (Python Example):**
+```python
+import moveit_commander
+
+# Initialize
+group = moveit_commander.MoveGroupCommander("parol6_arm")
+
+# Set a target (e.g., 20cm forward)
+group.set_position_target([0.2, 0.0, 0.4])
+
+# Plan and Execute
+plan = group.go(wait=True)
+group.stop()
+```
+
+### B. Add Perception (Eyes)
+A robot is blind without sensors.
+1.  **Add a Camera**: Add a RealSense or Kinect camera to your URDF.
+2.  **Octomap**: Configure MoveIt to read the camera's PointCloud. MoveIt will automatically build a 3D map of the world (Octomap) and avoid obstacles dynamically.
+
+### C. Add a Gripper
+1.  Update URDF to include a gripper link.
+2.  Add a new `ros2_control` interface for the gripper.
+3.  Use MoveIt to plan "Pick and Place" tasks.
+
+### D. State Machines (Behavior)
+For complex tasks (e.g., "Pick up cup, if heavy, put it down"), don't use `if/else` in Python. Use a **Behavior Tree**.
+*   **Tools**: `BehaviorTree.CPP` or `py_trees_ros`.
+*   This allows you to create modular, reusable behaviors.
+
+---
 
 ## 📚 Next Steps for Learning
 
