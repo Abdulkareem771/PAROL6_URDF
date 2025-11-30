@@ -141,7 +141,46 @@ docker exec -it parol6_dev bash -c "
 
 ---
 
-## 🎮 4. The Brain: Controlling the Robot
+## 🧠 4. The Planner: MoveIt & RViz
+
+While `ros2_control` moves the motors, **MoveIt** decides *how* to move them to avoid collisions and reach a goal.
+
+### 📄 File: `parol6_moveit_config/config/parol6.srdf`
+The SRDF (Semantic Robot Description Format) adds "meaning" to the URDF.
+
+```xml
+<robot name="parol6">
+    <!-- 1. Groups: Defines "parol6_arm" as the chain from base_link to L6 -->
+    <group name="parol6_arm">
+        <chain base_link="base_link" tip_link="L6"/>
+    </group>
+
+    <!-- 2. Poses: Pre-defined positions like "home" -->
+    <group_state name="home" group="parol6_arm">
+        <joint name="joint_L1" value="0"/>
+        ...
+    </group_state>
+
+    <!-- 3. Collisions: Tells MoveIt which parts can safely touch (e.g., adjacent links) -->
+    <disable_collisions link1="L1" link2="L2" reason="Adjacent"/>
+</robot>
+```
+
+### 📄 File: `parol6_moveit_config/config/kinematics.yaml`
+This tells MoveIt which math solver to use to calculate joint angles from a 3D position (Inverse Kinematics).
+
+```yaml
+parol6_arm:
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+```
+
+### 👁️ RViz (Visualization)
+RViz is the 3D tool you see. It subscribes to topics like `/joint_states` and `/robot_description` to draw the robot in 3D space. It allows you to drag the robot arm to set goals for MoveIt.
+
+---
+
+## 🎮 5. The Controller: Xbox Direct Control
 
 Finally, we want to move the robot with an Xbox controller. This is where our Python script comes in.
 
@@ -199,17 +238,28 @@ This function runs every time you move a joystick.
 
 ---
 
-## 🔗 How It All Connects
+## 🔗 How It All Connects (Node Graph)
+
+Here is how the data flows through the system:
+
+```mermaid
+graph LR
+    A[Xbox Controller] -->|USB| B(Linux Kernel)
+    B -->|/dev/input/js0| C[joy_node]
+    C -->|/joy Topic| D[xbox_direct_control.py]
+    D -->|FollowJointTrajectory Action| E[ros2_control]
+    E -->|Motor Commands| F[Gazebo Simulator]
+    F -->|Visuals| G[RViz]
+```
 
 1.  **You** push the Xbox Joystick.
-2.  **Linux** sees the input (`/dev/input/js0`).
-3.  **`joy_node`** (ROS Driver) reads Linux input and publishes a `Joy` message to the topic `/joy`.
-4.  **`xbox_direct_control.py`** receives the `/joy` message.
+2.  **`joy_node`** (ROS Driver) reads Linux input and publishes a `Joy` message to the topic `/joy`.
+3.  **`xbox_direct_control.py`** receives the `/joy` message.
     *   It calculates new joint angles.
     *   It sends a `FollowJointTrajectory` action goal to `/parol6_arm_controller`.
-5.  **`ros2_control`** (running in Gazebo) receives the goal.
-6.  **Gazebo** simulates the motors moving to those angles.
-7.  **You** see the robot move on screen!
+4.  **`ros2_control`** (running in Gazebo) receives the goal.
+5.  **Gazebo** simulates the motors moving to those angles.
+6.  **RViz** sees the updated joint states and updates the 3D model.
 
 ## 📚 Next Steps for Learning
 
