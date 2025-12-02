@@ -1,1 +1,0 @@
-/workspace/build/parol6/ament_cmake_environment_hooks/local_setup.sh
