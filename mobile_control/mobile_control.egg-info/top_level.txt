@@ -1,2 +1,0 @@
-mobile_bridge
-robot_bridge
