@@ -38,7 +38,7 @@ echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
 docker run -d --rm \
   --name parol6_dev \
   --network host \
-  -v /home/kareem/Desktop/PAROL6_URDF:/workspace \
+  -v "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)":/workspace \
   parol6-ultimate:latest \
   tail -f /dev/null
 
