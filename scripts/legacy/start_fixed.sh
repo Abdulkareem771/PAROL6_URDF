@@ -43,7 +43,7 @@ docker run -d --rm \
   --env="DISPLAY" \
   --env="QT_X11_NO_MITSHM=1" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-  --volume="/home/kareem/Desktop/PAROL6_URDF:/workspace" \
+  --volume="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd):/workspace" \
   parol6-ultimate:latest \
   tail -f /dev/null
 

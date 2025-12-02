@@ -45,7 +45,7 @@ docker run -d --rm \
   --env="LIBGL_ALWAYS_SOFTWARE=1" \
   --env="GALLIUM_DRIVER=softpipe" \
   --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-  --volume="/home/kareem/Desktop/PAROL6_URDF:/workspace" \
+  --volume="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd):/workspace" \
   parol6-robot:latest \
   tail -f /dev/null
 

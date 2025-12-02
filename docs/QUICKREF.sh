@@ -110,7 +110,7 @@ cat << 'EOF'
   docker run -it --rm --name parol6_dev \
     --env="DISPLAY" --env="QT_X11_NO_MITSHM=1" \
     --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
-    --volume="/home/kareem/Desktop/PAROL6_URDF:/workspace" \
+    --volume="$(pwd):/workspace" \
     parol6-robot:latest
 
   # Enter running container
