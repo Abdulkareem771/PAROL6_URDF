@@ -11,7 +11,7 @@ cat << 'EOF'
 │                        YOUR HOST COMPUTER                            │
 │  (Ubuntu, Windows WSL2, macOS)                                      │
 │                                                                      │
-│  📁 /home/kareem/Desktop/PAROL6_URDF/                               │
+│  📁 ~/PAROL6_URDF/                                             │
 │     ├── PAROL6/                    ← Edit here with VS Code        │
 │     ├── parol6_moveit_config/      ← Files sync automatically      │
 │     ├── *.md (documentation)                                        │
@@ -52,7 +52,7 @@ cat << 'EOF'
 WORKFLOW:
 
 1️⃣  EDIT FILES (on host)
-   cd /home/kareem/Desktop/PAROL6_URDF
+   cd ~/PAROL6_URDF
    code .
    # Edit PAROL6/urdf/PAROL6.urdf
    # Changes are INSTANTLY visible in container!
@@ -72,7 +72,7 @@ WORKFLOW:
 
 FILE SYNCHRONIZATION:
 
-Host:      /home/kareem/Desktop/PAROL6_URDF/PAROL6/urdf/PAROL6.urdf
+Host:      ~/PAROL6_URDF/PAROL6/urdf/PAROL6.urdf
            ↕️  (Automatically synced - no copying needed!)
 Container: /workspace/PAROL6/urdf/PAROL6.urdf
 
@@ -96,7 +96,7 @@ Terminal 2 (Container - Additional):
   $ ros2 topic list
 
 Terminal 3 (Host - Editing):
-  $ cd /home/kareem/Desktop/PAROL6_URDF
+  $ cd ~/PAROL6_URDF
   $ code .
   # Edit files
 

@@ -49,7 +49,7 @@ docker run -d --rm \
   -e QT_X11_NO_MITSHM=1 \
   -e XAUTHORITY=/tmp/.docker.xauth \
   -v /dev:/dev \
-  -v /home/kareem/Desktop/PAROL6_URDF:/workspace \
+  -v "$(pwd)":/workspace \
   --device /dev/dri \
   --group-add video \
   parol6-ultimate:latest \

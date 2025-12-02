@@ -23,7 +23,9 @@ echo -e "${BLUE}Building new Docker image...${NC}"
 echo -e "${YELLOW}This will take 5-10 minutes (one-time only)${NC}"
 echo ""
 
-cd /home/kareem/Desktop/PAROL6_URDF
+# Get the root directory of the repository
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
 
 docker build -t parol6-ultimate:latest -f Dockerfile .
 

@@ -28,7 +28,7 @@ docker run -it --rm \
   -e DISPLAY=$DISPLAY \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -e QT_X11_NO_MITSHM=1 \
-  -v /home/kareem/Desktop/PAROL6_URDF:/workspace \
+  -v "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)":/workspace \
   --device /dev/dri \
   parol6-ultimate:latest \
   bash -c "
