@@ -1,9 +1,0 @@
-/workspace/build/parol6/CMakeFiles/uninstall.dir
-/workspace/build/parol6/CMakeFiles/parol6_uninstall.dir
-/workspace/build/parol6/CMakeFiles/test.dir
-/workspace/build/parol6/CMakeFiles/edit_cache.dir
-/workspace/build/parol6/CMakeFiles/rebuild_cache.dir
-/workspace/build/parol6/CMakeFiles/list_install_components.dir
-/workspace/build/parol6/CMakeFiles/install.dir
-/workspace/build/parol6/CMakeFiles/install/local.dir
-/workspace/build/parol6/CMakeFiles/install/strip.dir

@@ -1,1 +1,0 @@
-/workspace/build/parol6/ament_cmake_core/parol6Config-version.cmake

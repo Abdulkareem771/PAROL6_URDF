@@ -1,1 +1,0 @@
-/workspace/parol6_moveit_config/launch/demo.launch.py
