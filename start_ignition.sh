@@ -16,7 +16,7 @@ echo ""
 
 # Enable X11 access for Docker
 echo -e "${YELLOW}Enabling X11 access...${NC}"
-xhost +local:docker > /dev/null 2>&1
+xhost + > /dev/null 2>&1
 
 # Create X11 authentication file for Docker
 XAUTH=/tmp/.docker.xauth
@@ -75,6 +75,7 @@ docker run -d --rm \
   --network host \
   --privileged \
   -e DISPLAY=$DISPLAY \
+  -e LIBGL_ALWAYS_SOFTWARE=1 \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
   -e QT_X11_NO_MITSHM=1 \
   -e XAUTHORITY=/tmp/.docker.xauth \
