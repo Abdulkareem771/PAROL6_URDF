@@ -20,11 +20,33 @@ xhost +local:docker > /dev/null 2>&1
 
 # Create X11 authentication file for Docker
 XAUTH=/tmp/.docker.xauth
-if [ ! -f $XAUTH ]; then
-    touch $XAUTH
-    xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
-    chmod 644 $XAUTH
+# Get the real user's Xauthority file (handle sudo case)
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    USER_UID=$(getent passwd "$SUDO_USER" | cut -d: -f3)
+    
+    # Check common locations
+    if [ -f "/run/user/$USER_UID/gdm/Xauthority" ]; then
+        XAUTH_SOURCE="/run/user/$USER_UID/gdm/Xauthority"
+    elif [ -f "$USER_HOME/.Xauthority" ]; then
+        XAUTH_SOURCE="$USER_HOME/.Xauthority"
+    else
+        # Try to find it from the user's environment if possible, or fallback
+        XAUTH_SOURCE=""
+        echo -e "${YELLOW}⚠️  Could not find .Xauthority file. X11 forwarding might fail.${NC}"
+    fi
+else
+    XAUTH_SOURCE=${XAUTHORITY:-"$HOME/.Xauthority"}
 fi
+
+# Create/Update the auth file
+touch $XAUTH
+if [ -n "$XAUTH_SOURCE" ] && [ -f "$XAUTH_SOURCE" ]; then
+    xauth -f "$XAUTH_SOURCE" nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
+else
+    echo -e "${YELLOW}⚠️  No Xauthority source found. Creating empty auth file.${NC}"
+fi
+chmod 644 $XAUTH
 
 # Check if container is already running
 if docker ps -a | grep -q parol6_dev; then
@@ -60,6 +82,7 @@ docker run -d --rm \
   -v "$(pwd)":/workspace \
   --device /dev/dri \
   --group-add video \
+  --shm-size=512m \
   parol6-ultimate:latest \
   tail -f /dev/null
 
