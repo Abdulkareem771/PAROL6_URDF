@@ -13,7 +13,8 @@ apt-get update && apt-get install -y \
     libturbojpeg0-dev \
     libglfw3-dev \
     libopenni2-dev \
-    git
+    git \
+    ros-humble-image-view
 
 echo "Building libfreenect2 driver..."
 cd /tmp
@@ -24,6 +25,7 @@ mkdir build && cd build
 cmake .. -Dfreenect2_camera=ON -DENABLE_CXX11=ON -DTurboJPEG_INCLUDE_DIRS=/usr/include -DTurboJPEG_LIBRARIES=/usr/lib/x86_64-linux-gnu/libturbojpeg.so.0
 make -j$(nproc)
 make install
+ldconfig
 mkdir -p /etc/udev/rules.d/
 cp ../platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/
 

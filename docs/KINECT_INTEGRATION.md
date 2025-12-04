@@ -7,7 +7,13 @@ We use a **Single Container** approach. The camera drivers and ROS 2 nodes are i
 - **Driver**: `libfreenect2` (Open source drivers for Kinect v2)
 - **ROS 2 Package**: `krepa098/kinect2_ros2` (Bridge between driver and ROS 2)
 
-## 2. Installation
+## 2. Prerequisites
+Before installing or using the camera:
+1.  **Container must be running**: Start your container with `./start_ignition.sh`
+2.  **Camera connection**: The Xbox Kinect v2 must be **plugged into a USB 3.0 port** on your computer
+3.  **USB passthrough**: The container must have access to USB devices (already configured in `start_ignition.sh` with `-v /dev:/dev --privileged`)
+
+## 3. Installation
 We have provided a script to install the drivers and ROS 2 package inside the container.
 
 1.  **Start the Container**:
@@ -27,19 +33,49 @@ We have provided a script to install the drivers and ROS 2 package inside the co
 
 ## 3. How to Use
 ### Running the Camera
-To start the camera node, open a new terminal in the container and run:
-```bash
-source /opt/kinect_ws/install/setup.bash
-ros2 launch kinect2_bridge kinect2_bridge_launch.py
-```
+**IMPORTANT**: All commands below must be run **INSIDE** the container, not on your host machine.
+
+1.  **Enter the container**:
+    ```bash
+    docker exec -it parol6_dev bash
+    ```
+2.  **Start the camera node**:
+    ```bash
+    source /opt/kinect_ws/install/setup.bash
+    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml
+    ```
 *Note: You may need to adjust the launch file name depending on the specific package contents.*
 
 ### Verifying Data
-To see the list of topics published by the camera:
+To see the list of topics published by the camera (run **inside the container**):
 ```bash
 ros2 topic list
 ```
 You should see topics like `/kinect2/qhd/image_color`, `/kinect2/sd/image_depth`, etc.
+
+### Previewing Camera Data
+**Option 1: Using RViz2 (Recommended)**
+1.  **Launch RViz2** (in a new terminal inside the container):
+    ```bash
+    docker exec -it parol6_dev bash
+    source /opt/kinect_ws/install/setup.bash
+    rviz2
+    ```
+2.  **Add Camera Display**:
+    - Click "Add" button (bottom left)
+    - Select "By topic" tab
+    - Expand `/kinect2/qhd/image_color` and select "Image"
+    - Click OK
+3.  **Add PointCloud Display** (for depth data):
+    - Click "Add" again
+    - Expand `/kinect2/sd/points` and select "PointCloud2"
+    - In the PointCloud2 settings, set "Fixed Frame" to the appropriate frame (usually `kinect2_link` or similar)
+
+**Option 2: Using image_view (Quick preview)**
+```bash
+ros2 run image_view image_view --ros-args --remap /image:=/kinect2/qhd/image_color
+```
+This will open a window showing the RGB camera feed.
 
 ### Using with PAROL6 Project
 Since the camera workspace is an "overlay", you can use it alongside your robot workspace:
@@ -51,7 +87,26 @@ source /home/kareem/Desktop/PAROL6_URDF/install/setup.bash
 # Now you can launch your robot and the camera, or nodes that use both.
 ```
 
-## 4. AI Data Collection
+## 4. Quick Test (Plug and Play)
+We've provided a test script for easy verification:
+```bash
+# Inside the container
+docker exec -it parol6_dev bash
+/workspace/scripts/test_kinect.sh
+```
+This will:
+- Launch the camera node
+- Display available topics
+- Show you how to preview the video
+
+**To preview in a separate terminal:**
+```bash
+docker exec -it parol6_dev bash
+source /opt/kinect_ws/install/setup.bash
+ros2 run image_view image_view --ros-args --remap /image:=/kinect2/qhd/image_color
+```
+
+## 5. AI Data Collection
 To collect data for training AI models (e.g., object detection, grasping):
 
 1.  **Record Data (Rosbag)**:
@@ -64,7 +119,7 @@ To collect data for training AI models (e.g., object detection, grasping):
 3.  **Processing**:
     You can write a Python script using `cv_bridge` to extract images from the bag files or subscribe directly to the topics to save frames as `.jpg` or `.png` files for your dataset.
 
-## 5. Deployment & Sharing
+## 6. Deployment & Sharing
 ### Sharing with Colleagues
 To share this setup **without** requiring them to download/build everything again:
 1.  **Build the Image**: You build the image on your machine.
