@@ -18,6 +18,14 @@ echo ""
 echo -e "${YELLOW}Enabling X11 access...${NC}"
 xhost +local:docker > /dev/null 2>&1
 
+# Create X11 authentication file for Docker
+XAUTH=/tmp/.docker.xauth
+if [ ! -f $XAUTH ]; then
+    touch $XAUTH
+    xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
+    chmod 644 $XAUTH
+fi
+
 # Check if container is already running
 if docker ps -a | grep -q parol6_dev; then
     echo -e "${YELLOW}⚠️  Container 'parol6_dev' already exists${NC}"
