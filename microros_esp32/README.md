@@ -398,7 +398,7 @@ microros_esp32/
 
 6. **Check serial port**: ESP32 might appear as `/dev/ttyUSB0`, `/dev/ttyUSB1`, or `/dev/ttyACM0` depending on your system. Check both in container and on host.
 
-7. **Monitor output**: Always check `idf.py monitor` output for connection status and errors.
+7. **Monitor output**: Check `idf.py monitor` output for connection status and errors. **IMPORTANT**: You cannot run `idf.py monitor` and the `micro_ros_agent` at the same time on the same serial port. Close the monitor before starting the agent.
 
 8. **Topic discovery**: Use `ros2 topic list` to see all available topics. The ESP32 topics will appear as `/parol6/esp32/led/command` and `/parol6/esp32/led/status`.
 
@@ -413,6 +413,32 @@ microros_esp32/
 11. **Topic naming**: Follow the `/parol6/component/function/direction` pattern for consistency with the rest of the robot system.
 
 12. **Multiple ESP32s**: If you add more ESP32s, use distinct names like `/parol6/esp32_gripper/...` or `/parol6/esp32_sensors/...`.
+
+### Port Busy / Resource Temporarily Unavailable
+**Problem**: You see errors like `Could not open /dev/ttyUSB0, the port is busy` or `Resource temporarily unavailable`.
+
+**Cause**:
+1. **Conflict**: You are trying to run `idf.py monitor` while the `micro_ros_agent` is running (or vice versa). They both need exclusive access to the serial port.
+2. **Stuck Process**: A previous command crashed or was closed incorrectly, leaving a process running in the background.
+
+**Solution**:
+1. **Kill stuck processes**:
+   ```bash
+   docker exec parol6_dev pkill -9 -f "idf.py"
+   docker exec parol6_dev pkill -9 -f "esp_idf_monitor"
+   docker exec parol6_dev pkill -9 -f "micro_ros_agent"
+   ```
+2. **Unplug/Replug**: Unplug the ESP32 USB cable and plug it back in to reset the hardware driver.
+
+### Connection Sequence (Crucial!)
+To establish a successful connection, follow this EXACT order:
+1. **Close Monitor**: Ensure `idf.py monitor` is NOT running.
+2. **Start Agent**: Run the micro-ROS agent command.
+   ```bash
+   docker exec -it parol6_dev bash -c "source /opt/ros/humble/setup.bash && source /microros_ws/install/setup.bash && ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200"
+   ```
+3. **Reset ESP32**: **After** the agent is running (showing `running...`), press the **EN (Reset)** button on the ESP32 board.
+4. **Verify**: You should see `Session established` in the agent output.
 
 ## Quick Reference: Running Agent in Container
 
