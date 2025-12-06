@@ -127,18 +127,20 @@ void micro_ros_task(void * arg) {
     RCCHECK(rclc_node_init_default(&node, "esp32_led_node", "", &support));
 
     // Create publisher
+    // Using robot namespace for better integration: /parol6/esp32/led/status
     RCCHECK(rclc_publisher_init_default(
         &publisher,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-        "esp/led_status"));
+        "/parol6/esp32/led/status"));
 
     // Create subscriber
+    // Using robot namespace for better integration: /parol6/esp32/led/command
     RCCHECK(rclc_subscription_init_default(
         &subscriber,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-        "esp/led_cmd"));
+        "/parol6/esp32/led/command"));
 
     // Create executor
     rclc_executor_t executor;
