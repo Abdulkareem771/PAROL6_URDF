@@ -13,3 +13,5 @@ while True:
     print("LED OFF")
     sleep(1)
 
+#to listen to the serial port:
+#ros2 topic echo /esp_serial

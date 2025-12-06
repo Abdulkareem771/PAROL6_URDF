@@ -83,3 +83,7 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
+#to listen to the serial port:
+#ros2 topic echo /esp_serial
