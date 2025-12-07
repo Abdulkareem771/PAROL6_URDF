@@ -480,6 +480,137 @@ docker exec -it parol6_dev bash -c "
 
 You should see `/parol6/esp32/led/command` and `/parol6/esp32/led/status` in the list.
 
+## Advanced Troubleshooting & Configuration
+
+### Critical Issue:TCP/IP Crash with UART Transport
+
+**Symptom**: ESP32 boots, shows "ESP32 ready", then crashes with:
+```
+assert failed: tcpip_send_msg_wait_sem /IDF/components/lwip/lwip/src/api/tcpip.c:449 (Invalid mbox)
+```
+
+**Root Cause**: The lwIP TCP/IP stack is being initialized even though we're using UART-only transport.
+
+**Solution Applied in This Project**:
+1. **CMakeLists.txt modifications**:
+   - Set `BUILD_WLAN_INTERFACE=OFF`
+   - Set `BUILD_ETHERNET_INTERFACE=OFF`
+   - Modified `components/micro_ros_espidf_component/CMakeLists.txt` to not require lwIP when network interfaces are disabled
+
+2. **Added custom UART transport**:
+   - Copied `esp32_serial_transport.c/h` from micro-ROS examples
+   - Added `rmw_uros_set_custom_transport()` call in `app_main()`
+
+3. **Configured UART pins in sdkconfig**:
+   ```
+   CONFIG_MICROROS_UART_TXD=1  # GPIO1 (default TX)
+   CONFIG_MICROROS_UART_RXD=3  # GPIO3 (default RX)
+   ```
+
+### How to Switch from UART to WiFi Mode
+
+If you want to use WiFi instead of UART in the future:
+
+1. **Update CMakeLists.txt** (`/workspace/microros_esp32/CMakeLists.txt`):
+   ```cmake
+   # Change these lines:
+   set(BUILD_WLAN_INTERFACE ON CACHE BOOL "Enable WiFi interface")
+   set(BUILD_ETHERNET_INTERFACE OFF CACHE BOOL "Disable Ethernet interface")
+   ```
+
+2. **Remove/comment out custom transport** in `main/main.c`:
+   ```c
+   // Comment out or remove these lines in app_main():
+   /*
+   rmw_uros_set_custom_transport(
+       true,
+       (void *) &uart_port,
+       esp32_serial_open,
+       esp32_serial_close,
+       esp32_serial_write,
+       esp32_serial_read
+   );
+   */
+   ```
+
+3. **Add WiFi initialization** in `main/main.c`:
+   ```c
+   #if defined(CONFIG_MICRO_ROS_ESP_NETIF_WLAN)
+   // Initialize WiFi
+   ESP_ERROR_CHECK(uros_network_interface_initialize());
+   #endif
+   ```
+
+4. **Configure WiFi via menuconfig**:
+   ```bash
+   idf.py menuconfig
+   # Navigate to: Micro-ROS Settings → WiFi Configuration
+   # Set SSID and password
+   ```
+
+5. **Clean rebuild**:
+   ```bash
+   rm -rf build
+   idf.py build flash
+   ```
+
+6. **Run agent on network** instead of serial:
+   ```bash
+   ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
+   ```
+
+### Debugging ESP32 Boot Issues
+
+If the ESP32 appears to do nothing after flashing:
+
+1. **Check boot messages**:
+   ```bash
+   # Kill any agents first
+   docker exec parol6_dev pkill -9 -f micro_ros_agent
+   
+   # Run monitor
+   docker exec -it parol6_dev bash -c "cd /workspace/microros_esp32 && . /opt/esp-idf/export.sh && idf.py monitor"
+   
+   # Press EN/RST button on ESP32
+   ```
+
+2. **Look for these messages**:
+   - ✅ `ESP32 ready` - App started successfully
+   - ✅ `Waiting for agent connection...` - micro-ROS task is running (only if using `rmw_uros_ping_agent`)
+   - ❌ `assert failed` - Crash (see error message for details)
+   - ❌ Nothing - UART not configured correctly or hardware issue
+
+3. **Common crash causes**:
+   - TCP/IP initialization (see solution above)
+   - Missing UART transport files (`esp32_serial_transport.c/h`)
+   - UART pins not configured in sdkconfig  
+   - Network interface code still being compiled
+
+### Verifying Correct Build Configuration
+
+Before flashing, verify your configuration:
+
+```bash
+# Check that WiFi/Ethernet are disabled in main cmake
+grep "BUILD.*_INTERFACE" /workspace/microros_esp32/CMakeLists.txt
+
+# Should show:
+# set(BUILD_WLAN_INTERFACE OFF ...)
+# set(BUILD_ETHERNET_INTERFACE OFF ...)
+
+# Check UART pins in sdkconfig
+grep "CONFIG_MICROROS_UART_" /workspace/microros_esp32/sdkconfig
+
+# Should show:
+# CONFIG_MICROROS_UART_TXD=1
+# CONFIG_MICROROS_UART_RXD=3
+
+# Check that transport files exist
+ls -la /workspace/microros_esp32/main/esp32_serial_transport.*
+```
+
+
+
 ## Additional Resources
 
 - [ESP-IDF Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/)
