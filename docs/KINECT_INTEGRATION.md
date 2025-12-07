@@ -71,9 +71,9 @@ You should see topics like `/kinect2/qhd/image_color`, `/kinect2/sd/image_depth`
     - Expand `/kinect2/sd/points` and select "PointCloud2"
     - In the PointCloud2 settings, set "Fixed Frame" to the appropriate frame (usually `kinect2_link` or similar)
 
-**Option 2: Using image_view (Quick preview)**
+**Option 2: Using image_view (Quick preview with selecting topics, and manibulating the image arguments)**
 ```bash
-ros2 run image_view image_view --ros-args --remap /image:=/kinect2/qhd/image_color
+ros2 run rqt_image_view rqt_image_view
 ```
 This will open a window showing the RGB camera feed.
 
