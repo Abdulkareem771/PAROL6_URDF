@@ -164,8 +164,9 @@ void app_main(void)
     if (led_mode == 2) {
       TickType_t now = xTaskGetTickCount();
       if ((now - last_toggle) >= pdMS_TO_TICKS(500)) {
-        int cur = gpio_get_level(LED_GPIO);
-        gpio_set_level(LED_GPIO, !cur);
+        static int led_state = 0;
+        led_state = !led_state;
+        gpio_set_level(LED_GPIO, led_state);
         last_toggle = now;
       }
     }

@@ -34,6 +34,13 @@ fi
 echo -e "${BLUE}Running ESP-IDF install tool (this will verify/resume tool downloads)...${NC}"
 $IDF_PATH/install.sh all
 
+echo -e "${BLUE}Installing Python dependencies for micro-ROS build...${NC}"
+# Source the export script to activate the python environment
+. $IDF_PATH/export.sh
+# Install required packages
+pip3 install catkin_pkg lark-parser colcon-common-extensions empy==3.3.4
+
+
 # 3. Build Micro-ROS Agent
 echo -e "${BLUE}[3/4] Building Micro-ROS Agent...${NC}"
 mkdir -p /microros_ws/src

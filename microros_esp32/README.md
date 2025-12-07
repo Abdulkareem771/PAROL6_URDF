@@ -65,7 +65,7 @@ source ~/.bashrc
 
 ### Step 3: Verify Micro-ROS Component
 
-The micro-ROS component should already be cloned in `components/micro_ros_espidf_component/`. Verify it exists:
+The micro-ROS component is included in this repository. Verify it exists:
 
 ```bash
 # Inside the container
@@ -73,25 +73,16 @@ cd /workspace/microros_esp32
 ls -la components/micro_ros_espidf_component/
 ```
 
-If it's missing, clone it:
-
-```bash
-cd /workspace/microros_esp32
-mkdir -p components
-git clone -b humble https://github.com/micro-ROS/micro_ros_espidf_component.git components/micro_ros_espidf_component
-```
+If the folder is empty, ensure you cloned this repository correctly.
 
 ### Step 4: Install Python Dependencies
-
-Install required Python packages for building micro-ROS:
+**Note**: This step is now handled automatically by `install_esp_tools.sh`. You only need to run this if you encounter build errors.
 
 ```bash
 # Inside the container
 . /opt/esp-idf/export.sh
-pip3 install catkin_pkg lark-parser colcon-common-extensions
+pip3 install catkin_pkg lark-parser colcon-common-extensions empy==3.3.4
 ```
-
-**Important**: Install these packages **after** sourcing ESP-IDF, as they need to be in the ESP-IDF Python environment.
 
 ## Build and Flash
 
@@ -626,6 +617,14 @@ ls -la /workspace/microros_esp32/main/esp32_serial_transport.*
 ```
 
 
+
+## Developing Your Own Apps
+
+Want to write your own micro-ROS programs? Check out the **[Developer Guide](DEVELOPER_GUIDE.md)**!
+It covers:
+- How to add new Publishers and Subscribers
+- How to use Timers
+- Code examples and best practices
 
 ## Additional Resources
 
