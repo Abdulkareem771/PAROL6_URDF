@@ -20,6 +20,8 @@ extern "C"
 {
 #endif
 
+#include <uxr/client/transport.h>   // <<< add this so uxrCustomTransport is visible
+
 bool esp32_serial_open(struct uxrCustomTransport * transport);
 bool esp32_serial_close(struct uxrCustomTransport * transport);
 size_t esp32_serial_write(struct uxrCustomTransport* transport, const uint8_t * buf, size_t len, uint8_t * err);
@@ -30,3 +32,5 @@ size_t esp32_serial_read(struct uxrCustomTransport* transport, uint8_t* buf, siz
 #endif
 
 #endif //_MICROROS_CLIENT_ESP32_SERIAL_TRANSPORT_H_
+
+

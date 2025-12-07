@@ -286,6 +286,19 @@ Then rebuild and flash.
    idf.py build
    ```
 
+### Build Error: "ModuleNotFoundError: No module named 'catkin_pkg'"
+
+**Problem**: The ESP-IDF Python environment is missing required packages or has incompatible versions (e.g., `empy`).
+
+**Solution**:
+Install the missing dependencies into the ESP-IDF environment:
+```bash
+# Inside the container
+. /opt/esp-idf/export.sh
+pip3 install catkin_pkg lark-parser colcon-common-extensions empy==3.3.4
+```
+*Note: `empy` must be version 3.3.4 to be compatible with ROS 2 Humble build tools.*
+
 ### Build Error: "idf.py: command not found"
 
 **Problem**: ESP-IDF environment not sourced.

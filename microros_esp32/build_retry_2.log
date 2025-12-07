@@ -1,0 +1,1518 @@
+/opt/esp-idf/tools/check_python_dependencies.py:12: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+  import pkg_resources
+Executing action: all (aliases: build)
+Running cmake in directory /workspace/microros_esp32/build
+Executing "cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/root/.espressif/python_env/idf5.1_py3.10_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /workspace/microros_esp32"...
+-- IDF_TARGET is not set, guessed 'esp32' from sdkconfig '/workspace/microros_esp32/sdkconfig'
+-- Found Git: /usr/bin/git (found version "2.34.1") 
+-- The C compiler identification is GNU 12.2.0
+-- The CXX compiler identification is GNU 12.2.0
+-- The ASM compiler identification is GNU
+-- Found assembler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Project is not inside a git repository, or git repository has no commits; will not use 'git describe' to determine PROJECT_VER.
+-- Building ESP-IDF components for target esp32
+-- Project sdkconfig file /workspace/microros_esp32/sdkconfig
+Loading defaults file /workspace/microros_esp32/sdkconfig.defaults...
+Compiler supported targets: xtensa-esp32-elf
+
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of time_t
+-- Check size of time_t - done
+-- Found Python3: /root/.espressif/python_env/idf5.1_py3.10_env/bin/python (found version "3.10.12") found components: Interpreter 
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS - Success
+-- App "microros_esp32" version: 1
+-- Adding linker script /workspace/microros_esp32/build/esp-idf/esp_system/ld/memory.ld
+-- Adding linker script /opt/esp-idf/components/esp_system/ld/esp32/sections.ld.in
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.api.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-data.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.syscalls.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
+-- Adding linker script /opt/esp-idf/components/soc/esp32/ld/esp32.peripherals.ld
+-- Using Micro XRCE-DDS middleware
+rm -rf micro_ros_dev; \
+mkdir micro_ros_dev; cd micro_ros_dev; \
+git clone -b humble https://github.com/ament/ament_cmake src/ament_cmake; \
+git clone -b humble https://github.com/ament/ament_lint src/ament_lint; \
+git clone -b humble https://github.com/ament/ament_package src/ament_package; \
+git clone -b humble https://github.com/ament/googletest src/googletest; \
+git clone -b humble https://github.com/ros2/ament_cmake_ros src/ament_cmake_ros; \
+git clone -b humble https://github.com/ament/ament_index src/ament_index; \
+colcon build --cmake-args -DBUILD_TESTING=OFF -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=gcc;
+rm -rf micro_ros_src; \
+mkdir micro_ros_src; cd micro_ros_src; \
+if [ "microxrcedds" = "embeddedrtps" ]; then \
+	git clone -b humble https://github.com/micro-ROS/embeddedRTPS src/embeddedRTPS; \
+	git clone -b humble https://github.com/micro-ROS/rmw_embeddedrtps src/rmw_embeddedrtps; \
+else \
+	git clone -b ros2 https://github.com/eProsima/Micro-XRCE-DDS-Client src/Micro-XRCE-DDS-Client; \
+	git clone -b humble https://github.com/micro-ROS/rmw_microxrcedds src/rmw_microxrcedds; \
+fi; \
+git clone -b ros2 https://github.com/eProsima/micro-CDR src/micro-CDR; \
+git clone -b humble https://github.com/micro-ROS/rcl src/rcl; \
+git clone -b humble https://github.com/ros2/rclc src/rclc; \
+git clone -b humble https://github.com/micro-ROS/rcutils src/rcutils; \
+git clone -b humble https://github.com/micro-ROS/micro_ros_msgs src/micro_ros_msgs; \
+git clone -b humble https://github.com/micro-ROS/rosidl_typesupport src/rosidl_typesupport; \
+git clone -b humble https://github.com/micro-ROS/rosidl_typesupport_microxrcedds src/rosidl_typesupport_microxrcedds; \
+git clone -b humble https://github.com/ros2/rosidl src/rosidl; \
+git clone -b humble https://github.com/ros2/rmw src/rmw; \
+git clone -b humble https://github.com/ros2/rcl_interfaces src/rcl_interfaces; \
+git clone -b humble https://github.com/ros2/rosidl_defaults src/rosidl_defaults; \
+git clone -b humble https://github.com/ros2/unique_identifier_msgs src/unique_identifier_msgs; \
+git clone -b humble https://github.com/ros2/common_interfaces src/common_interfaces; \
+git clone -b galactic https://github.com/ros2/example_interfaces src/example_interfaces; \
+git clone -b humble https://github.com/ros2/test_interface_files src/test_interface_files; \
+git clone -b humble https://github.com/ros2/rmw_implementation src/rmw_implementation; \
+git clone -b humble https://github.com/ros2/rcl_logging src/rcl_logging; \
+git clone -b humble https://gitlab.com/ros-tracing/ros2_tracing src/ros2_tracing; \
+git clone -b humble https://github.com/micro-ROS/micro_ros_utilities src/micro_ros_utilities; \
+    touch src/rosidl/rosidl_typesupport_introspection_cpp/COLCON_IGNORE; \
+    touch src/rcl_logging/rcl_logging_log4cxx/COLCON_IGNORE; \
+    touch src/rcl_logging/rcl_logging_spdlog/COLCON_IGNORE; \
+    touch src/rclc/rclc_examples/COLCON_IGNORE; \
+touch src/rcl/rcl_yaml_param_parser/COLCON_IGNORE; \
+cp -rf /workspace/microros_esp32/components/micro_ros_espidf_component/extra_packages src/extra_packages || :; \
+test -f src/extra_packages/extra_packages.repos && cd src/extra_packages && vcs import --input extra_packages.repos || :;
+Cloning into 'src/ament_cmake'...
+Cloning into 'src/Micro-XRCE-DDS-Client'...
+Cloning into 'src/ament_lint'...
+Cloning into 'src/ament_package'...
+Cloning into 'src/googletest'...
+Cloning into 'src/rmw_microxrcedds'...
+Cloning into 'src/micro-CDR'...
+Cloning into 'src/rcl'...
+Cloning into 'src/rclc'...
+Cloning into 'src/ament_cmake_ros'...
+Cloning into 'src/rcutils'...
+Cloning into 'src/ament_index'...
+Cloning into 'src/micro_ros_msgs'...
+fatal: unable to access 'https://github.com/ament/ament_index/': Could not resolve host: github.com
+Starting >>> ament_package
+Starting >>> ament_lint
+Starting >>> ament_pycodestyle
+Starting >>> gtest_vendor
+Starting >>> ament_cppcheck
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+--- stderr: gtest_vendor
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    BUILD_TESTING
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< gtest_vendor [0.66s]
+Starting >>> gmock_vendor
+--- stderr: gmock_vendor
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    BUILD_TESTING
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< gmock_vendor [0.09s]
+--- stderr: ament_pycodestyle
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_pycodestyle [1.13s]
+Starting >>> ament_pyflakes
+--- stderr: ament_lint
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_lint [1.14s]
+Starting >>> ament_flake8
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+Finished <<< ament_package [1.29s]
+--- stderr: ament_cppcheck
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_cppcheck [1.29s]
+Starting >>> ament_cmake_core
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+--- stderr: ament_cmake_core
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_core [0.65s]
+Starting >>> ament_cmake_python
+Starting >>> ament_cmake_libraries
+Starting >>> ament_cmake_export_libraries
+Starting >>> ament_cmake_include_directories
+Starting >>> ament_cmake_export_definitions
+Starting >>> ament_cmake_export_include_directories
+Starting >>> ament_cmake_export_link_flags
+Starting >>> ament_cmake_version
+--- stderr: ament_pyflakes
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_pyflakes [0.84s]
+--- stderr: ament_flake8
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_flake8 [0.84s]
+Starting >>> ament_pep257
+Starting >>> ament_mypy
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+--- stderr: ament_cmake_include_directories
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_include_directories [0.79s]
+--- stderr: ament_cmake_export_include_directories
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_include_directories [0.83s]
+--- stderr: ament_cmake_export_libraries
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_libraries [0.85s]
+Starting >>> ament_cmake_export_interfaces
+Starting >>> ament_cmake_export_targets
+--- stderr: ament_cmake_version
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_version [0.88s]
+--- stderr: ament_cmake_export_definitions
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_definitions [0.91s]
+--- stderr: ament_cmake_python
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_python [0.93s]
+--- stderr: ament_cmake_export_link_flags
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_link_flags [0.94s]
+--- stderr: ament_cmake_libraries
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_libraries [0.96s]
+Starting >>> ament_cmake_test
+Starting >>> ament_cmake_export_dependencies
+Starting >>> ament_cmake_target_dependencies
+--- stderr: ament_pep257
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_pep257 [1.19s]
+Starting >>> ament_copyright
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+--- stderr: ament_mypy
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_mypy [1.38s]
+--- stderr: ament_cmake_export_interfaces
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_interfaces [0.69s]
+--- stderr: ament_cmake_export_targets
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_targets [0.74s]
+--- stderr: ament_cmake_export_dependencies
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_export_dependencies [0.67s]
+--- stderr: ament_cmake_target_dependencies
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_target_dependencies [0.68s]
+--- stderr: ament_cmake_test
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_test [1.03s]
+Starting >>> ament_cmake_gtest
+Starting >>> ament_cmake_pytest
+Starting >>> ament_lint_auto
+Starting >>> ament_cmake_google_benchmark
+Starting >>> ament_cmake_nose
+Starting >>> ament_cmake_vendor_package
+--- stderr: ament_copyright
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_copyright [0.79s]
+Starting >>> ament_lint_cmake
+Starting >>> ament_cpplint
+Starting >>> ament_uncrustify
+Starting >>> ament_xmllint
+Starting >>> ament_clang_format
+Starting >>> ament_clang_tidy
+Starting >>> ament_pclint
+Starting >>> domain_coordinator
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+--- stderr: ament_cmake_pytest
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_pytest [1.45s]
+--- stderr: ament_cmake_nose
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_nose [1.46s]
+--- stderr: ament_lint_auto
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_lint_auto [1.49s]
+--- stderr: ament_cmake_vendor_package
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_vendor_package [1.51s]
+--- stderr: ament_cmake_gtest
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_gtest [1.54s]
+Starting >>> ament_cmake_gen_version_h
+Starting >>> ament_cmake_gmock
+--- stderr: ament_cmake_google_benchmark
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_google_benchmark [1.91s]
+Finished <<< ament_clang_format [2.21s]
+--- stderr: ament_clang_format
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_lint_cmake [2.26s]
+--- stderr: ament_lint_cmake
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Starting >>> ament_cmake_lint_cmake
+--- stderr: domain_coordinator
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< domain_coordinator [2.27s]
+--- stderr: ament_uncrustify
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_uncrustify [2.31s]
+--- stderr: ament_cpplint
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_cpplint [2.33s]
+Finished <<< ament_pclint [2.32s]
+--- stderr: ament_xmllint
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_xmllint [2.34s]
+--- stderr: ament_clang_tidy
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/dist.py:759: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: Apache Software License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+---
+Finished <<< ament_clang_tidy [2.36s]
+--- stderr: ament_cmake_gmock
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_gmock [0.89s]
+Finished <<< ament_cmake_gen_version_h [1.19s]
+Starting >>> ament_cmake
+--- stderr: ament_cmake_lint_cmake
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_lint_cmake [0.65s]
+Starting >>> ament_cmake_copyright
+--- stderr: ament_cmake
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake [0.52s]
+Starting >>> ament_cmake_auto
+--- stderr: ament_cmake_copyright
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_copyright [0.54s]
+Starting >>> ament_cmake_cppcheck
+Starting >>> ament_cmake_cpplint
+Starting >>> ament_cmake_flake8
+Starting >>> ament_cmake_pep257
+Starting >>> ament_cmake_uncrustify
+Starting >>> ament_cmake_xmllint
+Starting >>> ament_cmake_clang_format
+Starting >>> ament_cmake_clang_tidy
+Starting >>> ament_cmake_mypy
+Starting >>> ament_cmake_pclint
+Starting >>> ament_cmake_pycodestyle
+Starting >>> ament_cmake_pyflakes
+Finished <<< ament_cmake_auto [0.90s]
+--- stderr: ament_cmake_auto
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+--- stderr: ament_cmake_cpplint
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_cpplint [1.06s]
+--- stderr: ament_cmake_flake8
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_flake8 [1.10s]
+--- stderr: ament_cmake_cppcheck
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_cppcheck [1.12s]
+--- stderr: ament_cmake_pep257
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_pep257 [1.13s]
+--- stderr: ament_cmake_xmllint
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_xmllint [1.14s]
+--- stderr: ament_cmake_pycodestyle
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_pycodestyle [1.15s]
+--- stderr: ament_cmake_clang_tidy
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_clang_tidy [1.17s]
+--- stderr: ament_cmake_mypy
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_mypy [1.18s]
+--- stderr: ament_cmake_pyflakes
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_pyflakes [1.18s]
+--- stderr: ament_cmake_pclint
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_pclint [1.21s]
+--- stderr: ament_cmake_clang_format
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_clang_format [1.23s]
+--- stderr: ament_cmake_uncrustify
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_uncrustify [1.25s]
+Starting >>> ament_lint_common
+--- stderr: ament_lint_common
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_lint_common [0.54s]
+Starting >>> ament_cmake_ros
+Cloning into 'src/rosidl_typesupport'...
+--- stderr: ament_cmake_ros
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< ament_cmake_ros [0.63s]
+
+Summary: 59 packages finished [10.0s]
+  56 packages had stderr output: ament_clang_format ament_clang_tidy ament_cmake ament_cmake_auto ament_cmake_clang_format ament_cmake_clang_tidy ament_cmake_copyright ament_cmake_core ament_cmake_cppcheck ament_cmake_cpplint ament_cmake_export_definitions ament_cmake_export_dependencies ament_cmake_export_include_directories ament_cmake_export_interfaces ament_cmake_export_libraries ament_cmake_export_link_flags ament_cmake_export_targets ament_cmake_flake8 ament_cmake_gmock ament_cmake_google_benchmark ament_cmake_gtest ament_cmake_include_directories ament_cmake_libraries ament_cmake_lint_cmake ament_cmake_mypy ament_cmake_nose ament_cmake_pclint ament_cmake_pep257 ament_cmake_pycodestyle ament_cmake_pyflakes ament_cmake_pytest ament_cmake_python ament_cmake_ros ament_cmake_target_dependencies ament_cmake_test ament_cmake_uncrustify ament_cmake_vendor_package ament_cmake_version ament_cmake_xmllint ament_copyright ament_cppcheck ament_cpplint ament_flake8 ament_lint ament_lint_auto ament_lint_cmake ament_lint_common ament_mypy ament_pep257 ament_pycodestyle ament_pyflakes ament_uncrustify ament_xmllint domain_coordinator gmock_vendor gtest_vendor
+Cloning into 'src/rosidl_typesupport_microxrcedds'...
+Cloning into 'src/rosidl'...
+Cloning into 'src/rmw'...
+Cloning into 'src/rcl_interfaces'...
+Cloning into 'src/rosidl_defaults'...
+Cloning into 'src/unique_identifier_msgs'...
+Cloning into 'src/common_interfaces'...
+Cloning into 'src/example_interfaces'...
+Cloning into 'src/test_interface_files'...
+Cloning into 'src/rmw_implementation'...
+Cloning into 'src/rcl_logging'...
+Cloning into 'src/ros2_tracing'...
+warning: redirecting to https://gitlab.com/ros-tracing/ros2_tracing.git/
+Cloning into 'src/micro_ros_utilities'...
+touch: cannot touch 'src/rcl_logging/rcl_logging_log4cxx/COLCON_IGNORE': No such file or directory
+cd /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src; \
+unset AMENT_PREFIX_PATH; \
+PATH="/opt/esp-idf/components/espcoredump:/opt/esp-idf/components/partition_table:/opt/esp-idf/components/app_update:/root/.espressif/tools/xtensa-esp-elf-gdb/12.1_20221002/xtensa-esp-elf-gdb/bin:/root/.espressif/tools/riscv32-esp-elf-gdb/12.1_20221002/riscv32-esp-elf-gdb/bin:/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin:/root/.espressif/tools/xtensa-esp32s2-elf/esp-12.2.0_20230208/xtensa-esp32s2-elf/bin:/root/.espressif/tools/xtensa-esp32s3-elf/esp-12.2.0_20230208/xtensa-esp32s3-elf/bin:/root/.espressif/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf/bin:/root/.espressif/tools/esp32ulp-elf/2.35_20220830/esp32ulp-elf/bin:/root/.espressif/tools/openocd-esp32/v0.12.0-esp32-20230419/openocd-esp32/bin:/root/.espressif/python_env/idf5.1_py3.10_env/bin:/opt/esp-idf/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; \
+. ../micro_ros_dev/install/local_setup.sh; \
+colcon build \
+	--merge-install \
+	--packages-ignore-regex=.*_cpp \
+	--metas /workspace/microros_esp32/components/micro_ros_espidf_component/colcon.meta /workspace/microros_esp32/app-colcon.meta \
+	--cmake-args \
+	"--no-warn-unused-cli" \
+	-DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=OFF \
+	-DTHIRDPARTY=ON \
+	-DBUILD_SHARED_LIBS=OFF \
+	-DBUILD_TESTING=OFF \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_TOOLCHAIN_FILE=/workspace/microros_esp32/components/micro_ros_espidf_component/esp32_toolchain.cmake \
+	-DCMAKE_VERBOSE_MAKEFILE=OFF \
+        -DIDF_INCLUDES='-I/workspace/microros_esp32/components/micro_ros_espidf_component/include_override -I/opt/esp-idf/components/xtensa/include -I/opt/esp-idf/components/xtensa/esp32/include -I/opt/esp-idf/components/esp_ringbuf/include -I/opt/esp-idf/components/efuse/include -I/opt/esp-idf/components/efuse/esp32/include -I/opt/esp-idf/components/driver/include -I/opt/esp-idf/components/driver/deprecated -I/opt/esp-idf/components/driver/analog_comparator/include -I/opt/esp-idf/components/driver/dac/include -I/opt/esp-idf/components/driver/gpio/include -I/opt/esp-idf/components/driver/gptimer/include -I/opt/esp-idf/components/driver/i2c/include -I/opt/esp-idf/components/driver/i2s/include -I/opt/esp-idf/components/driver/ledc/include -I/opt/esp-idf/components/driver/mcpwm/include -I/opt/esp-idf/components/driver/parlio/include -I/opt/esp-idf/components/driver/pcnt/include -I/opt/esp-idf/components/driver/rmt/include -I/opt/esp-idf/components/driver/sdio_slave/include -I/opt/esp-idf/components/driver/sdmmc/include -I/opt/esp-idf/components/driver/sigma_delta/include -I/opt/esp-idf/components/driver/spi/include -I/opt/esp-idf/components/driver/temperature_sensor/include -I/opt/esp-idf/components/driver/touch_sensor/include -I/opt/esp-idf/components/driver/twai/include -I/opt/esp-idf/components/driver/uart/include -I/opt/esp-idf/components/driver/usb_serial_jtag/include -I/opt/esp-idf/components/driver/touch_sensor/esp32/include -I/opt/esp-idf/components/esp_pm/include -I/opt/esp-idf/components/mbedtls/port/include -I/opt/esp-idf/components/mbedtls/mbedtls/include -I/opt/esp-idf/components/mbedtls/mbedtls/library -I/opt/esp-idf/components/mbedtls/esp_crt_bundle/include -I/opt/esp-idf/components/esp_app_format/include -I/opt/esp-idf/components/bootloader_support/include -I/opt/esp-idf/components/bootloader_support/bootloader_flash/include -I/opt/esp-idf/components/esp_partition/include -I/opt/esp-idf/components/app_update/include -I/opt/esp-idf/components/esp_mm/include -I/opt/esp-idf/components/spi_flash/include -I/opt/esp-idf/components/pthread/include -I/opt/esp-idf/components/esp_system/include -I/opt/esp-idf/components/esp_rom/include -I/opt/esp-idf/components/esp_rom/include/esp32 -I/opt/esp-idf/components/esp_rom/esp32 -I/opt/esp-idf/components/hal/esp32/include -I/opt/esp-idf/components/hal/include -I/opt/esp-idf/components/hal/platform_port/include -I/opt/esp-idf/components/log/include -I/opt/esp-idf/components/heap/include -I/opt/esp-idf/components/soc/include -I/opt/esp-idf/components/soc/esp32 -I/opt/esp-idf/components/soc/esp32/include -I/opt/esp-idf/components/esp_hw_support/include -I/opt/esp-idf/components/esp_hw_support/include/soc -I/opt/esp-idf/components/esp_hw_support/include/soc/esp32 -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/include -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include -I/opt/esp-idf/components/freertos/esp_additions/include/freertos -I/opt/esp-idf/components/freertos/esp_additions/include -I/opt/esp-idf/components/freertos/esp_additions/arch/xtensa/include -I/opt/esp-idf/components/newlib/platform_include -I/opt/esp-idf/components/esp_common/include -I/opt/esp-idf/components/esp_timer/include -I/opt/esp-idf/components/app_trace/include -I/opt/esp-idf/components/esp_event/include -I/opt/esp-idf/components/nvs_flash/include -I/opt/esp-idf/components/nvs_flash/../spi_flash/include -I/opt/esp-idf/components/esp_phy/include -I/opt/esp-idf/components/esp_phy/esp32/include -I/opt/esp-idf/components/vfs/include -I/opt/esp-idf/components/lwip/include -I/opt/esp-idf/components/lwip/include/apps -I/opt/esp-idf/components/lwip/include/apps/sntp -I/opt/esp-idf/components/lwip/lwip/src/include -I/opt/esp-idf/components/lwip/port/include -I/opt/esp-idf/components/lwip/port/freertos/include/ -I/opt/esp-idf/components/lwip/port/esp32xx/include -I/opt/esp-idf/components/lwip/port/esp32xx/include/arch -I/opt/esp-idf/components/esp_netif/include -I/opt/esp-idf/components/wpa_supplicant/include -I/opt/esp-idf/components/wpa_supplicant/port/include -I/opt/esp-idf/components/wpa_supplicant/esp_supplicant/include -I/opt/esp-idf/components/esp_coex/include -I/opt/esp-idf/components/esp_wifi/include -I/opt/esp-idf/components/esp_wifi/wifi_apps/include -I/opt/esp-idf/components/unity/include -I/opt/esp-idf/components/unity/unity/src -I/opt/esp-idf/components/cmock/CMock/src -I/opt/esp-idf/components/console/. -I/opt/esp-idf/components/http_parser/. -I/opt/esp-idf/components/esp-tls/. -I/opt/esp-idf/components/esp-tls/esp-tls-crypto -I/opt/esp-idf/components/esp_adc/include -I/opt/esp-idf/components/esp_adc/interface -I/opt/esp-idf/components/esp_adc/esp32/include -I/opt/esp-idf/components/esp_adc/deprecated/include -I/opt/esp-idf/components/esp_eth/include -I/opt/esp-idf/components/esp_gdbstub/include -I/opt/esp-idf/components/esp_hid/include -I/opt/esp-idf/components/tcp_transport/include -I/opt/esp-idf/components/esp_http_client/include -I/opt/esp-idf/components/esp_http_server/include -I/opt/esp-idf/components/esp_https_ota/include -I/opt/esp-idf/components/esp_psram/include -I/opt/esp-idf/components/esp_lcd/include -I/opt/esp-idf/components/esp_lcd/interface -I/opt/esp-idf/components/protobuf-c/protobuf-c -I/opt/esp-idf/components/protocomm/include/common -I/opt/esp-idf/components/protocomm/include/security -I/opt/esp-idf/components/protocomm/include/transports -I/opt/esp-idf/components/esp_local_ctrl/include -I/opt/esp-idf/components/espcoredump/include -I/opt/esp-idf/components/espcoredump/include/port/xtensa -I/opt/esp-idf/components/wear_levelling/include -I/opt/esp-idf/components/sdmmc/include -I/opt/esp-idf/components/fatfs/diskio -I/opt/esp-idf/components/fatfs/vfs -I/opt/esp-idf/components/fatfs/src -I/opt/esp-idf/components/idf_test/include -I/opt/esp-idf/components/idf_test/include/esp32 -I/opt/esp-idf/components/ieee802154/include -I/opt/esp-idf/components/json/cJSON -I/opt/esp-idf/components/mqtt//opt/esp-idf/components/mqtt/esp-mqtt/include -I/opt/esp-idf/components/perfmon/include -I/opt/esp-idf/components/spiffs/include -I/opt/esp-idf/components/wifi_provisioning/include -I/workspace/microros_esp32/main/. -I/workspace/microros_esp32/components/micro_ros_espidf_component/network_interfaces' \
+	-DCMAKE_C_STANDARD=17 \
+	-DUCLIENT_C_STANDARD=17;
+Starting >>> rcutils
+Starting >>> rosidl_cli
+Starting >>> rosidl_typesupport_interface
+Starting >>> microcdr
+Starting >>> test_interface_files
+Starting >>> rmw_implementation_cmake
+Starting >>> tracetools
+Starting >>> tracetools_trace
+Starting >>> tracetools_read
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+Finished <<< test_interface_files [0.82s]
+Finished <<< rmw_implementation_cmake [0.86s]
+Finished <<< rosidl_typesupport_interface [0.89s]
+Finished <<< tracetools [1.21s]
+Finished <<< tracetools_read [1.57s]
+--- stderr: tracetools_read
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+--- stderr: tracetools_trace
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< tracetools_trace [1.61s]
+Starting >>> tracetools_launch
+Starting >>> ros2trace
+Finished <<< rosidl_cli [1.68s]
+Starting >>> rosidl_adapter
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+Finished <<< microcdr [2.04s]
+Starting >>> microxrcedds_client
+--- stderr: rcutils
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/env.c:20:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/filesystem.c:21:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/include/rcutils/error_handling.h:28,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/char_array.c:16:
+/opt/esp-idf/components/newlib/platform_include/assert.h:16:2: warning: #include_next is a GCC extension
+   16 | #include_next <assert.h>
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/include/rcutils/error_handling.h:28,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/error_handling.c:22:
+/opt/esp-idf/components/newlib/platform_include/assert.h:16:2: warning: #include_next is a GCC extension
+   16 | #include_next <assert.h>
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/logging.c:21:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/process.c:20:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/error_handling.c:35:
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h: In function '__rcutils_convert_uint64_t_into_c_str':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:109:48: warning: unused parameter 'number' [-Wunused-parameter]
+  109 | __rcutils_convert_uint64_t_into_c_str(uint64_t number, char * buffer, size_t buffer_size)
+      |                                       ~~~~~~~~~^~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:109:63: warning: unused parameter 'buffer' [-Wunused-parameter]
+  109 | __rcutils_convert_uint64_t_into_c_str(uint64_t number, char * buffer, size_t buffer_size)
+      |                                                        ~~~~~~~^~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:109:78: warning: unused parameter 'buffer_size' [-Wunused-parameter]
+  109 | __rcutils_convert_uint64_t_into_c_str(uint64_t number, char * buffer, size_t buffer_size)
+      |                                                                       ~~~~~~~^~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h: In function '__rcutils_format_error_string':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:142:28: warning: unused parameter 'error_string' [-Wunused-parameter]
+  142 |   rcutils_error_string_t * error_string,
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:143:33: warning: unused parameter 'error_state' [-Wunused-parameter]
+  143 |   const rcutils_error_state_t * error_state)
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/error_handling.c: In function 'rcutils_get_error_string':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/error_handling.c:240:38: warning: initializer-string for array of 'char' is too long
+  240 |     return (rcutils_error_string_t) {"error not set"};  // NOLINT(readability/braces)
+      |                                      ^~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/error_handling.c:240:38: note: (near initialization for '(anonymous).str')
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h: At top level:
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:109:1: warning: '__rcutils_convert_uint64_t_into_c_str' defined but not used [-Wunused-function]
+  109 | __rcutils_convert_uint64_t_into_c_str(uint64_t number, char * buffer, size_t buffer_size)
+      | ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/./error_handling_helpers.h:91:1: warning: '__rcutils_reverse_str' defined but not used [-Wunused-function]
+   91 | __rcutils_reverse_str(char * string_in, size_t string_len)
+      | ^~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/strcasecmp.c:20:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/strerror.c:20:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/snprintf.c:22:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/atomic_64bits.c:53:10: warning: conflicting types for built-in function '__atomic_load_8'; expected 'long long unsigned int(const volatile void *, int)' [-Wbuiltin-declaration-mismatch]
+   53 | uint64_t __atomic_load_8(uint64_t *mem, int model) {
+      |          ^~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/atomic_64bits.c:62:6: warning: conflicting types for built-in function '__atomic_store_8'; expected 'void(volatile void *, long long unsigned int,  int)' [-Wbuiltin-declaration-mismatch]
+   62 | void __atomic_store_8(uint64_t *mem, uint64_t val, int model) {
+      |      ^~~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/atomic_64bits.c:70:10: warning: conflicting types for built-in function '__atomic_exchange_8'; expected 'long long unsigned int(volatile void *, long long unsigned int,  int)' [-Wbuiltin-declaration-mismatch]
+   70 | uint64_t __atomic_exchange_8(uint64_t *mem, uint64_t val, int model) {
+      |          ^~~~~~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/atomic_64bits.c:80:10: warning: conflicting types for built-in function '__atomic_fetch_add_8'; expected 'long long unsigned int(volatile void *, long long unsigned int,  int)' [-Wbuiltin-declaration-mismatch]
+   80 | uint64_t __atomic_fetch_add_8(uint64_t *mem, uint64_t val, int model) {
+      |          ^~~~~~~~~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/logging.c: In function 'rcutils_get_env_var_zero_or_one':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/logging.c:130:35: warning: unused parameter 'zero_semantic' [-Wunused-parameter]
+  130 |   const char * name, const char * zero_semantic,
+      |                      ~~~~~~~~~~~~~^~~~~~~~~~~~~
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/logging.c:131:16: warning: unused parameter 'one_semantic' [-Wunused-parameter]
+  131 |   const char * one_semantic)
+      |   ~~~~~~~~~~~~~^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/include/rcutils/error_handling.h:28,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/uint8_array.c:15:
+/opt/esp-idf/components/newlib/platform_include/assert.h:16:2: warning: #include_next is a GCC extension
+   16 | #include_next <assert.h>
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/time.c:25:
+/opt/esp-idf/components/newlib/platform_include/time.h:11:2: warning: #include_next is a GCC extension
+   11 | #include_next <time.h>
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/time_unix.c:31:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rcutils/src/time_unix.c:42:
+/opt/esp-idf/components/newlib/platform_include/time.h:11:2: warning: #include_next is a GCC extension
+   11 | #include_next <time.h>
+      |  ^~~~~~~~~~~~
+---
+Finished <<< rcutils [2.14s]
+Starting >>> rosidl_runtime_c
+Starting >>> rcl_logging_interface
+--- stderr: ros2trace
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< ros2trace [1.35s]
+--- stderr: tracetools_launch
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< tracetools_launch [1.38s]
+Starting >>> tracetools_test
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+Finished <<< rosidl_adapter [1.68s]
+Starting >>> rosidl_parser
+--- stderr: microxrcedds_client
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/util/time.c:3:
+/opt/esp-idf/components/newlib/platform_include/time.h:11:2: warning: #include_next is a GCC extension
+   11 | #include_next <time.h>
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/sys/socket.h:15,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/discovery/transport/udp_transport_datagram_posix_nopoll.c:4:
+/opt/esp-idf/components/lwip/include/lwip/sockets.h:8:2: warning: #include_next is a GCC extension
+    8 | #include_next "lwip/sockets.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/sys/socket.h:15,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/transport/ip/udp/udp_transport_posix_nopoll.c:5:
+/opt/esp-idf/components/lwip/include/lwip/sockets.h:8:2: warning: #include_next is a GCC extension
+    8 | #include_next "lwip/sockets.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:74,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/portable.h:59,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/FreeRTOS.h:71,
+                 from /opt/esp-idf/components/esp_system/include/esp_task.h:24,
+                 from /opt/esp-idf/components/lwip/port/include/lwipopts.h:20,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:51,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/sockets.h:42,
+                 from /opt/esp-idf/components/lwip/include/lwip/sockets.h:8:
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h: In function 'spinlock_acquire':
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h:117:94: warning: comparison of integer expressions of different signedness: 'esp_cpu_cycle_count_t' {aka 'long unsigned int'} and 'int32_t' {aka 'long int'} [-Wsign-compare]
+  117 |     } while ((timeout == SPINLOCK_WAIT_FOREVER) || (esp_cpu_get_cycle_count() - start_count) <= timeout);
+      |                                                                                              ^~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:74,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/portable.h:59,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/FreeRTOS.h:71,
+                 from /opt/esp-idf/components/esp_system/include/esp_task.h:24,
+                 from /opt/esp-idf/components/lwip/port/include/lwipopts.h:20,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:51,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/sockets.h:42,
+                 from /opt/esp-idf/components/lwip/include/lwip/sockets.h:8:
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h: In function 'spinlock_acquire':
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h:117:94: warning: comparison of integer expressions of different signedness: 'esp_cpu_cycle_count_t' {aka 'long unsigned int'} and 'int32_t' {aka 'long int'} [-Wsign-compare]
+  117 |     } while ((timeout == SPINLOCK_WAIT_FOREVER) || (esp_cpu_get_cycle_count() - start_count) <= timeout);
+      |                                                                                              ^~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:79:
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h: In function 'esp_ptr_in_drom':
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h:301:25: warning: comparison of integer expressions of different signedness: 'int' and 'uint32_t' {aka 'long unsigned int'} [-Wsign-compare]
+  301 |     return ((intptr_t)p >= drom_start_addr && (intptr_t)p < SOC_DROM_HIGH);
+      |                         ^~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:79:
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h: In function 'esp_ptr_in_drom':
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h:301:25: warning: comparison of integer expressions of different signedness: 'int' and 'uint32_t' {aka 'long unsigned int'} [-Wsign-compare]
+  301 |     return ((intptr_t)p >= drom_start_addr && (intptr_t)p < SOC_DROM_HIGH);
+      |                         ^~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:74,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/portable.h:59,
+                 from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/include/freertos/FreeRTOS.h:71,
+                 from /opt/esp-idf/components/esp_system/include/esp_task.h:24,
+                 from /opt/esp-idf/components/lwip/port/include/lwipopts.h:20,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:51,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/inet.h:43,
+                 from /opt/esp-idf/components/lwip/port/include/arpa/inet.h:10,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/transport/ip/ip_posix.c:18:
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h: In function 'spinlock_acquire':
+/opt/esp-idf/components/esp_hw_support/include/spinlock.h:117:94: warning: comparison of integer expressions of different signedness: 'esp_cpu_cycle_count_t' {aka 'long unsigned int'} and 'int32_t' {aka 'long int'} [-Wsign-compare]
+  117 |     } while ((timeout == SPINLOCK_WAIT_FOREVER) || (esp_cpu_get_cycle_count() - start_count) <= timeout);
+      |                                                                                              ^~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/arch/cc.h:12,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/arch.h:48,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/debug.h:40,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:52:
+/opt/esp-idf/components/newlib/platform_include/errno.h: At top level:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/arch/cc.h:12,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/arch.h:48,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/debug.h:40,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:52:
+/opt/esp-idf/components/newlib/platform_include/errno.h: At top level:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/portmacro.h:79:
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h: In function 'esp_ptr_in_drom':
+/opt/esp-idf/components/esp_hw_support/include/esp_memory_utils.h:301:25: warning: comparison of integer expressions of different signedness: 'int' and 'uint32_t' {aka 'long unsigned int'} [-Wsign-compare]
+  301 |     return ((intptr_t)p >= drom_start_addr && (intptr_t)p < SOC_DROM_HIGH);
+      |                         ^~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/arch/cc.h:12,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/arch.h:48,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/debug.h:40,
+                 from /opt/esp-idf/components/lwip/lwip/src/include/lwip/opt.h:52:
+/opt/esp-idf/components/newlib/platform_include/errno.h: At top level:
+/opt/esp-idf/components/newlib/platform_include/errno.h:10:2: warning: #include_next is a GCC extension
+   10 | #include_next "errno.h"
+      |  ^~~~~~~~~~~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/transport/ip/udp/udp_transport_posix_nopoll.c:6:
+/opt/esp-idf/components/newlib/platform_include/sys/time.h:21:2: warning: #include_next is a GCC extension
+   21 | #include_next <sys/time.h>
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/include/netdb.h:14,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/discovery/transport/udp_transport_datagram_posix_nopoll.c:5:
+/opt/esp-idf/components/lwip/include/lwip/netdb.h:9:2: warning: #include_next is a GCC extension
+    9 | #include_next "lwip/netdb.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/include/netdb.h:14,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/transport/ip/udp/udp_transport_posix_nopoll.c:7:
+/opt/esp-idf/components/lwip/include/lwip/netdb.h:9:2: warning: #include_next is a GCC extension
+    9 | #include_next "lwip/netdb.h"
+      |  ^~~~~~~~~~~~
+In file included from /opt/esp-idf/components/lwip/port/esp32xx/include/sys/socket.h:15,
+                 from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/Micro-XRCE-DDS-Client/src/c/profile/transport/ip/ip_posix.c:20:
+/opt/esp-idf/components/lwip/include/lwip/sockets.h:8:2: warning: #include_next is a GCC extension
+    8 | #include_next "lwip/sockets.h"
+      |  ^~~~~~~~~~~~
+---
+Finished <<< microxrcedds_client [1.40s]
+Finished <<< rcl_logging_interface [1.34s]
+Starting >>> rcl_logging_noop
+Finished <<< rosidl_runtime_c [1.40s]
+Starting >>> rmw
+--- stderr: tracetools_test
+/root/.espressif/python_env/idf5.1_py3.10_env/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+---
+Finished <<< tracetools_test [0.90s]
+Finished <<< rosidl_parser [0.98s]
+Starting >>> rosidl_cmake
+Finished <<< rcl_logging_noop [1.04s]
+--- stderr: rmw
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_node_name.c:17:
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_node_name.c: In function 'rmw_validate_node_name_with_size':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_node_name.c:72:24: warning: array subscript has type 'char' [-Wchar-subscripts]
+   72 |   if (isdigit(node_name[0]) != 0) {
+      |               ~~~~~~~~~^~~
+In file included from /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_full_topic_name.c:17:
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_full_topic_name.c: In function 'rmw_validate_full_topic_name_with_size':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/rmw/rmw/src/validate_full_topic_name.c:106:29: warning: array subscript has type 'char' [-Wchar-subscripts]
+  106 |       if (isdigit(topic_name[i + 1]) != 0) {
+      |                   ~~~~~~~~~~^~~~~~~
+---
+Finished <<< rmw [1.14s]
+Finished <<< rosidl_cmake [1.02s]
+Starting >>> rosidl_typesupport_introspection_c
+Starting >>> rosidl_typesupport_microxrcedds_c
+Starting >>> rosidl_generator_c
+Finished <<< rosidl_generator_c [1.06s]
+Finished <<< rosidl_typesupport_introspection_c [1.09s]
+Finished <<< rosidl_typesupport_microxrcedds_c [1.12s]
+Starting >>> rosidl_typesupport_c
+Starting >>> micro_ros_utilities
+Starting >>> rosidl_typesupport_introspection_tests
+Finished <<< rosidl_typesupport_introspection_tests [0.80s]
+Finished <<< rosidl_typesupport_c [1.23s]
+Starting >>> rosidl_default_generators
+Starting >>> rosidl_default_runtime
+--- stderr: micro_ros_utilities
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/micro_ros_utilities/src/type_utilities.c: In function 'print_type_info':
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/src/micro_ros_utilities/src/type_utilities.c:96:61: warning: format '%u' expects argument of type 'unsigned int', but argument 7 has type 'uint32_t' {aka 'long unsigned int'} [-Wformat=]
+   96 |       buffer, sizeof(buffer), "%sIntrospection for %s/%s - %u members, %zu B\n",
+      |                                                            ~^
+      |                                                             |
+      |                                                             unsigned int
+      |                                                            %lu
+......
+  100 |       members->member_count_,
+      |       ~~~~~~~~~~~~~~~~~~~~~~                                 
+      |              |
+      |              uint32_t {aka long unsigned int}
+---
+Finished <<< micro_ros_utilities [1.33s]
+Finished <<< rosidl_default_generators [0.57s]
+Finished <<< rosidl_default_runtime [0.59s]
+Starting >>> builtin_interfaces
+Starting >>> micro_ros_msgs
+Starting >>> unique_identifier_msgs
+Starting >>> lifecycle_msgs
+Starting >>> std_srvs
+--- stderr: builtin_interfaces
+CMake Error at /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/share/rosidl_adapter/cmake/rosidl_adapt_interfaces.cmake:59 (message):
+  execute_process(/root/.espressif/python_env/idf5.1_py3.10_env/bin/python3
+  -m rosidl_adapter --package-name builtin_interfaces --arguments-file
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/build/builtin_interfaces/rosidl_adapter__arguments__builtin_interfaces.json
+  --output-dir
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/build/builtin_interfaces/rosidl_adapter/builtin_interfaces
+  --output-file
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/build/builtin_interfaces/rosidl_adapter/builtin_interfaces.idls)
+  returned error code 1:
+
+  AttributeError processing template 'msg.idl.em'
+
+  Traceback (most recent call last):
+
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/resource/__init__.py", line 51, in evaluate_template
+      em.BUFFERED_OPT: True,
+
+  AttributeError: module 'em' has no attribute 'BUFFERED_OPT'
+
+  
+
+  During handling of the above exception, another exception occurred:
+
+  
+
+  Traceback (most recent call last):
+
+    File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+      return _run_code(code, main_globals, None,
+    File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+      exec(code, run_globals)
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/__main__.py", line 19, in <module>
+      sys.exit(main())
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/main.py", line 53, in main
+      abs_idl_file = convert_to_idl(
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/__init__.py", line 19, in convert_to_idl
+      return convert_msg_to_idl(
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/msg/__init__.py", line 39, in convert_msg_to_idl
+      expand_template('msg.idl.em', data, output_file, encoding='iso-8859-1')
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/resource/__init__.py", line 23, in expand_template
+      content = evaluate_template(template_name, data)
+    File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/python3.10/site-packages/rosidl_adapter/resource/__init__.py", line 69, in evaluate_template
+      _interpreter.shutdown()
+
+  AttributeError: 'NoneType' object has no attribute 'shutdown'
+
+Call Stack (most recent call first):
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/share/rosidl_cmake/cmake/rosidl_generate_interfaces.cmake:130 (rosidl_adapt_interfaces)
+  CMakeLists.txt:16 (rosidl_generate_interfaces)
+
+
+---
+Failed   <<< builtin_interfaces [0.89s, exited with code 1]
+Aborted  <<< unique_identifier_msgs [0.89s]
+Aborted  <<< lifecycle_msgs [0.88s]
+Aborted  <<< micro_ros_msgs [0.89s]
+Aborted  <<< std_srvs [0.87s]
+
+Summary: 28 packages finished [9.53s]
+  1 package failed: builtin_interfaces
+  4 packages aborted: lifecycle_msgs micro_ros_msgs std_srvs unique_identifier_msgs
+  14 packages had stderr output: builtin_interfaces lifecycle_msgs micro_ros_msgs micro_ros_utilities microxrcedds_client rcutils rmw ros2trace std_srvs tracetools_launch tracetools_read tracetools_test tracetools_trace unique_identifier_msgs
+  32 packages not processed
+make: *** [libmicroros.mk:87: /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install] Error 1
+CMake Error at components/micro_ros_espidf_component/CMakeLists.txt:97 (message):
+  FAILED: 2
+
+
+-- Configuring incomplete, errors occurred!
+See also "/workspace/microros_esp32/build/CMakeFiles/CMakeOutput.log".
+[0;33mHINT: The issue is better to resolve by replacing format specifiers to 'PRI'-family macros (include <inttypes.h> header file).[0m
+cmake failed with exit code 1, output of the command is in the /workspace/microros_esp32/build/log/idf_py_stderr_output_2335451 and /workspace/microros_esp32/build/log/idf_py_stdout_output_2335451

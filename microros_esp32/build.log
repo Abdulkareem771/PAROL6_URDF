@@ -1,0 +1,202 @@
+/opt/esp-idf/tools/check_python_dependencies.py:12: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+Executing action: all (aliases: build)
+Running cmake in directory /workspace/microros_esp32/build
+Executing "cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/root/.espressif/python_env/idf5.1_py3.10_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /workspace/microros_esp32"...
+-- IDF_TARGET is not set, guessed 'esp32' from sdkconfig '/workspace/microros_esp32/sdkconfig'
+-- Found Git: /usr/bin/git (found version "2.34.1") 
+-- The C compiler identification is GNU 12.2.0
+-- The CXX compiler identification is GNU 12.2.0
+-- The ASM compiler identification is GNU
+-- Found assembler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Project is not inside a git repository, or git repository has no commits; will not use 'git describe' to determine PROJECT_VER.
+-- Building ESP-IDF components for target esp32
+-- Project sdkconfig file /workspace/microros_esp32/sdkconfig
+Loading defaults file /workspace/microros_esp32/sdkconfig.defaults...
+Compiler supported targets: xtensa-esp32-elf
+
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of time_t
+-- Check size of time_t - done
+-- Found Python3: /root/.espressif/python_env/idf5.1_py3.10_env/bin/python (found version "3.10.12") found components: Interpreter 
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS - Success
+-- App "microros_esp32" version: 1
+-- Adding linker script /workspace/microros_esp32/build/esp-idf/esp_system/ld/memory.ld
+-- Adding linker script /opt/esp-idf/components/esp_system/ld/esp32/sections.ld.in
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.api.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-data.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.syscalls.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
+-- Adding linker script /opt/esp-idf/components/soc/esp32/ld/esp32.peripherals.ld
+-- Using Micro XRCE-DDS middleware
+rm -f /workspace/microros_esp32/components/micro_ros_espidf_component/esp32_toolchain.cmake; \
+cat /workspace/microros_esp32/components/micro_ros_espidf_component/esp32_toolchain.cmake.in | \
+	sed "s/@CMAKE_C_COMPILER@/\/root\/.espressif\/tools\/xtensa-esp32-elf\/esp-12.2.0_20230208\/xtensa-esp32-elf\/bin\/xtensa-esp32-elf-gcc/g" | \
+	sed "s/@CMAKE_CXX_COMPILER@/\/root\/.espressif\/tools\/xtensa-esp32-elf\/esp-12.2.0_20230208\/xtensa-esp32-elf\/bin\/xtensa-esp32-elf-g++/g" | \
+	sed "s/@CFLAGS@/-mlongcalls -Wno-frame-address  -ffunction-sections -fdata-sections/g" | \
+	sed "s/@CXXFLAGS@/-mlongcalls -Wno-frame-address  -ffunction-sections -fdata-sections/g" | \
+	sed "s/@IDF_TARGET@/esp32/g" | \
+	sed "s/@IDF_PATH@/\/opt\/esp-idf/g" | \
+	sed "s/@BUILD_CONFIG_DIR@/\/workspace\/microros_esp32\/build\/config/g" \
+	> /workspace/microros_esp32/components/micro_ros_espidf_component/esp32_toolchain.cmake
+rm -rf micro_ros_dev; \
+mkdir micro_ros_dev; cd micro_ros_dev; \
+git clone -b humble https://github.com/ament/ament_cmake src/ament_cmake; \
+git clone -b humble https://github.com/ament/ament_lint src/ament_lint; \
+git clone -b humble https://github.com/ament/ament_package src/ament_package; \
+git clone -b humble https://github.com/ament/googletest src/googletest; \
+git clone -b humble https://github.com/ros2/ament_cmake_ros src/ament_cmake_ros; \
+git clone -b humble https://github.com/ament/ament_index src/ament_index; \
+colcon build --cmake-args -DBUILD_TESTING=OFF -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=gcc;
+rm -rf micro_ros_src; \
+mkdir micro_ros_src; cd micro_ros_src; \
+if [ "microxrcedds" = "embeddedrtps" ]; then \
+	git clone -b humble https://github.com/micro-ROS/embeddedRTPS src/embeddedRTPS; \
+	git clone -b humble https://github.com/micro-ROS/rmw_embeddedrtps src/rmw_embeddedrtps; \
+else \
+	git clone -b ros2 https://github.com/eProsima/Micro-XRCE-DDS-Client src/Micro-XRCE-DDS-Client; \
+	git clone -b humble https://github.com/micro-ROS/rmw_microxrcedds src/rmw_microxrcedds; \
+fi; \
+git clone -b ros2 https://github.com/eProsima/micro-CDR src/micro-CDR; \
+git clone -b humble https://github.com/micro-ROS/rcl src/rcl; \
+git clone -b humble https://github.com/ros2/rclc src/rclc; \
+git clone -b humble https://github.com/micro-ROS/rcutils src/rcutils; \
+git clone -b humble https://github.com/micro-ROS/micro_ros_msgs src/micro_ros_msgs; \
+git clone -b humble https://github.com/micro-ROS/rosidl_typesupport src/rosidl_typesupport; \
+git clone -b humble https://github.com/micro-ROS/rosidl_typesupport_microxrcedds src/rosidl_typesupport_microxrcedds; \
+git clone -b humble https://github.com/ros2/rosidl src/rosidl; \
+git clone -b humble https://github.com/ros2/rmw src/rmw; \
+git clone -b humble https://github.com/ros2/rcl_interfaces src/rcl_interfaces; \
+git clone -b humble https://github.com/ros2/rosidl_defaults src/rosidl_defaults; \
+git clone -b humble https://github.com/ros2/unique_identifier_msgs src/unique_identifier_msgs; \
+git clone -b humble https://github.com/ros2/common_interfaces src/common_interfaces; \
+git clone -b galactic https://github.com/ros2/example_interfaces src/example_interfaces; \
+git clone -b humble https://github.com/ros2/test_interface_files src/test_interface_files; \
+git clone -b humble https://github.com/ros2/rmw_implementation src/rmw_implementation; \
+git clone -b humble https://github.com/ros2/rcl_logging src/rcl_logging; \
+git clone -b humble https://gitlab.com/ros-tracing/ros2_tracing src/ros2_tracing; \
+git clone -b humble https://github.com/micro-ROS/micro_ros_utilities src/micro_ros_utilities; \
+    touch src/rosidl/rosidl_typesupport_introspection_cpp/COLCON_IGNORE; \
+    touch src/rcl_logging/rcl_logging_log4cxx/COLCON_IGNORE; \
+    touch src/rcl_logging/rcl_logging_spdlog/COLCON_IGNORE; \
+    touch src/rclc/rclc_examples/COLCON_IGNORE; \
+touch src/rcl/rcl_yaml_param_parser/COLCON_IGNORE; \
+cp -rf /workspace/microros_esp32/components/micro_ros_espidf_component/extra_packages src/extra_packages || :; \
+test -f src/extra_packages/extra_packages.repos && cd src/extra_packages && vcs import --input extra_packages.repos || :;
+Cloning into 'src/Micro-XRCE-DDS-Client'...
+Cloning into 'src/ament_cmake'...
+Cloning into 'src/ament_lint'...
+Cloning into 'src/ament_package'...
+Cloning into 'src/googletest'...
+Cloning into 'src/rmw_microxrcedds'...
+Cloning into 'src/micro-CDR'...
+Cloning into 'src/rcl'...
+Cloning into 'src/rclc'...
+Cloning into 'src/ament_cmake_ros'...
+Cloning into 'src/ament_index'...
+Cloning into 'src/rcutils'...
+Starting >>> ament_package
+Starting >>> ament_lint
+Starting >>> ament_pycodestyle
+Starting >>> gtest_vendor
+Starting >>> ament_cppcheck
+--- stderr: gtest_vendor
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    BUILD_TESTING
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< gtest_vendor [0.97s]
+Starting >>> gmock_vendor
+--- stderr: gmock_vendor
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    BUILD_TESTING
+    CMAKE_CXX_COMPILER
+    CMAKE_C_COMPILER
+
+
+---
+Finished <<< gmock_vendor [0.11s]
+Finished <<< ament_cppcheck [1.65s]
+Finished <<< ament_lint [1.67s]
+Finished <<< ament_pycodestyle [1.68s]
+Starting >>> ament_flake8
+Starting >>> ament_pyflakes
+Finished <<< ament_package [1.71s]
+Starting >>> ament_cmake_core
+--- stderr: ament_cmake_core
+Traceback (most recent call last):
+  File "/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_dev/src/ament_cmake/ament_cmake_core/cmake/core/package_xml_2_cmake.py", line 22, in <module>
+    from catkin_pkg.package import parse_package_string
+ModuleNotFoundError: No module named 'catkin_pkg'
+CMake Error at cmake/core/ament_package_xml.cmake:95 (message):
+  execute_process(/root/.espressif/python_env/idf5.1_py3.10_env/bin/python3
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_dev/src/ament_cmake/ament_cmake_core/cmake/core/package_xml_2_cmake.py
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_dev/src/ament_cmake/ament_cmake_core/package.xml
+  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_dev/build/ament_cmake_core/ament_cmake_core/package.cmake)
+  returned error code 1
+Call Stack (most recent call first):
+  cmake/core/ament_package_xml.cmake:49 (_ament_package_xml)
+  CMakeLists.txt:15 (ament_package_xml)
+
+
+---
+Failed   <<< ament_cmake_core [0.92s, exited with code 1]
+Aborted  <<< ament_flake8 [1.04s]
+Aborted  <<< ament_pyflakes [1.04s]
+
+Summary: 6 packages finished [3.11s]
+  1 package failed: ament_cmake_core
+  2 packages aborted: ament_flake8 ament_pyflakes
+  3 packages had stderr output: ament_cmake_core gmock_vendor gtest_vendor
+  52 packages not processed
+make: *** [libmicroros.mk:38: /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_dev/install] Error 1
+make: *** Waiting for unfinished jobs....
+Cloning into 'src/micro_ros_msgs'...
+Cloning into 'src/rosidl_typesupport'...
+Cloning into 'src/rosidl_typesupport_microxrcedds'...
+Cloning into 'src/rosidl'...
+Cloning into 'src/rmw'...
+Cloning into 'src/rcl_interfaces'...
+Cloning into 'src/rosidl_defaults'...
+Cloning into 'src/unique_identifier_msgs'...
+Cloning into 'src/common_interfaces'...
+Cloning into 'src/example_interfaces'...
+Cloning into 'src/test_interface_files'...
+Cloning into 'src/rmw_implementation'...
+Cloning into 'src/rcl_logging'...
+Cloning into 'src/ros2_tracing'...
+warning: redirecting to https://gitlab.com/ros-tracing/ros2_tracing.git/
+Cloning into 'src/micro_ros_utilities'...
+touch: cannot touch 'src/rcl_logging/rcl_logging_log4cxx/COLCON_IGNORE': No such file or directory
+CMake Error at components/micro_ros_espidf_component/CMakeLists.txt:97 (message):
+  FAILED: 2
+
+
+-- Configuring incomplete, errors occurred!
+See also "/workspace/microros_esp32/build/CMakeFiles/CMakeOutput.log".
+cmake failed with exit code 1, output of the command is in the /workspace/microros_esp32/build/log/idf_py_stderr_output_1239987 and /workspace/microros_esp32/build/log/idf_py_stdout_output_1239987

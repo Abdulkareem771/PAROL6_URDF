@@ -1,0 +1,90 @@
+/opt/esp-idf/tools/check_python_dependencies.py:12: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+  import pkg_resources
+Executing action: all (aliases: build)
+Running cmake in directory /workspace/microros_esp32/build
+Executing "cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/root/.espressif/python_env/idf5.1_py3.10_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /workspace/microros_esp32"...
+-- IDF_TARGET is not set, guessed 'esp32' from sdkconfig '/workspace/microros_esp32/sdkconfig'
+-- Found Git: /usr/bin/git (found version "2.34.1") 
+-- The C compiler identification is GNU 12.2.0
+-- The CXX compiler identification is GNU 12.2.0
+-- The ASM compiler identification is GNU
+-- Found assembler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Project is not inside a git repository, or git repository has no commits; will not use 'git describe' to determine PROJECT_VER.
+-- Building ESP-IDF components for target esp32
+-- Project sdkconfig file /workspace/microros_esp32/sdkconfig
+Loading defaults file /workspace/microros_esp32/sdkconfig.defaults...
+Compiler supported targets: xtensa-esp32-elf
+
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of time_t
+-- Check size of time_t - done
+-- Found Python3: /root/.espressif/python_env/idf5.1_py3.10_env/bin/python (found version "3.10.12") found components: Interpreter 
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS
+-- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS - Success
+-- App "microros_esp32" version: 1
+-- Adding linker script /workspace/microros_esp32/build/esp-idf/esp_system/ld/memory.ld
+-- Adding linker script /opt/esp-idf/components/esp_system/ld/esp32/sections.ld.in
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.api.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-data.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.syscalls.ld
+-- Adding linker script /opt/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
+-- Adding linker script /opt/esp-idf/components/soc/esp32/ld/esp32.peripherals.ld
+-- Using Micro XRCE-DDS middleware
+echo /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/atomic_workaround; \
+	mkdir /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/atomic_workaround; cd /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/atomic_workaround; \
+	/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar x /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/librcutils.a; \
+	/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip atomic_64bits.c.obj --strip-symbol=__atomic_fetch_add_8; \
+	if [ 5 -ge 5 ] && [ 1 -ge 3 ]; then \
+		/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip atomic_64bits.c.obj --strip-symbol=__atomic_load_8; \
+		/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip atomic_64bits.c.obj --strip-symbol=__atomic_store_8; \
+		/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip atomic_64bits.c.obj --strip-symbol=__atomic_exchange_8; \
+	fi; \
+	/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar rc -s librcutils.a *.obj; \
+	cp -rf librcutils.a  /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/librcutils.a; \
+	cd ..; \
+	rm -rf /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/atomic_workaround;
+/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/atomic_workaround
+/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar: /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/librcutils.a: No such file or directory
+/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip: 'atomic_64bits.c.obj': No such file
+/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar: *.obj: No such file or directory
+cp: cannot stat 'librcutils.a': No such file or directory
+mkdir -p /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/libmicroros; cd /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/libmicroros; \
+for file in $(find /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/lib/ -name '*.a'); do \
+	folder=$(echo $file | sed -E "s/(.+)\/(.+).a/\2/"); \
+	mkdir -p $folder; cd $folder; /root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar x $file; \
+	for f in *; do \
+		mv $f ../$folder-$f; \
+	done; \
+	cd ..; rm -rf $folder; \
+done ; \
+/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar rc -s libmicroros.a *.obj; cp libmicroros.a /workspace/microros_esp32/components/micro_ros_espidf_component; \
+cd ..; rm -rf libmicroros; \
+cp -R /workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/include /workspace/microros_esp32/components/micro_ros_espidf_component/include;
+/root/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar: *.obj: No such file or directory
+cp: cannot stat 'libmicroros.a': No such file or directory
+cp: cannot stat '/workspace/microros_esp32/components/micro_ros_espidf_component/micro_ros_src/install/include': No such file or directory
+make: *** [libmicroros.mk:151: /workspace/microros_esp32/components/micro_ros_espidf_component/libmicroros.a] Error 1
+CMake Error at components/micro_ros_espidf_component/CMakeLists.txt:97 (message):
+  FAILED: 2
+
+
+-- Configuring incomplete, errors occurred!
+See also "/workspace/microros_esp32/build/CMakeFiles/CMakeOutput.log".
+cmake failed with exit code 1, output of the command is in the /workspace/microros_esp32/build/log/idf_py_stderr_output_2309729 and /workspace/microros_esp32/build/log/idf_py_stdout_output_2309729

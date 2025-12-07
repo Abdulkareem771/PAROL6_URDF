@@ -1,3 +1,2 @@
-idf_component_register(SRCS "main.c"
-                    INCLUDE_DIRS "."
-                    REQUIRES micro_ros_espidf_component nvs_flash driver esp_timer)
+idf_component_register(SRCS "main.c" "esp32_serial_transport.c"
+                       INCLUDE_DIRS ".")
