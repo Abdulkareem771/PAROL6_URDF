@@ -572,6 +572,9 @@ If you want to use WiFi instead of UART in the future:
    ros2 run micro_ros_agent micro_ros_agent udp4 --port 8888
    ```
 
+7. **Check IP Address**:
+   Run `idf.py monitor` to see the IP address assigned to the ESP32. You might need to ping the agent using this IP if auto-discovery fails.
+
 ### Debugging ESP32 Boot Issues
 
 If the ESP32 appears to do nothing after flashing:
@@ -638,4 +641,29 @@ If you encounter issues:
 2. Review build logs in `/workspace/microros_esp32/build/log/`
 3. Check ESP32 monitor output for runtime errors
 4. Verify all prerequisites are installed
-5. Ensure the micro-ROS agent is running and can access the serial port
+
+## Deployment Best Practices
+
+### 1. Connection Stability (The "Reset" Trick)
+If the agent is running but not connecting:
+- **Timing is Key**: Start the agent *first*, wait for it to say `running...`, and *then* press the **EN (Reset)** button on the ESP32.
+- **Why?**: The ESP32 attempts to connect immediately on boot. If the agent isn't ready, the connection request is lost. Resetting forces a new request.
+
+### 2. Console Log Conflicts
+The ESP32 uses UART0 for both **logs** (printf) and **micro-ROS transport**. This can cause conflicts where the agent interprets log text as garbage data.
+- **Solution**: We have hardcoded the UART pins in `esp32_serial_transport.c` to ensure correct configuration.
+- **Debugging**: If you need to see boot logs, you must stop the agent and run `idf.py monitor`. You cannot run both simultaneously on the same port.
+
+### 3. Hardcoded Configuration
+To avoid issues with `sdkconfig` resets losing pin definitions, the UART pins are hardcoded in `main/esp32_serial_transport.c`:
+```c
+#define UART_TXD  (1)  // Default TX
+#define UART_RXD  (3)  // Default RX
+```
+
+### 4. Git Best Practices
+- **Do NOT commit `sdkconfig`**: This file is generated based on your local environment and specific build. It often changes and causes conflicts.
+- **DO commit `sdkconfig.defaults`**: This file contains the persistent project configuration (like UART settings). We have already updated it with the necessary flags.
+- **If you can't commit `sdkconfig`**: This is good! It should be in `.gitignore`. If you need to save a configuration change, run `idf.py save-defconfig` to update `sdkconfig.defaults`, then commit that.
+
+
