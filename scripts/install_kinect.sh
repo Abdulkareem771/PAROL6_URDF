@@ -1,6 +1,6 @@
 #!/bin/bash
-# Install Xbox Kinect v2 Drivers and ROS 2 Bridge
-# Run this script inside the container as root
+# Install Xbox Kinect v2 CPU-ONLY Drivers and ROS2 Bridge
+# Run inside container as root
 
 set -e
 
@@ -11,37 +11,54 @@ apt-get update && apt-get install -y \
     pkg-config \
     libusb-1.0-0-dev \
     libturbojpeg0-dev \
-    libglfw3-dev \
     libopenni2-dev \
     git \
     ros-humble-image-view
 
-echo "Building libfreenect2 driver..."
+###############
+# LIBFREENECT2
+###############
+
+echo "Building libfreenect2 (CPU ONLY - NO OpenGL)..."
+
 cd /tmp
 rm -rf libfreenect2
 git clone https://github.com/OpenKinect/libfreenect2.git
 cd libfreenect2
+
 mkdir build && cd build
-cmake .. -Dfreenect2_camera=ON -DENABLE_CXX11=ON -DTurboJPEG_INCLUDE_DIRS=/usr/include -DTurboJPEG_LIBRARIES=/usr/lib/x86_64-linux-gnu/libturbojpeg.so.0
+
+cmake .. \
+  -DENABLE_OPENGL=OFF \
+  -DENABLE_CUDA=OFF \
+  -DENABLE_OPENCL=OFF \
+  -DENABLE_TLS=ON
+
 make -j$(nproc)
 make install
 ldconfig
+
+# udev rules
 mkdir -p /etc/udev/rules.d/
 cp ../platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/
 
-echo "Building ROS 2 package..."
+################
+# ROS2 BRIDGE
+################
+
+echo "Building ROS2 driver..."
+
 mkdir -p /opt/kinect_ws/src
 cd /opt/kinect_ws/src
+
+rm -rf kinect2_ros2
 git clone https://github.com/krepa098/kinect2_ros2.git
+
 cd /opt/kinect_ws
 source /opt/ros/humble/setup.bash
-colcon build
+colcon build --symlink-install
 
-echo "Adding to bashrc..."
 echo "source /opt/kinect_ws/install/setup.bash" >> /root/.bashrc
-# Attempt to add to user bashrc if it exists
-if [ -f /home/kareem/.bashrc ]; then
-    echo "source /opt/kinect_ws/install/setup.bash" >> /home/kareem/.bashrc
-fi
 
-echo "Installation Complete!"
+echo ""
+echo "✅ INSTALL COMPLETE"
