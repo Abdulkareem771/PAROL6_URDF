@@ -4,7 +4,7 @@ This document details the integration of the Xbox Kinect v2 camera into the PARO
 
 ## 1. Architecture
 We use a **Single Container** approach. The camera drivers and ROS 2 nodes are installed directly into the main `parol6-ultimate` image.
-- **Driver**: `libfreenect2` (Open source drivers for Kinect v2)
+- **Driver**: `libfreenect2` (Open source drivers for Kinect v2) - CPU-only build
 - **ROS 2 Package**: `krepa098/kinect2_ros2` (Bridge between driver and ROS 2)
 
 ## 2. Prerequisites
@@ -14,24 +14,53 @@ Before installing or using the camera:
 3.  **USB passthrough**: The container must have access to USB devices (already configured in `start_ignition.sh` with `-v /dev:/dev --privileged`)
 
 ## 3. Installation
-We have provided a script to install the drivers and ROS 2 package inside the container.
+
+### Check if Kinect is Already Installed
+If you're using a **new image** built from the updated Dockerfile (or a pre-built image that includes Kinect), you can skip to [Section 4: How to Use](#4-how-to-use).
+
+To check if Kinect is already installed:
+```bash
+docker exec -it parol6_dev bash -c "test -f /opt/kinect_ws/install/setup.bash && echo 'Kinect is installed' || echo 'Kinect needs to be installed'"
+```
+
+### Installing Kinect (If Not Already Present)
+We have provided a script to install the drivers and ROS 2 package inside the container. The script includes all required dependencies:
+- `compressed-image-transport` - For compressed image transport
+- `compressed-depth-image-transport` - For compressed depth image transport  
+- `image-pipeline` - Includes `depth-image-proc` for depth image processing (required by launch files)
 
 1.  **Start the Container**:
     ```bash
     ./start_ignition.sh
     ```
+
 2.  **Run the Install Script**:
     Open a new terminal and run:
     ```bash
     docker exec -u 0 -it parol6_dev /workspace/scripts/install_kinect.sh
     ```
+    This will:
+    - Install all required dependencies
+    - Build and install libfreenect2 (CPU-only)
+    - Build the Kinect ROS2 bridge workspace
+    - Set up environment variables in `~/.bashrc`
+
+    **Note**: The installation may take 10-20 minutes depending on your internet connection and CPU.
+
 3.  **Save the Image (Optional but Recommended)**:
     To make the installation permanent so you don't have to run the script again:
     ```bash
     docker commit parol6_dev parol6-ultimate:latest
     ```
 
-## 3. How to Use
+4.  **Reload Your Shell** (if needed):
+    After installation, reload your shell environment:
+    ```bash
+    source ~/.bashrc
+    ```
+    Or simply start a new shell session.
+
+## 4. How to Use
 ### Running the Camera
 **IMPORTANT**: All commands below must be run **INSIDE** the container, not on your host machine.
 
@@ -87,7 +116,7 @@ source /home/kareem/Desktop/PAROL6_URDF/install/setup.bash
 # Now you can launch your robot and the camera, or nodes that use both.
 ```
 
-## 4. Quick Test (Plug and Play)
+## 5. Quick Test (Plug and Play)
 We've provided a test script for easy verification:
 ```bash
 # Inside the container
@@ -106,7 +135,7 @@ source /opt/kinect_ws/install/setup.bash
 ros2 run image_view image_view --ros-args --remap /image:=/kinect2/qhd/image_color
 ```
 
-## 5. AI Data Collection
+## 6. AI Data Collection
 To collect data for training AI models (e.g., object detection, grasping):
 
 1.  **Record Data (Rosbag)**:
@@ -119,20 +148,28 @@ To collect data for training AI models (e.g., object detection, grasping):
 3.  **Processing**:
     You can write a Python script using `cv_bridge` to extract images from the bag files or subscribe directly to the topics to save frames as `.jpg` or `.png` files for your dataset.
 
-## 6. Deployment & Sharing
+## 7. Deployment & Sharing
 ### Sharing with Colleagues
 To share this setup **without** requiring them to download/build everything again:
-1.  **Build the Image**: You build the image on your machine.
+
+1.  **Build the Image**: You build the image on your machine (or use an existing one with Kinect installed).
     ```bash
-    docker build -t parol6-ultimate:latest .
+    docker build -t parol6-ultimate:latest -f Dockerfile .
     ```
+    **Note**: The Dockerfile now includes Kinect installation automatically, so building from it will include everything.
+
 2.  **Save to File**: Export the built image to a single file.
     ```bash
     docker save parol6-ultimate:latest | gzip > parol6-ultimate-with-kinect.tar.gz
     ```
+
 3.  **Share**: Send the `.tar.gz` file to your colleagues (USB, Drive, etc.).
+
 4.  **Load**: They load it directly into their Docker.
     ```bash
     docker load < parol6-ultimate-with-kinect.tar.gz
     ```
-**Result**: They get the exact same environment, drivers, and compiled code instantly, with zero downloads.
+
+**Result**: They get the exact same environment, drivers, and compiled code instantly, with zero downloads. Kinect will be pre-installed and ready to use.
+
+**Alternative**: If they have an older image without Kinect, they can follow the installation steps in [Section 3](#3-installation) to install it manually.

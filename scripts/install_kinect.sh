@@ -13,7 +13,10 @@ apt-get update && apt-get install -y \
     libturbojpeg0-dev \
     libopenni2-dev \
     git \
-    ros-humble-image-view
+    ros-humble-image-view \
+    ros-humble-compressed-image-transport \
+    ros-humble-compressed-depth-image-transport \
+    ros-humble-image-pipeline
 
 ###############
 # LIBFREENECT2
