@@ -18,7 +18,38 @@ echo ""
 echo -e "${YELLOW}Enabling X11 access...${NC}"
 xhost +local:docker > /dev/null 2>&1
 
-# Check if container is already running
+# Create X11 authentication file for Docker
+XAUTH=/tmp/.docker.xauth
+
+# Get the real user's Xauthority file
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    USER_UID=$(getent passwd "$SUDO_USER" | cut -d: -f3)
+
+    if [ -f "/run/user/$USER_UID/gdm/Xauthority" ]; then
+        XAUTH_SOURCE="/run/user/$USER_UID/gdm/Xauthority"
+    elif [ -f "$USER_HOME/.Xauthority" ]; then
+        XAUTH_SOURCE="$USER_HOME/.Xauthority"
+    else
+        XAUTH_SOURCE=""
+        echo -e "${YELLOW}⚠️  Could not find .Xauthority file. X11 forwarding might fail.${NC}"
+    fi
+else
+    XAUTH_SOURCE=${XAUTHORITY:-"$HOME/.Xauthority"}
+fi
+
+# Create/update auth file
+touch $XAUTH
+
+if [ -n "$XAUTH_SOURCE" ] && [ -f "$XAUTH_SOURCE" ]; then
+    xauth -f "$XAUTH_SOURCE" nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
+else
+    echo -e "${YELLOW}⚠️  No Xauthority source found. Creating empty auth file.${NC}"
+fi
+
+chmod 644 $XAUTH
+
+# Check if container already exists
 if docker ps -a | grep -q parol6_dev; then
     echo -e "${YELLOW}⚠️  Container 'parol6_dev' already exists${NC}"
     read -p "Stop it and start fresh? (y/n): " -n 1 -r
@@ -38,9 +69,14 @@ fi
 echo -e "${GREEN}🚀 Starting PAROL6 with Ignition Gazebo...${NC}"
 echo ""
 
-# Start container with enhanced X11 support
+# ---------------------------
+# START DOCKER CONTAINER
+# GPU + X11 + USB SUPPORT
+# ---------------------------
+
 echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
 docker run -d --rm \
+  --gpus all \
   --name parol6_dev \
   --network host \
   --privileged \
@@ -50,8 +86,7 @@ docker run -d --rm \
   -e XAUTHORITY=/tmp/.docker.xauth \
   -v /dev:/dev \
   -v "$(pwd)":/workspace \
-  --device /dev/dri \
-  --group-add video \
+  --shm-size=512m \
   parol6-ultimate:latest \
   tail -f /dev/null
 
@@ -71,36 +106,3 @@ else
     exit 1
 fi
 echo ""
-
-# Launch Ignition Gazebo
-echo -e "${BLUE}[3/3]${NC} Launching Ignition Gazebo..."
-echo -e "${YELLOW}⚠️  Ignition will open in a new window${NC}"
-echo -e "${YELLOW}⚠️  Keep this terminal open!${NC}"
-echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║              STARTING IGNITION GAZEBO...                    ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}After Ignition loads:${NC}"
-echo "  1. Open a NEW terminal"
-echo "  2. Run: ./add_moveit.sh"
-echo ""
-echo -e "${YELLOW}To stop: Press Ctrl+C or run ./stop.sh${NC}"
-echo ""
-
-# Run Ignition in foreground
-docker exec -it parol6_dev bash -c "
-  source /opt/ros/humble/setup.bash && \
-  source /workspace/install/setup.bash && \
-  export IGN_GAZEBO_RESOURCE_PATH=/workspace/install/parol6/share:\$IGN_GAZEBO_RESOURCE_PATH && \
-  ros2 launch parol6 ignition.launch.py
-"
-
-# When closed, clean up
-echo ""
-echo -e "${YELLOW}Ignition closed. Stopping container...${NC}"
-docker stop parol6_dev
-echo -e "${GREEN}✓ System stopped${NC}"
-
-# Reset X11 access
-xhost -local:docker > /dev/null 2>&1
