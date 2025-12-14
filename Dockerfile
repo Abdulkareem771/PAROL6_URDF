@@ -41,6 +41,7 @@ RUN cd /tmp && \
     cd / && rm -rf /tmp/libfreenect2
 
 # Build Kinect ROS2 bridge
+SHELL ["/bin/bash", "-c"]
 RUN mkdir -p /opt/kinect_ws/src && \
     cd /opt/kinect_ws/src && \
     git clone https://github.com/krepa098/kinect2_ros2.git && \
@@ -56,3 +57,13 @@ RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "source /opt/kinect_ws/install/setup.bash" >> ~/.bashrc
 
 CMD ["/bin/bash"]
+
+# Install dependencies for images extraction (RGB + Depth extraction tools)
+RUN apt-get update && apt-get install -y \
+    ros-humble-cv-bridge \
+    ros-humble-vision-opencv \
+    ros-humble-rosbag2 \
+    ros-humble-rosbag2-storage-default-plugins \
+    python3-opencv \
+    python3-numpy \
+    && rm -rf /var/lib/apt/lists/*

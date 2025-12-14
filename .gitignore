@@ -32,3 +32,9 @@ microros_esp32/
 # OS
 .DS_Store
 Thumbs.db
+
+# Extracted datasets (RGB and Depth images)
+extracted_dataset/*
+
+# Temporarily container's start code
+#start_container.sh 
