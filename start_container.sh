@@ -1,10 +1,9 @@
 #!/bin/bash
 
-
+--gpus all \
 # Start container directly
 echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
 docker run -d --rm \
-  --gpus all \
   --name parol6_dev \
   --network host \
   --privileged \

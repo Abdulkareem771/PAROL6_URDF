@@ -71,7 +71,7 @@ We have provided a script to install the drivers and ROS 2 package inside the co
 2.  **Start the camera node**:
     ```bash
     source /opt/kinect_ws/install/setup.bash
-    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml
+    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml fps_limit:=2
     ```
 *Note: You may need to adjust the launch file name depending on the specific package contents.*
 
