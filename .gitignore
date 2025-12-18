@@ -13,6 +13,8 @@ __pycache__/
 #docker image container
 
 parol6-ultimate-with-servo.tar.gz
+parol6-ultimate-with-servo-updated.tar.gz
+
 
 # MoveIt source dependencies (should not be committed)
 moveit2/
@@ -30,3 +32,5 @@ moveit_task_constructor/
 # OS
 .DS_Store
 Thumbs.db
+
+#
