@@ -42,8 +42,8 @@ Note: if it's not already configured, you must add the previous command (i.e., -
 Inside the container, and after finished from starting the camera: 
 ```bash
 ros2 bag record -o /workspace/rosbags/ai_dataset \
-  /kinect2/qhd/image_color \
-  /kinect2/sd/image_depth
+  /kinect2/hd/image_color \
+  /kinect2/hd/image_depth
 ```
 
 Press **Ctrl + C** to stop recording.
