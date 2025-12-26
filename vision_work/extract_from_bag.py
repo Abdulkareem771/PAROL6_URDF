@@ -5,7 +5,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 # Path to the bag folder (the folder that contains metadata.yaml + .db3)
-BAG_FOLDER = "/workspace/vision_work/rosbags/ai_dataset_1"   # adjust to your bag location
+BAG_FOLDER = "/workspace/vision_work/rosbags/ai_dataset_2"   # adjust to your bag location
 OUT_RGB = "/workspace/vision_work/extracted_dataset/rgb"
 OUT_DEPTH = "/workspace/vision_work/extracted_dataset/depth"
 
