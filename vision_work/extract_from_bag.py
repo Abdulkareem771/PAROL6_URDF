@@ -21,8 +21,11 @@ reader = SequentialReader()
 reader.open(storage_options, converter_options)
 
 # prepare topic name variables
-rgb_topic = "/kinect2/qhd/image_color"
-depth_topic = "/kinect2/sd/image_depth"
+#rgb_topic = "/kinect2/qhd/image_color"
+#depth_topic = "/kinect2/sd/image_depth"
+rgb_topic = "/kinect2/hd/image_color"
+depth_topic = "/kinect2/hd/image_depth"
+
 
 count = 0
 while reader.has_next():
