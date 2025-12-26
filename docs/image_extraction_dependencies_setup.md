@@ -41,9 +41,10 @@ Note: if it's not already configured, you must add the previous command (i.e., -
 ### ✔️ 3. Record RGB + Depth topics
 Inside the container, and after finished from starting the camera: 
 ```bash
-ros2 bag record -o /workspace/vision_work/rosbags/ai_dataset \
+ros2 bag record -o /workspace/vision_work/rosbags/ai_dataset_$(date +%Y-%m-%d_%I-%M-%S_%p) \
   /kinect2/hd/image_color \
   /kinect2/hd/image_depth
+
 ```
 
 Press **Ctrl + C** to stop recording.
