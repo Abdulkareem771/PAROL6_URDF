@@ -42,6 +42,7 @@ static rosidl_typesupport_introspection_c__MessageMember diagnostic_msgs__msg__K
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -59,6 +60,7 @@ static rosidl_typesupport_introspection_c__MessageMember diagnostic_msgs__msg__K
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -78,6 +80,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers diagnostic_msgs_
   "KeyValue",  // message name
   2,  // number of fields
   sizeof(diagnostic_msgs__msg__KeyValue),
+  false,  // has_any_key_member_
   diagnostic_msgs__msg__KeyValue__rosidl_typesupport_introspection_c__KeyValue_message_member_array,  // message members
   diagnostic_msgs__msg__KeyValue__rosidl_typesupport_introspection_c__KeyValue_init_function,  // function to initialize message memory (memory has to be allocated)
   diagnostic_msgs__msg__KeyValue__rosidl_typesupport_introspection_c__KeyValue_fini_function  // function to terminate message instance (will not free memory)
@@ -89,6 +92,9 @@ static rosidl_message_type_support_t diagnostic_msgs__msg__KeyValue__rosidl_type
   0,
   &diagnostic_msgs__msg__KeyValue__rosidl_typesupport_introspection_c__KeyValue_message_members,
   get_message_typesupport_handle_function,
+  &diagnostic_msgs__msg__KeyValue__get_type_hash,
+  &diagnostic_msgs__msg__KeyValue__get_type_description,
+  &diagnostic_msgs__msg__KeyValue__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_diagnostic_msgs

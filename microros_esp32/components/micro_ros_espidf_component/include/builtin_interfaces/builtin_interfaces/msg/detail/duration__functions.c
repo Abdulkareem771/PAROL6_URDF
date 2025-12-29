@@ -65,7 +65,7 @@ builtin_interfaces__msg__Duration__copy(
 }
 
 builtin_interfaces__msg__Duration *
-builtin_interfaces__msg__Duration__create()
+builtin_interfaces__msg__Duration__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   builtin_interfaces__msg__Duration * msg = (builtin_interfaces__msg__Duration *)allocator.allocate(sizeof(builtin_interfaces__msg__Duration), allocator.state);

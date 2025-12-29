@@ -37,6 +37,7 @@ static rosidl_typesupport_introspection_c__MessageMember statistics_msgs__msg__S
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT8,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -56,6 +57,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers statistics_msgs_
   "StatisticDataType",  // message name
   1,  // number of fields
   sizeof(statistics_msgs__msg__StatisticDataType),
+  false,  // has_any_key_member_
   statistics_msgs__msg__StatisticDataType__rosidl_typesupport_introspection_c__StatisticDataType_message_member_array,  // message members
   statistics_msgs__msg__StatisticDataType__rosidl_typesupport_introspection_c__StatisticDataType_init_function,  // function to initialize message memory (memory has to be allocated)
   statistics_msgs__msg__StatisticDataType__rosidl_typesupport_introspection_c__StatisticDataType_fini_function  // function to terminate message instance (will not free memory)
@@ -67,6 +69,9 @@ static rosidl_message_type_support_t statistics_msgs__msg__StatisticDataType__ro
   0,
   &statistics_msgs__msg__StatisticDataType__rosidl_typesupport_introspection_c__StatisticDataType_message_members,
   get_message_typesupport_handle_function,
+  &statistics_msgs__msg__StatisticDataType__get_type_hash,
+  &statistics_msgs__msg__StatisticDataType__get_type_description,
+  &statistics_msgs__msg__StatisticDataType__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_statistics_msgs

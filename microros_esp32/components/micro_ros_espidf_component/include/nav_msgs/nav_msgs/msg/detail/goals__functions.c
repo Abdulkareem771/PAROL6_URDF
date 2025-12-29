@@ -93,7 +93,7 @@ nav_msgs__msg__Goals__copy(
 }
 
 nav_msgs__msg__Goals *
-nav_msgs__msg__Goals__create()
+nav_msgs__msg__Goals__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   nav_msgs__msg__Goals * msg = (nav_msgs__msg__Goals *)allocator.allocate(sizeof(nav_msgs__msg__Goals), allocator.state);

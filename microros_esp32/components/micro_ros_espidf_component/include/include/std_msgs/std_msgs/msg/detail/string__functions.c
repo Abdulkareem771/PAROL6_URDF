@@ -72,7 +72,7 @@ std_msgs__msg__String__copy(
 }
 
 std_msgs__msg__String *
-std_msgs__msg__String__create()
+std_msgs__msg__String__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__String * msg = (std_msgs__msg__String *)allocator.allocate(sizeof(std_msgs__msg__String), allocator.state);

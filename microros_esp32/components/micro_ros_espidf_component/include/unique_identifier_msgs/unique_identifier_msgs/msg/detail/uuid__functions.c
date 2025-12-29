@@ -61,7 +61,7 @@ unique_identifier_msgs__msg__UUID__copy(
 }
 
 unique_identifier_msgs__msg__UUID *
-unique_identifier_msgs__msg__UUID__create()
+unique_identifier_msgs__msg__UUID__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   unique_identifier_msgs__msg__UUID * msg = (unique_identifier_msgs__msg__UUID *)allocator.allocate(sizeof(unique_identifier_msgs__msg__UUID), allocator.state);

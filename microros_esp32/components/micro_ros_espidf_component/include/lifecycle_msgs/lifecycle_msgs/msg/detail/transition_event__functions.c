@@ -121,7 +121,7 @@ lifecycle_msgs__msg__TransitionEvent__copy(
 }
 
 lifecycle_msgs__msg__TransitionEvent *
-lifecycle_msgs__msg__TransitionEvent__create()
+lifecycle_msgs__msg__TransitionEvent__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   lifecycle_msgs__msg__TransitionEvent * msg = (lifecycle_msgs__msg__TransitionEvent *)allocator.allocate(sizeof(lifecycle_msgs__msg__TransitionEvent), allocator.state);

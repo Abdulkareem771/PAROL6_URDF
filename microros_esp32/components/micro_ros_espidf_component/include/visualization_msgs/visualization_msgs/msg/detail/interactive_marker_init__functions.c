@@ -101,7 +101,7 @@ visualization_msgs__msg__InteractiveMarkerInit__copy(
 }
 
 visualization_msgs__msg__InteractiveMarkerInit *
-visualization_msgs__msg__InteractiveMarkerInit__create()
+visualization_msgs__msg__InteractiveMarkerInit__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__InteractiveMarkerInit * msg = (visualization_msgs__msg__InteractiveMarkerInit *)allocator.allocate(sizeof(visualization_msgs__msg__InteractiveMarkerInit), allocator.state);

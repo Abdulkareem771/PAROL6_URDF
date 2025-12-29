@@ -96,7 +96,7 @@ sensor_msgs__msg__PointField__copy(
 }
 
 sensor_msgs__msg__PointField *
-sensor_msgs__msg__PointField__create()
+sensor_msgs__msg__PointField__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__PointField * msg = (sensor_msgs__msg__PointField *)allocator.allocate(sizeof(sensor_msgs__msg__PointField), allocator.state);

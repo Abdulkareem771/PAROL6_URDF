@@ -93,7 +93,7 @@ example_interfaces__msg__Float32MultiArray__copy(
 }
 
 example_interfaces__msg__Float32MultiArray *
-example_interfaces__msg__Float32MultiArray__create()
+example_interfaces__msg__Float32MultiArray__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__Float32MultiArray * msg = (example_interfaces__msg__Float32MultiArray *)allocator.allocate(sizeof(example_interfaces__msg__Float32MultiArray), allocator.state);

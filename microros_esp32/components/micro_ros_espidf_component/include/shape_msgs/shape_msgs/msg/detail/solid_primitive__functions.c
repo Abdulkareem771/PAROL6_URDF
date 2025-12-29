@@ -101,7 +101,7 @@ shape_msgs__msg__SolidPrimitive__copy(
 }
 
 shape_msgs__msg__SolidPrimitive *
-shape_msgs__msg__SolidPrimitive__create()
+shape_msgs__msg__SolidPrimitive__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   shape_msgs__msg__SolidPrimitive * msg = (shape_msgs__msg__SolidPrimitive *)allocator.allocate(sizeof(shape_msgs__msg__SolidPrimitive), allocator.state);

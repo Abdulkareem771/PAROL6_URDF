@@ -93,7 +93,7 @@ geometry_msgs__msg__Pose__copy(
 }
 
 geometry_msgs__msg__Pose *
-geometry_msgs__msg__Pose__create()
+geometry_msgs__msg__Pose__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__Pose * msg = (geometry_msgs__msg__Pose *)allocator.allocate(sizeof(geometry_msgs__msg__Pose), allocator.state);

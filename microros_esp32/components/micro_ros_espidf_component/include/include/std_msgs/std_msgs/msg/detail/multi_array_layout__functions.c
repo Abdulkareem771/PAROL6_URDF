@@ -80,7 +80,7 @@ std_msgs__msg__MultiArrayLayout__copy(
 }
 
 std_msgs__msg__MultiArrayLayout *
-std_msgs__msg__MultiArrayLayout__create()
+std_msgs__msg__MultiArrayLayout__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__MultiArrayLayout * msg = (std_msgs__msg__MultiArrayLayout *)allocator.allocate(sizeof(std_msgs__msg__MultiArrayLayout), allocator.state);

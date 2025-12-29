@@ -37,6 +37,7 @@ static rosidl_typesupport_introspection_c__MessageMember geometry_msgs__msg__Poi
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -54,6 +55,7 @@ static rosidl_typesupport_introspection_c__MessageMember geometry_msgs__msg__Poi
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -71,6 +73,7 @@ static rosidl_typesupport_introspection_c__MessageMember geometry_msgs__msg__Poi
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -90,6 +93,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers geometry_msgs__m
   "Point",  // message name
   3,  // number of fields
   sizeof(geometry_msgs__msg__Point),
+  false,  // has_any_key_member_
   geometry_msgs__msg__Point__rosidl_typesupport_introspection_c__Point_message_member_array,  // message members
   geometry_msgs__msg__Point__rosidl_typesupport_introspection_c__Point_init_function,  // function to initialize message memory (memory has to be allocated)
   geometry_msgs__msg__Point__rosidl_typesupport_introspection_c__Point_fini_function  // function to terminate message instance (will not free memory)
@@ -101,6 +105,9 @@ static rosidl_message_type_support_t geometry_msgs__msg__Point__rosidl_typesuppo
   0,
   &geometry_msgs__msg__Point__rosidl_typesupport_introspection_c__Point_message_members,
   get_message_typesupport_handle_function,
+  &geometry_msgs__msg__Point__get_type_hash,
+  &geometry_msgs__msg__Point__get_type_description,
+  &geometry_msgs__msg__Point__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_geometry_msgs

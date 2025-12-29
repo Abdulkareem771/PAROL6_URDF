@@ -100,6 +100,7 @@ static rosidl_typesupport_introspection_c__MessageMember example_interfaces__msg
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -117,6 +118,7 @@ static rosidl_typesupport_introspection_c__MessageMember example_interfaces__msg
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT32,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -136,6 +138,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers example_interfac
   "UInt32MultiArray",  // message name
   2,  // number of fields
   sizeof(example_interfaces__msg__UInt32MultiArray),
+  false,  // has_any_key_member_
   example_interfaces__msg__UInt32MultiArray__rosidl_typesupport_introspection_c__UInt32MultiArray_message_member_array,  // message members
   example_interfaces__msg__UInt32MultiArray__rosidl_typesupport_introspection_c__UInt32MultiArray_init_function,  // function to initialize message memory (memory has to be allocated)
   example_interfaces__msg__UInt32MultiArray__rosidl_typesupport_introspection_c__UInt32MultiArray_fini_function  // function to terminate message instance (will not free memory)
@@ -147,6 +150,9 @@ static rosidl_message_type_support_t example_interfaces__msg__UInt32MultiArray__
   0,
   &example_interfaces__msg__UInt32MultiArray__rosidl_typesupport_introspection_c__UInt32MultiArray_message_members,
   get_message_typesupport_handle_function,
+  &example_interfaces__msg__UInt32MultiArray__get_type_hash,
+  &example_interfaces__msg__UInt32MultiArray__get_type_description,
+  &example_interfaces__msg__UInt32MultiArray__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_example_interfaces

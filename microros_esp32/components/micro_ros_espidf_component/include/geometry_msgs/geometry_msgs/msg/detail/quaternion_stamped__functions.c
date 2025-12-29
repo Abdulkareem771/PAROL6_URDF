@@ -93,7 +93,7 @@ geometry_msgs__msg__QuaternionStamped__copy(
 }
 
 geometry_msgs__msg__QuaternionStamped *
-geometry_msgs__msg__QuaternionStamped__create()
+geometry_msgs__msg__QuaternionStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__QuaternionStamped * msg = (geometry_msgs__msg__QuaternionStamped *)allocator.allocate(sizeof(geometry_msgs__msg__QuaternionStamped), allocator.state);

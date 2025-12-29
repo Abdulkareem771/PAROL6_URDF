@@ -803,7 +803,7 @@ test_msgs__msg__UnboundedSequences__copy(
 }
 
 test_msgs__msg__UnboundedSequences *
-test_msgs__msg__UnboundedSequences__create()
+test_msgs__msg__UnboundedSequences__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__UnboundedSequences * msg = (test_msgs__msg__UnboundedSequences *)allocator.allocate(sizeof(test_msgs__msg__UnboundedSequences), allocator.state);

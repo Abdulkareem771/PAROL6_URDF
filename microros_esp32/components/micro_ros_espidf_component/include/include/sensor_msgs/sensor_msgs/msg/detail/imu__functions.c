@@ -170,7 +170,7 @@ sensor_msgs__msg__Imu__copy(
 }
 
 sensor_msgs__msg__Imu *
-sensor_msgs__msg__Imu__create()
+sensor_msgs__msg__Imu__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__Imu * msg = (sensor_msgs__msg__Imu *)allocator.allocate(sizeof(sensor_msgs__msg__Imu), allocator.state);

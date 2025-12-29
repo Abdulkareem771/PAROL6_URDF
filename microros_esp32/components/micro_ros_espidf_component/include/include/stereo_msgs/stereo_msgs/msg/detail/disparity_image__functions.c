@@ -154,7 +154,7 @@ stereo_msgs__msg__DisparityImage__copy(
 }
 
 stereo_msgs__msg__DisparityImage *
-stereo_msgs__msg__DisparityImage__create()
+stereo_msgs__msg__DisparityImage__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   stereo_msgs__msg__DisparityImage * msg = (stereo_msgs__msg__DisparityImage *)allocator.allocate(sizeof(stereo_msgs__msg__DisparityImage), allocator.state);

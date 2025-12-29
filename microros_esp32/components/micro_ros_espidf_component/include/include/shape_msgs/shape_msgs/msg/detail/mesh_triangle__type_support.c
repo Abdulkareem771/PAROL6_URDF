@@ -82,6 +82,7 @@ static rosidl_typesupport_introspection_c__MessageMember shape_msgs__msg__MeshTr
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT32,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     3,  // array size
     false,  // is upper bound
@@ -101,6 +102,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers shape_msgs__msg_
   "MeshTriangle",  // message name
   1,  // number of fields
   sizeof(shape_msgs__msg__MeshTriangle),
+  false,  // has_any_key_member_
   shape_msgs__msg__MeshTriangle__rosidl_typesupport_introspection_c__MeshTriangle_message_member_array,  // message members
   shape_msgs__msg__MeshTriangle__rosidl_typesupport_introspection_c__MeshTriangle_init_function,  // function to initialize message memory (memory has to be allocated)
   shape_msgs__msg__MeshTriangle__rosidl_typesupport_introspection_c__MeshTriangle_fini_function  // function to terminate message instance (will not free memory)
@@ -112,6 +114,9 @@ static rosidl_message_type_support_t shape_msgs__msg__MeshTriangle__rosidl_types
   0,
   &shape_msgs__msg__MeshTriangle__rosidl_typesupport_introspection_c__MeshTriangle_message_members,
   get_message_typesupport_handle_function,
+  &shape_msgs__msg__MeshTriangle__get_type_hash,
+  &shape_msgs__msg__MeshTriangle__get_type_description,
+  &shape_msgs__msg__MeshTriangle__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_shape_msgs

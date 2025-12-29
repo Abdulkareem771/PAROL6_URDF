@@ -88,7 +88,7 @@ sensor_msgs__msg__Illuminance__copy(
 }
 
 sensor_msgs__msg__Illuminance *
-sensor_msgs__msg__Illuminance__create()
+sensor_msgs__msg__Illuminance__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__Illuminance * msg = (sensor_msgs__msg__Illuminance *)allocator.allocate(sizeof(sensor_msgs__msg__Illuminance), allocator.state);

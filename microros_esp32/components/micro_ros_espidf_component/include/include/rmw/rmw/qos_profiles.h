@@ -87,6 +87,19 @@ static const rmw_qos_profile_t rmw_qos_profile_parameter_events =
   false
 };
 
+static const rmw_qos_profile_t rmw_qos_profile_rosout_default =
+{
+  RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+  1000,
+  RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+  RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL,
+  RMW_QOS_DEADLINE_DEFAULT,
+  {10, 0},
+  RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
+  RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
+  false
+};
+
 static const rmw_qos_profile_t rmw_qos_profile_system_default =
 {
   RMW_QOS_POLICY_HISTORY_SYSTEM_DEFAULT,
@@ -97,6 +110,32 @@ static const rmw_qos_profile_t rmw_qos_profile_system_default =
   RMW_QOS_LIFESPAN_DEFAULT,
   RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
   RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
+  false
+};
+
+/// Match majority of endpoints currently available while maintaining the highest level of service
+/**
+ * Reliability, durability, deadline, liveliness, and liveliness lease duration policies will be
+ * chosen at the time of creating a subscription or publisher.
+ *
+ * The actual QoS policy can be retrieved after the endpoint is created with
+ * `rmw_get_subscriptions_info_by_topic` or `rmw_get_publishers_info_by_topic`.
+ *
+ * The middleware is not expected to update policies after creating a subscription or
+ * publisher, even if one or more policies are incompatible with newly discovered endpoints.
+ * Therefore, this profile should be used with care since non-deterministic behavior
+ * can occur due to races with discovery.
+ */
+static const rmw_qos_profile_t rmw_qos_profile_best_available =
+{
+  RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+  10,
+  RMW_QOS_POLICY_RELIABILITY_BEST_AVAILABLE,
+  RMW_QOS_POLICY_DURABILITY_BEST_AVAILABLE,
+  RMW_QOS_DEADLINE_BEST_AVAILABLE,
+  RMW_QOS_LIFESPAN_DEFAULT,
+  RMW_QOS_POLICY_LIVELINESS_BEST_AVAILABLE,
+  RMW_QOS_LIVELINESS_LEASE_DURATION_BEST_AVAILABLE,
   false
 };
 
@@ -166,7 +205,7 @@ typedef enum RMW_PUBLIC_TYPE rmw_qos_compatibility_type_e
  * \param[in] reason_size: Size of the string buffer `reason`, if one is provided.
  *   If `reason` is `nullptr`, then this parameter must be zero.
  * \return `RMW_RET_OK` if the check was successful, or
- * \return `RMW_RET_INVALID_ARGUMENT` if `compatiblity` is `nullptr`, or
+ * \return `RMW_RET_INVALID_ARGUMENT` if `compatibility` is `nullptr`, or
  * \return `RMW_RET_INVALID_ARGUMENT` if `reason` is `NULL` and  `reason_size` is not zero, or
  * \return `RMW_RET_ERROR` if there is an unexpected error.
  */

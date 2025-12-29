@@ -156,7 +156,7 @@ sensor_msgs__msg__MultiDOFJointState__copy(
 }
 
 sensor_msgs__msg__MultiDOFJointState *
-sensor_msgs__msg__MultiDOFJointState__create()
+sensor_msgs__msg__MultiDOFJointState__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__MultiDOFJointState * msg = (sensor_msgs__msg__MultiDOFJointState *)allocator.allocate(sizeof(sensor_msgs__msg__MultiDOFJointState), allocator.state);

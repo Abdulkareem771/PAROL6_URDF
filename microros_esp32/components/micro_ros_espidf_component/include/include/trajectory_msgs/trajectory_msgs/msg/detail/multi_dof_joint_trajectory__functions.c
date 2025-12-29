@@ -114,7 +114,7 @@ trajectory_msgs__msg__MultiDOFJointTrajectory__copy(
 }
 
 trajectory_msgs__msg__MultiDOFJointTrajectory *
-trajectory_msgs__msg__MultiDOFJointTrajectory__create()
+trajectory_msgs__msg__MultiDOFJointTrajectory__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   trajectory_msgs__msg__MultiDOFJointTrajectory * msg = (trajectory_msgs__msg__MultiDOFJointTrajectory *)allocator.allocate(sizeof(trajectory_msgs__msg__MultiDOFJointTrajectory), allocator.state);

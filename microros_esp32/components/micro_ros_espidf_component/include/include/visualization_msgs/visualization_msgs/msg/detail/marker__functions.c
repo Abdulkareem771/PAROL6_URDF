@@ -381,7 +381,7 @@ visualization_msgs__msg__Marker__copy(
 }
 
 visualization_msgs__msg__Marker *
-visualization_msgs__msg__Marker__create()
+visualization_msgs__msg__Marker__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__Marker * msg = (visualization_msgs__msg__Marker *)allocator.allocate(sizeof(visualization_msgs__msg__Marker), allocator.state);

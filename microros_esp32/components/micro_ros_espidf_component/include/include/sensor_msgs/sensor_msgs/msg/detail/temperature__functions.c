@@ -88,7 +88,7 @@ sensor_msgs__msg__Temperature__copy(
 }
 
 sensor_msgs__msg__Temperature *
-sensor_msgs__msg__Temperature__create()
+sensor_msgs__msg__Temperature__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__Temperature * msg = (sensor_msgs__msg__Temperature *)allocator.allocate(sizeof(sensor_msgs__msg__Temperature), allocator.state);

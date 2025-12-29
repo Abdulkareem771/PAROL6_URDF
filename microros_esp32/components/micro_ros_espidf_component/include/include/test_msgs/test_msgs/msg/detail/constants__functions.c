@@ -57,7 +57,7 @@ test_msgs__msg__Constants__copy(
 }
 
 test_msgs__msg__Constants *
-test_msgs__msg__Constants__create()
+test_msgs__msg__Constants__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Constants * msg = (test_msgs__msg__Constants *)allocator.allocate(sizeof(test_msgs__msg__Constants), allocator.state);

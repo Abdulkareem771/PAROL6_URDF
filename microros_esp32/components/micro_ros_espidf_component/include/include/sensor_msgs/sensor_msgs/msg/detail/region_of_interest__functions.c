@@ -89,7 +89,7 @@ sensor_msgs__msg__RegionOfInterest__copy(
 }
 
 sensor_msgs__msg__RegionOfInterest *
-sensor_msgs__msg__RegionOfInterest__create()
+sensor_msgs__msg__RegionOfInterest__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__RegionOfInterest * msg = (sensor_msgs__msg__RegionOfInterest *)allocator.allocate(sizeof(sensor_msgs__msg__RegionOfInterest), allocator.state);

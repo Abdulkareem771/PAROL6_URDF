@@ -84,7 +84,7 @@ geometry_msgs__msg__AccelWithCovariance__copy(
 }
 
 geometry_msgs__msg__AccelWithCovariance *
-geometry_msgs__msg__AccelWithCovariance__create()
+geometry_msgs__msg__AccelWithCovariance__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__AccelWithCovariance * msg = (geometry_msgs__msg__AccelWithCovariance *)allocator.allocate(sizeof(geometry_msgs__msg__AccelWithCovariance), allocator.state);

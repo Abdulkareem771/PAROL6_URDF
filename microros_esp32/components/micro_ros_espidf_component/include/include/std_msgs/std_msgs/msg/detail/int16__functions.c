@@ -57,7 +57,7 @@ std_msgs__msg__Int16__copy(
 }
 
 std_msgs__msg__Int16 *
-std_msgs__msg__Int16__create()
+std_msgs__msg__Int16__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__Int16 * msg = (std_msgs__msg__Int16 *)allocator.allocate(sizeof(std_msgs__msg__Int16), allocator.state);

@@ -20,8 +20,11 @@
 #include "rcl/allocator.h"
 #include "rcl/error_handling.h"
 #include "rcl/node.h"
+#include "rcl/macros.h"
 #include "rcl/types.h"
 #include "rcl/visibility_control.h"
+
+#include "rmw/qos_profiles.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -34,6 +37,7 @@ extern "C"
  * - durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL
  * - lifespan = {10, 0}
  */
+RCUTILS_DEPRECATED_WITH_MSG("use rmw_qos_profile_rosout_default instead")
 static const rmw_qos_profile_t rcl_qos_profile_rosout_default =
 {
   RMW_QOS_POLICY_HISTORY_KEEP_LAST,
@@ -91,7 +95,7 @@ rcl_logging_rosout_init(
 RCL_PUBLIC
 RCL_WARN_UNUSED
 rcl_ret_t
-rcl_logging_rosout_fini();
+rcl_logging_rosout_fini(void);
 
 /// Creates a rosout publisher for a node and registers it to be used by the logging system
 /**
@@ -187,6 +191,70 @@ rcl_logging_rosout_output_handler(
   rcutils_time_point_value_t timestamp,
   const char * format,
   va_list * args);
+
+/// Add a subordinate logger based on a logger
+/**
+ * Calling this will use the existing publisher of `logger_name` on a node to create an subordinate
+ * logger that will be used by the logging system to publish all log messages from that Node's
+ * logger.
+ *
+ * If a subordinate logger already exists, it will NOT be created.
+ *
+ * It is expected that after creating a subordinate logger with this function
+ * rcl_logging_rosout_remove_sublogger() will be called for the node to cleanup
+ * the subordinate logger while the publisher of `logger_name` is still valid.
+ *
+ *
+ * <hr>
+ * Attribute          | Adherence
+ * ------------------ | -------------
+ * Allocates Memory   | Yes
+ * Thread-Safe        | No
+ * Uses Atomics       | No
+ * Lock-Free          | Yes
+ *
+ * \param[in] logger_name a logger_name that has a corresponding rosout publisher on a node
+ * \param[in] sublogger_name a sublogger name
+ * \return #RCL_RET_OK if the subordinate logger was created successfully, or
+ * \return #RCL_RET_INVALID_ARGUMENT if any arguments are invalid, or
+ * \return #RCL_RET_NOT_FOUND if the parent logger does not exist, or
+ * \return #RCL_RET_BAD_ALLOC if allocating memory failed, or
+ * \return #RCL_RET_ERROR if an unspecified error occurs.
+ */
+RCL_PUBLIC
+RCL_WARN_UNUSED
+rcl_ret_t
+rcl_logging_rosout_add_sublogger(
+  const char * logger_name, const char * sublogger_name);
+
+/// Remove a subordinate logger and cleans up allocated resources
+/**
+ * Calling this will destroy the subordinate logger based on
+ * `logger_name+RCUTILS_LOGGING_SEPARATOR_STRING+sublogger_name` on that node and remove it from
+ * the logging system so that no more Log messages are published to this function.
+ *
+ *
+ * <hr>
+ * Attribute          | Adherence
+ * ------------------ | -------------
+ * Allocates Memory   | Yes
+ * Thread-Safe        | No
+ * Uses Atomics       | No
+ * Lock-Free          | Yes
+ *
+ * \param[in] logger_name a logger_name that has a corresponding rosout publisher on a node
+ * \param[in] sublogger_name a sublogger name
+ * \return #RCL_RET_OK if the subordinate logger was finalized successfully, or
+ * \return #RCL_RET_INVALID_ARGUMENT if any arguments are invalid, or
+ * \return #RCL_RET_NOT_FOUND if the sublogger does not exist, or
+ * \return #RCL_RET_BAD_ALLOC if allocating memory failed, or
+ * \return #RCL_RET_ERROR if an unspecified error occurs.
+ */
+RCL_PUBLIC
+RCL_WARN_UNUSED
+rcl_ret_t
+rcl_logging_rosout_remove_sublogger(
+  const char * logger_name, const char * sublogger_name);
 
 #ifdef __cplusplus
 }

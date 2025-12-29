@@ -73,7 +73,7 @@ rcl_interfaces__msg__FloatingPointRange__copy(
 }
 
 rcl_interfaces__msg__FloatingPointRange *
-rcl_interfaces__msg__FloatingPointRange__create()
+rcl_interfaces__msg__FloatingPointRange__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__FloatingPointRange * msg = (rcl_interfaces__msg__FloatingPointRange *)allocator.allocate(sizeof(rcl_interfaces__msg__FloatingPointRange), allocator.state);

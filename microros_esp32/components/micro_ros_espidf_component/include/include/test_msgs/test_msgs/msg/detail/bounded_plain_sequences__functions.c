@@ -734,7 +734,7 @@ test_msgs__msg__BoundedPlainSequences__copy(
 }
 
 test_msgs__msg__BoundedPlainSequences *
-test_msgs__msg__BoundedPlainSequences__create()
+test_msgs__msg__BoundedPlainSequences__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__BoundedPlainSequences * msg = (test_msgs__msg__BoundedPlainSequences *)allocator.allocate(sizeof(test_msgs__msg__BoundedPlainSequences), allocator.state);

@@ -137,7 +137,7 @@ sensor_msgs__msg__NavSatFix__copy(
 }
 
 sensor_msgs__msg__NavSatFix *
-sensor_msgs__msg__NavSatFix__create()
+sensor_msgs__msg__NavSatFix__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__NavSatFix * msg = (sensor_msgs__msg__NavSatFix *)allocator.allocate(sizeof(sensor_msgs__msg__NavSatFix), allocator.state);

@@ -72,7 +72,7 @@ example_interfaces__msg__WString__copy(
 }
 
 example_interfaces__msg__WString *
-example_interfaces__msg__WString__create()
+example_interfaces__msg__WString__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__WString * msg = (example_interfaces__msg__WString *)allocator.allocate(sizeof(example_interfaces__msg__WString), allocator.state);

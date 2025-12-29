@@ -268,6 +268,7 @@ static rosidl_typesupport_introspection_c__MessageMember trajectory_msgs__msg__J
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -285,6 +286,7 @@ static rosidl_typesupport_introspection_c__MessageMember trajectory_msgs__msg__J
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -302,6 +304,7 @@ static rosidl_typesupport_introspection_c__MessageMember trajectory_msgs__msg__J
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -319,6 +322,7 @@ static rosidl_typesupport_introspection_c__MessageMember trajectory_msgs__msg__J
     rosidl_typesupport_introspection_c__ROS_TYPE_DOUBLE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -336,6 +340,7 @@ static rosidl_typesupport_introspection_c__MessageMember trajectory_msgs__msg__J
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -355,6 +360,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers trajectory_msgs_
   "JointTrajectoryPoint",  // message name
   5,  // number of fields
   sizeof(trajectory_msgs__msg__JointTrajectoryPoint),
+  false,  // has_any_key_member_
   trajectory_msgs__msg__JointTrajectoryPoint__rosidl_typesupport_introspection_c__JointTrajectoryPoint_message_member_array,  // message members
   trajectory_msgs__msg__JointTrajectoryPoint__rosidl_typesupport_introspection_c__JointTrajectoryPoint_init_function,  // function to initialize message memory (memory has to be allocated)
   trajectory_msgs__msg__JointTrajectoryPoint__rosidl_typesupport_introspection_c__JointTrajectoryPoint_fini_function  // function to terminate message instance (will not free memory)
@@ -366,6 +372,9 @@ static rosidl_message_type_support_t trajectory_msgs__msg__JointTrajectoryPoint_
   0,
   &trajectory_msgs__msg__JointTrajectoryPoint__rosidl_typesupport_introspection_c__JointTrajectoryPoint_message_members,
   get_message_typesupport_handle_function,
+  &trajectory_msgs__msg__JointTrajectoryPoint__get_type_hash,
+  &trajectory_msgs__msg__JointTrajectoryPoint__get_type_description,
+  &trajectory_msgs__msg__JointTrajectoryPoint__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_trajectory_msgs

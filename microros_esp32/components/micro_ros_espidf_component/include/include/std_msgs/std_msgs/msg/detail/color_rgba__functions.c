@@ -81,7 +81,7 @@ std_msgs__msg__ColorRGBA__copy(
 }
 
 std_msgs__msg__ColorRGBA *
-std_msgs__msg__ColorRGBA__create()
+std_msgs__msg__ColorRGBA__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__ColorRGBA * msg = (std_msgs__msg__ColorRGBA *)allocator.allocate(sizeof(std_msgs__msg__ColorRGBA), allocator.state);

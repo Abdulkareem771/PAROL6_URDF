@@ -117,7 +117,7 @@ nav_msgs__msg__MapMetaData__copy(
 }
 
 nav_msgs__msg__MapMetaData *
-nav_msgs__msg__MapMetaData__create()
+nav_msgs__msg__MapMetaData__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   nav_msgs__msg__MapMetaData * msg = (nav_msgs__msg__MapMetaData *)allocator.allocate(sizeof(nav_msgs__msg__MapMetaData), allocator.state);

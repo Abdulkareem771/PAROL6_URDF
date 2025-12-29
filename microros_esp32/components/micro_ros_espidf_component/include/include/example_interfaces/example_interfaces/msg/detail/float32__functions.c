@@ -57,7 +57,7 @@ example_interfaces__msg__Float32__copy(
 }
 
 example_interfaces__msg__Float32 *
-example_interfaces__msg__Float32__create()
+example_interfaces__msg__Float32__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__Float32 * msg = (example_interfaces__msg__Float32 *)allocator.allocate(sizeof(example_interfaces__msg__Float32), allocator.state);

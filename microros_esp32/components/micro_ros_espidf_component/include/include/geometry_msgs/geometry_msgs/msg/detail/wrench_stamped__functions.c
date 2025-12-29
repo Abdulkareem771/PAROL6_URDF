@@ -93,7 +93,7 @@ geometry_msgs__msg__WrenchStamped__copy(
 }
 
 geometry_msgs__msg__WrenchStamped *
-geometry_msgs__msg__WrenchStamped__create()
+geometry_msgs__msg__WrenchStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__WrenchStamped * msg = (geometry_msgs__msg__WrenchStamped *)allocator.allocate(sizeof(geometry_msgs__msg__WrenchStamped), allocator.state);

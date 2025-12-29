@@ -199,7 +199,7 @@ visualization_msgs__msg__InteractiveMarkerFeedback__copy(
 }
 
 visualization_msgs__msg__InteractiveMarkerFeedback *
-visualization_msgs__msg__InteractiveMarkerFeedback__create()
+visualization_msgs__msg__InteractiveMarkerFeedback__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__InteractiveMarkerFeedback * msg = (visualization_msgs__msg__InteractiveMarkerFeedback *)allocator.allocate(sizeof(visualization_msgs__msg__InteractiveMarkerFeedback), allocator.state);

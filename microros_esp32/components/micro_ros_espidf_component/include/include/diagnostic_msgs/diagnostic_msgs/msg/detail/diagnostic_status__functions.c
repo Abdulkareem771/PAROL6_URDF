@@ -141,7 +141,7 @@ diagnostic_msgs__msg__DiagnosticStatus__copy(
 }
 
 diagnostic_msgs__msg__DiagnosticStatus *
-diagnostic_msgs__msg__DiagnosticStatus__create()
+diagnostic_msgs__msg__DiagnosticStatus__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   diagnostic_msgs__msg__DiagnosticStatus * msg = (diagnostic_msgs__msg__DiagnosticStatus *)allocator.allocate(sizeof(diagnostic_msgs__msg__DiagnosticStatus), allocator.state);

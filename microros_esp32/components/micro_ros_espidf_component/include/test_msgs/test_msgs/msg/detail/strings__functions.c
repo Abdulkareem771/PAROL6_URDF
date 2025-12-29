@@ -372,7 +372,7 @@ test_msgs__msg__Strings__copy(
 }
 
 test_msgs__msg__Strings *
-test_msgs__msg__Strings__create()
+test_msgs__msg__Strings__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Strings * msg = (test_msgs__msg__Strings *)allocator.allocate(sizeof(test_msgs__msg__Strings), allocator.state);

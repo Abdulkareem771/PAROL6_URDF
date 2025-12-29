@@ -57,7 +57,7 @@ std_msgs__msg__Byte__copy(
 }
 
 std_msgs__msg__Byte *
-std_msgs__msg__Byte__create()
+std_msgs__msg__Byte__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__Byte * msg = (std_msgs__msg__Byte *)allocator.allocate(sizeof(std_msgs__msg__Byte), allocator.state);

@@ -80,7 +80,7 @@ lifecycle_msgs__msg__State__copy(
 }
 
 lifecycle_msgs__msg__State *
-lifecycle_msgs__msg__State__create()
+lifecycle_msgs__msg__State__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   lifecycle_msgs__msg__State * msg = (lifecycle_msgs__msg__State *)allocator.allocate(sizeof(lifecycle_msgs__msg__State), allocator.state);

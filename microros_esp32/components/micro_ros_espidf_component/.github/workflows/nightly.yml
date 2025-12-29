@@ -14,12 +14,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch: [rolling, jazzy, humble]
+        branch: [rolling, kilted, jazzy, humble]
         idf_target: [ esp32, esp32s2, esp32c3, esp32s3, esp32c6]
         idf_version: [ "espressif/idf:release-v4.4", "espressif/idf:release-v5.2" ]
         exclude:
           # Skip IDF v4 + ESP32C6 combination
           - idf_target: esp32c6
+            idf_version: espressif/idf:release-v4.4
+          # Skip IDF v4 for rolling and kilted
+          - branch: rolling
+            idf_version: espressif/idf:release-v4.4
+          - branch: kilted
             idf_version: espressif/idf:release-v4.4
 
 
@@ -39,11 +44,11 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt install -y git python3-pip
           . $IDF_PATH/export.sh
-          pip3 install catkin_pkg lark-parser colcon-common-extensions
+          pip3 install catkin_pkg lark-parser empy==3.3.4 colcon-common-extensions
           # This line avoids the error when using Python < 3.7 https://importlib-resources.readthedocs.io/en/latest/
           pip3 install importlib-resources
           # this installs the modules also for global python interpreter, needed for IDF v5
-          /usr/bin/pip3 install catkin_pkg lark-parser colcon-common-extensions importlib-resources
+          /usr/bin/pip3 install catkin_pkg lark-parser empy==3.3.4 colcon-common-extensions importlib-resources
 
       # This line can be removed when https://github.com/colcon/colcon-python-setup-py/issues/56 is solved
       - name: Patch setuptools

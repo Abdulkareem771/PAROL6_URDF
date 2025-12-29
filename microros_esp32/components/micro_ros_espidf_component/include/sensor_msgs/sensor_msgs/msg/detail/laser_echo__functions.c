@@ -72,7 +72,7 @@ sensor_msgs__msg__LaserEcho__copy(
 }
 
 sensor_msgs__msg__LaserEcho *
-sensor_msgs__msg__LaserEcho__create()
+sensor_msgs__msg__LaserEcho__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__LaserEcho * msg = (sensor_msgs__msg__LaserEcho *)allocator.allocate(sizeof(sensor_msgs__msg__LaserEcho), allocator.state);

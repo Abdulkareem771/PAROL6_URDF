@@ -93,7 +93,7 @@ test_msgs__msg__Builtins__copy(
 }
 
 test_msgs__msg__Builtins *
-test_msgs__msg__Builtins__create()
+test_msgs__msg__Builtins__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Builtins * msg = (test_msgs__msg__Builtins *)allocator.allocate(sizeof(test_msgs__msg__Builtins), allocator.state);

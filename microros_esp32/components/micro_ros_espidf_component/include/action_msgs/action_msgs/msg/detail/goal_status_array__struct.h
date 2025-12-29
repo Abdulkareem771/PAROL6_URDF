@@ -2,6 +2,9 @@
 // with input from action_msgs:msg/GoalStatusArray.idl
 // generated code does not contain a copyright notice
 
+// IWYU pragma: private, include "action_msgs/msg/goal_status_array.h"
+
+
 #ifndef ACTION_MSGS__MSG__DETAIL__GOAL_STATUS_ARRAY__STRUCT_H_
 #define ACTION_MSGS__MSG__DETAIL__GOAL_STATUS_ARRAY__STRUCT_H_
 
@@ -13,7 +16,6 @@ extern "C"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
 
 // Constants defined in the message
 

@@ -11,16 +11,9 @@ if(BUILD_WLAN_INTERFACE)
     list(APPEND COMPONENT_SRC "network_interfaces/uros_wlan_netif.c")
 endif()
 
-if(BUILD_WLAN_INTERFACE OR BUILD_ETHERNET_INTERFACE)
-    idf_component_register(SRCS ${COMPONENT_SRC}
-                           INCLUDE_DIRS "network_interfaces"
-                           REQUIRES nvs_flash esp_wifi esp_eth lwip)
-else()
-    # UART-only mode: no network dependencies needed
-    idf_component_register(SRCS ${COMPONENT_SRC}
-                           INCLUDE_DIRS "network_interfaces"
-                           REQUIRES)
-endif()
+idf_component_register(SRCS ${COMPONENT_SRC}
+                       INCLUDE_DIRS "network_interfaces"
+                       REQUIRES nvs_flash esp_wifi esp_eth lwip)
 
 if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
 set(submake "make")

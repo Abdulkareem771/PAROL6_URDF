@@ -101,7 +101,7 @@ actionlib_msgs__msg__GoalStatus__copy(
 }
 
 actionlib_msgs__msg__GoalStatus *
-actionlib_msgs__msg__GoalStatus__create()
+actionlib_msgs__msg__GoalStatus__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   actionlib_msgs__msg__GoalStatus * msg = (actionlib_msgs__msg__GoalStatus *)allocator.allocate(sizeof(actionlib_msgs__msg__GoalStatus), allocator.state);

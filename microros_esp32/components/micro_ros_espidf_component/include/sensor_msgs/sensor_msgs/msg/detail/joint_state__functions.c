@@ -154,7 +154,7 @@ sensor_msgs__msg__JointState__copy(
 }
 
 sensor_msgs__msg__JointState *
-sensor_msgs__msg__JointState__create()
+sensor_msgs__msg__JointState__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__JointState * msg = (sensor_msgs__msg__JointState *)allocator.allocate(sizeof(sensor_msgs__msg__JointState), allocator.state);

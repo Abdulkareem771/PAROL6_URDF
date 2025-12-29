@@ -169,7 +169,7 @@ sensor_msgs__msg__LaserScan__copy(
 }
 
 sensor_msgs__msg__LaserScan *
-sensor_msgs__msg__LaserScan__create()
+sensor_msgs__msg__LaserScan__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__LaserScan * msg = (sensor_msgs__msg__LaserScan *)allocator.allocate(sizeof(sensor_msgs__msg__LaserScan), allocator.state);

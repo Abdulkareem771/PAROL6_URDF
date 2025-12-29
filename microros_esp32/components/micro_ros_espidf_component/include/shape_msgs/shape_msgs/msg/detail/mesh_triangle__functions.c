@@ -61,7 +61,7 @@ shape_msgs__msg__MeshTriangle__copy(
 }
 
 shape_msgs__msg__MeshTriangle *
-shape_msgs__msg__MeshTriangle__create()
+shape_msgs__msg__MeshTriangle__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   shape_msgs__msg__MeshTriangle * msg = (shape_msgs__msg__MeshTriangle *)allocator.allocate(sizeof(shape_msgs__msg__MeshTriangle), allocator.state);

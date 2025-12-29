@@ -84,7 +84,7 @@ geometry_msgs__msg__PoseWithCovariance__copy(
 }
 
 geometry_msgs__msg__PoseWithCovariance *
-geometry_msgs__msg__PoseWithCovariance__create()
+geometry_msgs__msg__PoseWithCovariance__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__PoseWithCovariance * msg = (geometry_msgs__msg__PoseWithCovariance *)allocator.allocate(sizeof(geometry_msgs__msg__PoseWithCovariance), allocator.state);

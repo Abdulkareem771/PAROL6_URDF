@@ -88,7 +88,7 @@ sensor_msgs__msg__RelativeHumidity__copy(
 }
 
 sensor_msgs__msg__RelativeHumidity *
-sensor_msgs__msg__RelativeHumidity__create()
+sensor_msgs__msg__RelativeHumidity__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__RelativeHumidity * msg = (sensor_msgs__msg__RelativeHumidity *)allocator.allocate(sizeof(sensor_msgs__msg__RelativeHumidity), allocator.state);

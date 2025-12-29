@@ -152,6 +152,7 @@ static rosidl_typesupport_introspection_c__MessageMember rcl_interfaces__msg__Li
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -169,6 +170,7 @@ static rosidl_typesupport_introspection_c__MessageMember rcl_interfaces__msg__Li
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -188,6 +190,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers rcl_interfaces__
   "ListParametersResult",  // message name
   2,  // number of fields
   sizeof(rcl_interfaces__msg__ListParametersResult),
+  false,  // has_any_key_member_
   rcl_interfaces__msg__ListParametersResult__rosidl_typesupport_introspection_c__ListParametersResult_message_member_array,  // message members
   rcl_interfaces__msg__ListParametersResult__rosidl_typesupport_introspection_c__ListParametersResult_init_function,  // function to initialize message memory (memory has to be allocated)
   rcl_interfaces__msg__ListParametersResult__rosidl_typesupport_introspection_c__ListParametersResult_fini_function  // function to terminate message instance (will not free memory)
@@ -199,6 +202,9 @@ static rosidl_message_type_support_t rcl_interfaces__msg__ListParametersResult__
   0,
   &rcl_interfaces__msg__ListParametersResult__rosidl_typesupport_introspection_c__ListParametersResult_message_members,
   get_message_typesupport_handle_function,
+  &rcl_interfaces__msg__ListParametersResult__get_type_hash,
+  &rcl_interfaces__msg__ListParametersResult__get_type_description,
+  &rcl_interfaces__msg__ListParametersResult__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_rcl_interfaces

@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         idf_target: [ esp32, esp32s2, esp32s3, esp32c3, esp32c6]
-        idf_version: [ "espressif/idf:release-v4.4", "espressif/idf:release-v5.2" ]
+        idf_version: [ "espressif/idf:release-v5.2" ]
         exclude:
           # Skip IDF v4 + ESP32C6 combination
           - idf_target: esp32c6
@@ -34,11 +34,11 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt install -y git python3-pip
           . $IDF_PATH/export.sh
-          pip3 install catkin_pkg lark-parser colcon-common-extensions empy==3.3.4
+          pip3 install catkin_pkg lark-parser colcon-common-extensions
           # This line avoids the error when using Python < 3.7 https://importlib-resources.readthedocs.io/en/latest/
           pip3 install importlib-resources
           # this installs the modules also for global python interpreter, needed for IDF v5
-          /usr/bin/pip3 install catkin_pkg lark-parser colcon-common-extensions empy==3.3.4 importlib-resources
+          /usr/bin/pip3 install catkin_pkg lark-parser colcon-common-extensions importlib-resources
 
       # This line can be removed when https://github.com/colcon/colcon-python-setup-py/issues/56 is solved
       - name: Patch setuptools
@@ -81,6 +81,15 @@ jobs:
           make -f libmicroros.mk clean
           sed -i 's/DRMW_UXRCE_TRANSPORT=udp/DRMW_UXRCE_TRANSPORT=custom/' colcon.meta
           cd examples/int32_publisher_custom_transport
+          idf.py set-target ${{ matrix.idf_target }}
+          idf.py build
+
+      - name: Build sample - int32_publisher_custom_transport_usbcdc
+        shell: bash
+        if: (matrix.idf_target == 'esp32s2' || matrix.idf_target == 'esp32s3') && matrix.idf_version == 'espressif/idf:release-v5.2'
+        run: |
+          . $IDF_PATH/export.sh
+          cd micro_ros_espidf_component/examples/int32_publisher_custom_transport_usbcdc
           idf.py set-target ${{ matrix.idf_target }}
           idf.py build
 

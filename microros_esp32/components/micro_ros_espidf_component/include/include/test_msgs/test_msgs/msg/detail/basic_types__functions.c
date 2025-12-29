@@ -153,7 +153,7 @@ test_msgs__msg__BasicTypes__copy(
 }
 
 test_msgs__msg__BasicTypes *
-test_msgs__msg__BasicTypes__create()
+test_msgs__msg__BasicTypes__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__BasicTypes * msg = (test_msgs__msg__BasicTypes *)allocator.allocate(sizeof(test_msgs__msg__BasicTypes), allocator.state);

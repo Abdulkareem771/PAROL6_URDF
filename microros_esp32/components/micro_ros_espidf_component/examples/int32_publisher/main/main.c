@@ -67,11 +67,12 @@ void micro_ros_task(void * arg)
 	// create timer,
 	rcl_timer_t timer;
 	const unsigned int timer_timeout = 1000;
-	RCCHECK(rclc_timer_init_default(
+	RCCHECK(rclc_timer_init_default2(
 		&timer,
 		&support,
 		RCL_MS_TO_NS(timer_timeout),
-		timer_callback));
+		timer_callback,
+		true));
 
 	// create executor
 	rclc_executor_t executor;
@@ -97,7 +98,7 @@ void app_main(void)
 #if defined(CONFIG_MICRO_ROS_ESP_NETIF_WLAN) || defined(CONFIG_MICRO_ROS_ESP_NETIF_ENET)
     ESP_ERROR_CHECK(uros_network_interface_initialize());
 #endif
-
+ vTaskDelay(pdMS_TO_TICKS(3000));  // 🔥 REQUIRED
     //pin micro-ros task in APP_CPU to make PRO_CPU to deal with wifi:
     xTaskCreate(micro_ros_task,
             "uros_task",

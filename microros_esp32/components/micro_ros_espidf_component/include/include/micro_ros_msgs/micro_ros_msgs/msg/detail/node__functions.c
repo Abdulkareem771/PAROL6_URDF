@@ -113,7 +113,7 @@ micro_ros_msgs__msg__Node__copy(
 }
 
 micro_ros_msgs__msg__Node *
-micro_ros_msgs__msg__Node__create()
+micro_ros_msgs__msg__Node__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   micro_ros_msgs__msg__Node * msg = (micro_ros_msgs__msg__Node *)allocator.allocate(sizeof(micro_ros_msgs__msg__Node), allocator.state);

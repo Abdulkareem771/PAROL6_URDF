@@ -57,7 +57,7 @@ test_msgs__msg__Empty__copy(
 }
 
 test_msgs__msg__Empty *
-test_msgs__msg__Empty__create()
+test_msgs__msg__Empty__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Empty * msg = (test_msgs__msg__Empty *)allocator.allocate(sizeof(test_msgs__msg__Empty), allocator.state);

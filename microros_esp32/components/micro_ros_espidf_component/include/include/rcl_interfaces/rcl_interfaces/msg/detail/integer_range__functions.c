@@ -73,7 +73,7 @@ rcl_interfaces__msg__IntegerRange__copy(
 }
 
 rcl_interfaces__msg__IntegerRange *
-rcl_interfaces__msg__IntegerRange__create()
+rcl_interfaces__msg__IntegerRange__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__IntegerRange * msg = (rcl_interfaces__msg__IntegerRange *)allocator.allocate(sizeof(rcl_interfaces__msg__IntegerRange), allocator.state);

@@ -65,7 +65,7 @@ statistics_msgs__msg__StatisticDataPoint__copy(
 }
 
 statistics_msgs__msg__StatisticDataPoint *
-statistics_msgs__msg__StatisticDataPoint__create()
+statistics_msgs__msg__StatisticDataPoint__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   statistics_msgs__msg__StatisticDataPoint * msg = (statistics_msgs__msg__StatisticDataPoint *)allocator.allocate(sizeof(statistics_msgs__msg__StatisticDataPoint), allocator.state);

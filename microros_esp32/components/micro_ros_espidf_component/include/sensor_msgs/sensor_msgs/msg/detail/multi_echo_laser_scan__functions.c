@@ -169,7 +169,7 @@ sensor_msgs__msg__MultiEchoLaserScan__copy(
 }
 
 sensor_msgs__msg__MultiEchoLaserScan *
-sensor_msgs__msg__MultiEchoLaserScan__create()
+sensor_msgs__msg__MultiEchoLaserScan__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__MultiEchoLaserScan * msg = (sensor_msgs__msg__MultiEchoLaserScan *)allocator.allocate(sizeof(sensor_msgs__msg__MultiEchoLaserScan), allocator.state);

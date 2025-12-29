@@ -57,7 +57,7 @@ example_interfaces__msg__Int64__copy(
 }
 
 example_interfaces__msg__Int64 *
-example_interfaces__msg__Int64__create()
+example_interfaces__msg__Int64__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__Int64 * msg = (example_interfaces__msg__Int64 *)allocator.allocate(sizeof(example_interfaces__msg__Int64), allocator.state);

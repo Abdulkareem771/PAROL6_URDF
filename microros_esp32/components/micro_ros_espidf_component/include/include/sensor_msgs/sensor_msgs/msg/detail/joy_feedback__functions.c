@@ -73,7 +73,7 @@ sensor_msgs__msg__JoyFeedback__copy(
 }
 
 sensor_msgs__msg__JoyFeedback *
-sensor_msgs__msg__JoyFeedback__create()
+sensor_msgs__msg__JoyFeedback__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__JoyFeedback * msg = (sensor_msgs__msg__JoyFeedback *)allocator.allocate(sizeof(sensor_msgs__msg__JoyFeedback), allocator.state);

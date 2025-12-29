@@ -174,7 +174,7 @@ statistics_msgs__msg__MetricsMessage__copy(
 }
 
 statistics_msgs__msg__MetricsMessage *
-statistics_msgs__msg__MetricsMessage__create()
+statistics_msgs__msg__MetricsMessage__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   statistics_msgs__msg__MetricsMessage * msg = (statistics_msgs__msg__MetricsMessage *)allocator.allocate(sizeof(statistics_msgs__msg__MetricsMessage), allocator.state);

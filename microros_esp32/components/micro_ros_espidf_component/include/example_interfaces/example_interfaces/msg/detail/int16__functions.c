@@ -57,7 +57,7 @@ example_interfaces__msg__Int16__copy(
 }
 
 example_interfaces__msg__Int16 *
-example_interfaces__msg__Int16__create()
+example_interfaces__msg__Int16__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__Int16 * msg = (example_interfaces__msg__Int16 *)allocator.allocate(sizeof(example_interfaces__msg__Int16), allocator.state);

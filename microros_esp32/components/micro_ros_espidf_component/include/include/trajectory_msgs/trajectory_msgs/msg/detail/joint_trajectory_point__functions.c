@@ -153,7 +153,7 @@ trajectory_msgs__msg__JointTrajectoryPoint__copy(
 }
 
 trajectory_msgs__msg__JointTrajectoryPoint *
-trajectory_msgs__msg__JointTrajectoryPoint__create()
+trajectory_msgs__msg__JointTrajectoryPoint__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   trajectory_msgs__msg__JointTrajectoryPoint * msg = (trajectory_msgs__msg__JointTrajectoryPoint *)allocator.allocate(sizeof(trajectory_msgs__msg__JointTrajectoryPoint), allocator.state);

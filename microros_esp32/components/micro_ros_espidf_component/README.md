@@ -3,7 +3,9 @@
 
 # micro-ROS component for ESP-IDF
 
-This component has been tested in ESP-IDF v4.4, and v5.2 with ESP32, ESP32-S2, ESP32-S3, ESP32-C3 and ESP32-C6.
+This component has been tested in ESP-IDF v5.2 with ESP32, ESP32-S2, ESP32-S3, ESP32-C3 and ESP32-C6.
+
+_Note: ESP-IDF v4.4 is supported only in ROS 2 Humble and Jazzy due to Python version incompatibilities._
 
 ## Dependencies
 
@@ -53,7 +55,7 @@ Is possible to use a micro-ROS Agent just with this docker command:
 
 ```bash
 # UDPv4 micro-ROS Agent
-docker run -it --rm --net=host microros/micro-ros-agent:humble udp4 --port 8888 -v6
+docker run -it --rm --net=host microros/micro-ros-agent:kilted udp4 --port 8888 -v6
 ```
 
 ## Build with docker container
@@ -106,7 +108,7 @@ Is possible to use a micro-ROS Agent just with this docker command:
 
 ```bash
 # Serial micro-ROS Agent
-docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:humble serial --dev [YOUR BOARD PORT] -v6
+docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:kilted serial --dev [YOUR BOARD PORT] -v6
 ```
 
 ## Purpose of the Project

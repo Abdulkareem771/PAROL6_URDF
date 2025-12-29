@@ -17,30 +17,30 @@
 
 /// \def RCL_LIFECYCLE_VERSION_MAJOR
 /// Defines RCL_LIFECYCLE major version number
-#define RCL_LIFECYCLE_VERSION_MAJOR (5)
+#define RCL_LIFECYCLE_VERSION_MAJOR (10)
 
 /// \def RCL_LIFECYCLE_VERSION_MINOR
 /// Defines RCL_LIFECYCLE minor version number
-#define RCL_LIFECYCLE_VERSION_MINOR (3)
+#define RCL_LIFECYCLE_VERSION_MINOR (1)
 
 /// \def RCL_LIFECYCLE_VERSION_PATCH
 /// Defines RCL_LIFECYCLE version patch number
-#define RCL_LIFECYCLE_VERSION_PATCH (10)
+#define RCL_LIFECYCLE_VERSION_PATCH (1)
 
 /// \def RCL_LIFECYCLE_VERSION_STR
 /// Defines RCL_LIFECYCLE version string
-#define RCL_LIFECYCLE_VERSION_STR "5.3.10"
+#define RCL_LIFECYCLE_VERSION_STR "10.1.1"
 
 /// \def RCL_LIFECYCLE_VERSION_GTE
 /// Defines a macro to check whether the version of RCL_LIFECYCLE is greater than or equal to
 /// the given version triple.
 #define RCL_LIFECYCLE_VERSION_GTE(major, minor, patch) ( \
      (major < RCL_LIFECYCLE_VERSION_MAJOR) ? true \
-     : (major > RCL_LIFECYCLE_VERSION_MAJOR) ? false \
-     : (minor < RCL_LIFECYCLE_VERSION_MINOR) ? true \
-     : (minor > RCL_LIFECYCLE_VERSION_MINOR) ? false \
-     : (patch < RCL_LIFECYCLE_VERSION_PATCH) ? true \
-     : (patch > RCL_LIFECYCLE_VERSION_PATCH) ? false \
-     : true)
+     : ((major > RCL_LIFECYCLE_VERSION_MAJOR) ? false \
+     : ((minor < RCL_LIFECYCLE_VERSION_MINOR) ? true \
+     : ((minor > RCL_LIFECYCLE_VERSION_MINOR) ? false \
+     : ((patch < RCL_LIFECYCLE_VERSION_PATCH) ? true \
+     : ((patch > RCL_LIFECYCLE_VERSION_PATCH) ? false \
+     : true))))))
 
 #endif  // RCL_LIFECYCLE__VERSION_H_

@@ -2,6 +2,9 @@
 // with input from geometry_msgs:msg/PolygonInstance.idl
 // generated code does not contain a copyright notice
 
+// IWYU pragma: private, include "geometry_msgs/msg/polygon_instance.h"
+
+
 #ifndef GEOMETRY_MSGS__MSG__DETAIL__POLYGON_INSTANCE__STRUCT_H_
 #define GEOMETRY_MSGS__MSG__DETAIL__POLYGON_INSTANCE__STRUCT_H_
 
@@ -13,7 +16,6 @@ extern "C"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
 
 // Constants defined in the message
 

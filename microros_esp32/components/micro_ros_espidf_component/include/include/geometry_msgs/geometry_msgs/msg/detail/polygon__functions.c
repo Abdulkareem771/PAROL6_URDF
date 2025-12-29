@@ -72,7 +72,7 @@ geometry_msgs__msg__Polygon__copy(
 }
 
 geometry_msgs__msg__Polygon *
-geometry_msgs__msg__Polygon__create()
+geometry_msgs__msg__Polygon__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__Polygon * msg = (geometry_msgs__msg__Polygon *)allocator.allocate(sizeof(geometry_msgs__msg__Polygon), allocator.state);

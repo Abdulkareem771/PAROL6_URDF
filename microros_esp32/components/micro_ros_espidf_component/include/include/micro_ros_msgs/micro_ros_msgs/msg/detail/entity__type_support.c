@@ -97,6 +97,7 @@ static rosidl_typesupport_introspection_c__MessageMember micro_ros_msgs__msg__En
     rosidl_typesupport_introspection_c__ROS_TYPE_OCTET,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -114,6 +115,7 @@ static rosidl_typesupport_introspection_c__MessageMember micro_ros_msgs__msg__En
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     256,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -131,6 +133,7 @@ static rosidl_typesupport_introspection_c__MessageMember micro_ros_msgs__msg__En
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     256,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -150,6 +153,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers micro_ros_msgs__
   "Entity",  // message name
   3,  // number of fields
   sizeof(micro_ros_msgs__msg__Entity),
+  false,  // has_any_key_member_
   micro_ros_msgs__msg__Entity__rosidl_typesupport_introspection_c__Entity_message_member_array,  // message members
   micro_ros_msgs__msg__Entity__rosidl_typesupport_introspection_c__Entity_init_function,  // function to initialize message memory (memory has to be allocated)
   micro_ros_msgs__msg__Entity__rosidl_typesupport_introspection_c__Entity_fini_function  // function to terminate message instance (will not free memory)
@@ -161,6 +165,9 @@ static rosidl_message_type_support_t micro_ros_msgs__msg__Entity__rosidl_typesup
   0,
   &micro_ros_msgs__msg__Entity__rosidl_typesupport_introspection_c__Entity_message_members,
   get_message_typesupport_handle_function,
+  &micro_ros_msgs__msg__Entity__get_type_hash,
+  &micro_ros_msgs__msg__Entity__get_type_description,
+  &micro_ros_msgs__msg__Entity__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_micro_ros_msgs

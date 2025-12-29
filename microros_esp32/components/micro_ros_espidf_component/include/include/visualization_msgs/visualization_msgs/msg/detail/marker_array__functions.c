@@ -72,7 +72,7 @@ visualization_msgs__msg__MarkerArray__copy(
 }
 
 visualization_msgs__msg__MarkerArray *
-visualization_msgs__msg__MarkerArray__create()
+visualization_msgs__msg__MarkerArray__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__MarkerArray * msg = (visualization_msgs__msg__MarkerArray *)allocator.allocate(sizeof(visualization_msgs__msg__MarkerArray), allocator.state);

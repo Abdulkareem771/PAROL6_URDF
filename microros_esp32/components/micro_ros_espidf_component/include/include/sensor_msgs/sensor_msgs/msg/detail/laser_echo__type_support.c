@@ -96,6 +96,7 @@ static rosidl_typesupport_introspection_c__MessageMember sensor_msgs__msg__Laser
     rosidl_typesupport_introspection_c__ROS_TYPE_FLOAT,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -115,6 +116,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers sensor_msgs__msg
   "LaserEcho",  // message name
   1,  // number of fields
   sizeof(sensor_msgs__msg__LaserEcho),
+  false,  // has_any_key_member_
   sensor_msgs__msg__LaserEcho__rosidl_typesupport_introspection_c__LaserEcho_message_member_array,  // message members
   sensor_msgs__msg__LaserEcho__rosidl_typesupport_introspection_c__LaserEcho_init_function,  // function to initialize message memory (memory has to be allocated)
   sensor_msgs__msg__LaserEcho__rosidl_typesupport_introspection_c__LaserEcho_fini_function  // function to terminate message instance (will not free memory)
@@ -126,6 +128,9 @@ static rosidl_message_type_support_t sensor_msgs__msg__LaserEcho__rosidl_typesup
   0,
   &sensor_msgs__msg__LaserEcho__rosidl_typesupport_introspection_c__LaserEcho_message_members,
   get_message_typesupport_handle_function,
+  &sensor_msgs__msg__LaserEcho__get_type_hash,
+  &sensor_msgs__msg__LaserEcho__get_type_description,
+  &sensor_msgs__msg__LaserEcho__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_sensor_msgs

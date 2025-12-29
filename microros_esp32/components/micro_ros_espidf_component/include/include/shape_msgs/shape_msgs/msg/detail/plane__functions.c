@@ -61,7 +61,7 @@ shape_msgs__msg__Plane__copy(
 }
 
 shape_msgs__msg__Plane *
-shape_msgs__msg__Plane__create()
+shape_msgs__msg__Plane__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   shape_msgs__msg__Plane * msg = (shape_msgs__msg__Plane *)allocator.allocate(sizeof(shape_msgs__msg__Plane), allocator.state);

@@ -88,7 +88,7 @@ sensor_msgs__msg__FluidPressure__copy(
 }
 
 sensor_msgs__msg__FluidPressure *
-sensor_msgs__msg__FluidPressure__create()
+sensor_msgs__msg__FluidPressure__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__FluidPressure * msg = (sensor_msgs__msg__FluidPressure *)allocator.allocate(sizeof(sensor_msgs__msg__FluidPressure), allocator.state);

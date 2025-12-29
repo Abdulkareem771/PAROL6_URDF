@@ -114,7 +114,7 @@ sensor_msgs__msg__CompressedImage__copy(
 }
 
 sensor_msgs__msg__CompressedImage *
-sensor_msgs__msg__CompressedImage__create()
+sensor_msgs__msg__CompressedImage__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__CompressedImage * msg = (sensor_msgs__msg__CompressedImage *)allocator.allocate(sizeof(sensor_msgs__msg__CompressedImage), allocator.state);

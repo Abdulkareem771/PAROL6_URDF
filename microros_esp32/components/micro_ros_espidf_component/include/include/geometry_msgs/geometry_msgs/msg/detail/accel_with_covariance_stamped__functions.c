@@ -93,7 +93,7 @@ geometry_msgs__msg__AccelWithCovarianceStamped__copy(
 }
 
 geometry_msgs__msg__AccelWithCovarianceStamped *
-geometry_msgs__msg__AccelWithCovarianceStamped__create()
+geometry_msgs__msg__AccelWithCovarianceStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__AccelWithCovarianceStamped * msg = (geometry_msgs__msg__AccelWithCovarianceStamped *)allocator.allocate(sizeof(geometry_msgs__msg__AccelWithCovarianceStamped), allocator.state);

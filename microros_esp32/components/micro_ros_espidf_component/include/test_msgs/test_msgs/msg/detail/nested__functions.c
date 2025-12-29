@@ -72,7 +72,7 @@ test_msgs__msg__Nested__copy(
 }
 
 test_msgs__msg__Nested *
-test_msgs__msg__Nested__create()
+test_msgs__msg__Nested__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Nested * msg = (test_msgs__msg__Nested *)allocator.allocate(sizeof(test_msgs__msg__Nested), allocator.state);

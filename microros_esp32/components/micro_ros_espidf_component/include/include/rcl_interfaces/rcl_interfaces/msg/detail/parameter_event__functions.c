@@ -154,7 +154,7 @@ rcl_interfaces__msg__ParameterEvent__copy(
 }
 
 rcl_interfaces__msg__ParameterEvent *
-rcl_interfaces__msg__ParameterEvent__create()
+rcl_interfaces__msg__ParameterEvent__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__ParameterEvent * msg = (rcl_interfaces__msg__ParameterEvent *)allocator.allocate(sizeof(rcl_interfaces__msg__ParameterEvent), allocator.state);

@@ -225,7 +225,7 @@ test_msgs__msg__WStrings__copy(
 }
 
 test_msgs__msg__WStrings *
-test_msgs__msg__WStrings__create()
+test_msgs__msg__WStrings__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__WStrings * msg = (test_msgs__msg__WStrings *)allocator.allocate(sizeof(test_msgs__msg__WStrings), allocator.state);

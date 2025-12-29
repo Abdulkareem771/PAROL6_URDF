@@ -93,7 +93,7 @@ std_msgs__msg__Header__copy(
 }
 
 std_msgs__msg__Header *
-std_msgs__msg__Header__create()
+std_msgs__msg__Header__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__Header * msg = (std_msgs__msg__Header *)allocator.allocate(sizeof(std_msgs__msg__Header), allocator.state);

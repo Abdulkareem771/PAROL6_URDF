@@ -114,7 +114,7 @@ nav_msgs__msg__OccupancyGrid__copy(
 }
 
 nav_msgs__msg__OccupancyGrid *
-nav_msgs__msg__OccupancyGrid__create()
+nav_msgs__msg__OccupancyGrid__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   nav_msgs__msg__OccupancyGrid * msg = (nav_msgs__msg__OccupancyGrid *)allocator.allocate(sizeof(nav_msgs__msg__OccupancyGrid), allocator.state);

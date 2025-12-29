@@ -100,7 +100,7 @@ micro_ros_msgs__msg__Entity__copy(
 }
 
 micro_ros_msgs__msg__Entity *
-micro_ros_msgs__msg__Entity__create()
+micro_ros_msgs__msg__Entity__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   micro_ros_msgs__msg__Entity * msg = (micro_ros_msgs__msg__Entity *)allocator.allocate(sizeof(micro_ros_msgs__msg__Entity), allocator.state);

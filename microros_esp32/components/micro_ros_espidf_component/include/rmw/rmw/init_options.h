@@ -23,8 +23,9 @@ extern "C"
 #include <stdint.h>
 
 #include "rcutils/allocator.h"
+#include "rmw/discovery_options.h"
 #include "rmw/domain_id.h"
-#include "rmw/localhost.h"
+#include "rmw/enclave.h"
 #include "rmw/macros.h"
 #include "rmw/ret_types.h"
 #include "rmw/security_options.h"
@@ -52,8 +53,8 @@ typedef struct RMW_PUBLIC_TYPE rmw_init_options_s
   size_t domain_id;
   /// Security options
   rmw_security_options_t security_options;
-  /// Enable localhost only
-  rmw_localhost_only_t localhost_only;
+  /// Configure discovery
+  rmw_discovery_options_t discovery_options;
   /// Enclave, name used to find security artifacts in a sros2 keystore.
   char * enclave;
 

@@ -57,7 +57,7 @@ example_interfaces__msg__UInt8__copy(
 }
 
 example_interfaces__msg__UInt8 *
-example_interfaces__msg__UInt8__create()
+example_interfaces__msg__UInt8__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__UInt8 * msg = (example_interfaces__msg__UInt8 *)allocator.allocate(sizeof(example_interfaces__msg__UInt8), allocator.state);

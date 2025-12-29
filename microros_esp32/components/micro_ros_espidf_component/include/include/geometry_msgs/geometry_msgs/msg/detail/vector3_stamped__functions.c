@@ -93,7 +93,7 @@ geometry_msgs__msg__Vector3Stamped__copy(
 }
 
 geometry_msgs__msg__Vector3Stamped *
-geometry_msgs__msg__Vector3Stamped__create()
+geometry_msgs__msg__Vector3Stamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__Vector3Stamped * msg = (geometry_msgs__msg__Vector3Stamped *)allocator.allocate(sizeof(geometry_msgs__msg__Vector3Stamped), allocator.state);

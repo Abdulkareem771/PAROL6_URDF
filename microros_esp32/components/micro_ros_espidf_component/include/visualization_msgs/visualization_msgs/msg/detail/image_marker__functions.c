@@ -256,7 +256,7 @@ visualization_msgs__msg__ImageMarker__copy(
 }
 
 visualization_msgs__msg__ImageMarker *
-visualization_msgs__msg__ImageMarker__create()
+visualization_msgs__msg__ImageMarker__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__ImageMarker * msg = (visualization_msgs__msg__ImageMarker *)allocator.allocate(sizeof(visualization_msgs__msg__ImageMarker), allocator.state);

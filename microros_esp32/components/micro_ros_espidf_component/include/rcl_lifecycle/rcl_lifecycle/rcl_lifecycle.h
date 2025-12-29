@@ -53,7 +53,7 @@ extern "C"
  */
 RCL_LIFECYCLE_PUBLIC
 rcl_lifecycle_state_t
-rcl_lifecycle_get_zero_initialized_state();
+rcl_lifecycle_get_zero_initialized_state(void);
 
 /// Initialize a rcl_lifecycle_state_init.
 /**
@@ -123,7 +123,7 @@ rcl_lifecycle_state_fini(
  */
 RCL_LIFECYCLE_PUBLIC
 rcl_lifecycle_transition_t
-rcl_lifecycle_get_zero_initialized_transition();
+rcl_lifecycle_get_zero_initialized_transition(void);
 
 /// Initialize a transition from a start state to the goal state.
 /**
@@ -197,7 +197,7 @@ rcl_lifecycle_transition_fini(
 /// Return a default initialized state machine options struct.
 RCL_LIFECYCLE_PUBLIC
 rcl_lifecycle_state_machine_options_t
-rcl_lifecycle_get_default_state_machine_options();
+rcl_lifecycle_get_default_state_machine_options(void);
 
 /// Return a rcl_lifecycle_state_machine_t struct with members set to `NULL` or 0.
 /**
@@ -206,7 +206,7 @@ rcl_lifecycle_get_default_state_machine_options();
  */
 RCL_LIFECYCLE_PUBLIC
 rcl_lifecycle_state_machine_t
-rcl_lifecycle_get_zero_initialized_state_machine();
+rcl_lifecycle_get_zero_initialized_state_machine(void);
 
 /// Initialize state machine
 /**
@@ -411,24 +411,31 @@ rcl_lifecycle_trigger_transition_by_label(
   const char * label,
   bool publish_notification);
 
-/// Print the state machine data
+/// Log the state machine data
 /**
- * This function will print in the standard output the data in the
+ * This function will log the all data in the state machine
  * rcl_lifecycle_state_machine_t struct.
  *
- * <hr>
- * Attribute          | Adherence
- * ------------------ | -------------
- * Allocates Memory   | No
- * Thread-Safe        | No
- * Uses Atomics       | No
- * Lock-Free          | Yes
+ * the logging level must be INFO or a more verbose level (e.g., DEBUG).
  *
- * \param[in] state_machine pointer to the state machine struct to print
+ * \param[in] state_machine pointer to the state machine struct to log
  */
 RCL_LIFECYCLE_PUBLIC
 void
 rcl_print_state_machine(const rcl_lifecycle_state_machine_t * state_machine);
+
+/// Log the transition map
+/**
+ * This function will log the all data in the transition map
+ * rcl_lifecycle_state_machine_t struct.
+ *
+ * the logging level must be INFO or a more verbose level (e.g., DEBUG).
+ *
+ * \param[in] transition_map pointer to the transition map to log
+ */
+RCL_LIFECYCLE_PUBLIC
+void
+rcl_print_transition_map(const rcl_lifecycle_transition_map_t * transition_map);
 
 #ifdef __cplusplus
 }

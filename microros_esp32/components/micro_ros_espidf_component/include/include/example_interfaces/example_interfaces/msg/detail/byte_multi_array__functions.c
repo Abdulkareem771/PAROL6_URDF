@@ -93,7 +93,7 @@ example_interfaces__msg__ByteMultiArray__copy(
 }
 
 example_interfaces__msg__ByteMultiArray *
-example_interfaces__msg__ByteMultiArray__create()
+example_interfaces__msg__ByteMultiArray__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__ByteMultiArray * msg = (example_interfaces__msg__ByteMultiArray *)allocator.allocate(sizeof(example_interfaces__msg__ByteMultiArray), allocator.state);

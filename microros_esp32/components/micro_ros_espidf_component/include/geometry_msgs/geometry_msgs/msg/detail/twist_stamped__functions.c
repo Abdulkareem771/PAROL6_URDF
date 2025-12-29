@@ -93,7 +93,7 @@ geometry_msgs__msg__TwistStamped__copy(
 }
 
 geometry_msgs__msg__TwistStamped *
-geometry_msgs__msg__TwistStamped__create()
+geometry_msgs__msg__TwistStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__TwistStamped * msg = (geometry_msgs__msg__TwistStamped *)allocator.allocate(sizeof(geometry_msgs__msg__TwistStamped), allocator.state);

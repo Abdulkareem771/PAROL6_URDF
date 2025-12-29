@@ -114,7 +114,7 @@ trajectory_msgs__msg__JointTrajectory__copy(
 }
 
 trajectory_msgs__msg__JointTrajectory *
-trajectory_msgs__msg__JointTrajectory__create()
+trajectory_msgs__msg__JointTrajectory__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   trajectory_msgs__msg__JointTrajectory * msg = (trajectory_msgs__msg__JointTrajectory *)allocator.allocate(sizeof(trajectory_msgs__msg__JointTrajectory), allocator.state);

@@ -242,7 +242,7 @@ sensor_msgs__msg__BatteryState__copy(
 }
 
 sensor_msgs__msg__BatteryState *
-sensor_msgs__msg__BatteryState__create()
+sensor_msgs__msg__BatteryState__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__BatteryState * msg = (sensor_msgs__msg__BatteryState *)allocator.allocate(sizeof(sensor_msgs__msg__BatteryState), allocator.state);

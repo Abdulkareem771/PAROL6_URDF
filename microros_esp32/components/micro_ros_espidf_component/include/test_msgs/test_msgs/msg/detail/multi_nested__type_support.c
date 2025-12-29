@@ -528,6 +528,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     false,  // is upper bound
@@ -545,6 +546,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     false,  // is upper bound
@@ -562,6 +564,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     false,  // is upper bound
@@ -579,6 +582,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     true,  // is upper bound
@@ -596,6 +600,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     true,  // is upper bound
@@ -613,6 +618,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     3,  // array size
     true,  // is upper bound
@@ -630,6 +636,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -647,6 +654,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -664,6 +672,7 @@ static rosidl_typesupport_introspection_c__MessageMember test_msgs__msg__MultiNe
     rosidl_typesupport_introspection_c__ROS_TYPE_MESSAGE,  // type
     0,  // upper bound of string
     NULL,  // members of sub message (initialized later)
+    false,  // is key
     true,  // is array
     0,  // array size
     false,  // is upper bound
@@ -683,6 +692,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers test_msgs__msg__
   "MultiNested",  // message name
   9,  // number of fields
   sizeof(test_msgs__msg__MultiNested),
+  false,  // has_any_key_member_
   test_msgs__msg__MultiNested__rosidl_typesupport_introspection_c__MultiNested_message_member_array,  // message members
   test_msgs__msg__MultiNested__rosidl_typesupport_introspection_c__MultiNested_init_function,  // function to initialize message memory (memory has to be allocated)
   test_msgs__msg__MultiNested__rosidl_typesupport_introspection_c__MultiNested_fini_function  // function to terminate message instance (will not free memory)
@@ -694,6 +704,9 @@ static rosidl_message_type_support_t test_msgs__msg__MultiNested__rosidl_typesup
   0,
   &test_msgs__msg__MultiNested__rosidl_typesupport_introspection_c__MultiNested_message_members,
   get_message_typesupport_handle_function,
+  &test_msgs__msg__MultiNested__get_type_hash,
+  &test_msgs__msg__MultiNested__get_type_description,
+  &test_msgs__msg__MultiNested__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_test_msgs

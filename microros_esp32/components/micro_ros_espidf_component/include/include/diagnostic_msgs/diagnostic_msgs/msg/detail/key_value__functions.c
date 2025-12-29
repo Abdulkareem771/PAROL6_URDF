@@ -92,7 +92,7 @@ diagnostic_msgs__msg__KeyValue__copy(
 }
 
 diagnostic_msgs__msg__KeyValue *
-diagnostic_msgs__msg__KeyValue__create()
+diagnostic_msgs__msg__KeyValue__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   diagnostic_msgs__msg__KeyValue * msg = (diagnostic_msgs__msg__KeyValue *)allocator.allocate(sizeof(diagnostic_msgs__msg__KeyValue), allocator.state);

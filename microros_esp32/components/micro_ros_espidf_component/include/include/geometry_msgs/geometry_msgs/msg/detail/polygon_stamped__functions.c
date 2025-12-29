@@ -93,7 +93,7 @@ geometry_msgs__msg__PolygonStamped__copy(
 }
 
 geometry_msgs__msg__PolygonStamped *
-geometry_msgs__msg__PolygonStamped__create()
+geometry_msgs__msg__PolygonStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__PolygonStamped * msg = (geometry_msgs__msg__PolygonStamped *)allocator.allocate(sizeof(geometry_msgs__msg__PolygonStamped), allocator.state);

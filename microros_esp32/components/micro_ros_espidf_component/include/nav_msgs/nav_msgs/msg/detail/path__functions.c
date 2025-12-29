@@ -93,7 +93,7 @@ nav_msgs__msg__Path__copy(
 }
 
 nav_msgs__msg__Path *
-nav_msgs__msg__Path__create()
+nav_msgs__msg__Path__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   nav_msgs__msg__Path * msg = (nav_msgs__msg__Path *)allocator.allocate(sizeof(nav_msgs__msg__Path), allocator.state);

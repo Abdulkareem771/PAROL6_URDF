@@ -93,7 +93,7 @@ action_msgs__msg__GoalInfo__copy(
 }
 
 action_msgs__msg__GoalInfo *
-action_msgs__msg__GoalInfo__create()
+action_msgs__msg__GoalInfo__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   action_msgs__msg__GoalInfo * msg = (action_msgs__msg__GoalInfo *)allocator.allocate(sizeof(action_msgs__msg__GoalInfo), allocator.state);

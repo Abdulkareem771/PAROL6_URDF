@@ -88,7 +88,7 @@ example_interfaces__msg__MultiArrayDimension__copy(
 }
 
 example_interfaces__msg__MultiArrayDimension *
-example_interfaces__msg__MultiArrayDimension__create()
+example_interfaces__msg__MultiArrayDimension__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   example_interfaces__msg__MultiArrayDimension * msg = (example_interfaces__msg__MultiArrayDimension *)allocator.allocate(sizeof(example_interfaces__msg__MultiArrayDimension), allocator.state);

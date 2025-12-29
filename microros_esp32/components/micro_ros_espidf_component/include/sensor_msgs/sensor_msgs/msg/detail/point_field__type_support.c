@@ -41,6 +41,7 @@ static rosidl_typesupport_introspection_c__MessageMember sensor_msgs__msg__Point
     rosidl_typesupport_introspection_c__ROS_TYPE_STRING,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -58,6 +59,7 @@ static rosidl_typesupport_introspection_c__MessageMember sensor_msgs__msg__Point
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT32,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -75,6 +77,7 @@ static rosidl_typesupport_introspection_c__MessageMember sensor_msgs__msg__Point
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT8,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -92,6 +95,7 @@ static rosidl_typesupport_introspection_c__MessageMember sensor_msgs__msg__Point
     rosidl_typesupport_introspection_c__ROS_TYPE_UINT32,  // type
     0,  // upper bound of string
     NULL,  // members of sub message
+    false,  // is key
     false,  // is array
     0,  // array size
     false,  // is upper bound
@@ -111,6 +115,7 @@ static const rosidl_typesupport_introspection_c__MessageMembers sensor_msgs__msg
   "PointField",  // message name
   4,  // number of fields
   sizeof(sensor_msgs__msg__PointField),
+  false,  // has_any_key_member_
   sensor_msgs__msg__PointField__rosidl_typesupport_introspection_c__PointField_message_member_array,  // message members
   sensor_msgs__msg__PointField__rosidl_typesupport_introspection_c__PointField_init_function,  // function to initialize message memory (memory has to be allocated)
   sensor_msgs__msg__PointField__rosidl_typesupport_introspection_c__PointField_fini_function  // function to terminate message instance (will not free memory)
@@ -122,6 +127,9 @@ static rosidl_message_type_support_t sensor_msgs__msg__PointField__rosidl_typesu
   0,
   &sensor_msgs__msg__PointField__rosidl_typesupport_introspection_c__PointField_message_members,
   get_message_typesupport_handle_function,
+  &sensor_msgs__msg__PointField__get_type_hash,
+  &sensor_msgs__msg__PointField__get_type_description,
+  &sensor_msgs__msg__PointField__get_type_description_sources,
 };
 
 ROSIDL_TYPESUPPORT_INTROSPECTION_C_EXPORT_sensor_msgs

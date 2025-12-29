@@ -203,7 +203,7 @@ sensor_msgs__msg__CameraInfo__copy(
 }
 
 sensor_msgs__msg__CameraInfo *
-sensor_msgs__msg__CameraInfo__create()
+sensor_msgs__msg__CameraInfo__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   sensor_msgs__msg__CameraInfo * msg = (sensor_msgs__msg__CameraInfo *)allocator.allocate(sizeof(sensor_msgs__msg__CameraInfo), allocator.state);

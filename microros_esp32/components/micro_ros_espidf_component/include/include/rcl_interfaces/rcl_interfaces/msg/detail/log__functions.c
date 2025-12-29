@@ -169,7 +169,7 @@ rcl_interfaces__msg__Log__copy(
 }
 
 rcl_interfaces__msg__Log *
-rcl_interfaces__msg__Log__create()
+rcl_interfaces__msg__Log__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__Log * msg = (rcl_interfaces__msg__Log *)allocator.allocate(sizeof(rcl_interfaces__msg__Log), allocator.state);

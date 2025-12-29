@@ -72,7 +72,7 @@ micro_ros_msgs__msg__Graph__copy(
 }
 
 micro_ros_msgs__msg__Graph *
-micro_ros_msgs__msg__Graph__create()
+micro_ros_msgs__msg__Graph__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   micro_ros_msgs__msg__Graph * msg = (micro_ros_msgs__msg__Graph *)allocator.allocate(sizeof(micro_ros_msgs__msg__Graph), allocator.state);

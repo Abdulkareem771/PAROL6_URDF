@@ -180,7 +180,7 @@ rcl_interfaces__msg__ParameterDescriptor__copy(
 }
 
 rcl_interfaces__msg__ParameterDescriptor *
-rcl_interfaces__msg__ParameterDescriptor__create()
+rcl_interfaces__msg__ParameterDescriptor__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__ParameterDescriptor * msg = (rcl_interfaces__msg__ParameterDescriptor *)allocator.allocate(sizeof(rcl_interfaces__msg__ParameterDescriptor), allocator.state);

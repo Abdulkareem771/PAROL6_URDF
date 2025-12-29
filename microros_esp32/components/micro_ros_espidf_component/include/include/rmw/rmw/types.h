@@ -37,9 +37,11 @@ extern "C"
 #include "rmw/time.h"
 #include "rmw/visibility_control.h"
 
-// 24 bytes is the most memory needed to represent the GID by any current
-// implementation. It may need to be increased in the future.
-#define RMW_GID_STORAGE_SIZE 24u
+// We define the GID as 16 bytes (128 bits).  This should be enough to ensure
+// uniqueness amongst all entities in the system.  It is up to the individual
+// RMW implementations to fill that in, either from the underlying middleware
+// or from the RMW layer itself.
+#define RMW_GID_STORAGE_SIZE 16u
 
 /// Structure which encapsulates an rmw node
 typedef struct RMW_PUBLIC_TYPE rmw_node_s
@@ -161,12 +163,7 @@ typedef struct RMW_PUBLIC_TYPE rmw_subscription_options_s
    * remote nodes, especially to avoid "double delivery" when both intra- and
    * inter- process communication is taking place.
    *
-   * \todo(wjwwood): nail this down when participant mapping is sorted out.
-   *   See: https://github.com/ros2/design/pull/250
-   *
-   * The definition of local is somewhat vague at the moment.
-   * Right now it means local to the node, and that definition works best, but
-   * may become more complicated when/if participants map to a context instead.
+   * The definition of local means that in the same context.
    */
   bool ignore_local_publications;
 
@@ -356,7 +353,7 @@ typedef struct RMW_PUBLIC_TYPE rmw_wait_set_s
 typedef struct RMW_PUBLIC_TYPE rmw_request_id_s
 {
   /// The guid of the writer associated with this request
-  int8_t writer_guid[16];
+  uint8_t writer_guid[RMW_GID_STORAGE_SIZE];
 
   /// Sequence number of this service
   int64_t sequence_number;
@@ -382,7 +379,26 @@ typedef enum RMW_PUBLIC_TYPE rmw_qos_reliability_policy_e
   RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
 
   /// Reliability policy has not yet been set
-  RMW_QOS_POLICY_RELIABILITY_UNKNOWN
+  RMW_QOS_POLICY_RELIABILITY_UNKNOWN,
+
+  /// Will match the majority of endpoints and use a reliable policy if possible
+  /**
+   * A policy will be chosen at the time of creating a subscription or publisher.
+   * A reliable policy will by chosen if it matches with all discovered endpoints,
+   * otherwise a best effort policy will be chosen.
+   *
+   * The QoS policy reported by functions like `rmw_subscription_get_actual_qos` or
+   * `rmw_publisher_get_actual_qos` may be best available, reliable, or best effort.
+   *
+   * Services and clients are not supported and default to the reliability value in
+   * `rmw_qos_profile_services_default`.
+   *
+   * The middleware is not expected to update the policy after creating a subscription or
+   * publisher, even if the chosen policy is incompatible with newly discovered endpoints.
+   * Therefore, this policy should be used with care since non-deterministic behavior
+   * can occur due to races with discovery.
+   */
+  RMW_QOS_POLICY_RELIABILITY_BEST_AVAILABLE
 } rmw_qos_reliability_policy_t;
 
 /// QoS history enumerations describing how samples endure
@@ -414,14 +430,36 @@ typedef enum RMW_PUBLIC_TYPE rmw_qos_durability_policy_e
   RMW_QOS_POLICY_DURABILITY_VOLATILE,
 
   /// Durability policy has not yet been set
-  RMW_QOS_POLICY_DURABILITY_UNKNOWN
+  RMW_QOS_POLICY_DURABILITY_UNKNOWN,
+
+  /// Will match the majority of endpoints and use a transient local policy if possible
+  /**
+   * A policy will be chosen at the time of creating a subscription or publisher.
+   * A transient local policy will by chosen if it matches with all discovered endpoints,
+   * otherwise a volatile policy will be chosen.
+   *
+   * In the case that a volatile policy is chosen for a subscription, any messages sent before
+   * the subscription was created by transient local publishers will not be received.
+   *
+   * The QoS policy reported by functions like `rmw_subscription_get_actual_qos` or
+   * `rmw_publisher_get_actual_qos` may be best available, transient local, or volatile.
+   *
+   * Services and clients are not supported and default to the durability value in
+   * `rmw_qos_profile_services_default`.
+   *
+   * The middleware is not expected to update the policy after creating a subscription or
+   * publisher, even if the chosen policy is incompatible with newly discovered endpoints.
+   * Therefore, this policy should be used with care since non-deterministic behavior
+   * can occur due to races with discovery.
+   */
+  RMW_QOS_POLICY_DURABILITY_BEST_AVAILABLE
 } rmw_qos_durability_policy_t;
 
 #define RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE_DEPRECATED_MSG \
   "RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_NODE is deprecated. " \
   "Use RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC if manually asserted liveliness is needed."
 
-#ifndef _WIN32
+#ifndef _MSC_VER
 # define RMW_DECLARE_DEPRECATED(name, msg) name __attribute__((deprecated(msg)))
 #else
 # define RMW_DECLARE_DEPRECATED(name, msg) name __pragma(deprecated(name))
@@ -453,17 +491,80 @@ typedef enum RMW_PUBLIC_TYPE rmw_qos_liveliness_policy_e
   RMW_QOS_POLICY_LIVELINESS_MANUAL_BY_TOPIC = 3,
 
   /// Liveliness policy has not yet been set
-  RMW_QOS_POLICY_LIVELINESS_UNKNOWN = 4
+  RMW_QOS_POLICY_LIVELINESS_UNKNOWN = 4,
+
+  /// Will match the majority of endpoints and use a manual by topic policy if possible
+  /**
+   * A policy will be chosen at the time of creating a subscription or publisher.
+   * A manual by topic policy will by chosen if it matches with all discovered endpoints,
+   * otherwise an automatic policy will be chosen.
+   *
+   * The QoS policy reported by functions like `rmw_subscription_get_actual_qos` or
+   * `rmw_publisher_get_actual_qos` may be best available, automatic, or manual by topic.
+   *
+   * Services and clients are not supported and default to the liveliness value in
+   * `rmw_qos_profile_services_default`.
+   *
+   * The middleware is not expected to update the policy after creating a subscription or
+   * publisher, even if the chosen policy is incompatible with newly discovered endpoints.
+   * Therefore, this policy should be used with care since non-deterministic behavior
+   * can occur due to races with discovery.
+   */
+  RMW_QOS_POLICY_LIVELINESS_BEST_AVAILABLE = 5
 } rmw_qos_liveliness_policy_t;
 
 /// QoS Deadline default.
 #define RMW_QOS_DEADLINE_DEFAULT RMW_DURATION_UNSPECIFIED
+/// Will match the majority of endpoints while maintaining as strict a policy as possible
+/**
+ * Value is RMW_DURATION_INFINITE - 1.
+ *
+ * A policy will be chosen at the time of creating a subscription or publisher.
+ * For a subscription, the deadline will be the maximum value of all discovered publisher
+ * deadlines.
+ * For a publisher, the deadline will be the minimum value of all discovered subscription
+ * deadlines.
+ *
+ * The QoS policy reported by functions like `rmw_subscription_get_actual_qos` or
+ * `rmw_publisher_get_actual_qos` may be best available or the actual deadline value.
+ *
+ * Services and clients are not supported and default to the deadline value in
+ * `rmw_qos_profile_services_default`.
+ *
+ * The middleware is not expected to update the policy after creating a subscription or
+ * publisher, even if the chosen policy is incompatible with newly discovered endpoints.
+ * Therefore, this policy should be used with care since non-deterministic behavior
+ * can occur due to races with discovery.
+ */
+#define RMW_QOS_DEADLINE_BEST_AVAILABLE {9223372036LL, 854775806LL}
 
 /// QoS Lifespan default.
 #define RMW_QOS_LIFESPAN_DEFAULT RMW_DURATION_UNSPECIFIED
 
 /// QoS Liveliness lease duration default.
 #define RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT RMW_DURATION_UNSPECIFIED
+/// Will match the majority of endpoints while maintaining as strict a policy as possible
+/**
+ * Value is RMW_DURATION_INFINITE - 1.
+ *
+ * A policy will be chosen at the time of creating a subscription or publisher.
+ * For a subscription, the lease duration will be the maximum value of all discovered publisher
+ * lease durations.
+ * For a publisher, the lease duration will be the minimum value of all discovered subscription
+ * lease durations.
+ *
+ * The QoS policy reported by functions like `rmw_subscription_get_actual_qos` or
+ * `rmw_publisher_get_actual_qos` may be best available or the actual lease duration value.
+ *
+ * Services and clients are not supported and default to the lease duration value in
+ * `rmw_qos_profile_services_default`.
+ *
+ * The middleware is not expected to update the policy after creating a subscription or
+ * publisher, even if the chosen policy is incompatible with newly discovered endpoints.
+ * Therefore, this policy should be used with care since non-deterministic behavior
+ * can occur due to races with discovery.
+ */
+#define RMW_QOS_LIVELINESS_LEASE_DURATION_BEST_AVAILABLE {9223372036LL, 854775806LL}
 
 /// ROS MiddleWare quality of service profile.
 typedef struct RMW_PUBLIC_TYPE rmw_qos_profile_s
@@ -477,14 +578,14 @@ typedef struct RMW_PUBLIC_TYPE rmw_qos_profile_s
   enum rmw_qos_durability_policy_e durability;
   /// The period at which messages are expected to be sent/received
   /**
-    * RMW_DURATION_UNSPEFICIED will use the RMW implementation's default value,
+    * RMW_DURATION_UNSPECIFIED will use the RMW implementation's default value,
     *   which may or may not be infinite.
     * RMW_DURATION_INFINITE explicitly states that messages never miss a deadline expectation.
     */
   struct rmw_time_s deadline;
   /// The age at which messages are considered expired and no longer valid
   /**
-    * RMW_DURATION_UNSPEFICIED will use the RMW implementation's default value,
+    * RMW_DURATION_UNSPECIFIED will use the RMW implementation's default value,
     *   which may or may not be infinite.
     * RMW_DURATION_INFINITE explicitly states that messages do not expire.
     */
@@ -493,7 +594,7 @@ typedef struct RMW_PUBLIC_TYPE rmw_qos_profile_s
   enum rmw_qos_liveliness_policy_e liveliness;
   /// The time within which the RMW node or publisher must show that it is alive
   /**
-    * RMW_DURATION_UNSPEFICIED will use the RMW implementation's default value,
+    * RMW_DURATION_UNSPECIFIED will use the RMW implementation's default value,
     *   which may or may not be infinite.
     * RMW_DURATION_INFINITE explicitly states that liveliness is not enforced.
     */
@@ -512,13 +613,18 @@ typedef struct RMW_PUBLIC_TYPE rmw_qos_profile_s
   bool avoid_ros_namespace_conventions;
 } rmw_qos_profile_t;
 
-/// ROS graph ID of the topic
+/// Globally unique identifier for a ROS graph entity
+/**
+ * This is expected to be globally unique within a ROS domain.
+ * The identifier should be the same when reported both locally (where the entity was created)
+ * and on remote hosts or processes.
+ */
 typedef struct RMW_PUBLIC_TYPE rmw_gid_s
 {
   /// Name of the rmw implementation
   const char * implementation_identifier;
 
-  /// Bype data Gid value
+  /// Byte data GID value
   uint8_t data[RMW_GID_STORAGE_SIZE];
 } rmw_gid_t;
 

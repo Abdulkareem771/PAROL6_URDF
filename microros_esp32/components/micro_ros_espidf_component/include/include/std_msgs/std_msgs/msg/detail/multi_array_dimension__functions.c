@@ -88,7 +88,7 @@ std_msgs__msg__MultiArrayDimension__copy(
 }
 
 std_msgs__msg__MultiArrayDimension *
-std_msgs__msg__MultiArrayDimension__create()
+std_msgs__msg__MultiArrayDimension__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__MultiArrayDimension * msg = (std_msgs__msg__MultiArrayDimension *)allocator.allocate(sizeof(std_msgs__msg__MultiArrayDimension), allocator.state);

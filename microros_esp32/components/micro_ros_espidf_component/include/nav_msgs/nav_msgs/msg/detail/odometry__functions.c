@@ -135,7 +135,7 @@ nav_msgs__msg__Odometry__copy(
 }
 
 nav_msgs__msg__Odometry *
-nav_msgs__msg__Odometry__create()
+nav_msgs__msg__Odometry__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   nav_msgs__msg__Odometry * msg = (nav_msgs__msg__Odometry *)allocator.allocate(sizeof(nav_msgs__msg__Odometry), allocator.state);

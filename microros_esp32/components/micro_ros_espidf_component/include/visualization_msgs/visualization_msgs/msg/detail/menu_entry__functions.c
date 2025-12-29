@@ -116,7 +116,7 @@ visualization_msgs__msg__MenuEntry__copy(
 }
 
 visualization_msgs__msg__MenuEntry *
-visualization_msgs__msg__MenuEntry__create()
+visualization_msgs__msg__MenuEntry__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   visualization_msgs__msg__MenuEntry * msg = (visualization_msgs__msg__MenuEntry *)allocator.allocate(sizeof(visualization_msgs__msg__MenuEntry), allocator.state);

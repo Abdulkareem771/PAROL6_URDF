@@ -44,7 +44,7 @@ typedef struct RCUTILS_PUBLIC_TYPE rcutils_hash_map_s
  * \return A hash value for the provided string
  */
 typedef size_t (* rcutils_hash_map_key_hasher_t)(
-  const void *  // key to hash
+  const void * key
 );
 
 /// The function signature for a key comparison function.
@@ -56,8 +56,8 @@ typedef size_t (* rcutils_hash_map_key_hasher_t)(
  * \return Zero if val1 == val2.
  */
 typedef int (* rcutils_hash_map_key_cmp_t)(
-  const void *,  // val1
-  const void *  // val2
+  const void * val1,
+  const void * val2
 );
 
 /**
@@ -119,7 +119,7 @@ rcutils_hash_map_string_cmp_func(const void * val1, const void * val2);
 RCUTILS_PUBLIC
 RCUTILS_WARN_UNUSED
 rcutils_hash_map_t
-rcutils_get_zero_initialized_hash_map();
+rcutils_get_zero_initialized_hash_map(void);
 
 /// Initialize a rcutils_hash_map_t, allocating space for given capacity.
 /**
@@ -144,7 +144,7 @@ rcutils_get_zero_initialized_hash_map();
  * ```c
  * rcutils_hash_map_t hash_map = rcutils_get_zero_initialized_hash_map();
  * rcutils_ret_t ret =
- *   rcutils_hash_map_init(&hash_map, 10, rcutils_get_default_allocator());
+ *   rcutils_hash_map_init(&hash_map, 2, rcutils_get_default_allocator());
  * if (ret != RCUTILS_RET_OK) {
  *   // ... do error handling
  * }
@@ -156,7 +156,8 @@ rcutils_get_zero_initialized_hash_map();
  * ```
  *
  * \param[inout] hash_map rcutils_hash_map_t to be initialized
- * \param[in] initial_capacity the amount of initial capacity for the hash_map
+ * \param[in] initial_capacity the amount of initial capacity for the hash_map - this must be
+ *                             greater than zero and will be automatically rounded up to the next power of 2
  * \param[in] key_size the size (in bytes) of the key used to index the data
  * \param[in] data_size the size (in bytes) of the data being stored
  * \param[in] key_hashing_func a function that returns a hashed value for a key

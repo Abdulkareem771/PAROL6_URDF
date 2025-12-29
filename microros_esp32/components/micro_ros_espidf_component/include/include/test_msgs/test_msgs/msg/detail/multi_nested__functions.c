@@ -258,7 +258,7 @@ test_msgs__msg__MultiNested__copy(
 }
 
 test_msgs__msg__MultiNested *
-test_msgs__msg__MultiNested__create()
+test_msgs__msg__MultiNested__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__MultiNested * msg = (test_msgs__msg__MultiNested *)allocator.allocate(sizeof(test_msgs__msg__MultiNested), allocator.state);

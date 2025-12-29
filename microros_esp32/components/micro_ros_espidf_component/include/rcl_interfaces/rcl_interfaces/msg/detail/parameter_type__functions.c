@@ -57,7 +57,7 @@ rcl_interfaces__msg__ParameterType__copy(
 }
 
 rcl_interfaces__msg__ParameterType *
-rcl_interfaces__msg__ParameterType__create()
+rcl_interfaces__msg__ParameterType__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rcl_interfaces__msg__ParameterType * msg = (rcl_interfaces__msg__ParameterType *)allocator.allocate(sizeof(rcl_interfaces__msg__ParameterType), allocator.state);

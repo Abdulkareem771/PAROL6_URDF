@@ -93,7 +93,7 @@ std_msgs__msg__ByteMultiArray__copy(
 }
 
 std_msgs__msg__ByteMultiArray *
-std_msgs__msg__ByteMultiArray__create()
+std_msgs__msg__ByteMultiArray__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__ByteMultiArray * msg = (std_msgs__msg__ByteMultiArray *)allocator.allocate(sizeof(std_msgs__msg__ByteMultiArray), allocator.state);

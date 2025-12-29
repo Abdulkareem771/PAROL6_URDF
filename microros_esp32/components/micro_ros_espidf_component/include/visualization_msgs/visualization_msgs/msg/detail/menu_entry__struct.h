@@ -2,6 +2,9 @@
 // with input from visualization_msgs:msg/MenuEntry.idl
 // generated code does not contain a copyright notice
 
+// IWYU pragma: private, include "visualization_msgs/msg/menu_entry.h"
+
+
 #ifndef VISUALIZATION_MSGS__MSG__DETAIL__MENU_ENTRY__STRUCT_H_
 #define VISUALIZATION_MSGS__MSG__DETAIL__MENU_ENTRY__STRUCT_H_
 
@@ -13,7 +16,6 @@ extern "C"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
 
 // Constants defined in the message
 

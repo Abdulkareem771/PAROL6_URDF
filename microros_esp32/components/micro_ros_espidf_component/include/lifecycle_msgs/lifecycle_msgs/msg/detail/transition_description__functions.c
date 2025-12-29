@@ -113,7 +113,7 @@ lifecycle_msgs__msg__TransitionDescription__copy(
 }
 
 lifecycle_msgs__msg__TransitionDescription *
-lifecycle_msgs__msg__TransitionDescription__create()
+lifecycle_msgs__msg__TransitionDescription__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   lifecycle_msgs__msg__TransitionDescription * msg = (lifecycle_msgs__msg__TransitionDescription *)allocator.allocate(sizeof(lifecycle_msgs__msg__TransitionDescription), allocator.state);

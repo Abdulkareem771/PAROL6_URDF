@@ -32,19 +32,26 @@ extern "C"
 /// Define publisher/subscription events
 typedef enum rmw_event_type_e
 {
+  // must be zero or rmw_get_zero_initialized_event will break
+  RMW_EVENT_INVALID = 0,
+
   // subscription events
   RMW_EVENT_LIVELINESS_CHANGED,
   RMW_EVENT_REQUESTED_DEADLINE_MISSED,
   RMW_EVENT_REQUESTED_QOS_INCOMPATIBLE,
   RMW_EVENT_MESSAGE_LOST,
+  RMW_EVENT_SUBSCRIPTION_INCOMPATIBLE_TYPE,
+  RMW_EVENT_SUBSCRIPTION_MATCHED,
 
   // publisher events
   RMW_EVENT_LIVELINESS_LOST,
   RMW_EVENT_OFFERED_DEADLINE_MISSED,
   RMW_EVENT_OFFERED_QOS_INCOMPATIBLE,
+  RMW_EVENT_PUBLISHER_INCOMPATIBLE_TYPE,
+  RMW_EVENT_PUBLICATION_MATCHED,
 
   // sentinel value
-  RMW_EVENT_INVALID
+  RMW_EVENT_TYPE_MAX
 } rmw_event_type_t;
 
 /// Encapsulate the RMW event implementation, data, and type.
@@ -125,6 +132,17 @@ RMW_PUBLIC
 RMW_WARN_UNUSED
 rmw_ret_t
 rmw_event_fini(rmw_event_t * event);
+
+
+/// Check if an event type is supported by the RMW implementation.
+/*
+ * \param[in] rmw_event_type to check
+ * \return True if the event is supported false otherwise.
+ */
+RMW_PUBLIC
+RMW_WARN_UNUSED
+bool
+rmw_event_type_is_supported(rmw_event_type_t rmw_event_type);
 
 #ifdef __cplusplus
 }

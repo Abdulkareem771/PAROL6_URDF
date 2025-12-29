@@ -57,7 +57,7 @@ std_msgs__msg__Int64__copy(
 }
 
 std_msgs__msg__Int64 *
-std_msgs__msg__Int64__create()
+std_msgs__msg__Int64__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__Int64 * msg = (std_msgs__msg__Int64 *)allocator.allocate(sizeof(std_msgs__msg__Int64), allocator.state);

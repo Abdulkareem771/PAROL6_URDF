@@ -166,7 +166,7 @@ test_msgs__msg__Defaults__copy(
 }
 
 test_msgs__msg__Defaults *
-test_msgs__msg__Defaults__create()
+test_msgs__msg__Defaults__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   test_msgs__msg__Defaults * msg = (test_msgs__msg__Defaults *)allocator.allocate(sizeof(test_msgs__msg__Defaults), allocator.state);

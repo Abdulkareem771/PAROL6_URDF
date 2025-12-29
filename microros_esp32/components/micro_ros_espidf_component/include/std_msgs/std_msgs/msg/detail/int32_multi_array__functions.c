@@ -93,7 +93,7 @@ std_msgs__msg__Int32MultiArray__copy(
 }
 
 std_msgs__msg__Int32MultiArray *
-std_msgs__msg__Int32MultiArray__create()
+std_msgs__msg__Int32MultiArray__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   std_msgs__msg__Int32MultiArray * msg = (std_msgs__msg__Int32MultiArray *)allocator.allocate(sizeof(std_msgs__msg__Int32MultiArray), allocator.state);

@@ -72,7 +72,7 @@ rosgraph_msgs__msg__Clock__copy(
 }
 
 rosgraph_msgs__msg__Clock *
-rosgraph_msgs__msg__Clock__create()
+rosgraph_msgs__msg__Clock__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   rosgraph_msgs__msg__Clock * msg = (rosgraph_msgs__msg__Clock *)allocator.allocate(sizeof(rosgraph_msgs__msg__Clock), allocator.state);

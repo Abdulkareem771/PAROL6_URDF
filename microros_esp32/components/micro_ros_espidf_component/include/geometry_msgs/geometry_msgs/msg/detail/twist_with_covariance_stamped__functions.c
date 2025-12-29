@@ -93,7 +93,7 @@ geometry_msgs__msg__TwistWithCovarianceStamped__copy(
 }
 
 geometry_msgs__msg__TwistWithCovarianceStamped *
-geometry_msgs__msg__TwistWithCovarianceStamped__create()
+geometry_msgs__msg__TwistWithCovarianceStamped__create(void)
 {
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
   geometry_msgs__msg__TwistWithCovarianceStamped * msg = (geometry_msgs__msg__TwistWithCovarianceStamped *)allocator.allocate(sizeof(geometry_msgs__msg__TwistWithCovarianceStamped), allocator.state);
