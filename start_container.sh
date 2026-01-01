@@ -3,13 +3,14 @@
 --gpus all \
 # Start container directly
 echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
+xhost +local:root
 docker run -d --rm \
   --name parol6_dev \
   --network host \
   --privileged \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -e QT_X11_NO_MITSHM=1 \
+  --env DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  --env QT_X11_NO_MITSHM=1 \
   -e XAUTHORITY=/tmp/.docker.xauth \
   -v /dev:/dev \
   -v "$(pwd)":/workspace \
