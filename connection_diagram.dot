@@ -1,0 +1,52 @@
+digraph ConnectionDiagram {
+  rankdir=TB;
+  node [shape=box, style=filled, fillcolor=white];
+  
+  subgraph cluster_ignition {
+    label = "Ignition Gazebo (Simulation)";
+    style = filled;
+    fillcolor = lightgrey;
+    Ignition [label="Physics Engine"];
+    Plugin [label="ign_ros2_control Plugin" fillcolor=lightblue];
+    Ignition -> Plugin [dir=both];
+  }
+
+  subgraph cluster_control {
+    label = "ROS 2 Control Layer";
+    style = dashed;
+    CM [label="Controller Manager" fillcolor=lightblue];
+    JTC [label="parol6_arm_controller" fillcolor=lightgreen];
+    JSB [label="joint_state_broadcaster" fillcolor=lightgreen];
+    
+    Plugin -> CM [dir=both];
+    CM -> JTC;
+    CM -> JSB;
+  }
+
+  subgraph cluster_moveit {
+    label = "Motion Planning (MoveIt)";
+    style = dashed;
+    MoveGroup [label="move_group Node" fillcolor=orange];
+    RViz [label="RViz2" fillcolor=orange];
+    
+    JSB -> MoveGroup [label="/joint_states"];
+    JSB -> RViz [label="/joint_states"];
+    MoveGroup -> JTC [label="Action: FollowJointTrajectory"];
+  }
+
+  subgraph cluster_hardware {
+    label = "Hardware/Input";
+    style = dashed;
+    Xbox [label="Xbox Controller"];
+    XboxNode [label="xbox_direct_control" fillcolor=yellow];
+    ESP32 [label="ESP32 Microcontroller"];
+    SerialNode [label="serial_publisher" fillcolor=yellow];
+    DebugListener [label="Debug Listener"];
+
+    Xbox -> XboxNode [label="/joy"];
+    XboxNode -> JTC [label="Action: FollowJointTrajectory"];
+    
+    ESP32 -> SerialNode [label="Serial"];
+    SerialNode -> DebugListener [label="/esp_serial"];
+  }
+}

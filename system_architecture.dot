@@ -1,0 +1,53 @@
+digraph SystemArchitecture {
+  rankdir=LR;
+  node [shape=box, style=filled, fillcolor=lightblue];
+
+  subgraph cluster_input {
+    label = "Input Devices";
+    style = dashed;
+    Client [label="Xbox Controller\n/joy"];
+    Clock [label="Simulation Clock\n/clock"];
+  }
+
+  subgraph cluster_ros {
+    label = "ROS 2 Control Layer";
+    style = solid;
+    XboxNode [label="xbox_direct_control"];
+    MoveGroup [label="move_group\n(Planning)"];
+    RViz [label="RViz 2\n(Visualization)"];
+    Bridge [label="ros_ign_bridge"];
+  }
+
+  subgraph cluster_execution {
+    label = "Execution";
+    style = solid;
+    Controller [label="parol6_arm_controller\n(JTC)"];
+    Broadcaster [label="joint_state_broadcaster"];
+  }
+
+  subgraph cluster_sim {
+    label = "Ignition Gazebo";
+    style = filled;
+    fillcolor = lightgrey;
+    Plugin [label="ign_ros2_control\nPlugin"];
+    Physics [label="Physics Engine"];
+  }
+
+  # Connections
+  Client -> XboxNode [label="TCP/USB"];
+  Clock -> Bridge;
+  Bridge -> XboxNode;
+  Bridge -> MoveGroup[label="Time Sync"];
+
+  XboxNode -> Controller [label="Action: FollowJointTrajectory"];
+  MoveGroup -> Controller [label="Action: FollowJointTrajectory"];
+  
+  Controller -> Plugin [label="Command"];
+  Plugin -> Physics [label="Simulated Motor"];
+  Physics -> Plugin [label="Feedback"];
+  Plugin -> Broadcaster [label="State Read"];
+  
+  Broadcaster -> XboxNode [label="/joint_states"];
+  Broadcaster -> MoveGroup [label="/joint_states"];
+  Broadcaster -> RViz [label="/joint_states"];
+}
