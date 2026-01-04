@@ -138,3 +138,53 @@ A complete list of active topics, their types, and connected nodes.
 | **`/parol6_arm_controller/follow_joint_trajectory`** | `FollowJointTrajectory` | `parol6_arm_controller` | `move_group` / `xbox_direct_control` | The "Move" command. |
 
 
+
+## 8. Component Responsibility Reference
+
+### **A. Nodes Reference Table**
+| Node Name | Package | Type | Responsibility |
+| :--- | :--- | :--- | :--- |
+| **`xbox_direct_control`** | `(custom)` | Python Node | Reads `/joy` and calculates position commands for the arm (Teleop). |
+| **`move_group`** | `moveit_ros_move_group` | C++ Node | Central MoveIt planner; handles collisions, kinematics (IK), and path planning. |
+| **`rviz2`** | `rviz2` | C++ GUI | Visualization interface for the user and MoveIt interaction. |
+| **`ros_ign_bridge`** | `ros_ign_bridge` | C++ Bridge | Transfers messages (Clock, TF, Cmd) between ROS 2 and Ignition Gazebo. |
+| **`spawner`** | `controller_manager` | Python Script | Loads and configures `ros2_control` controllers into the manager. |
+| **`robot_state_publisher`**| `robot_state_publisher` | C++ Node | Publishes static and dynamic TFs based on URDF and joint states. |
+| **`serial_publisher`** | `serial_publisher` | Python Node | **(ESP32 Branch)** Reads raw serial data from microcontroller for debugging. |
+
+### **B. Packages Reference Table**
+| Package Name | Location in Repo | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **`parol6`** | `/PAROL6` | CMake | **Core Description**. Contains URDF, Meshes (`/meshes`), and Gazebo Launch files (`/launch`). |
+| **`parol6_moveit_config`**| `/parol6_moveit_config` | CMake | **MoveIt Config**. Generated SRDF, kinematics.yaml, and MoveIt launch files. |
+| **`serial_publisher`** | `ros2_ws/src/...` | Python | **ESP32 Bridge**. Handles serial communication in the `ESP32-main` branch. |
+| **`microros_espidf`** | `/microros_esp32` | ESP-IDF | **Firmware**. Micro-ROS agent component for the ESP32 (Main Branch). |
+
+### **C. Topic Responsibility Matrix**
+This table categorizes topics by which subsystem "owns" or produces them, and who consumes them.
+
+| Subsystem & Responsibility | Topic Name | Message Type | Consumed By (Subscribers) |
+| :--- | :--- | :--- | :--- |
+| **IGNITION GAZEBO** (Simulation) | | | |
+| *Publishes Sim Time* | `/clock` | `rosgraph_msgs/Clock` | **All Nodes** (Sync) |
+| *Publishes Ground Truth* | `/model/parol6/pose` | `geometry_msgs/Pose` | **ros_ign_bridge** |
+| **ROS 2 CONTROL** (Hardware Interface) | | | |
+| *Motor Feedback* | `/joint_states` | `sensor_msgs/JointState` | **move_group**, **rviz2**, **xbox_direct_control** |
+| *Dynamic Transforms* | `/tf` | `tf2_msgs/TFMessage` | **move_group**, **rviz2** |
+| **MOVEIT 2** (Motion Planning) | | | |
+| *Visualizing Plans* | `/move_group/display_planned_path` | `moveit_msgs/DisplayTrajectory` | **rviz2** |
+| *Scene Awareness* | `/monitored_planning_scene` | `moveit_msgs/PlanningScene` | **rviz2** |
+| **INPUT / BRIDGE** (User Commands) | | | |
+| *GamePad Input* | `/joy` | `sensor_msgs/Joy` | **xbox_direct_control** |
+| *Command Target* | `/parol6_arm_controller/follow_joint_trajectory/goal` | `FollowJointTrajectoryAction` | **parol6_arm_controller** |
+
+### **D. Services & Actions Responsibility Matrix**
+| Subsystem & Responsibility | Name | Type | Called By (Clients) |
+| :--- | :--- | :--- | :--- |
+| **MOVEIT 2** (Planning) | | | |
+| *Inverse Kinematics* | `/compute_ik` | `GetPositionIK` | **External Nodes**, **RViz** |
+| *Path Planning* | `/plan_kinematic_path` | `GetMotionPlan` | **External Nodes** |
+| *Execute Plan* | `/move_group` | `MoveGroupAction` | **RViz**, **External Scripts** |
+| **ROS 2 CONTROL** (Execution) | | | |
+| *Execute Trajectory* | `/parol6_arm_controller/follow_joint_trajectory` | `FollowJointTrajectory` | **move_group**, **xbox_direct_control** |
+| *Manage Controllers* | `/controller_manager/list_controllers` | `ListControllers` | **spawner** |
