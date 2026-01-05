@@ -188,3 +188,87 @@ This table categorizes topics by which subsystem "owns" or produces them, and wh
 | **ROS 2 CONTROL** (Execution) | | | |
 | *Execute Trajectory* | `/parol6_arm_controller/follow_joint_trajectory` | `FollowJointTrajectory` | **move_group**, **xbox_direct_control** |
 | *Manage Controllers* | `/controller_manager/list_controllers` | `ListControllers` | **spawner** |
+| *Manage Controllers* | `/controller_manager/list_controllers` | `ListControllers` | **spawner** |
+
+## 9. Major Component Interaction Guide
+
+This table provides a "Standard Usage" guide for the primary system components, explaining how they are intended to be used logically.
+
+| Component | Role | Key Inputs (Subscribes) | Key Outputs (Publishes) | How to Interact (Standard Usage) |
+| :--- | :--- | :--- | :--- | :--- |
+| **MoveIt 2** (`move_group`) | **Planner**. Calculates collision-free paths. | `/joint_states`, `/tf`, `/robot_description` | `/parol6_arm_controller/follow_joint_trajectory/goal`, `/move_group/display_planned_path` | **To Move Robot:** Use the MoveGroup C++/Python Interface to set a target pose (XYZ) and call `.go()`. <br> **Do NOT** publish to topics directly; use the MoveGroup API. |
+| **ROS 2 Control** (`parol6_arm_controller`) | **Executor**. Interpolates points and drives motors. | `/parol6_arm_controller/follow_joint_trajectory/goal` (Action) | `/joint_states` (via broadcaster) | **To Send Motion:** Send a `FollowJointTrajectory` Action Goal. <br> **To Read Motion:** Subscribe to `/joint_states`. |
+| **Ignition Gazebo** (`ros_ign_bridge`) | **Hardware**. Simulates physics and motors. | `/model/parol6/cmd_vel` (if using Twist), Control Commands (internal plugin) | `/clock`, `/model/parol6/pose` | **Standard:** Do not interact directly. Use ROS 2 Control (above). <br> **Debug:** You can subscribe to `/model/parol6/pose` for ground truth, but use `/joint_states` for control loops. |
+| **Xbox Control** (`xbox_direct_control`) | **Teleop**. Human-in-the-loop control. | `/joy`, `/joint_states` | `/parol6_arm_controller/follow_joint_trajectory/goal` | **Usage:** Press buttons on controller. <br> **Logic:** It bypasses MoveIt and talks directly to the Controller for low-latency response. |
+| **RViz 2** | **Visualizer**. Shows what the robot thinks. | `/tf`, `/robot_description`, `/move_group/display_planned_path` | *(Interactive Markers)* | **Usage:** Use "MotionPlanning" plugin to drag the end-effector and visualize plans before executing. |
+
+## 10. Common Developer Workflows
+
+### **A. How to Insert the Microcontroller (Micro-ROS Layer)**
+To transition from Simulation to Real Hardware, you replace the **Ignition/Bridge** layer with the **Micro-ROS Layer**.
+1.  **The Concept**: The ESP32 acts as a "Hardware Bridge". It must run a Micro-ROS node that talks to the PC via USB Serial (UART) or Wi-Fi (UDP).
+2.  **Data Flow**:
+    *   **PC -> ESP32**: The ESP32 subscribes to `/parol6_arm_controller/follow_joint_trajectory` (or an intermediate topic like `/joint_commands`). It receives trajectory points (Position/Velocity) and drives the stepper motors.
+    *   **ESP32 -> PC**: The ESP32 publishes to `/joint_states`. It reads encoders/steps and sends back the *real* angles [L1...L6] so MoveIt knows where the robot is.
+3.  **Implementation**:
+    *   Use the `microros_esp32` component (verified in `microros_espidf` branch).
+    *   Run the **Micro-ROS Agent** on the PC (inside Docker):
+        ```bash
+        ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 --baudrate 115200
+        ```
+    *   Flash the ESP32 to connect to this agent.
+
+### **B. How to Tune PID Controllers**
+If the robot wobbles or reacts too slowly in simulation:
+1.  **Edit**: `PAROL6/config/ros2_controllers.yaml`.
+    *   Look for `gains:` under `parol6_arm_controller`.
+    *   Adjust `p` (Proportional) for stiffness, `d` (Derivative) for damping.
+2.  **Apply**:
+    *   Stop the simulation (`Ctrl+C` or `stop.sh`).
+    *   Rebuild: `colcon build`.
+    *   Restart: `./start_ignition.sh`.
+
+### **C. How to Add a Sensor (e.g., Camera)**
+1.  **Model It**: Add a `<link>` (camera body) and `<joint>` (mount) to `PAROL6/urdf/PAROL6.urdf`.
+2.  **Simulate It**: Add a `<sensor>` tag inside a `<gazebo>` plugin block in the URDF. Use `type="camera"` or `type="depth"`.
+3.  **Bridge It**: Update `PAROL6/launch/ignition.launch.py` to bridge the new sensor topic (e.g., `/camera/image_raw`) from Ignition to ROS 2.
+
+### **D. Alternative: Direct Serial Bridge (Any MCU / No Micro-ROS)**
+If you cannot use Micro-ROS (e.g., using Arduino Uno/Nano, or prefer simpler code), you can use a **Custom Serial Bridge**.
+1.  **Architecture**: `[ROS 2 Node] <---> [USB Serial] <---> [MCU Firmware]`
+2.  **The ROS 2 Node (Python)**:
+    *   **Input**: Subscribes to `/joint_states` (or your custom command topic).
+    *   **Logic**: Converts the list of 6 floats into a formatted string (e.g., `<J1,J2,J3,J4,J5,J6>`).
+    *   **Output**: Writes this string to `/dev/ttyUSB0` using the `pyserial` library.
+    *   **Feedback**: Reads lines from Serial and publishes them back to ROS (e.g., `/real_joint_states`).
+    *   *Reference*: The `serial_publisher` node in the `ESP32-main` branch is a basic example of the "Reader" part of this bridge.
+3.  **The Firmware (C++)**:
+    *   Standard `void loop()` that listens for Serial data.
+    *   Parses the string `<...>` and runs `stepper.moveTo()`.
+    *   **Pros**: Works on *any* board, easier to debug with Serial Monitor.
+    *   **Cons**: No guaranteed timing (latency), you must invent your own data protocol.
+
+## 11. Troubleshooting & Optimization
+
+### **A. GPU Acceleration & Docker**
+The `start_ignition.sh` script is configured for **Direct Rendering (DRI)**, which works for most Intel/AMD/NVIDIA setups on Linux.
+*   **The Check**: Inside the container (or outside), run `glxinfo | grep "OpenGL renderer"`. You should see your actual GPU (e.g., "NVIDIA GeForce..."), not "llvmpipe" (software rendering).
+*   **NVIDIA Specifics**: If `glxinfo` fails or simulation is slow on NVIDIA:
+    1.  Install **NVIDIA Container Toolkit** on your host machine: `sudo apt install nvidia-container-toolkit`.
+    2.  Edit `start_ignition.sh`: Change `--device /dev/dri` to `--gpus all`.
+    3.  Restart.
+
+### **B. Micro-ROS Connection Issues**
+If the Agent says "Waiting for agent..." or doesn't connect:
+1.  **Permissions**: Ensure your user owns the port: `sudo chmod 666 /dev/ttyUSB0`.
+2.  **Reset Sequence**:
+    *   Start the Agent on PC *first*.
+    *   Press the **EN (Reset)** button on the ESP32.
+    *   Watch for "Session Established" logs.
+3.  **Baud Rate**: Ensure the baud rate in the C++ firmware (`rmw_uros_set_custom_transport`) matches the agent command (default `115200`).
+
+### **C. X11 / GUI Not Opening**
+If `start_ignition.sh` fails with "Can't open display":
+1.  **Unlock X11**: Run `xhost +local:docker` on your host machine.
+2.  **Check Display**: Ensure `echo $DISPLAY` returns something like `:0` or `:1`.
+
