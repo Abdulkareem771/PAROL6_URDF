@@ -248,7 +248,44 @@ If you cannot use Micro-ROS (e.g., using Arduino Uno/Nano, or prefer simpler cod
     *   **Pros**: Works on *any* board, easier to debug with Serial Monitor.
     *   **Cons**: No guaranteed timing (latency), you must invent your own data protocol.
 
-## 11. Troubleshooting & Optimization
+## 12. Camera Integration (Xbox Kinect V2)
+Based on the `xbox_camera` branch and standard ROS 2 perception workflows.
+
+### **A. Driver Stack**
+The Kinect V2 is not plug-and-play; it requires a specific userspace driver and a bridge node.
+1.  **`libfreenect2`**: The core driver. It communicates directly with the USB 3.0 controller to fetch raw RGB and Depth packets.
+    *   *Installation*: Handled by `scripts/install_kinect.sh`.
+2.  **`kinect2_bridge`** (or `kinect_ros2`): The ROS 2 Node. It links against `libfreenect2` and publishes standard ROS messages.
+
+### **B. Key Topics**
+| Topic Name | Message Type | Purpose | Consumers |
+| :--- | :--- | :--- | :--- |
+| **`/kinect2/qhd/image_color`** | `sensor_msgs/Image` | Raw RGB video stream (960x540). | **Computer Vision** (YOLO, OpenCV), **RViz** |
+| **`/kinect2/qhd/image_depth_rect`**| `sensor_msgs/Image` | Rectified depth map (mm distance). | **Navigation**, **3D Reconstruction** |
+| **`/kinect2/qhd/points`** | `sensor_msgs/PointCloud2`| 3D Point Cloud (XYZRGB). | **MoveIt 2** (Octomap), **RViz** |
+| **`/kinect2/camera_info`** | `sensor_msgs/CameraInfo` | Calibration intrinsics (K matrix). | **Image Proc**, **Rectification Nodes** |
+
+### **C. MoveIt 2 Integration (Perception)**
+To allow the robot to "see" and avoid obstacles dynamically:
+1.  **Update Config**: Edit `parol6_moveit_config/config/sensors_3d.yaml`.
+2.  **Add Sensor**:
+    ```yaml
+    sensors:
+      - sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+        point_cloud_topic: /kinect2/qhd/points
+        max_range: 2.0
+    ```
+3.  **Result**: MoveIt will consume the PointCloud and build a dynamic **Octomap** (represented as voxels) in the planning scene, preventing the arm from hitting objects seen by the Kinect.
+
+### **D. Common Approaches for Vision Tasks**
+1.  **Object Detection**: Subscribe to `/kinect2/qhd/image_color`. Use a separate node (e.g., `yolov8_ros`) to find bounding boxes like "Cup".
+2.  **Grasping**:
+    *   Take the center pixel (u,v) of the bounding box.
+    *   Look up the depth (d) at (u,v) in `/kinect2/qhd/image_depth_rect`.
+    *   Deproject (u,v,d) using `/kinect2/camera_info` to get 3D coordinates (X,Y,Z).
+    *   Send this (X,Y,Z) to MoveIt as a target pose.
+
+## 13. Troubleshooting & Optimization
 
 ### **A. GPU Acceleration & Docker**
 The `start_ignition.sh` script is configured for **Direct Rendering (DRI)**, which works for most Intel/AMD/NVIDIA setups on Linux.
@@ -271,4 +308,46 @@ If the Agent says "Waiting for agent..." or doesn't connect:
 If `start_ignition.sh` fails with "Can't open display":
 1.  **Unlock X11**: Run `xhost +local:docker` on your host machine.
 2.  **Check Display**: Ensure `echo $DISPLAY` returns something like `:0` or `:1`.
+
+## 14. Daily Operation Cheat Sheet (TL;DR)
+Copy and paste these commands.
+
+| Task | Command / Action |
+| :--- | :--- |
+| **Start Everything** | `./start_ignition.sh` (Wait for Gazebo) -> New Terminal -> `./add_moveit.sh` |
+| **Stop Everything** | `Ctrl+C` in all terminals -> `./stop.sh` |
+| **Reset Simulation** | Press **Orange "Reset" Button** in Ignition GUI (bottom left). |
+| **Record Data** | `ros2 bag record -o my_data /joint_states /kinect2/qhd/image_color /kinect2/qhd/points` |
+| **Play Data** | `ros2 bag play my_data` |
+| **List Topics** | `ros2 topic list` |
+| **Echo Topic** | `ros2 topic echo /joint_states` (Ctrl+C to stop) |
+| **View Graph** | `rqt_graph` |
+
+## 15. Extensibility Guide
+
+### **A. How to Add a Gripper**
+1.  **URDF**: Edit `PAROL6/urdf/PAROL6.urdf`. Add a `<joint>` connecting `link_6` to your gripper base.
+2.  **SRDF**: Edit `parol6_moveit_config/config/parol6.srdf`. Add a new `<group name="gripper">` and define its joints/links.
+3.  **Controllers**: Update `PAROL6/config/ros2_controllers.yaml`. Add a `gripper_controller` (type: `PositionJointInterface`).
+4.  **MoveIt Controllers**: Update `parol6_moveit_config/config/moveit_controllers.yaml`. Add `gripper_controller` to the list.
+5.  **Rebuild**: Run `colcon build` inside the container.
+
+### **B. How to Change Motors / Gear Ratios**
+1.  **Limits**: Edit `PAROL6/urdf/PAROL6.urdf`. Find the `<joint>` tags.
+    *   Update `velocity="..."` (Max rad/s).
+    *   Update `effort="..."` (Max Nm).
+2.  **Transmissions**: If using `ros2_control` hardware interface, update the `mechanicalReduction` in the `<transmission>` block (if implemented) or adjust the steps/rad ratio in your microcontroller firmware.
+
+## 16. Maintenance & Deployment
+
+### **A. Exporting Your Work (Docker)**
+To share your exact setup with a colleague who doesn't want to rebuild:
+1.  **Commit**: `docker commit parol6_dev parol6-export:v1`
+2.  **Save**: `docker save parol6-export:v1 | gzip > parol6_v1.tar.gz`
+3.  **Load (Colleague)**: `docker load < parol6_v1.tar.gz`
+
+### **B. Adding New Packages**
+If you need a new ROS package (e.g., `ros-humble-yolo`):
+1.  **Try Online**: Enter container, run `sudo apt install ros-humble-yolo`.
+2.  **Make Permanent**: Add the line `RUN apt-get install -y ros-humble-yolo` to your `Dockerfile`. All future builds will have it.
 
