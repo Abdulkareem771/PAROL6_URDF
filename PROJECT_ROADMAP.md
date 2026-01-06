@@ -20,7 +20,9 @@
 - [x] (Attempted) Create `firmware.ino`
 - [x] Implement `virtual_esp32.py` (Software Simulation)
 - [x] Setup `socat` Virtual Serial Port (Ports 8/9 active)
-- [ ] Verify ROS -> Virtual Serial -> Virtual ESP32 Loop
+- [ ] **[NEXT]** Verify ROS -> Virtual Serial -> Virtual ESP32 Loop
+    - [x] Create `start_real_robot.sh` (The Docker Launcher)
+    - [x] Launch Setup and Verify Motion
 
 ## Phase 4: Dependencies & Environment [ToDo]
 - [x] Merge `xbox-camera` branch (Contains Kinect Drivers)
@@ -41,7 +43,7 @@
     - [ ] MoveIt Cartesian Path Call
 
 ## Phase 6: System Integration (The "Bringup") [ToDo]
-- [ ] Create `real_robot_bringup.launch.py`
+- [ ] Create `real_robot_bringup.launch.py` (For Deployment)
     - [ ] Orchestrate Driver + Vision + MoveIt + RViz
 - [ ] Final "Dry Run" Test (No Power)
 - [ ] Final "Live" Test (With Power)
