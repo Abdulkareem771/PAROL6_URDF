@@ -27,6 +27,30 @@ cd /path/to/PAROL6_URDF/
 
 ---
 
+## 🎯 Project Context: Vision-Guided Welding/Gluing
+
+**Thesis Goal**: Automated welding/gluing system that:
+1. **Vision**: Captures workspace image → Detects workpiece → Identifies ROI (seam/edge)
+2. **Planning**: Generates smooth welding path from ROI → Applies B-spline smoothing
+3. **Execution**: Follows path precisely with mkservo42c closed-loop servos
+
+**Hardware**:
+- **Servos**: mkservo42c (closed-loop FOC steppers)
+- **Camera**: Kinect v2 (RGB + Depth)
+- **End-Effector**: Welding torch / glue dispenser
+
+**Key Requirements**:
+- Smooth Cartesian paths (straight lines, no jerky motion)
+- Precise trajectory following (closed-loop feedback)
+- Acceleration profiles (smooth start/stop for quality)
+
+**This guide helps colleagues**:
+- Control the robot via MoveIt API
+- Understand the driver <-> servo communication
+- Extend the system for welding/vision applications
+
+---
+
 ## 📝 Writing Code to Control the Robot
 
 ### Option 1: Python Script (Recommended for Beginners)
