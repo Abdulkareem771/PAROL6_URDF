@@ -139,6 +139,300 @@ ros2 service call /plan_kinematic_path moveit_msgs/srv/GetMotionPlan "{
 
 ---
 
+## 🔌 Understanding the Driver Architecture
+
+### When to Use MoveIt API vs. Direct Driver Interaction
+
+**Use MoveIt API** (Recommended 95% of the time):
+- Planning trajectories
+- Collision avoidance
+- Inverse kinematics
+- High-level robot control
+
+**Modify the Driver** (Advanced use cases):
+- Changing serial communication protocol
+- Adding custom hardware interfaces (sensors, grippers)
+- Implementing low-level safety checks
+- Debugging communication issues
+
+### Driver Node Anatomy
+
+**File**: `parol6_driver/parol6_driver/real_robot_driver.py`
+
+**What it does**:
+1. **Connects to ESP32** via serial port (`/dev/ttyACM0` or `/dev/pts/8`)
+2. **Implements Action Server** (`/parol6_arm_controller/follow_joint_trajectory`)
+3. **Receives trajectories** from MoveIt
+4. **Sends commands** to microcontroller in format: `<J1,J2,J3,J4,J5,J6>`
+5. **Publishes feedback** as `/joint_states`
+
+### Communication Flow
+
+```
+┌──────────────┐
+│   MoveIt     │  Plans trajectory
+│  (move_group)│
+└──────┬───────┘
+       │
+       │ Action Goal: FollowJointTrajectory
+       │ (list of waypoints with timestamps)
+       ▼
+┌───────────────────────┐
+│  real_robot_driver.py │  Executes trajectory
+└───────────────────────┘
+       │
+       │ Serial: <J1,J2,J3,J4,J5,J6>
+       ▼
+┌───────────────────────┐
+│   ESP32 Firmware      │  Moves motors
+└───────────────────────┘
+```
+
+### Communication Protocol
+
+**To ESP32** (Commands):
+```
+<0.0,0.5,-0.3,0.0,0.2,0.0>\n
+```
+Format: `<joint1,joint2,joint3,joint4,joint5,joint6>\n`
+
+**From ESP32** (Acknowledgment):
+```
+READY
+MOVING
+DONE
+```
+
+---
+
+## 🛠️ Modifying the Driver
+
+### Example 1: Add Gripper Control
+
+```python
+# In real_robot_driver.py
+
+from std_srvs.srv import SetBool
+
+class RealRobotDriver(Node):
+    def __init__(self):
+        # ... existing code ...
+        
+        # Add gripper service
+        self.gripper_service = self.create_service(
+            SetBool,
+            'gripper/set_state',
+            self.gripper_callback
+        )
+    
+    def gripper_callback(self, request, response):
+        """Open/close gripper"""
+        if request.data:  # True = close
+            self.ser.write(b"<GRIP_CLOSE>\n")
+        else:  # False = open
+            self.ser.write(b"<GRIP_OPEN>\n")
+        
+        response.success = True
+        return response
+```
+
+**Usage**:
+```bash
+ros2 service call /gripper/set_state std_srvs/srv/SetBool "{data: true}"
+```
+
+**ESP32 Firmware** (add this):
+```cpp
+void loop() {
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    
+    if (cmd == "<GRIP_CLOSE>") {
+      digitalWrite(GRIPPER_PIN, HIGH);
+    }
+    else if (cmd == "<GRIP_OPEN>") {
+      digitalWrite(GRIPPER_PIN, LOW);
+    }
+  }
+}
+```
+
+---
+
+### Example 2: Add Force Sensor Reading
+
+```python
+from geometry_msgs.msg import WrenchStamped
+import threading
+
+class RealRobotDriver(Node):
+    def __init__(self):
+        # ... existing code ...
+        
+        # Add force sensor publisher
+        self.force_pub = self.create_publisher(
+            WrenchStamped, '/force_sensor', 10
+        )
+        
+        # Start sensor reading thread
+        self.sensor_thread = threading.Thread(
+            target=self.read_sensor_loop, daemon=True
+        )
+        self.sensor_thread.start()
+    
+    def read_sensor_loop(self):
+        """Continuously read force sensor from Arduino"""
+        while rclpy.ok():
+            if self.ser.in_waiting > 0:
+                line = self.ser.readline().decode().strip()
+                
+                if line.startswith("FORCE:"):
+                    # Parse: "FORCE:12.5"
+                    force_z = float(line.split(":")[1])
+                    
+                    msg = WrenchStamped()
+                    msg.header.stamp = self.get_clock().now().to_msg()
+                    msg.wrench.force.z = force_z
+                    self.force_pub.publish(msg)
+            
+            time.sleep(0.01)  # 100Hz
+```
+
+**ESP32 Firmware**:
+```cpp
+void loop() {
+  float force = analogRead(A0) * 0.0488;  // Convert to Newtons
+  Serial.print("FORCE:");
+  Serial.println(force);
+  delay(10);
+}
+```
+
+---
+
+### Example 3: Add Safety Limit Checking
+
+```python
+def execute_callback(self, goal_handle):
+    trajectory = goal_handle.request.trajectory
+    
+    # Check if trajectory is safe
+    for point in trajectory.points:
+        if not self.is_safe_position(point.positions):
+            self.get_logger().error("Unsafe trajectory detected!")
+            goal_handle.abort()
+            return FollowJointTrajectory.Result()
+    
+    # ... rest of execution ...
+
+def is_safe_position(self, joint_positions):
+    """Check if position is within safety bounds"""
+    safety_limits = {
+        0: (-3.14, 3.14),   # joint1
+        1: (-1.57, 1.57),   # joint2
+        2: (-1.57, 1.57),   # joint3
+        3: (-3.14, 3.14),   # joint4
+        4: (-1.57, 1.57),   # joint5
+        5: (-3.14, 3.14),   # joint6
+    }
+    
+    for i, pos in enumerate(joint_positions):
+        min_val, max_val = safety_limits[i]
+        
+        if not (min_val <= pos <= max_val):
+            self.get_logger().warn(f"Joint {i+1} out of bounds: {pos}")
+            return False
+    
+    return True
+```
+
+---
+
+## 📊 Debugging the Driver
+
+### Test driver directly
+
+```python
+# test_driver.py
+import rclpy
+from rclpy.action import ActionClient
+from control_msgs.action import FollowJointTrajectory
+from trajectory_msgs.msg import JointTrajectoryPoint
+
+def send_test_command():
+    rclpy.init()
+    node = rclpy.create_node('test_driver')
+    
+    client = ActionClient(
+        node, 
+        FollowJointTrajectory,
+        '/parol6_arm_controller/follow_joint_trajectory'
+    )
+    
+    goal = FollowJointTrajectory.Goal()
+    
+    # Single waypoint
+    point = JointTrajectoryPoint()
+    point.positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    point.time_from_start.sec = 2
+    
+    goal.trajectory.points = [point]
+    goal.trajectory.joint_names = [
+        'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6'
+    ]
+    
+    future = client.send_goal_async(goal)
+    rclpy.spin_until_future_complete(node, future)
+    
+    print(f"Goal accepted: {future.result().accepted}")
+
+if __name__ == '__main__':
+    send_test_command()
+```
+
+### Monitor Communication
+
+```bash
+# Check if driver is running
+ros2 node list | grep real_robot_driver
+
+# Check action server
+ros2 action list
+ros2 action info /parol6_arm_controller/follow_joint_trajectory
+
+# Monitor joint states
+ros2 topic echo /joint_states
+
+# See trajectory commands
+ros2 topic echo /joint_trajectory
+```
+
+---
+
+## 🎯 Recommendation
+
+**For most tasks**: Use the MoveIt Python API (Options 1 & 2 shown earlier)
+
+**Only modify the driver when**:
+- Adding new hardware (sensors, grippers, tool changers)
+- Changing communication protocol
+- Implementing robot-specific safety features
+- Debugging low-level communication issues
+
+**MoveIt handles**:
+- Path planning & optimization
+- Collision detection  
+- Inverse kinematics
+- Trajectory smoothing
+
+**Driver handles**:
+- Serial communication
+- Hardware interface
+- Real-time control loop
+- Joint state feedback
+
+---
+
 ## 🏗️ Code Structure
 
 ```
