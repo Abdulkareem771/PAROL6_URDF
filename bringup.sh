@@ -3,7 +3,7 @@ set -e
 
 # Defaults
 MODE="real"
-CONTAINER_NAME="parol6_unified"
+CONTAINER_NAME="parol6_dev"
 IMAGE_NAME="parol6-ultimate:latest"
 
 # Help Menu
