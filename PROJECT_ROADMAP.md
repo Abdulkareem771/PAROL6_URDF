@@ -18,8 +18,8 @@
 
 ## Phase 3: The Firmware Layer [Hardware Failed -> Virtual]
 - [x] (Attempted) Create `firmware.ino`
-- [ ] **[NEW]** Implement `virtual_esp32.py` (Software Simulation)
-- [ ] **[NEW]** Setup `socat` Virtual Serial Port
+- [x] Implement `virtual_esp32.py` (Software Simulation)
+- [x] Setup `socat` Virtual Serial Port (Ports 8/9 active)
 - [ ] Verify ROS -> Virtual Serial -> Virtual ESP32 Loop
 
 ## Phase 4: Dependencies & Environment [ToDo]
