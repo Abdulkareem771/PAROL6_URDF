@@ -22,6 +22,8 @@ moveit_msgs/
 moveit_resources/
 moveit_task_constructor/
 
+#microros ignore in camera branch
+microros_esp32/
 # IDE
 .vscode/
 .idea/
@@ -32,3 +34,10 @@ moveit_task_constructor/
 # OS
 .DS_Store
 Thumbs.db
+
+# Extracted datasets (RGB and Depth images)
+vision_work/extracted_dataset/*
+vision_work/rosbags/*
+
+# Temporarily container's start code
+#start_container.sh
