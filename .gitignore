@@ -38,6 +38,8 @@ Thumbs.db
 # Extracted datasets (RGB and Depth images)
 vision_work/extracted_dataset/*
 vision_work/rosbags/*
-
+vision_work/Checkboards/*
+vision_work/image_before_calibration/*
 # Temporarily container's start code
 #start_container.sh
+ luayzayed

@@ -9,13 +9,19 @@ Panels:
         - /MotionPlanning1/Planning Request1
         - /MotionPlanning1/Planning Metrics1
         - /MotionPlanning1/Planned Path1
+        - /Camera1
+        - /Camera1/Topic1
+        - /Image1
+        - /Image1/Status1
+        - /Image1/Topic1
+        - /Camera2
+        - /Camera2/Status1
+        - /Camera2/Visibility1
+        - /Camera2/Topic1
       Splitter Ratio: 0.5
-    Tree Height: 140
-  - Class: rviz_common/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
+    Tree Height: 366
+  - Class: rviz_common/Transformation
+    Name: Transformation
 Visualization Manager:
   Class: ""
   Displays:
@@ -114,7 +120,7 @@ Visualization Manager:
         Show Robot Visual: true
         Show Trail: false
         State Display Time: 3x
-        Trail Step Size: 1
+        Trail Step Size: 4
         Trajectory Topic: /display_planned_path
         Use Sim Time: false
       Planning Metrics:
@@ -197,6 +203,60 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 1
+    - Class: rviz_default_plugins/Camera
+      Enabled: true
+      Far Plane Distance: 100
+      Image Rendering: background and overlay
+      Name: Camera
+      Overlay Alpha: 0.5
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: ""
+      Value: true
+      Visibility:
+        Camera: true
+        Grid: true
+        Image: true
+        MotionPlanning: true
+        Value: true
+      Zoom Factor: 1
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: ""
+      Value: true
+    - Class: rviz_default_plugins/Camera
+      Enabled: true
+      Far Plane Distance: 100
+      Image Rendering: background and overlay
+      Name: Camera
+      Overlay Alpha: 0.5
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /kinect2/hd/image_color
+      Value: true
+      Visibility:
+        Camera: true
+        Grid: true
+        Image: true
+        MotionPlanning: true
+        Value: true
+      Zoom Factor: 1
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -208,7 +268,6 @@ Visualization Manager:
       Hide Inactive Objects: true
     - Class: rviz_default_plugins/Measure
       Line color: 128; 128; 0
-    - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:
@@ -242,25 +301,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.3510364294052124
+      Distance: 1.6295830011367798
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.21545349061489105
-        Y: 0.10921706259250641
-        Z: 0.34622517228126526
+        X: 0.23147469758987427
+        Y: 0.2566610872745514
+        Z: 0.1861683577299118
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.305000364780426
+      Pitch: 0.1647965908050537
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.1249996423721313
+      Yaw: 1.9004459381103516
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 2.5
@@ -343,18 +402,22 @@ Visualization Manager:
         Value: Orbit (rviz_default_plugins)
         Yaw: 1.5949991941452026
 Window Geometry:
+  Camera:
+    collapsed: false
   Displays:
     collapsed: false
-  Height: 898
+  Height: 2278
   Hide Left Dock: false
   Hide Right Dock: false
+  Image:
+    collapsed: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002b40000032cfc0200000004fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c0069006400650072000000003b0000003f0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000003b000001b90000016900fffffffb000000100044006900730070006c00610079007301000001fa000000c7000000c700fffffffb0000000a0056006900650077007301000002c7000000a0000000a000ffffff000001db0000032c00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Views:
+  QMainWindow State: 000000ff00000000fd00000001000000000000043700000836fc0200000008fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720100000080000000900000008900fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000011f000003440000031f00fffffffb000000100044006900730070006c0061007900730100000472000001e8000001d200fffffffb0000000a005600690065007700730100000627000001660000000000000000fb0000000c00430061006d0065007200610100000669000000580000005400fffffffb0000000a0049006d00610067006501000006d0000000580000005400fffffffb0000000c00430061006d0065007200610100000737000000580000005400fffffffb0000001c005400720061006e00730066006f0072006d006100740069006f006e010000079e000001180000011800ffffff000005030000083600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Transformation:
     collapsed: false
-  Width: 1173
-  X: 590
-  Y: 144
+  Width: 2377
+  X: 158
+  Y: 68
