@@ -9,27 +9,26 @@
     - [x] Add Full Source Code Appendices (A-F)
 - [x] Generate PDF/HTML versions of reports
 
-## Phase 2: The Driver Layer [In Progress]
+## Phase 2: The Driver Layer [Done]
 - [x] Create `parol6_driver` ROS 2 Package (Python)
 - [x] Implement `real_robot_driver.py` (Action Server Node)
 - [x] Configure `setup.py` and `package.xml` dependencies
-- [ ] **[ACTION]** Fix Build Permissions (`colcon build` failed)
-- [ ] Verify node startup (`ros2 run parol6_driver real_robot_driver`)
+- [x] Fix Build Permissions
+- [x] Verify node startup
 
-## Phase 3: The Firmware Layer [ToDo]
-- [ ] Create `firmware.ino` (ESP32 Code)
-    - [ ] Implement `AccelStepper` setup for 6 axes
-    - [ ] Implement Serial Command Parser (`<J1,J2...>`)
-    - [ ] Implement Homing Sequence (Limit Switches)
-    - [ ] Implement Alarm/Stall Monitoring
-- [ ] Flash ESP32 and Verify Serial Communication
+## Phase 3: The Firmware Layer [Hardware Failed -> Virtual]
+- [x] (Attempted) Create `firmware.ino`
+- [ ] **[NEW]** Implement `virtual_esp32.py` (Software Simulation)
+- [ ] **[NEW]** Setup `socat` Virtual Serial Port
+- [ ] Verify ROS -> Virtual Serial -> Virtual ESP32 Loop
 
 ## Phase 4: Dependencies & Environment [ToDo]
-- [ ] Merge `xbox-camera` branch (Contains Kinect Drivers)
+- [x] Merge `xbox-camera` branch (Contains Kinect Drivers)
 - [ ] Update `Dockerfile`
     - [ ] Add `libfreenect2` (Kinect)
     - [ ] Add `ultralytics` (YOLOv8)
     - [ ] Add `scipy` (B-Splines)
+    - [ ] Add `socat` (For simulation)
 - [ ] Rebuild Docker Image
 
 ## Phase 5: The Vision Layer [ToDo]

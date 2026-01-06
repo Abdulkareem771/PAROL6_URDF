@@ -16,7 +16,7 @@ class RealRobotDriver(Node):
         
         # 1. Serial Connection - Auto-detect
         self.ser = None
-        ports_to_try = ['/dev/ttyACM0', '/dev/ttyUSB0', '/dev/ttyUSB1']
+        ports_to_try = ['/dev/ttyACM0', '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/pts/1']
         
         for port in ports_to_try:
             try:
