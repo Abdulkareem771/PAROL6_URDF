@@ -15,6 +15,7 @@ __pycache__/
 parol6-ultimate-with-servo.tar.gz
 parol6-ultimate-with-servo-updated.tar.gz
 parol6-ultimate.tar.gz
+parol6-ultimate-with-kinect.tar.gz
 # MoveIt source dependencies (should not be committed)
 moveit2/
 moveit_msgs/
