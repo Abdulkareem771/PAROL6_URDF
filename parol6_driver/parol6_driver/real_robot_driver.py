@@ -14,16 +14,21 @@ class RealRobotDriver(Node):
     def __init__(self):
         super().__init__('real_robot_driver')
         
-        # 1. Serial Connection
-        # Adjust port as needed (/dev/ttyUSB0 or /dev/ttyACM0)
-        try:
-            # self.ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=0.1)
-            # time.sleep(2) # Wait for Arduino reset
-            self.ser = None # Placeholder for now
-            self.get_logger().info("Connected to ESP32 via Serial (Simulated for now).")
-        except Exception as e:
-            self.get_logger().error(f"Failed to connect to Serial: {e}")
-            self.ser = None
+        # 1. Serial Connection - Auto-detect
+        self.ser = None
+        ports_to_try = ['/dev/ttyACM0', '/dev/ttyUSB0', '/dev/ttyUSB1']
+        
+        for port in ports_to_try:
+            try:
+                self.ser = serial.Serial(port, 115200, timeout=0.1)
+                time.sleep(2) # Wait for Arduino reset
+                self.get_logger().info(f"Connected to Microcontroller at {port}")
+                break
+            except Exception:
+                pass
+        
+        if self.ser is None:
+             self.get_logger().warn("Could not connect to any Serial Port! Mode: SIMULATION")
 
         # 2. Homing Wait
         # self.wait_for_homing()
