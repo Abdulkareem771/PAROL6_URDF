@@ -73,9 +73,6 @@ PACKAGES="parol6 parol6_driver parol6_moveit_config"
 # Clean build artifacts inside container to avoid host pollution
 docker exec "$CONTAINER_NAME" bash -c "rm -rf /workspace/build /workspace/install /workspace/log"
 
-# Install runtime dependencies (Temporary fix until Phase 4 Image Rebuild)
-docker exec "$CONTAINER_NAME" bash -c "apt-get update && apt-get install -y python3-serial"
-
 # Build
 docker exec "$CONTAINER_NAME" bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install --packages-select $PACKAGES"
 echo "Build Complete."

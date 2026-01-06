@@ -104,7 +104,7 @@ def generate_launch_description():
     # E. RVIZ
     rviz_config_file = os.path.join(
         get_package_share_directory("parol6_moveit_config"),
-        "config",
+        "rviz",
         "moveit.rviz"
     )
 

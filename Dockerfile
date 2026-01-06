@@ -23,16 +23,18 @@ RUN apt-get update && apt-get install -y \
     ros-humble-image-pipeline \
     && rm -rf /var/lib/apt/lists/*
 
+
+
 # Install libfreenect2 (CPU-only, no GPU dependencies)
 RUN cd /tmp && \
     git clone https://github.com/OpenKinect/libfreenect2.git && \
     cd libfreenect2 && \
     mkdir build && cd build && \
     cmake .. \
-      -DENABLE_OPENGL=OFF \
-      -DENABLE_CUDA=OFF \
-      -DENABLE_OPENCL=OFF \
-      -DENABLE_TLS=ON && \
+    -DENABLE_OPENGL=OFF \
+    -DENABLE_CUDA=OFF \
+    -DENABLE_OPENCL=OFF \
+    -DENABLE_TLS=ON && \
     make -j$(nproc) && \
     make install && \
     ldconfig && \
@@ -67,3 +69,16 @@ RUN apt-get update && apt-get install -y \
     python3-opencv \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
+
+# Install System & ROS Dependencies for Real Robot & Simulation (Layered for Cache)
+RUN apt-get update && apt-get install -y \
+    python3-serial \
+    socat \
+    python3-pip \
+    python3-scipy \
+    ros-humble-ros-ign-bridge \
+    ros-humble-ros-ign-gazebo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages (YOLOv8, esptool)
+RUN pip3 install ultralytics esptool
