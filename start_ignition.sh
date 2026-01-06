@@ -18,38 +18,7 @@ echo ""
 echo -e "${YELLOW}Enabling X11 access...${NC}"
 xhost +local:docker > /dev/null 2>&1
 
-# Create X11 authentication file for Docker
-XAUTH=/tmp/.docker.xauth
-
-# Get the real user's Xauthority file
-if [ -n "$SUDO_USER" ]; then
-    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-    USER_UID=$(getent passwd "$SUDO_USER" | cut -d: -f3)
-
-    if [ -f "/run/user/$USER_UID/gdm/Xauthority" ]; then
-        XAUTH_SOURCE="/run/user/$USER_UID/gdm/Xauthority"
-    elif [ -f "$USER_HOME/.Xauthority" ]; then
-        XAUTH_SOURCE="$USER_HOME/.Xauthority"
-    else
-        XAUTH_SOURCE=""
-        echo -e "${YELLOW}⚠️  Could not find .Xauthority file. X11 forwarding might fail.${NC}"
-    fi
-else
-    XAUTH_SOURCE=${XAUTHORITY:-"$HOME/.Xauthority"}
-fi
-
-# Create/update auth file
-touch $XAUTH
-
-if [ -n "$XAUTH_SOURCE" ] && [ -f "$XAUTH_SOURCE" ]; then
-    xauth -f "$XAUTH_SOURCE" nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f $XAUTH nmerge -
-else
-    echo -e "${YELLOW}⚠️  No Xauthority source found. Creating empty auth file.${NC}"
-fi
-
-chmod 644 $XAUTH
-
-# Check if container already exists
+# Check if container is already running
 if docker ps -a | grep -q parol6_dev; then
     echo -e "${YELLOW}⚠️  Container 'parol6_dev' already exists${NC}"
     read -p "Stop it and start fresh? (y/n): " -n 1 -r
@@ -69,14 +38,9 @@ fi
 echo -e "${GREEN}🚀 Starting PAROL6 with Ignition Gazebo...${NC}"
 echo ""
 
-# ---------------------------
-# START DOCKER CONTAINER
-# GPU + X11 + USB SUPPORT
-# ---------------------------
-
+# Start container with enhanced X11 support
 echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
 docker run -d --rm \
-  --gpus all \
   --name parol6_dev \
   --network host \
   --privileged \
@@ -86,7 +50,8 @@ docker run -d --rm \
   -e XAUTHORITY=/tmp/.docker.xauth \
   -v /dev:/dev \
   -v "$(pwd)":/workspace \
-  --shm-size=512m \
+  --device /dev/dri \
+  --group-add video \
   parol6-ultimate:latest \
   tail -f /dev/null
 
@@ -131,11 +96,11 @@ docker exec -it parol6_dev bash -c "
   ros2 launch parol6 ignition.launch.py
 "
 
-# Clean up afterwards
+# When closed, clean up
 echo ""
 echo -e "${YELLOW}Ignition closed. Stopping container...${NC}"
 docker stop parol6_dev
 echo -e "${GREEN}✓ System stopped${NC}"
 
-# Restore X11 restrictions
+# Reset X11 access
 xhost -local:docker > /dev/null 2>&1
