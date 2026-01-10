@@ -1,5 +1,18 @@
 # 🧠 YOLO + ROS 2 Humble + Docker (Ubuntu 22.04) — Team Guide
 
+> **📌 UPDATED STRATEGY (January 2026)**  
+> This document describes the initial YOLO setup approach and is kept as reference.  
+> For the **current recommended workflow** using virtual environments and offline wheels,  
+> see: [VISION_DEPLOYMENT_GUIDE.md](../VISION_DEPLOYMENT_GUIDE.md)
+>
+> **Use this doc for:**
+> - Understanding YOLO basics
+> - GPU setup reference  
+> - Training workflow concepts
+> - Troubleshooting hardware issues
+
+---
+
 ## 📌 Purpose of This Guide
 This document explains how to:
 
