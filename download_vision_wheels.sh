@@ -57,7 +57,7 @@ elif [ "$choice" == "4" ]; then
         $TORCH_PKGS --index-url https://download.pytorch.org/whl/cu130
 
 else
-    echo "Eixting..."
+    echo "Eixting.."
     exit 1
 fi
 
