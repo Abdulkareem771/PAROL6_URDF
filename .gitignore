@@ -23,6 +23,8 @@ moveit_msgs/
 moveit_resources/
 moveit_task_constructor/
 
+#python vision libraries:
+python vison libs
 #microros ignore in camera branch
 microros_esp32/
 # IDE

@@ -1,40 +1,31 @@
 #!/bin/bash
-# Download Vision Library Wheels
-# Run this ONCE on a machine with good internet
-# Then share the wheels/ folder with teammates
+# Download Vision Library Wheels (Linux / Docker Compatible)
+# Run this on ANY machine with internet (Linux, Mac, or WSL)
+# It downloads wheels specifically for:
+# - OS: Linux (manylinux2014_x86_64)
+# - Python: 3.10 (ROS 2 Humble standard)
 
 set -e
 
 echo "=========================================="
-echo "  Downloading Vision Library Wheels"
+echo "  Downloading Vision Wheels (Linux/ROS 2 version)"
 echo "=========================================="
-echo ""
-
-# Navigate to workspace
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
 
 # Create wheels directory
-mkdir -p wheels
+mkdir -p wheels_linux_py310
+cd wheels_linux_py310
 
-echo "[1/3] Creating temporary venv..."
-python3 -m venv temp_venv
-source temp_venv/bin/activate
+echo "[1/2] Downloading necessary libraries..."
+echo "  Target: Linux x86_64, Python 3.10"
+echo "  Libraries: YOLO, OpenCV, PyTorch, SciPy"
 
-echo "✓ Temporary venv created"
-echo ""
-
-echo "[2/3] Downloading wheels..."
-echo "  Platform: manylinux2014_x86_64"
-echo "  Python: 3.10"
-echo "  This may take 10-15 minutes (downloading ~2GB)..."
-echo ""
-
+# Download exact binary wheels for Linux
 pip download \
     --only-binary=:all: \
     --platform manylinux2014_x86_64 \
     --python-version 3.10 \
-    --dest wheels/ \
+    --implementation cp \
+    --abi cp310 \
     ultralytics \
     opencv-python \
     scipy \
@@ -43,30 +34,9 @@ pip download \
     pyyaml
 
 echo ""
-echo "✓ Wheels downloaded"
+echo "[2/2] Download Complete"
+echo "  Location: $(pwd)"
+echo "  Size: $(du -sh . | cut -f1)"
 echo ""
-
-echo "[3/3] Cleaning up..."
-deactivate
-rm -rf temp_venv
-echo "✓ Cleanup complete"
-echo ""
-
-# Show what was downloaded
-echo "=========================================="
-echo "  Download Complete!"
-echo "=========================================="
-echo ""
-echo "Wheels saved to: $(pwd)/wheels/"
-echo ""
-ls -lh wheels/*.whl | wc -l | xargs echo "Total packages:"
-du -sh wheels/ | awk '{print "Total size: "$1}'
-echo ""
-echo "Next steps:"
-echo "  1. Share wheels/ folder with teammates"
-echo "  2. Run: ./setup_vision_env.sh (uses wheels for offline install)"
-echo ""
-echo "To share:"
-echo "  tar -czf vision_wheels.tar.gz wheels/"
-echo "  # Share vision_wheels.tar.gz via Google Drive/USB"
-echo ""
+echo "Next Step:"
+echo "  Copy this 'wheels_linux_py310' folder to your robot/Docker workspace."

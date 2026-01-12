@@ -38,139 +38,62 @@ All team members should follow these steps for consistency.
 
 ---
 
-## 📦 Prerequisites (One-Time Team Setup)
+## 📦 Dependencies & Setup
 
-### Step 0: Get Wheels Folder
-
-**Option A: Download Fresh** (Requires internet, ~15 minutes)
-```bash
-cd /path/to/PAROL6_URDF
-./download_vision_wheels.sh
-```
-
-**Option B: Get from Teammate** (Offline)
-```bash
-# Teammate provides: vision_wheels.tar.gz
-tar -xzf vision_wheels.tar.gz  # Creates wheels/ folder
-```
-
-**What's in wheels/:**
-- `torch-*.whl` (~900MB)
-- `ultralytics-*.whl`
-- `opencv_python-*.whl`
-- `scipy-*.whl`
-- `torchvision-*.whl`
-- Dependencies (~40 packages total)
-
-**Size**: ~1.5-2GB  
-**Share once**: All teammates use same wheels
+### Critical Requirement: Python 3.10
+Since we are using **ROS 2 Humble**, we **MUST use Python 3.10**.
+- The Docker container uses Python 3.10 by default.
+- Any external wheels must be built for `cp310` (Python 3.10).
+- Windows wheels (cp313, win_amd64) **WILL NOT WORK** on the robot.
 
 ---
 
-## 🐳 Part 1: Docker Container Setup
+### Option A: Online Setup (Direct Download)
+*Best for fast setup if the robot has internet.*
 
-### Step 1.1: Start Container
-
-```bash
-cd /path/to/PAROL6_URDF
-
-# Start the unified container
-docker start parol6_dev 2>/dev/null || \
-docker run -d --name parol6_dev \
-  --network host \
-  --privileged \
-  --gpus all \
-  -e DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -v $(pwd):/workspace \
-  -v /dev:/dev \
-  parol6-ultimate:latest \
-  tail -f /dev/null
-
-# Enter container
-docker exec -it parol6_dev bash
-```
-
-**You are now inside Docker.** All following steps run here.
-
----
-
-### Step 1.2: Verify Python Version
+Run the setup script inside the container. It will automatically download the correct versions from PyPI.
 
 ```bash
-python3 --version
-# Expected: Python 3.10.x
-```
-
-**Why Python 3.10?**
-- ROS 2 Humble uses Python 3.10
-- All ROS packages built for Python 3.10
-- Vision libraries fully support Python 3.10
-- Binary compatibility guaranteed
-
----
-
-## 🔧 Part 2: Vision Environment Setup
-
-### Step 2.1: Navigate to Workspace
-
-```bash
-cd /workspace
-ls wheels/  # Should see *.whl files
-```
-
-If no wheels, exit container and run `./download_vision_wheels.sh` on host.
-
----
-
-### Step 2.2: Run Setup Script
-
-```bash
+# Inside Docker container
 ./setup_vision_env.sh
 ```
 
-**What it does:**
-1. Creates `venv_vision/` with Python 3.10
-2. Installs vision libraries from `wheels/` (offline)
-3. Saves `requirements_vision.txt`
-4. Ready in 1-2 minutes
+---
 
-**Output:**
-```
-✓ Virtual environment created
-✓ Vision libraries installed
-  Mode: OFFLINE (from wheels/)
-  Python version: 3.10.12
-```
+### Option B: Offline Setup (Using Linux Wheels)
+*Best for air-gapped robots or slow internet.*
+
+1. **On a PC with Internet:**
+   Run the download script to fetch Linux-compatible wheels:
+   ```bash
+   ./download_vision_wheels.sh
+   # Result: Creates 'wheels_linux_py310' folder (~2GB)
+   ```
+
+2. **Transfer**:
+   Copy the `wheels_linux_py310` folder to your robot's workspace.
+
+3. **Install on Robot:**
+   The setup script will automatically detect the local folder and install from it.
+   ```bash
+   ./setup_vision_env.sh
+   ```
 
 ---
 
-### Step 2.3: Test Installation
+## 🔧 Setup Script (`setup_vision_env.sh`)
 
-```bash
-# Activate venv
-source venv_vision/bin/activate
-
-# Test YOLO
-python3 -c "from ultralytics import YOLO; print('YOLO ready!')"
-
-# Test OpenCV
-python3 -c "import cv2; print(f'OpenCV {cv2.__version__}')"
-
-# Test PyTorch
-python3 -c "import torch; print(f'PyTorch {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
-
-# Deactivate when done
-deactivate
-```
-
-**Expected:**
-```
-YOLO ready!
-OpenCV 4.8.1
-PyTorch 2.1.0
-CUDA: True  # (or False if CPU-only)
-```
+This script handles everything automatically:
+1. Creates virtual environment (`venv_vision`)
+2. Activates it
+3. Checks for local wheels folder
+   - If found: Installs offline
+   - If missing: Downloads online
+4. Installs **Necessary Libraries Only**:
+   - `ultralytics` (YOLO)
+   - `opencv-python`
+   - `torch` & `torchvision`
+   - `scipy`
 
 ---
 
