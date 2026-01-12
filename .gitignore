@@ -42,5 +42,9 @@ Thumbs.db
 vision_work/extracted_dataset/*
 vision_work/rosbags/*
 
+
+# Wheel download directory
+wheels_linux_py310/*
+wheels/*
 # Temporarily container's start code
 #start_container.sh
