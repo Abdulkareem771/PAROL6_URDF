@@ -135,6 +135,94 @@ Typical rate: **10-20 Hz** (one command every 50-100ms)
 
 ---
 
+## 🔍 Important: What ESP32 Actually Receives
+
+**ESP32 gets POSITIONS ONLY (not velocities/accelerations!)**
+
+### Message Format Comparison
+
+**Sent to ESP32 (over serial):**
+```
+<SEQ,J1,J2,J3,J4,J5,J6>
+<0,0.523,-0.892,1.234,-0.456,0.789,-0.321>
+```
+Contains:
+- ✅ Sequence number
+- ✅ 6 joint positions (radians)
+- ❌ NO velocities
+- ❌ NO accelerations
+
+**Logged on PC (CSV file):**
+```csv
+seq,timestamp,j1_pos,j2_pos,...,j1_vel,j2_vel,...,j1_acc,j2_acc,...
+0,1736781...,0.523,-0.892,...,0.05,0.03,...,0.01,0.02,...
+```
+Contains:
+- ✅ Everything MoveIt calculated
+- ✅ Positions, velocities, accelerations
+- ✅ Timestamps
+- ✅ Full trajectory data
+
+### Why Are They Different?
+
+**1. Bandwidth Efficiency**
+- Positions only: 7 numbers per command (~60 bytes)
+- With vel/acc: 19 numbers per command (~180 bytes)
+- **Saves 67% bandwidth!**
+
+**2. ESP32 Can Calculate Velocities**
+```cpp
+// On ESP32, you can calculate velocity:
+float velocity = (new_position - old_position) / time_interval;
+```
+
+**3. Most Motors Only Need Positions**
+- Stepper motors: just need target position
+- Servo motors: have internal velocity control
+- Only advanced control needs explicit vel/acc
+
+### If You Need Velocities/Accelerations on ESP32
+
+**Option 1: Modify Protocol (Advanced)**
+
+Change driver to send extended format:
+```cpp
+// New format:
+<SEQ,J1_pos,J1_vel,J2_pos,J2_vel,...,J6_pos,J6_vel>
+```
+
+**Option 2: Calculate on ESP32 (Recommended)**
+```cpp
+// Store previous position
+float prev_pos[6];
+float current_vel[6];
+
+// On new command:
+for(int i = 0; i < 6; i++) {
+    current_vel[i] = (joints[i] - prev_pos[i]) / 0.05; // 50ms interval
+    prev_pos[i] = joints[i];
+}
+```
+
+**Option 3: Use Trajectory Interpolation**
+- ESP32 calculates smooth path between positions
+- Generates intermediate points
+- Smoother motor motion
+
+### Summary Table
+
+| Data | ESP32 Receives | PC Logs | Why Different |
+|------|---------------|---------|---------------|
+| Sequence # | ✅ Yes | ✅ Yes | Packet tracking |
+| Positions | ✅ Yes (6 values) | ✅ Yes | Essential for motion |
+| Velocities | ❌ No | ✅ Yes | Can calculate from positions |
+| Accelerations | ❌ No | ✅ Yes | Can calculate from velocities |
+| Timestamps | ❌ No | ✅ Yes | PC-side analysis |
+
+**Bottom line:** ESP32 gets what it needs (positions), PC logs everything for analysis and motor tuning!
+
+---
+
 ## 📊 Check Logs (PC Side)
 
 After executing, check what the driver sent:

@@ -91,7 +91,7 @@ def analyze_log(csv_file):
     ax = axes[0]
     for col in pos_cols:
         if col in df.columns:
-            ax.plot(x_axis, np.degrees(df[col]), label=col.upper(), linewidth=1.5)
+            ax.plot(x_axis, np.degrees(df[col].values), label=col.upper(), linewidth=1.5)
     ax.set_ylabel('Position (degrees)', fontsize=11)
     ax.set_title('Joint Positions Over Time')
     ax.legend(loc='best', ncol=6)
@@ -101,7 +101,7 @@ def analyze_log(csv_file):
     ax = axes[1]
     for col in vel_cols:
         if col in df.columns:
-            ax.plot(x_axis, np.degrees(df[col]), label=col.upper(), linewidth=1.5)
+            ax.plot(x_axis, np.degrees(df[col].values), label=col.upper(), linewidth=1.5)
     ax.set_ylabel('Velocity (°/s)', fontsize=11)
     ax.set_title('Joint Velocities Over Time')
     ax.legend(loc='best', ncol=6)
@@ -111,7 +111,7 @@ def analyze_log(csv_file):
     ax = axes[2]
     for col in acc_cols:
         if col in df.columns:
-            ax.plot(x_axis, np.degrees(df[col]), label=col.upper(), linewidth=1.5)
+            ax.plot(x_axis, np.degrees(df[col].values), label=col.upper(), linewidth=1.5)
     ax.set_xlabel('Command Number', fontsize=11)
     ax.set_ylabel('Acceleration (°/s²)', fontsize=11)
     ax.set_title('Joint Accelerations Over Time')
@@ -128,13 +128,118 @@ def analyze_log(csv_file):
     plt.show()
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python3 quick_log_analysis.py <path_to_csv>")
-        print("\nExample:")
-        print("  python3 quick_log_analysis.py logs/driver_commands_20260112_225502.csv")
-        sys.exit(1)
-    
-    csv_file = sys.argv[1]
+    # If file provided as argument, use it
+    if len(sys.argv) >= 2:
+        csv_file = sys.argv[1]
+    else:
+        # Interactive mode - show available files
+        logs_dir = Path('logs')
+        
+        if not logs_dir.exists():
+            print("❌ logs/ directory not found!")
+            print("Run this script from the project root directory.")
+            sys.exit(1)
+        
+        # Find all CSV files
+        all_csv_files = sorted(logs_dir.glob('driver_commands_*.csv'), reverse=True)
+        
+        if not all_csv_files:
+            print("❌ No log files found in logs/ directory")
+            sys.exit(1)
+        
+        # Filter out empty files (only headers, no data)
+        csv_files = [f for f in all_csv_files if f.stat().st_size > 500]  # More than just headers
+        
+        if not csv_files:
+            print("❌ No non-empty log files found in logs/ directory")
+            print(f"Found {len(all_csv_files)} file(s) but all are empty (header only)")
+            sys.exit(1)
+        
+        # Show only recent files by default
+        max_display = 10
+        display_files = csv_files[:max_display]
+        
+        # Show file list
+        print("\n" + "="*70)
+        print("  Available Driver Log Files")
+        if len(csv_files) > max_display:
+            print(f"  (Showing {max_display} most recent of {len(csv_files)} total)")
+        print("="*70 + "\n")
+        
+        for idx, file in enumerate(display_files, 1):
+            # Get file size
+            size = file.stat().st_size
+            if size < 1024:
+                size_str = f"{size}B"
+            elif size < 1024*1024:
+                size_str = f"{size/1024:.1f}KB"
+            else:
+                size_str = f"{size/(1024*1024):.1f}MB"
+            
+            # Get modification time
+            mtime = file.stat().st_mtime
+            from datetime import datetime
+            dt = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Estimate number of commands
+            if size > 500:
+                est_commands = (size - 177) // 150  # Rough estimate
+                commands_str = f" (~{est_commands} commands)"
+            else:
+                commands_str = " (empty)"
+            
+            print(f"  [{idx}] {file.name}")
+            print(f"      Size: {size_str:>8s}  |  Modified: {dt}{commands_str}")
+            print()
+        
+        # Get user selection
+        print("="*70)
+        if len(csv_files) > max_display:
+            print(f"\nTip: Type 'all' to see all {len(csv_files)} files")
+        
+        while True:
+            try:
+                choice = input(f"\nSelect file [1-{len(display_files)}] or 'q' to quit: ").strip()
+                
+                if choice.lower() == 'q':
+                    print("Cancelled.")
+                    sys.exit(0)
+                
+                if choice.lower() == 'all' and len(csv_files) > max_display:
+                    # Show all files
+                    display_files = csv_files
+                    print("\n" + "="*70)
+                    print(f"  All {len(csv_files)} Driver Log Files")
+                    print("="*70 + "\n")
+                    
+                    for idx, file in enumerate(display_files, 1):
+                        size = file.stat().st_size
+                        if size < 1024:
+                            size_str = f"{size}B"
+                        elif size < 1024*1024:
+                            size_str = f"{size/1024:.1f}KB"
+                        else:
+                            size_str = f"{size/(1024*1024):.1f}MB"
+                        
+                        mtime = file.stat().st_mtime
+                        from datetime import datetime
+                        dt = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        print(f"  [{idx}] {file.name:50s} {size_str:>8s}  {dt}")
+                    
+                    print("="*70)
+                    continue
+                
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(display_files):
+                    csv_file = str(display_files[choice_num - 1])
+                    break
+                else:
+                    print(f"Please enter a number between 1 and {len(display_files)}")
+            except ValueError:
+                print("Invalid input. Enter a number, 'all', or 'q' to quit.")
+            except KeyboardInterrupt:
+                print("\nCancelled.")
+                sys.exit(0)
     
     if not Path(csv_file).exists():
         print(f"❌ File not found: {csv_file}")
