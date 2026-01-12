@@ -1,34 +1,73 @@
 #!/bin/bash
+# Unified Container Management Script
+# Single persistent container for ALL robot operations
 
---gpus all \
-# Start container directly
-echo -e "${BLUE}[1/3]${NC} Starting Docker container..."
-xhost +local:root
-docker run -d --rm \
-  --name parol6_dev \
-  --network host \
-  --privileged \
-  --env DISPLAY=$DISPLAY \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  --env QT_X11_NO_MITSHM=1 \
-  -e XAUTHORITY=/tmp/.docker.xauth \
-  -v /dev:/dev \
-  -v "$(pwd)":/workspace \
-  --shm-size=512m \
-  parol6-ultimate:latest \
-  tail -f /dev/null
+set -e
 
-sleep 2
-echo -e "${GREEN}✓ Container started${NC}"
+CONTAINER_NAME="parol6_dev"
+IMAGE_NAME="parol6-ultimate:latest"
+
+# Colors
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║     PAROL6 Unified Container Manager                       ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Enter to container
-docker exec -it parol6_dev bash
+# Check if container exists
+if docker ps -a | grep -q "$CONTAINER_NAME"; then
+    echo -e "${BLUE}[INFO]${NC} Container '$CONTAINER_NAME' exists"
+    
+    if docker ps | grep -q "$CONTAINER_NAME"; then
+        echo -e "${GREEN}[✓]${NC} Container is already running"
+    else
+        echo -e "${YELLOW}[!]${NC} Starting existing container..."
+        docker start "$CONTAINER_NAME"
+        echo -e "${GREEN}[✓]${NC} Container started"
+    fi
+else
+    echo -e "${BLUE}[INFO]${NC} Creating new container '$CONTAINER_NAME'..."
+    
+    # Enable X11
+    xhost +local:root >/dev/null 2>&1
+    
+    # Detect ESP32 port
+    ESP_PORT=""
+    for port in /dev/ttyUSB0 /dev/ttyACM0 /dev/ttyUSB1; do
+        if [ -e "$port" ]; then
+            ESP_PORT="$port"
+            echo -e "${GREEN}[✓]${NC} Detected ESP32 at $ESP_PORT"
+            break
+        fi
+    done
+    
+    docker run -d --name $CONTAINER_NAME \
+        --network host \
+        --privileged \
+        --gpus all \
+        -e DISPLAY=$DISPLAY \
+        -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+        -v $(pwd):/workspace \
+        -v /dev:/dev \
+        -w /workspace \
+        $IMAGE_NAME \
+        tail -f /dev/null
+    
+    echo -e "${GREEN}[✓]${NC} Container created and started"
+fi
 
-
-# Stop container
-echo -e "${BLUE}[3/3]${NC} Stopping Docker container..."
-docker stop parol6_dev
-sleep 1
-echo -e "${GREEN}✓ Container stopped${NC}"
+echo ""
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║  Container Status: READY                                    ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Quick Commands:"
+echo "  ${GREEN}Enter shell:${NC}        docker exec -it $CONTAINER_NAME bash"
+echo "  ${GREEN}Run simulation:${NC}     ./run_robot.sh sim"
+echo "  ${GREEN}Run real robot:${NC}     ./run_robot.sh real"
+echo "  ${GREEN}Stop container:${NC}     docker stop $CONTAINER_NAME"
 echo ""

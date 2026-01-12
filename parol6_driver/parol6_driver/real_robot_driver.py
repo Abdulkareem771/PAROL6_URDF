@@ -9,10 +9,39 @@ import serial
 import time
 import math
 import threading
+import csv
+from datetime import datetime
+import os
 
 class RealRobotDriver(Node):
     def __init__(self):
         super().__init__('real_robot_driver')
+        
+        # Declare logging parameter
+        self.declare_parameter('enable_logging', True)
+        self.declare_parameter('log_dir', '/workspace/logs')
+        
+        self.enable_logging = self.get_parameter('enable_logging').value
+        self.log_dir = self.get_parameter('log_dir').value
+        
+        # Setup logging
+        if self.enable_logging:
+            os.makedirs(self.log_dir, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            log_file = os.path.join(self.log_dir, f'driver_commands_{timestamp}.csv')
+            self.log_file = open(log_file, 'w', newline='')
+            self.log_writer = csv.writer(self.log_file)
+            self.log_writer.writerow([
+                'seq', 'timestamp_pc_us', 'timestamp_pc_iso',
+                'j1_pos', 'j2_pos', 'j3_pos', 'j4_pos', 'j5_pos', 'j6_pos',
+                'j1_vel', 'j2_vel', 'j3_vel', 'j4_vel', 'j5_vel', 'j6_vel',
+                'j1_acc', 'j2_acc', 'j3_acc', 'j4_acc', 'j5_acc', 'j6_acc',
+                'command_sent'
+            ])
+            self.seq_counter = 0
+            self.get_logger().info(f'Logging enabled: {log_file}')
+        else:
+            self.get_logger().info('Logging disabled')
         
         # 1. Serial Connection - Auto-detect
         self.ser = None
@@ -111,6 +140,12 @@ class RealRobotDriver(Node):
         msg.name = self.joint_names
         msg.position = self.current_joints
         self.joint_pub.publish(msg)
+    
+    def __del__(self):
+        """Cleanup logging on shutdown"""
+        if hasattr(self, 'log_file') and self.log_file:
+            self.log_file.close()
+            self.get_logger().info('Log file closed')
 
 def main(args=None):
     rclpy.init(args=args)
