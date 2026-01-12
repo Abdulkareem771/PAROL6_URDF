@@ -24,6 +24,29 @@ All team members should follow these steps for consistency.
 
 ---
 
+## 🖥️ Part 0: Host Machine Setup (Prerequisites)
+
+**Before starting Docker, ensure your host machine is ready.**
+
+### 0.1 Install NVIDIA Container Toolkit (For GPU)
+*Reference from teammate's notes*
+
+If you have an NVIDIA GPU, you need the toolkit to let Docker use it.
+
+```bash
+# On Host Machine (NOT inside Docker)
+sudo apt install nvidia-container-toolkit
+sudo nvidia-ctk runtime configure
+sudo systemctl restart docker
+```
+
+**Verify Host GPU:**
+```bash
+nvidia-smi
+```
+
+---
+
 ## 🎯 Quick Reference
 
 | Component | Version | Location |
@@ -294,13 +317,25 @@ ros2 launch parol6_vision vision_pipeline.launch.py
 
 ### Step 5.1: Prepare Dataset
 
+**Required Folder Structure:**
+```
+dataset/
+ ├── images/
+ │   ├── train/  # Training images (.jpg/.png)
+ │   └── val/    # Validation images
+ └── labels/
+     ├── train/  # YOLO labels (.txt)
+     └── val/
+```
+
+**Commands to create:**
 ```bash
 mkdir -p dataset/images/{train,val}
 mkdir -p dataset/labels/{train,val}
-
-# Annotate using Roboflow or labelImg
-# Export in YOLO format
 ```
+
+**Label Format:**
+`class_id x_center y_center width height` (Normalized 0-1)
 
 ---
 
@@ -444,6 +479,25 @@ source venv_vision/bin/activate
 # Option 2: Set in launch file
 additional_env={'PYTHONPATH': '/workspace/venv_vision/lib/python3.10/site-packages'}
 ```
+
+---
+
+### Issue: Camera Not Working / Not Found
+
+**Symptom**: `[ERROR] [kinect_node]: Cannot open device`
+
+**Cause**: Docker container lacks permissions or `--privileged` flag missing.
+
+**Fix**:
+1. **On Host Machine**: Give permission to video device
+   ```bash
+   sudo chmod 666 /dev/video0
+   # Or specific kinect USB device rules
+   ```
+2. **Docker Run Command**: Ensure it has:
+   ```bash
+   --privileged --network host -v /dev:/dev
+   ```
 
 ---
 
