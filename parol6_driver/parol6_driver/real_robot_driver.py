@@ -114,8 +114,13 @@ class RealRobotDriver(Node):
             # 1. Update Internal State
             self.current_joints = list(point.positions)
             
-            # 2. Format & Send
-            cmd_str = f"<{','.join([f'{p:.4f}' for p in self.current_joints])}>\n"
+            # 2. Format & Send (with sequence number for ESP32)
+            if self.enable_logging:
+                seq = self.seq_counter
+                cmd_str = f"<{seq},{','.join([f'{p:.4f}' for p in self.current_joints])}>\n"
+            else:
+                # If logging disabled, still need sequence for ESP32
+                cmd_str = f"<0,{','.join([f'{p:.4f}' for p in self.current_joints])}>\n"
             
             if self.ser:
                 self.ser.write(cmd_str.encode())
@@ -126,6 +131,27 @@ class RealRobotDriver(Node):
                         self.get_logger().fatal("ROBOT STALL DETECTED!")
                         goal_handle.abort()
                         return FollowJointTrajectory.Result()
+            
+            # 3. Log command
+            if self.enable_logging:
+                timestamp_us = int(time.time() * 1_000_000)
+                timestamp_iso = datetime.now().isoformat()
+                
+                # Get velocities and accelerations (may be empty)
+                velocities = list(point.velocities) if len(point.velocities) == 6 else [0.0] * 6
+                accelerations = list(point.accelerations) if len(point.accelerations) == 6 else [0.0] * 6
+                
+                self.log_writer.writerow([
+                    seq,
+                    timestamp_us,
+                    timestamp_iso,
+                    *self.current_joints,
+                    *velocities,
+                    *accelerations,
+                    cmd_str.strip()
+                ])
+                self.log_file.flush()
+                self.seq_counter += 1
 
             # 3. Timing (Approximation)
             time.sleep(0.05) 

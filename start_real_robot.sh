@@ -20,7 +20,7 @@ echo -e "${YELLOW}Enabling X11 access...${NC}"
 xhost +local:docker > /dev/null 2>&1
 
 # Container Name (Different from simulation to avoid conflict)
-CONTAINER_NAME="parol6_real"
+CONTAINER_NAME="parol6_dev"
 
 # Check if container is already running
 if docker ps -a | grep -q $CONTAINER_NAME; then
