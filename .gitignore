@@ -46,5 +46,10 @@ vision_work/rosbags/*
 # Wheel download directory
 wheels_linux_py310/*
 wheels/*
+
+# virtual environments
+venvs/vision_venvs/ultralytics_cpu_env/*
+venvs/*
+
 # Temporarily container's start code
 #start_container.sh
