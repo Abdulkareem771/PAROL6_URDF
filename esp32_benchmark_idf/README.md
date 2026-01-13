@@ -1,550 +1,172 @@
-# ESP32 Benchmark Firmware - Complete Guide
+# ESP32 Firmware - Documentation Index
 
-**Test ROS → ESP32 Communication Pipeline**
-
-This guide walks you through everything from scratch: building firmware, flashing ESP32, testing communication, and analyzing results.
+**Welcome! This is your starting point for ESP32 firmware development and testing.**
 
 ---
 
-## 📋 Table of Contents
+## 🎯 Quick Start - Which Guide Do I Need?
 
-1. [Prerequisites](#prerequisites)
-2. [One-Time Setup](#one-time-setup)
-3. [Build & Flash Firmware](#build--flash-firmware)
-4. [Testing](#testing)
-5. [ROS Integration](#ros-integration)
-6. [Troubleshooting](#troubleshooting)
+Choose based on what you want to do:
+
+| I want to... | Guide to use | Time needed |
+|--------------|--------------|-------------|
+| **Flash ESP32 and test** | [QUICK_START.md](QUICK_START.md) | 10 mins |
+| **Test full ROS pipeline** | [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md) | 20 mins |
+| **Understand the firmware code** | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | 30 mins |
+| **Understand ROS system** | [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md) | 30 mins |
+| **Add motor control** | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adapting-for-motor-control) | Varies |
 
 ---
 
-## 🔧 Prerequisites
+## 📚 Documentation Structure
 
-### Hardware
-- ✅ ESP32 development board
-- ✅ USB cable
-- ✅ Computer running Linux (or WSL/Docker)
-
-### Software
-- ✅ Docker with `parol6-ultimate:latest` image
-- ✅ ESP-IDF installed in Docker (`/opt/esp-idf/`)
-- ✅ ROS 2 Humble
-
-**Check Docker image:**
-```bash
-docker images | grep parol6-ultimate
+```
+esp32_benchmark_idf/
+├── README.md (you are here)          ← Navigation guide
+├── QUICK_START.md                    ← Fast testing (standalone)
+├── TESTING_WITH_ROS.md               ← Full ROS pipeline testing
+├── DEVELOPER_GUIDE.md                ← Code walkthrough + motor integration
+├── ROS_SYSTEM_ARCHITECTURE.md        ← How RViz → ESP32 works
+└── ALTERNATIVE_FLASH_METHODS.md      ← Other flashing options
 ```
 
 ---
 
-## 🚀 One-Time Setup
+## 🚀 Complete Workflow (Recommended Path)
 
-### Step 1: Start Container
+### For New Team Members:
 
-```bash
-cd /path/to/PAROL6_URDF
-./start_container.sh
-```
+**1. Environment Setup** (One-time, 5 minutes)
+   - Start container: `./start_container.sh`
+   - Fix Python: `./fix_python_env.sh`
+   - See: [Main GET_STARTED.md](../GET_STARTED.md)
 
-**Expected output:**
-```
-╔══════════════════════════════════════════════════════════════╗
-║     PAROL6 Unified Container Manager                       ║
-╚══════════════════════════════════════════════════════════════╝
+**2. Flash & Test ESP32** (10 minutes)
+   - Quick test without ROS
+   - Verify communication works
+   - See: **[QUICK_START.md](QUICK_START.md)** ✅ **Start here!**
 
-[INFO] Container 'parol6_dev' exists
-[✓] Container started
-```
+**3. Test ROS Pipeline** (20 minutes)
+   - Full RViz → MoveIt → Driver → ESP32
+   - Measure latency, analyze logs
+   - See: **[TESTING_WITH_ROS.md](TESTING_WITH_ROS.md)**
 
----
+**4. Understand the Code** (30 minutes)
+   - How firmware works
+   - Prepare for motor integration
+   - See: **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)**
 
-### Step 2: Fix Python Environment (IMPORTANT!)
-
-This prevents ESP-IDF Python from conflicting with ROS builds.
-
-```bash
-# Enter container
-docker exec -it parol6_dev bash
-
-# Run fix script
-cd /workspace
-./fix_python_env.sh
-
-# Exit
-exit
-```
-
-**Expected output:**
-```
-✅ Added PYTHON_EXECUTABLE to ~/.bashrc
-✅ Set PYTHON_EXECUTABLE for current session
-```
-
-**This is permanent** - you only need to do it once!
+**5. Motor Integration** (Your thesis work!)
+   - Replace benchmark code with motor control
+   - See: [DEVELOPER_GUIDE.md - Motor Integration](DEVELOPER_GUIDE.md#adapting-for-motor-control)
 
 ---
 
-### Step 3: Check ESP32 Connection
+## 📖 Guide Descriptions
 
-```bash
-# On host machine
-ls /dev/ttyUSB* /dev/ttyACM*
+### [QUICK_START.md](QUICK_START.md)
+**Best for:** First-time users, quick verification  
+**You'll learn:** How to flash ESP32 and test communication  
+**Prerequisites:** ESP32 plugged in, Docker container running  
+**Output:** Verified 0% packet loss, ~30ms latency
 
-# Should show something like:
-# /dev/ttyUSB0
-```
-
-**If not found:**
-- Plug in ESP32 via USB
-- Check cable (try different one if needed)
-- Try different USB port
-
-**Fix permissions:**
-```bash
-sudo chmod 666 /dev/ttyUSB0
-```
+**Covers:**
+- One-command flashing
+- Standalone communication test
+- Success criteria
 
 ---
 
-## 📦 Build & Flash Firmware
+### [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md)
+**Best for:** Testing full robot pipeline  
+**You'll learn:** RViz → ESP32 data flow, message formats  
+**Prerequisites:** QUICK_START.md completed  
+**Output:** Working robot control, CSV logs with trajectory data
 
-### Method 1: Automatic (Recommended for First Time)
-
-```bash
-cd /path/to/PAROL6_URDF/esp32_benchmark_idf
-./flash.sh /dev/ttyUSB0
-```
-
-**What happens:**
-1. ✅ Starts temporary Docker container
-2. ✅ Loads ESP-IDF environment
-3. ✅ Builds firmware (~30 seconds first time)
-4. ✅ Flashes to ESP32
-5. ✅ Opens serial monitor
-
-**Expected output:**
-```
-========================================
-  ESP32 Benchmark Firmware (ESP-IDF)
-========================================
-Ready to receive commands...
-READY: ESP32_BENCHMARK_V2
-```
-
-**To exit monitor:** Press `Ctrl + ]`
+**Covers:**
+- Full ROS integration
+- Message format explained (positions only, not vel/acc)
+- Log analysis
+- Latency measurement
+- What ESP32 receives vs what's logged
 
 ---
 
-### Method 2: Manual (Step-by-Step)
+### [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+**Best for:** Understanding/modifying firmware  
+**You'll learn:** ESP-IDF project structure, code walkthrough  
+**Prerequisites:** Basic C programming, some embedded experience  
+**Output:** Understanding to add motor control
 
-For more control, build manually:
-
-#### 2a. Enter Container
-
-```bash
-docker exec -it parol6_dev bash
-```
-
-#### 2b. Load ESP-IDF Environment
-
-```bash
-. /opt/esp-idf/export.sh
-```
-
-**Expected:**
-```
-Done! You can now compile ESP-IDF projects.
-```
-
-#### 2c. Navigate to Project
-
-```bash
-cd /workspace/esp32_benchmark_idf
-```
-
-#### 2d. Configure Target (First Time Only)
-
-```bash
-idf.py set-target esp32
-```
-
-**Expected:**
-```
--- Configuring done
--- Generating done
--- Build files have been written to...
-```
-
-#### 2e. Build Firmware
-
-```bash
-idf.py build
-```
-
-**Build time:**
-- First build: ~30-60 seconds
-- Incremental: ~5-10 seconds
-
-**Expected final line:**
-```
-Project build complete. To flash, run:
- idf.py -p /dev/ttyUSB0 flash
-```
-
-#### 2f. Flash to ESP32
-
-```bash
-idf.py -p /dev/ttyUSB0 flash monitor
-```
-
-**Flash time:** ~10 seconds
-
-**Expected:**
-```
-Hash of data verified.
-
-========================================
-  ESP32 Benchmark Firmware (ESP-IDF)
-========================================
-Ready to receive commands...
-READY: ESP32_BENCHMARK_V2
-```
-
-**Monitor will show incoming commands in real-time!**
+**Covers:**
+- ESP-IDF concepts (FreeRTOS, UART, logging)
+- Line-by-line code explanation
+- Motor integration examples
+- Debugging tips
+- Best practices
 
 ---
 
-## 🧪 Testing
+### [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md)
+**Best for:** Understanding ROS pipeline, adding custom planners  
+**You'll learn:** How ROS components connect, data flow  
+**Prerequisites:** Basic ROS 2 knowledge  
+**Output:** Ability to modify/extend ROS system
 
-### Test 1: Standalone Communication Test
-
-Test PC ↔ ESP32 communication **without ROS**.
-
-#### Step 1: Ensure Monitor is Closed
-
-If ESP32 monitor is running, press `Ctrl + ]` to exit.
-
-#### Step 2: Run Test Script
-
-```bash
-# On host machine (outside Docker)
-cd /path/to/PAROL6_URDF
-python3 scripts/test_driver_communication.py --port /dev/ttyUSB0
-```
-
-**Expected output:**
-```
-============================================================
-  ROS-ESP32 Communication Integrity Test
-============================================================
-✓ Connected to /dev/ttyUSB0 at 115200 baud
-
-[  1/100] ✓ ACK received | Latency: 29.75ms
-[  2/100] ✓ ACK received | Latency: 29.72ms
-...
-[100/100] ✓ ACK received | Latency: 29.79ms
-
-==================================================
-PERFORMANCE REPORT
-==================================================
-Packets Sent:     100
-ACKs Received:    100
-Packets Lost:     0
-Loss Rate:        0.00%
-Avg Latency:      29.78 ms
-```
-
-**Success criteria:**
-- ✅ Loss Rate: 0.00%
-- ✅ Avg Latency: < 50ms
-
-**If test fails, see [Troubleshooting](#troubleshooting)**
+**Covers:**
+- RViz, MoveIt, Driver explained
+- ROS 2 concepts (topics, actions, parameters)
+- Step-by-step data flow
+- How to interact with system
+- Adding custom functionality
 
 ---
 
-### Test 2: View Results
+### [ALTERNATIVE_FLASH_METHODS.md](ALTERNATIVE_FLASH_METHODS.md)
+**Best for:** Advanced users, alternatives to Docker  
+**You'll learn:** Different flashing approaches  
+**Prerequisites:** Some embedded development experience
 
-The test creates visualizations:
-
-```bash
-# View graph
-xdg-open comm_test_report.png
-
-# View CSV data
-cat comm_test_report.csv
-```
+**Covers:**
+- Using esptool.py directly
+- Installing ESP-IDF locally
+- PlatformIO option
 
 ---
 
-## 🤖 ROS Integration
+## 🎓 Learning Paths
 
-Test the **full pipeline**: RViz → MoveIt → ROS Driver → ESP32
+### Path 1: "I just need to test communication"
+1. [QUICK_START.md](QUICK_START.md) ✓ Done!
 
-### Step 1: ESP32 Monitor (Terminal 1)
+### Path 2: "I'm integrating with ROS"
+1. [QUICK_START.md](QUICK_START.md)
+2. [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md)
+3. [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md) (for custom development)
 
-```bash
-docker exec -it parol6_dev bash
-cd /workspace/esp32_benchmark_idf
-. /opt/esp-idf/export.sh
-idf.py -p /dev/ttyUSB0 monitor
-```
+### Path 3: "I'm implementing motor control"
+1. [QUICK_START.md](QUICK_START.md)
+2. [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md)
+3. [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) ← Focus here
+4. [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md) (for higher-level control)
 
-**Leave this open** - you'll watch commands arrive here!
-
----
-
-### Step 2: Launch ROS (Terminal 2)
-
-```bash
-docker exec -it parol6_dev bash
-cd /workspace
-
-# Source ROS
-source /opt/ros/humble/setup.bash
-
-# Build (if not already done)
-colcon build --symlink-install
-
-# Source workspace
-source install/setup.bash
-
-# Launch robot in real mode
-ros2 launch parol6_driver unified_bringup.launch.py mode:=real
-```
-
-**Expected:**
-- RViz window opens
-- Terminal shows: `[real_robot_driver]: Connected to Microcontroller at /dev/ttyUSB0`
+### Path 4: "I'm adding custom ROS planning"
+1. [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md)
+2. [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md) ← Focus here
+3. [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) (understand what ESP32 expects)
 
 ---
 
-### Step 3: Move Robot in RViz
-
-1. **Drag** the interactive marker (orange/blue sphere at end-effector)
-2. Click **"Plan"** button → MoveIt calculates trajectory
-3. Click **"Execute"** button → Sends to ESP32
-
----
-
-### Step 4: Watch Terminal 1 (ESP32 Monitor)
-
-You'll see commands arriving:
-
-```
-<ACK,0,1234567>
-I (1234) BENCHMARK: SEQ:0 J:[0.500,0.300,-0.200,0.100,0.400,-0.100]
-<ACK,1,1334567>
-I (1334) BENCHMARK: SEQ:1 J:[0.510,0.305,-0.205,0.102,0.402,-0.102]
-<ACK,2,1434567>
-...
-```
-
-**Each line shows:**
-- `<ACK,SEQ,TIMESTAMP>` - Response to PC
-- `I (time) BENCHMARK: SEQ:X J:[...]` - Joint positions
-
----
-
-### Step 5: Collect Logs
-
-ROS automatically logs all commands:
-
-```bash
-# After stopping ROS (Ctrl+C in Terminal 2)
-ls /workspace/logs/
-
-# You'll see:
-# driver_commands_20260112_194500.csv
-```
-
----
-
-### Step 6: Analyze Logs (Optional)
-
-Compare PC and ESP32 logs:
-
-```bash
-# Copy ESP32 monitor output to file
-# (or use SD card log if firmware configured for it)
-
-# Run analysis
-python3 scripts/analyze_communication_logs.py \
-  --pc-log /workspace/logs/driver_commands_*.csv \
-  --esp-log esp32_log.csv
-```
-
-Creates graphs showing latency, packet loss, and data integrity!
-
----
-
-## 🐛 Troubleshooting
-
-### Issue: "Port not found" or "Permission denied"
-
-**Symptoms:**
-```
-Error: /dev/ttyUSB0 not found
-```
-
-**Solutions:**
-
-1. **Check connection:**
-   ```bash
-   ls /dev/ttyUSB* /dev/ttyACM*
-   ```
-
-2. **Fix permissions:**
-   ```bash
-   sudo chmod 666 /dev/ttyUSB0
-   ```
-
-3. **Add user to dialout group (permanent):**
-   ```bash
-   sudo usermod -a -G dialout $USER
-   # Logout and login again
-   ```
-
-4. **Try different port:**
-   ```bash
-   # ESP32 might be on different device
-   ls -l /dev/tty*
-   ```
-
----
-
-### Issue: "idf.py: command not found"
-
-**Cause:** ESP-IDF environment not loaded
-
-**Fix:**
-```bash
-. /opt/esp-idf/export.sh
-```
-
-**Permanent fix:**
-```bash
-echo '. /opt/esp-idf/export.sh' >> ~/.bashrc
-```
-
----
-
-### Issue: "catkin_pkg not found" during colcon build
-
-**Cause:** ESP-IDF Python is being used instead of system Python
-
-**Fix:**
-```bash
-# Run the fix script (one-time)
-docker exec -it parol6_dev bash
-cd /workspace
-./fix_python_env.sh
-exit
-
-# Or manually:
-export PYTHON_EXECUTABLE=/usr/bin/python3
-colcon build --symlink-install
-```
-
----
-
-### Issue: "100% Packet Loss" in test
-
-**Cause:** ESP32 monitor or another program is using the port
-
-**Fix:**
-
-1. **Close ESP32 monitor:**
-   - Press `Ctrl + ]` in monitor terminal
-
-2. **Check for other programs:**
-   ```bash
-   sudo lsof /dev/ttyUSB0
-   # Kill any processes using the port
-   ```
-
-3. **Reset ESP32:**
-   - Press RESET button on board
-
-4. **Retry test:**
-   ```bash
-   python3 scripts/test_driver_communication.py --port /dev/ttyUSB0
-   ```
-
----
-
-### Issue: RViz doesn't open
-
-**Symptoms:**
-```
-Package 'parol6_moveit_config' not found
-```
-
-**Fix:**
-
-1. **Check you're using correct launch file:**
-   ```bash
-   ros2 launch parol6_driver unified_bringup.launch.py mode:=real
-   ```
-
-2. **Rebuild workspace:**
-   ```bash
-   cd /workspace
-   rm -rf build install log
-   source /opt/ros/humble/setup.bash
-   colcon build --symlink-install
-   source install/setup.bash
-   ```
-
-3. **Fix X11 permissions (if RViz window doesn't appear):**
-   ```bash
-   xhost +local:root
-   ```
-
----
-
-### Issue: Build errors
-
-**Full clean rebuild:**
-```bash
-cd /workspace/esp32_benchmark_idf
-idf.py fullclean
-idf.py set-target esp32
-idf.py build
-```
-
-**Check ESP-IDF version:**
-```bash
-cd /opt/esp-idf
-git describe --tags
-# Should be v5.1.x or similar
-```
-
----
-
-## 📊 Advanced Configuration
-
-### Change Baud Rate
-
-Edit `main/benchmark_main.c`:
-```c
-.baud_rate = 115200,  // Change to 921600 for high speed
-```
-
-Rebuild:
-```bash
-idf.py build flash
-```
-
-### Enable SD Card Logging
-
-(For firmware versions that support it - check source code)
-
----
-
-## 📚 Additional Resources
-
-- **Full Integration Test:** [docs/FULL_INTEGRATION_TEST_GUIDE.md](../docs/FULL_INTEGRATION_TEST_GUIDE.md)
-- **Driver Testing:** [docs/ROS_DRIVER_TESTING_GUIDE.md](../docs/ROS_DRIVER_TESTING_GUIDE.md)
-- **Container Guide:** [docs/UNIFIED_CONTAINER_GUIDE.md](../docs/UNIFIED_CONTAINER_GUIDE.md)
+## 🛠️ Common Tasks - Quick Reference
+
+| Task | Command | Guide |
+|------|---------|-------|
+| Flash ESP32 | `./flash.sh /dev/ttyUSB0` | [QUICK_START.md](QUICK_START.md) |
+| Test communication | `python3 scripts/test_driver_communication.py` | [QUICK_START.md](QUICK_START.md) |
+| Launch ROS pipeline | `./start_real_robot.sh` | [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md) |
+| Analyze logs | `python3 scripts/quick_log_analysis.py` | [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md) |
+| Monitor ESP32 | `idf.py -p /dev/ttyUSB0 monitor` | Any guide |
+| Build firmware | `idf.py build` | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) |
 
 ---
 
@@ -552,33 +174,73 @@ idf.py build flash
 
 ```
 esp32_benchmark_idf/
-├── README.md              ← You are here
+├── README.md                      ← You are here (navigation)
+├── QUICK_START.md                 ← Start here for first test
+├── TESTING_WITH_ROS.md            ← Full ROS pipeline
+├── DEVELOPER_GUIDE.md             ← Code explanation
+├── ROS_SYSTEM_ARCHITECTURE.md     ← ROS system details
+├── ALTERNATIVE_FLASH_METHODS.md   ← Other options
+│
 ├── main/
-│   ├── benchmark_main.c   ← ESP32 firmware source
-│   └── CMakeLists.txt     ← Component build config
-├── CMakeLists.txt         ← Project build config
-├── flash.sh               ← Quick flash script
-└── COLCON_IGNORE          ← Prevents ROS from building this
+│   ├── benchmark_main.c           ← Firmware source code
+│   └── CMakeLists.txt
+├── CMakeLists.txt
+├── flash.sh                       ← Quick flash script
+└── COLCON_IGNORE                  ← Keeps ROS from building this
 ```
 
 ---
 
-## ✅ Success Checklist for Teammates
+## ❓ FAQ
 
-- [ ] Container started with `./start_container.sh`
-- [ ] Python environment fixed with `./fix_python_env.sh`
-- [ ] ESP32 connected and detected (`ls /dev/ttyUSB0`)
-- [ ] Firmware flashed successfully
-- [ ] Standalone test shows 0% packet loss
-- [ ] ROS launches and RViz opens
-- [ ] ESP32 monitor shows commands when moving robot in RViz
-- [ ] Logs saved in `/workspace/logs/`
+**Q: Which guide should I read first?**  
+A: [QUICK_START.md](QUICK_START.md) - it's the fastest way to verify everything works.
 
-**If all checked, you're ready for motor connection!**
+**Q: I want to understand the code, where do I start?**  
+A: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - complete code walkthrough with explanations.
+
+**Q: How do I test with ROS?**  
+A: [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md) - full pipeline from RViz to ESP32.
+
+**Q: I want to add custom motion planning, which guide?**  
+A: [ROS_SYSTEM_ARCHITECTURE.md](ROS_SYSTEM_ARCHITECTURE.md) - shows how to interact with the system.
+
+**Q: Where are the message formats explained?**  
+A: [TESTING_WITH_ROS.md](TESTING_WITH_ROS.md#important-what-esp32-actually-receives) - detailed breakdown.
+
+**Q: How do I add motor control?**  
+A: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adapting-for-motor-control) - step-by-step examples.
+
+---
+
+## ✅ Success Checklist
+
+After following the guides, you should have:
+
+- [x] Flashed ESP32 successfully
+- [x] Tested standalone communication (0% loss)
+- [x] Tested ROS pipeline (RViz → ESP32)
+- [x] Understood firmware code structure
+- [x] Know how to add motor control
+- [x] Can analyze trajectory logs
+
+**If stuck:** Check the Troubleshooting section in each guide!
+
+---
+
+## 🔗 Related Documentation
+
+**In parent directory:**
+- [../GET_STARTED.md](../GET_STARTED.md) - New team member onboarding
+- [../docs/RVIZ_SETUP_GUIDE.md](../docs/RVIZ_SETUP_GUIDE.md) - RViz troubleshooting
+
+**Analysis tools:**
+- [../scripts/quick_log_analysis.py](../scripts/quick_log_analysis.py) - Interactive log analysis
+- [../scripts/test_driver_communication.py](../scripts/test_driver_communication.py) - Communication test
 
 ---
 
 **Last Updated:** January 2026  
-**Maintained by:** PAROL6 Team
+**Team:** PAROL6 Robotics
 
-**Questions?** See detailed guides in `docs/` folder or ask the team!
+**Questions?** Check the specific guide or ask the team!
