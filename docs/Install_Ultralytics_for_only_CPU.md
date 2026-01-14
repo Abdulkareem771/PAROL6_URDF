@@ -70,3 +70,8 @@ docker commit parol6_dev parol6-ultimate:latest
 ```
 This will save any libraries or packages you have installed inside the container.  **You can now stop the container in safe way.**
 
+You can stop the container as following:
+
+```bash 
+docker stop parol6_dev
+```
