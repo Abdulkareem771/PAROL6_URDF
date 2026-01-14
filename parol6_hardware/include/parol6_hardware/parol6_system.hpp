@@ -17,7 +17,8 @@
 #include "rclcpp/macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
-#include "rclcpp_lifecycle/state.hpp"
+#include <rclcpp_lifecycle/state.hpp>
+#include <libserial/SerialPort.h>
 
 namespace parol6_hardware
 {
@@ -65,6 +66,15 @@ private:
 
   // Logger (namespace-qualified for better filtering)
   rclcpp::Logger logger_{rclcpp::get_logger("parol6_hardware.system")};
+
+  // Serial Communication
+  LibSerial::SerialPort serial_;
+  std::string serial_port_;
+  int baud_rate_;
+  uint32_t seq_counter_ = 0;
+  
+  // Clock for throttling logs
+  rclcpp::Clock clock_;
 };
 
 }  // namespace parol6_hardware
