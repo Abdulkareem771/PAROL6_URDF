@@ -53,22 +53,47 @@ GitHub Projects is a built-in project management tool that helps teams:
 
 ### Our Project Board Structure
 
-```
-┌──────────────────────────────────────────────────────┐
-│  PAROL6 ros2_control Migration                       │
-├──────────────┬──────────────┬──────────┬────────────┤
-│ 📋 Backlog   │ 🔄 In Prog   │ ✅ Done  │ 🐛 Blocked │
-├──────────────┼──────────────┼──────────┼────────────┤
-│ Future work  │ Active tasks │ Complete │ Issues     │
-│ Planned      │ Assigned     │ Verified │ Waiting    │
-└──────────────┴──────────────┴──────────┴────────────┘
-```
+**Project Name:** `PAROL6` (Master Board)
 
-**Column Meanings:**
-- **Backlog:** Tasks ready to be picked up
-- **In Progress:** Currently being worked on
-- **Done:** Completed and verified
-- **Blocked:** Waiting on dependencies
+We use a single unified board for all parallel workstreams (Hardware, Vision, AI, Mobile).
+
+#### 1. Columns (Status)
+- **📋 Backlog**: All future tasks
+- **🔄 In Progress**: Active work
+- **👀 Review**: PRs waiting for merge
+- **✅ Done**: Completed tasks
+- **🐛 Blocked**: Issues needing help
+
+#### 2. Custom Fields (Tracks)
+We use a custom field "Track" (Single Select) to filter views:
+- **🤖 Hardware** (ros2_control, ESP32)
+- **👁️ Vision** (YOLO, Kinect, Depth)
+- **🧠 AI** (Training, Models)
+- **📱 Mobile** (App, Joystick)
+- **🔧 Infrastructure** (Docker, CI/CD)
+
+#### 3. Views (Tabs)
+Create these tabs to see specific work:
+1. **All Tasks** (Table view, grouped by Track)
+2. **Hardware Sprint** (Board view, filtered by Track: "Hardware")
+3. **Vision Sprint** (Board view, filtered by Track: "Vision")
+4. **My Tasks** (Table view, filtered by Assignee: "@me")
+
+```
+┌────────────────────────────────────────────────────────┐
+│  PAROL6 (Master Board)                                 │
+│  [Tabs: All | Hardware 🤖 | Vision 👁️ | Mobile 📱]      │
+├──────────────┬──────────────┬──────────┬───────────────┤
+│ 📋 Backlog   │ 🔄 In Prog   │ ✅ Done  │ Examples      │
+├──────────────┼──────────────┼──────────┼───────────────┤
+│ [Vision]     │ [Hardware]   │ [Infra]  │               │
+│ Depth Node   │ Serial TX    │ Setup    │               │
+│ @teammateB   │ @you         │ @you     │               │
+│              │              │          │               │
+│ [Mobile]     │              │          │               │
+│ UI Design    │              │          │               │
+└──────────────┴──────────────┴──────────┴───────────────┘
+```
 
 ---
 
@@ -78,31 +103,39 @@ GitHub Projects is a built-in project management tool that helps teams:
 
 ### 3.1 Creating the Project Board
 
+### 3.1 Creating the Master Project Board
+
 **Step 1: Create the Project**
 1. Go to: https://github.com/Abdulkareem771/PAROL6_URDF
 2. Click **"Projects"** tab
 3. Click **"New project"**
-4. Choose **"Board"** template
-5. Name: **"PAROL6 ros2_control Migration"**
+4. Choose **"Table"** template (better for master planning)
+5. Name: **"PAROL6"**
 6. Click **"Create"**
 
-**Step 2: Customize Columns**
-1. Rename columns to:
-   - `📋 Backlog`
-   - `🔄 In Progress`
-   - `✅ Done`
-2. Add new column: `🐛 Blocked`
+**Step 2: Configure Fields**
+1. Click **"+"** next to headers to add field
+2. Select **"New field"**
+3. Name: **"Track"**
+4. Type: **"Single select"**
+5. Options:
+   - 🤖 Hardware
+   - 👁️ Vision
+   - 🧠 AI
+   - 📱 Mobile
+   - 🔧 Infrastructure
 
-**Step 3: Enable Automation**
-1. Click **"..."** (top right) → **"Workflows"**
-2. Enable:
-   - ✅ Auto-add new issues
-   - ✅ Move to "In Progress" when assigned
-   - ✅ Move to "Done" when closed
+**Step 3: Configure Views**
+1. Rename first tab to **"All Tasks"**
+2. Click **"+"** to add new view (Board)
+3. Rename to **"Hardware 🤖"**
+4. Click **Filter** → Track: **Hardware**
+5. Repeat for Vision, AI, etc.
 
-**Step 4: Create Phase Issues**
+**Step 4: Create Tracking Issues**
 1. Go to **"Issues"** tab
-2. Create issues from templates (Day 1-5)
+2. Use templates to create tasks for all tracks
+3. Add them to the project and assign "Track" field
 
 ---
 
@@ -723,10 +756,61 @@ git push origin --delete branch  # Delete remote branch
 
 ### Release History
 
-- **v2.0.0** (2026-01-14) - Day 1 SIL validation complete
-- **v1.1.0** (Planned) - Serial TX
-- **v1.2.0** (Planned) - Feedback loop
-- **v2.0.0** (Planned) - Hardware deployment
+#### Hardware Track
+- **v2.0.0** (2026-01-14) - SIL Validation Complete
+- **v2.1.0** (Planned) - Serial TX & Feedback
+- **v2.2.0** (Planned) - Full Motor Control
+
+#### Vision Track
+- **v0.1.0** (Planned) - Red Marker Detection (Fast Track)
+- **v0.2.0** (Planned) - Depth Matching (Core)
+- **v0.3.0** (Planned) - Path Generation
+- **v1.0.0** (Planned) - YOLO / Custom AI Integration
+
+---
+
+## 15. Modular Vision Architecture
+
+We use a **Standard Interface Strategy** to allow parallel work.
+
+```
+                  [Swappable Detector Layer]
+                  (All publish Detection2DArray)
+                 ┌─────────────────────────────┐
+                 │    A. Red Marker Node       │ (Fast Track)
+                 │    (HSV Thresholding)       │
+                 └─────────────┬───────────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                │     B. Generic YOLOv8       │ (Parallel Track)
+                │     (Object Detection)      │
+                └──────────────┬──────────────┘
+                               │
+                               ▼
+                    [ /vision/detections_2d ]
+                               │
+                               ▼
+                 ┌─────────────────────────────┐
+                 │     Core: Depth Matcher     │ (Infrastructure)
+                 │  (2D bbox + Depth → 3D)     │
+                 └─────────────┬───────────────┘
+                               │
+                               ▼
+                    [ /vision/detections_3d ]
+                               │
+                               ▼
+                 ┌─────────────────────────────┐
+                 │    Core: Path Generator     │ (Logic)
+                 │  (3D Points → Robot Path)   │
+                 └─────────────────────────────┘
+```
+
+**Why this works:**
+1. **Teammate A** builds Red Marker Node immediately.
+2. **Teammate B** builds Depth Matcher + Path Generator using Red Marker input.
+3. **Teammate C** tests robot movement with Red Markers.
+4. **Teammate A (later)** finishes AI model. We just swap the detector node. **Nothing else changes.**
+
 
 ---
 
