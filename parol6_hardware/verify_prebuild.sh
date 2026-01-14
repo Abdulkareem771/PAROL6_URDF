@@ -41,12 +41,12 @@ fi
 
 # Check 3: Dependencies installed
 echo -n "✓ Checking serial package... "
-if dpkg -l | grep -q ros-${ROS_DISTRO}-serial; then
+if dpkg -l | grep -q libserial-dev; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${YELLOW}WARNING${NC}"
-    echo "  ros-${ROS_DISTRO}-serial not found"
-    echo "  Install: sudo apt-get install ros-${ROS_DISTRO}-serial"
+    echo "  libserial-dev not found"
+    echo "  Install: sudo apt-get install libserial-dev"
     ISSUES=$((ISSUES+1))
 fi
 
@@ -117,7 +117,7 @@ fi
 
 # Check 8: Plugin installation
 echo -n "✓ Checking plugin XML installation... "
-if grep -q "install.*parol6_hardware_plugin.xml" parol6_hardware/CMakeLists.txt; then
+if grep -q "FILES parol6_hardware_plugin.xml" parol6_hardware/CMakeLists.txt; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${RED}FAIL${NC}"

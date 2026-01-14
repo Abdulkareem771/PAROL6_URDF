@@ -16,7 +16,8 @@
     <depend>rclcpp_lifecycle</depend>
 
     <!-- Serial communication -->
-    <depend>serial</depend>
+    <build_depend>libserial-dev</build_depend>
+    <exec_depend>libserial-dev</exec_depend>
 
     <!-- For launch files -->
     <exec_depend>controller_manager</exec_depend>

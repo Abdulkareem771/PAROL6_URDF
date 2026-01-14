@@ -27,6 +27,7 @@ from launch.substitutions import Command, FindExecutable, LaunchConfiguration, P
 
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -73,12 +74,39 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_ros2_control",
+            default_value="true",
+            description="Enable ros2_control",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "serial_port",
+            default_value="/dev/ttyUSB0",
+            description="Serial port for ESP32",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "baud_rate",
+            default_value="115200",
+            description="Baud rate for serial communication",
+        )
+    )
+
     # Initialize arguments
     runtime_config_package = LaunchConfiguration("runtime_config_package")
     controllers_file = LaunchConfiguration("controllers_file")
     description_package = LaunchConfiguration("description_package")
     description_file = LaunchConfiguration("description_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    use_ros2_control = LaunchConfiguration("use_ros2_control")
+    serial_port = LaunchConfiguration("serial_port")
+    baud_rate = LaunchConfiguration("baud_rate")
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -86,14 +114,22 @@ def generate_launch_description():
             PathJoinSubstitution([FindExecutable(name="xacro")]),
             " ",
             PathJoinSubstitution(
-                [FindPackageShare(description_package), "urdf", description_file]
+                [FindPackageShare("parol6_hardware"), "urdf", "parol6.urdf.xacro"]
             ),
             " ",
-            "use_ros2_control:=true",  # Enable ros2_control in xacro
+            "use_ros2_control:=",
+            use_ros2_control,
+            " ",
+            "serial_port:=",
+            serial_port,
+            " ",
+            "baud_rate:=",
+            baud_rate,
         ]
     )
     
-    robot_description = {"robot_description": robot_description_content}
+    # Wrap in ParameterValue to avoid YAML parsing error
+    robot_description = {"robot_description": ParameterValue(robot_description_content, value_type=str)}
 
     # Controller configuration file path
     robot_controllers = PathJoinSubstitution(

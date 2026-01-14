@@ -17,7 +17,11 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
-find_package(serial REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
+
+# Serial library (system-installed)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SERIAL REQUIRED libserial)
 
 # Hardware interface library
 add_library(
@@ -30,6 +34,12 @@ target_include_directories(
   ${PROJECT_NAME}
   PRIVATE
   include
+  ${SERIAL_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  ${PROJECT_NAME}
+  ${SERIAL_LIBRARIES}
 )
 
 ament_target_dependencies(
@@ -38,7 +48,6 @@ ament_target_dependencies(
   pluginlib
   rclcpp
   rclcpp_lifecycle
-  serial
 )
 
 # Export hardware plugin description

@@ -3,6 +3,13 @@
 # Single persistent container for ALL robot operations
 
 set -e
+GPU_FLAG=""
+if docker info | grep -i nvidia >/dev/null 2>&1; then
+    GPU_FLAG="--gpus all"
+    echo "[INFO] NVIDIA runtime detected — enabling GPU"
+else
+    echo "[INFO] No NVIDIA runtime detected — running CPU only"
+fi
 
 CONTAINER_NAME="parol6_dev"
 IMAGE_NAME="parol6-ultimate:latest"
@@ -46,17 +53,17 @@ else
     done
     
     docker run -d --name $CONTAINER_NAME \
-        --network host \
-        --privileged \
-        --gpus all \
-        -e DISPLAY=$DISPLAY \
-        -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-        -v $(pwd):/workspace \
-        -v /dev:/dev \
-        -w /workspace \
-        $IMAGE_NAME \
-        tail -f /dev/null
-    
+    --network host \
+    --privileged \
+    $GPU_FLAG \
+    -e DISPLAY=$DISPLAY \
+    -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+    -v $(pwd):/workspace \
+    -v /dev:/dev \
+    -w /workspace \
+    $IMAGE_NAME \
+    tail -f /dev/null
+
     echo -e "${GREEN}[✓]${NC} Container created and started"
 fi
 
