@@ -14,6 +14,7 @@ __pycache__/
 
 parol6-ultimate-with-servo.tar.gz
 parol6-ultimate-with-servo-updated.tar.gz
+parol6-ultimate.tar.gz
 parol6-ultimate-with-kinect.tar.gz
 parol6-ultimate-with-kinect-updated-tar.gz
 # MoveIt source dependencies (should not be committed)
@@ -22,6 +23,10 @@ moveit_msgs/
 moveit_resources/
 moveit_task_constructor/
 
+#python vision libraries:
+python vison libs
+#microros ignore in camera branch
+microros_esp32/
 # IDE
 .vscode/
 .idea/
@@ -32,4 +37,23 @@ moveit_task_constructor/
 # OS
 .DS_Store
 Thumbs.db
+<<<<<<< HEAD
 logs/*.csv
+=======
+
+# Extracted datasets (RGB and Depth images)
+vision_work/extracted_dataset/*
+vision_work/rosbags/*
+
+
+# Wheel download directory
+wheels_linux_py310/*
+wheels/*
+
+# virtual environments
+venvs/vision_venvs/ultralytics_cpu_env/*
+venvs/*
+
+# Temporarily container's start code
+#start_container.sh
+>>>>>>> real-robot-integration

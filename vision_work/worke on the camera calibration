@@ -1,0 +1,66 @@
+0.  # Start container directly
+	xhost +local:root
+	docker run -d --rm \
+	  --name parol6_dev \
+	  --network host \
+	  --privileged \
+	  --env DISPLAY=$DISPLAY \
+	  -v /tmp/.X11-unix:/tmp/.X11-unix \
+	  --env QT_X11_NO_MITSHM=1 \
+	  -e XAUTHORITY=/tmp/.docker.xauth \
+	  -v /dev:/dev \
+	  -v "$(pwd)":/workspace \
+	  --shm-size=512m \
+	  parol6-ultimate:latest \
+	  tail -f /dev/null
+
+
+
+1. # **Enter the container**:
+	    ```bash
+	    docker exec -it parol6_dev bash
+	    ```
+    
+2.  #**Start the camera node**:
+	    ```bash
+	    source /opt/kinect_ws/install/setup.bash
+	    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml fps_limit:=2
+	    ```
+    #test the camera view
+	ros2 run rqt_image_view rqt_image_view
+
+	
+	#	create a directory for your calibration data files,
+	 for example:
+	  ```bash
+	  mkdir ~/kinect_cal_data; cd ~/kinect_cal_data
+	  ```
+    # 	Record images for the color camera: 
+		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 record color
+
+
+	#	Calibrate the intrinsics: 
+		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 calibrate color
+
+    #     Record images for the ir camera:	
+	    ```bash
+		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 record ir
+		```
+
+
+    #    Calibrate the intrinsics of the ir camera: 
+		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 calibrate ir
+
+
+3.  #**Save to File**: Export the built image to a single file.
+	    ```bash
+	    docker commit parol6_dev parol6-ultimate:latest
+	    ```
+
+
+4.  # 	Stop container
+		echo -e "${BLUE}[3/3]${NC} Stopping Docker container..."
+		docker stop parol6_dev
+		sleep 1
+		echo -e "${GREEN}✓ Container stopped${NC}"
+		echo ""
