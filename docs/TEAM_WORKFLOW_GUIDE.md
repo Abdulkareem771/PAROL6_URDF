@@ -76,36 +76,7 @@ GitHub Projects is a built-in project management tool that helps teams:
 
 ## 3. Initial Setup
 
-### 3.1 Automated Setup (Recommended)
-
-**We've created a Python script to help set this up!**
-
-**Run the automation script:**
-```bash
-# Install dependencies
-pip install playwright
-playwright install chromium
-
-# Run the setup script
-python3 scripts/setup_project_board.py
-```
-
-**The script will:**
-1. Open a browser window
-2. Ask you to log in to GitHub
-3. Navigate to the repository
-4. Initialize the project board
-
-**Manual verification after automation:**
-- Check that columns are named correctly
-- Verify automation workflows are enabled
-- Create the Day 1-5 issues from templates
-
----
-
-### 3.2 Manual Setup (Alternative)
-
-**If you prefer to set up manually:**
+### 3.1 Creating the Project Board
 
 **Step 1: Create the Project**
 1. Go to: https://github.com/Abdulkareem771/PAROL6_URDF
@@ -116,46 +87,22 @@ python3 scripts/setup_project_board.py
 6. Click **"Create"**
 
 **Step 2: Customize Columns**
-1. Click on column name to rename:
-   - Column 1 → `📋 Backlog`
-   - Column 2 → `🔄 In Progress`
-   - Column 3 → `✅ Done`
+1. Rename columns to:
+   - `📋 Backlog`
+   - `🔄 In Progress`
+   - `✅ Done`
 2. Add new column: `🐛 Blocked`
 
 **Step 3: Enable Automation**
-1. Click **"..."** (top right of project)
-2. Select **"Workflows"**
-3. Enable:
+1. Click **"..."** (top right) → **"Workflows"**
+2. Enable:
    - ✅ Auto-add new issues
    - ✅ Move to "In Progress" when assigned
    - ✅ Move to "Done" when closed
 
 **Step 4: Create Phase Issues**
 1. Go to **"Issues"** tab
-2. Create issues from templates:
-   - 🚀 Day 1 - SIL Validation (mark as Done)
-   - 📡 Day 2 - Serial TX
-   - 🔄 Day 3 - Feedback Loop
-   - 🤖 Day 4 - First Motion
-   - 🎓 Day 5 - Validation & Thesis
-
-### 3.2 Team Member Setup
-
-**Step 1: Clone Repository**
-```bash
-git clone https://github.com/Abdulkareem771/PAROL6_URDF.git
-cd PAROL6_URDF
-```
-
-**Step 2: View Project Board**
-1. Go to repository on GitHub
-2. Click **"Projects"** tab
-3. You'll see the project board
-
-**Step 3: Introduce Yourself**
-1. Go to **Issues** tab
-2. Find a bug report or question
-3. Comment: "Hi team! I'm [name], working on [area]"
+2. Create issues from templates (Day 1-5)
 
 ---
 
