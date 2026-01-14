@@ -71,3 +71,6 @@ echo "  ${GREEN}Run simulation:${NC}     ./run_robot.sh sim"
 echo "  ${GREEN}Run real robot:${NC}     ./run_robot.sh real"
 echo "  ${GREEN}Stop container:${NC}     docker stop $CONTAINER_NAME"
 echo ""
+
+# Activate the environment
+source ultralytics_cpu_env/bin/activate
