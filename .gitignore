@@ -32,3 +32,4 @@ moveit_task_constructor/
 # OS
 .DS_Store
 Thumbs.db
+logs/*.csv
