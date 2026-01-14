@@ -1,145 +1,297 @@
+#!/usr/bin/env python3
+"""
+PAROL6 - GitHub Project Board Automation
+
+Purpose:
+---------
+Automates population of the PAROL6 GitHub Project Board by:
+  - Logging into GitHub interactively
+  - Opening the Project Board (Projects v2 compatible)
+  - Parsing issue templates from .github/ISSUE_TEMPLATE
+  - Creating issues automatically
+  - Adding issues to the Project Board
+  - Avoiding duplicate issue creation
+
+This script is intentionally conservative and UI-based
+to avoid GitHub API token management and permission complexity.
+
+Designed for:
+  - Repeatable onboarding
+  - Thesis evidence reproducibility
+  - Long-term maintainability
+
+Author: PAROL6 Team
+Version: 1.1.0
+"""
+
 import time
-import os
 import glob
 import re
-from playwright.sync_api import sync_playwright
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-REPO_URL = "https://github.com/Abdulkareem771/PAROL6_URDF"
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+
+# =============================================================================
+# ============================= CONFIGURATION =================================
+# =============================================================================
+
+# Repository metadata
+REPO_OWNER = "Abdulkareem771"
+REPO_NAME = "PAROL6_URDF"
+REPO_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}"
+
+# GitHub Project (Projects v2 URL — MUST be direct link)
 PROJECT_NAME = "PAROL6"
+PROJECT_URL = "https://github.com/users/Abdulkareem771/projects/1"
 
-def parse_issue_template(filepath):
-    """Extracts title, body, and labels from markdown template."""
-    with open(filepath, 'r') as f:
-        content = f.read()
-    
-    # Parse generic YAML frontmatter
+# Local templates path
+ISSUE_TEMPLATE_DIR = Path(".github/ISSUE_TEMPLATE")
+
+# Browser behavior
+HEADLESS = False                 # Keep visible for debugging
+NAVIGATION_TIMEOUT_MS = 60_000
+UI_STABILIZATION_DELAY = 2.0     # seconds
+
+# Safety
+SKIP_EXISTING_ISSUES = True      # Prevent duplicates
+
+
+# =============================================================================
+# ============================= UTILITIES =====================================
+# =============================================================================
+
+def log(msg: str) -> None:
+    print(f"[PAROL6-AUTO] {msg}")
+
+
+def parse_issue_template(filepath: Path) -> Tuple[Optional[Dict], Optional[str]]:
+    """
+    Extracts metadata and body from GitHub issue template markdown.
+
+    Supports YAML frontmatter:
+    ---
+    title: "My Title"
+    labels: ["vision", "hardware"]
+    ---
+    Body text...
+    """
+
+    try:
+        content = filepath.read_text(encoding="utf-8")
+    except Exception as e:
+        log(f"❌ Failed reading template {filepath}: {e}")
+        return None, None
+
+    if not content.startswith("---"):
+        log(f"⚠️  Template has no YAML header: {filepath.name}")
+        return None, None
+
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        log(f"⚠️  Invalid YAML block in {filepath.name}")
+        return None, None
+
+    yaml_block = parts[1]
+    body = parts[2].strip()
+
     meta = {}
-    if content.startswith('---'):
-        parts = content.split('---', 2)
-        if len(parts) >= 3:
-            yaml_block = parts[1]
-            body = parts[2].strip()
-            
-            for line in yaml_block.split('\n'):
-                if ':' in line:
-                    key, val = line.split(':', 1)
-                    meta[key.strip()] = val.strip().strip('"').strip("'")
-            
-            # Extract labels list specifically
-            labels_match = re.search(r'labels: \[(.*?)\]', yaml_block)
-            if labels_match:
-                meta['labels'] = [l.strip().strip('"').strip("'") for l in labels_match.group(1).split(',')]
-            
-            return meta, body
-    return None, None
+    for line in yaml_block.splitlines():
+        if ":" not in line:
+            continue
+        key, val = line.split(":", 1)
+        meta[key.strip()] = val.strip().strip('"').strip("'")
 
-def get_track_from_labels(labels):
-    """Maps labels to track names."""
-    if not labels: return None
-    if 'vision' in labels: return '👁️ Vision'
-    if 'ai' in labels: return '🧠 AI'
-    if 'mobile' in labels: return '📱 Mobile'
-    if 'hardware' in labels or 'day2' in labels: return '🤖 Hardware'
-    return None
+    # Extract labels list if present
+    labels_match = re.search(r"labels:\s*\[(.*?)\]", yaml_block)
+    if labels_match:
+        labels = [
+            l.strip().strip('"').strip("'")
+            for l in labels_match.group(1).split(",")
+            if l.strip()
+        ]
+        meta["labels"] = labels
+    else:
+        meta["labels"] = []
 
-def run_automation():
-    print(f"🚀 Starting automation for {PROJECT_NAME}...")
-    
+    return meta, body
+
+
+def collect_templates() -> List[Path]:
+    if not ISSUE_TEMPLATE_DIR.exists():
+        log("❌ ISSUE_TEMPLATE directory not found.")
+        return []
+
+    templates = sorted(ISSUE_TEMPLATE_DIR.glob("*.md"))
+    if not templates:
+        log("⚠️  No templates found.")
+    return templates
+
+
+# =============================================================================
+# ============================ PLAYWRIGHT HELPERS =============================
+# =============================================================================
+
+def safe_goto(page, url: str) -> bool:
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+        time.sleep(UI_STABILIZATION_DELAY)
+        return True
+    except PlaywrightTimeoutError:
+        log(f"❌ Timeout navigating to: {url}")
+        return False
+
+
+def wait_for_login(page) -> None:
+    log("🔵 Opening GitHub login page...")
+    page.goto("https://github.com/login", wait_until="domcontentloaded")
+
+    log("👇 ACTION REQUIRED:")
+    log("   Please log in manually until you reach your GitHub dashboard.")
+    log("   The script will continue automatically.")
+
+    # Wait until GitHub home loads after login
+    page.wait_for_url("https://github.com/", timeout=0)
+    log("✅ Login detected.")
+
+
+def issue_exists(page, title: str) -> bool:
+    """
+    Checks if an issue with identical title already exists in repo.
+    """
+    search_url = f"{REPO_URL}/issues?q=is%3Aissue+{title.replace(' ', '+')}"
+    if not safe_goto(page, search_url):
+        return False
+
+    try:
+        if page.get_by_text(title, exact=False).count() > 0:
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def create_issue(page, title: str, body: str) -> bool:
+    """
+    Creates a new GitHub issue.
+    """
+    log(f"📝 Creating issue: {title}")
+
+    if not safe_goto(page, f"{REPO_URL}/issues/new"):
+        return False
+
+    try:
+        page.get_by_placeholder("Title").fill(title)
+        page.get_by_placeholder("Leave a comment").fill(body)
+        page.get_by_text("Submit new issue").click()
+        page.wait_for_load_state("networkidle")
+        return True
+    except Exception as e:
+        log(f"❌ Failed creating issue '{title}': {e}")
+        return False
+
+
+def add_issue_to_project(page) -> bool:
+    """
+    Adds currently open issue to the project board.
+    """
+    try:
+        page.get_by_role("button", name="Projects").click()
+        time.sleep(1)
+
+        page.get_by_placeholder("Filter projects").fill(PROJECT_NAME)
+        time.sleep(1)
+
+        page.get_by_text(PROJECT_NAME, exact=False).first.click()
+        page.keyboard.press("Escape")
+
+        return True
+    except Exception as e:
+        log(f"⚠️  Could not auto-add issue to project: {e}")
+        return False
+
+
+# =============================================================================
+# ================================ MAIN LOGIC =================================
+# =============================================================================
+
+def run_automation() -> None:
+    log("🚀 Starting PAROL6 Project Board Automation")
+
+    templates = collect_templates()
+    if not templates:
+        log("❌ No templates found — exiting.")
+        return
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=HEADLESS)
         context = browser.new_context()
         page = context.new_page()
 
-        # 1. Login Logic
-        print("🔵 Navigating to GitHub Login...")
-        page.goto("https://github.com/login")
-        print("👇 ACTION REQUIRED: Please log in repeatedly until you reach your dashboard.")
-        try:
-            page.wait_for_url("https://github.com/", timeout=0)
-            print("✅ Login Success!")
-        except:
-            print("❌ Login timed out.")
+        # ---------------- Login ----------------
+        wait_for_login(page)
+
+        # ---------------- Open Project ----------------
+        log("🔵 Opening Project Board...")
+        if not safe_goto(page, PROJECT_URL):
+            log("❌ Failed to open Project Board. Aborting.")
             return
 
-        # 2. Go to Project
-        print(f"🔵 Opening Project: {PROJECT_NAME}")
-        projects_url = f"{REPO_URL}/projects?query=is%3Aopen"
-        page.goto(projects_url)
-        
-        # Click the project link (finding by partial text)
-        try:
-            page.get_by_text(PROJECT_NAME, exact=False).first.click()
-            page.wait_for_load_state('networkidle')
-            print("✅ Project Board Opened")
-        except Exception as e:
-            print(f"❌ Could not find project '{PROJECT_NAME}'. Please open it manually.")
-            input("Press Enter once Project Board is open...")
+        log("✅ Project Board opened successfully.")
 
-        # 3. Create 'Track' Field (User said they did manual work, but let's verify/add)
-        print("\n🔧 Configuring 'Track' Field...")
-        # Note: UI automation for creating fields is fragile due to dynamic IDs.
-        # We will skip direct field creation to avoid breaking and focus on Issue Creation which is high value.
-        print("ℹ️  Skipping field creation (assumed manual). Focusing on Issue Population.")
+        # ---------------- Create Issues ----------------
+        created_count = 0
+        skipped_count = 0
 
-        # 4. Create Issues from Templates
-        print("\n📝 Creating Issues from Templates...")
-        templates = glob.glob(".github/ISSUE_TEMPLATE/*.md")
-        
-        for template_path in sorted(templates):
-            # Skip templates that shouldn't be auto-created (like generic bug_report) if desired, 
-            # but user wants to populate the board, so let's do the specific phase ones.
-            if "bug_report" in template_path: continue
-            
+        log("📂 Scanning templates...")
+
+        for template_path in templates:
+            if "bug" in template_path.name.lower():
+                log(f"⏭️  Skipping template: {template_path.name}")
+                continue
+
             meta, body = parse_issue_template(template_path)
-            if not meta or not meta.get('title'): continue
-            
-            title = meta['title']
-            print(f"   Creating: {title}")
-            
-            # Go to New Issue page
-            page.goto(f"{REPO_URL}/issues/new")
-            
-            # If template chooser appears, skip it by going directly or clicking "Open a blank issue"
-            # Actually, easiest is just filling the blank issue form
-            page.goto(f"{REPO_URL}/issues/new/choose")
-            
-            # Check if this exact template exists in list and click it?
-            # Creating from scratch is safer to ensure title/body match EXACTLY what's on disk
-            page.goto(f"{REPO_URL}/issues/new")
-            
-            # Fill Title
-            page.get_by_placeholder("Title").fill(title)
-            
-            # Fill Body (using code view usually safer but plain text area works)
-            page.get_by_placeholder("Leave a comment").fill(body)
-            
-            # Add to Project (Metadata Sidebar)
-            # This is complex in UI. Easier to just create the issue first.
-            
-            # Submit
-            page.get_by_text("Submit new issue").click()
-            page.wait_for_load_state('networkidle')
-            print("     ✅ Issue Created")
-            
-            # Now Add to Project (Post-creation)
-            # Find the "Projects" gear on the right sidebar
-            try:
-                page.get_by_role("button", name="Projects").click()
-                page.get_by_placeholder("Filter projects").fill(PROJECT_NAME)
-                # Click the project in the menu
-                page.get_by_text(PROJECT_NAME, exact=False).first.click()
-                # Click away to save
-                page.keyboard.press("Escape")
-                print("     ✅ Added to Project")
-            except:
-                print("     ⚠️ Failed to add to Project (do it manually)")
-                
-            time.sleep(1) # Rate limit kindness
+            if not meta or not meta.get("title"):
+                log(f"⚠️  Invalid template skipped: {template_path.name}")
+                continue
 
-        print("\n✅ Automation Complete!")
-        print("👉 Go to your Project Board and use the 'Track' field to organize items.")
-        input("Press Enter to close browser...")
+            title = meta["title"]
+
+            if SKIP_EXISTING_ISSUES and issue_exists(page, title):
+                log(f"♻️  Already exists: {title}")
+                skipped_count += 1
+                continue
+
+            if not create_issue(page, title, body):
+                continue
+
+            time.sleep(1)
+
+            if add_issue_to_project(page):
+                log("   ✅ Added to project")
+            else:
+                log("   ⚠️  Please add manually if missing")
+
+            created_count += 1
+            time.sleep(2)  # polite pacing
+
+        # ---------------- Summary ----------------
+        log("========================================")
+        log("🎉 Automation Completed")
+        log(f"   Created Issues : {created_count}")
+        log(f"   Skipped Issues : {skipped_count}")
+        log("👉 Review the Project Board for correctness.")
+        log("========================================")
+
+        input("Press ENTER to close browser...")
         browser.close()
+
+
+# =============================================================================
+# ================================ ENTRYPOINT =================================
+# =============================================================================
 
 if __name__ == "__main__":
     run_automation()
