@@ -122,6 +122,29 @@ PAROL6_URDF/
 
 ---
 
+## 👁️ Modular Vision Architecture
+
+We use a **swappable detector** strategy to parallelize work:
+
+```mermaid
+graph TD
+    A[Camera Input] --> B{Detector Layer}
+    B -->|Option 1: Fast| C[Red Marker Node]
+    B -->|Option 2: Parallel| D[YOLO Node]
+    B -->|Option 3: Final| E[Custom AI Node]
+    
+    C -->|Detection2DArray| F[Depth Matcher]
+    D -->|Detection2DArray| F
+    E -->|Detection2DArray| F
+    
+    F -->|Detection3DArray| G[Path Generator]
+    G -->|Robot Path| H[MoveIt Controller]
+```
+
+**See:** [docs/TEAM_WORKFLOW_GUIDE.md](docs/TEAM_WORKFLOW_GUIDE.md#15-modular-vision-architecture)
+
+---
+
 ## 🎓 Thesis Integration
 
 This project includes:
