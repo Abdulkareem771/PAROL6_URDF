@@ -32,3 +32,6 @@ docker stop parol6_dev
 sleep 1
 echo -e "${GREEN}✓ Container stopped${NC}"
 echo ""
+
+# Activate the environment
+source ultralytics_cpu_env/bin/activate
