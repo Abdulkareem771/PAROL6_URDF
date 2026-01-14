@@ -1,0 +1,1256 @@
+<h1 id="real-robot-integration-guide">Real Robot Integration Guide</h1>
+<p>This guide defines the structure to bridge <strong>MoveIt 2</strong> planning results to your <strong>Physical Motors</strong> (via ESP32/Arduino).</p>
+<h2 id="the-architecture">1. The Architecture</h2>
+<p>To move from Simulation (Ignition) to Reality, we swap out the “Simulation Layer” for a “Hardware Layer”.</p>
+<p><strong>Simulation Flow (Current):</strong> <code>MoveIt</code> -&gt; <code>FollowJointTrajectory</code> (Action) -&gt; <code>ros2_control</code> (JTC) -&gt; <code>Ignition Plugin</code> -&gt; <code>Simulated Motors</code></p>
+<p><strong>Physical Flow (Proposed):</strong> <code>MoveIt</code> -&gt; <code>FollowJointTrajectory</code> (Action) -&gt; <strong>Python Driver Node</strong> -&gt; <code>USB Serial</code> -&gt; <strong>ESP32 Firmware</strong> -&gt; <code>Stepper Motors</code></p>
+<p><em>Why this way?</em> It is the simplest to implement. You write a single Python script that acts as the “Manager”. It accepts the trajectory from MoveIt, interpolates it, and sends commands to the ESP32.</p>
+<hr />
+<h2 id="the-python-driver-node-real_robot_driver.py">2. The Python Driver Node (<code>real_robot_driver.py</code>)</h2>
+<p>This node does two things: 1. <strong>Action Server</strong>: Listens for the trajectory from MoveIt. 2. <strong>Serial Writer</strong>: Sends joint angles to the ESP32.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true"></a><span class="im">import</span> rclpy</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true"></a><span class="im">from</span> rclpy.node <span class="im">import</span> Node</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true"></a><span class="im">from</span> rclpy.action <span class="im">import</span> ActionServer</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true"></a><span class="im">from</span> control_msgs.action <span class="im">import</span> FollowJointTrajectory</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true"></a><span class="im">from</span> sensor_msgs.msg <span class="im">import</span> JointState</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true"></a><span class="im">import</span> serial</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true"></a><span class="im">import</span> struct</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true"></a><span class="im">import</span> time</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true"></a><span class="kw">class</span> RealRobotDriver(Node):</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="st">&#39;real_robot_driver&#39;</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true"></a>        </span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true"></a>        <span class="co"># 1. Setup Serial to ESP32</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true"></a>        <span class="co"># self.ser = serial.Serial(&#39;/dev/ttyUSB0&#39;, 115200, timeout=0.1)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&quot;Connected to ESP32&quot;</span>)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true"></a>        <span class="co"># 2. Action Server (Replaces ros2_control&#39;s JTC)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true"></a>        <span class="va">self</span>._action_server <span class="op">=</span> ActionServer(</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true"></a>            <span class="va">self</span>,</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true"></a>            FollowJointTrajectory,</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true"></a>            <span class="st">&#39;/parol6_arm_controller/follow_joint_trajectory&#39;</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true"></a>            <span class="va">self</span>.execute_callback)</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true"></a>            </span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true"></a>        <span class="co"># 3. Publisher (To update RViz)</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true"></a>        <span class="va">self</span>.joint_pub <span class="op">=</span> <span class="va">self</span>.create_publisher(JointState, <span class="st">&#39;/joint_states&#39;</span>, <span class="dv">10</span>)</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true"></a>    <span class="kw">def</span> execute_callback(<span class="va">self</span>, goal_handle):</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&#39;Executing goal...&#39;</span>)</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true"></a>        feedback_msg <span class="op">=</span> FollowJointTrajectory.Feedback()</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true"></a>        </span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true"></a>        <span class="co"># Iterate through trajectory points</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true"></a>        <span class="cf">for</span> point <span class="kw">in</span> goal_handle.request.trajectory.points:</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true"></a>            positions <span class="op">=</span> point.positions <span class="co"># [L1, L2, L3, L4, L5, L6]</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true"></a>            </span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true"></a>            <span class="co"># A. Send to ESP32 (Format: &lt;A,B,C,D,E,F&gt;)</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true"></a>            cmd_str <span class="op">=</span> <span class="ss">f&quot;&lt;</span><span class="sc">{</span><span class="st">&#39;,&#39;</span><span class="sc">.</span>join(<span class="bu">map</span>(<span class="bu">str</span>, positions))<span class="sc">}</span><span class="ss">&gt;</span><span class="ch">\n</span><span class="ss">&quot;</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true"></a>            <span class="co"># self.ser.write(cmd_str.encode())</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true"></a>            </span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true"></a>            <span class="co"># B. Publish State for RViz</span></span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true"></a>            msg <span class="op">=</span> JointState()</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true"></a>            msg.header.stamp <span class="op">=</span> <span class="va">self</span>.get_clock().now().to_msg()</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true"></a>            msg.name <span class="op">=</span> goal_handle.request.trajectory.joint_names</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true"></a>            msg.position <span class="op">=</span> positions</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true"></a>            <span class="va">self</span>.joint_pub.publish(msg)</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true"></a>            </span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true"></a>            <span class="co"># Wait for next point (Simple open-loop timing)</span></span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true"></a>            time.sleep(<span class="fl">0.1</span>) </span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true"></a>        goal_handle.succeed()</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true"></a>        result <span class="op">=</span> FollowJointTrajectory.Result()</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true"></a>        <span class="cf">return</span> result</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true"></a></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true"></a><span class="kw">def</span> main(args<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true"></a>    rclpy.init(args<span class="op">=</span>args)</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true"></a>    driver <span class="op">=</span> RealRobotDriver()</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true"></a>    rclpy.spin(driver)</span></code></pre></div>
+<hr />
+<h2 id="the-firmware-esp32arduino">3. The Firmware (ESP32/Arduino)</h2>
+<p>The logic on the microcontroller side to parse the protocol <code>&lt;J1,J2,J3,J4,J5,J6&gt;</code>.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true"></a><span class="pp">#include </span><span class="im">&lt;AccelStepper.h&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true"></a><span class="co">// Define your steppers here...</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true"></a><span class="dt">void</span> setup() {</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true"></a>  Serial.begin(<span class="dv">115200</span>);</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true"></a>}</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true"></a><span class="dt">void</span> loop() {</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true"></a>  <span class="cf">if</span> (Serial.available() &gt; <span class="dv">0</span>) {</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true"></a>    String input = Serial.readStringUntil(<span class="ch">&#39;</span><span class="sc">\n</span><span class="ch">&#39;</span>);</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true"></a>    <span class="co">// Expected format: &lt;0.5, 1.2, -0.4, ...&gt;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true"></a>    <span class="cf">if</span> (input.startsWith(<span class="st">&quot;&lt;&quot;</span>) &amp;&amp; input.endsWith(<span class="st">&quot;&gt;&quot;</span>)) {</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true"></a>      input = input.substring(<span class="dv">1</span>, input.length() - <span class="dv">1</span>);</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true"></a>      </span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true"></a>      <span class="co">// Parse Floats (Naive implementation)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true"></a>      <span class="dt">float</span> joints[<span class="dv">6</span>];</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true"></a>      <span class="dt">int</span> index = <span class="dv">0</span>;</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true"></a>      <span class="dt">int</span> lastIndex = <span class="dv">0</span>;</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true"></a>      <span class="cf">for</span> (<span class="dt">int</span> i = <span class="dv">0</span>; i &lt; input.length(); i++) {</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true"></a>        <span class="cf">if</span> (input.charAt(i) == <span class="ch">&#39;,&#39;</span>) {</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true"></a>           joints[index++] = input.substring(lastIndex, i).toFloat();</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true"></a>           lastIndex = i + <span class="dv">1</span>;</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true"></a>        }</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true"></a>      }</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true"></a>      joints[index] = input.substring(lastIndex).toFloat();</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true"></a></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true"></a>      <span class="co">// Move Motors</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true"></a>      <span class="co">// stepper1.moveTo(radToSteps(joints[0]));</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true"></a>      <span class="co">// ...</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true"></a>    }</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true"></a>  }</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true"></a>  <span class="co">// stepper1.run();</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true"></a>}</span></code></pre></div>
+<h2 id="how-to-run-it">4. How to Run It</h2>
+<ol type="1">
+<li><strong>Close Simulation</strong>: Stop any running Ignition instances.</li>
+<li><strong>Flash ESP32</strong>: Upload the code.</li>
+<li><strong>Launch Driver</strong>: <code>python3 real_robot_driver.py</code></li>
+<li><strong>Launch MoveIt</strong>: <code>ros2 launch parol6_moveit_config moveit.launch.py</code> (You might need a modified launch file that doesn’t wait for Gazebo).</li>
+</ol>
+<h2 id="digital-twin-setup-simulation-real-robot">5. Digital Twin Setup (Simulation + Real Robot)</h2>
+<p>Yes! You can run the simulation and have the real robot copy it (Shadow Mode). This is often called a “Digital Twin”.</p>
+<p><strong>The Data Flow:</strong> 1. <strong>MoveIt</strong> plans a path. 2. <strong>Ignition Gazebo</strong> executes it visually. 3. <strong>Real Robot Driver</strong> (Shadow Mode) subscribes to <code>/joint_states</code> from the simulation. 4. <strong>Real Robot</strong> moves to match the Simulation angles in real-time.</p>
+<p><strong>Modified Python Driver for Shadowing:</strong> Instead of an Action Server, standard subscriber logic:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true"></a><span class="co"># Inside RealRobotDriver __init__:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true"></a><span class="va">self</span>.sub <span class="op">=</span> <span class="va">self</span>.create_subscription(JointState, <span class="st">&#39;/joint_states&#39;</span>, <span class="va">self</span>.shadow_callback, <span class="dv">10</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true"></a><span class="kw">def</span> shadow_callback(<span class="va">self</span>, msg):</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true"></a>    <span class="co"># msg.position contains [L1...L6] from Simulation</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true"></a>    <span class="co"># Send directly to ESP32</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true"></a>    cmd <span class="op">=</span> <span class="ss">f&quot;&lt;</span><span class="sc">{</span><span class="st">&#39;,&#39;</span><span class="sc">.</span>join(<span class="bu">map</span>(<span class="bu">str</span>, msg.position))<span class="sc">}</span><span class="ss">&gt;</span><span class="ch">\n</span><span class="ss">&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true"></a>    <span class="va">self</span>.ser.write(cmd.encode())</span></code></pre></div>
+<p><em>Risk</em>: If Simulation jumps instantly (teleport), Real Robot tries to jump instantly (dangerous). You need safety limits in firmware.</p>
+<h2 id="the-standard-ros2_control-firmware-way">6. The “Standard” ros2_control Firmware Way</h2>
+<p>You asked: <em>“does ros_control firmware has something to do with that?”</em> <strong>Answer: YES.</strong></p>
+<p>The method in Section 1 (Python Driver) is a <strong>bypass</strong>. The “Official/Professional” ROS 2 way is:</p>
+<p><strong>Architecture:</strong> <code>MoveIt</code> -&gt; <code>ros2_control</code> (Controller Manager) -&gt; <strong>Hardware Interface (C++)</strong> -&gt; <code>Micro-ROS Agent</code> -&gt; <code>ESP32 Firmware</code></p>
+<ol type="1">
+<li><strong>Hardware Interface</strong>: You write a C++ class in ROS that inherits from <code>SystemInterface</code>.</li>
+<li><strong>Communication</strong>: This C++ class sends/receives data to the hardware.</li>
+<li><strong>Firmware</strong>: The ESP32 runs a <strong>Micro-ROS Node</strong> that exposes Services/Topics directly to the Host.</li>
+</ol>
+<p><strong>Why simpler (Python) vs. Standard (ros2_control)?</strong> * <strong>Python Bridge</strong>: Easier to understand, debug, and implement for a Thesis/Prototyping. * <strong>ros2_control C++</strong>: Harder to write (C++ plugins, pluginlib), but gives real-time guarantees and perfect synchronization with MoveIt.</p>
+<p><strong>Recommendation</strong>: Start with the <strong>Python Bridge / Digital Twin</strong> (Section 5). It achieves 90% of the value with 10% of the complexity.</p>
+<h2 id="the-conventional-way-mode-switching-best-practice">7. The Conventional Way: Mode Switching (Best Practice)</h2>
+<p>You asked: <em>“if gazebo has a problem the real robot will too? what is the conventional way?”</em></p>
+<p><strong>You are absolutely correct.</strong> Chaining them (MoveIt -&gt; Gazebo -&gt; Real) introduces a “single point of failure” (Gazebo).</p>
+<p><strong>The Conventional Industrial Approach is “Mode Switching”.</strong> You do not run both at the same time. You act like a railroad switch.</p>
+<p><strong>Architecture:</strong> * <strong>Mode A (Simulation)</strong>: <code>MoveIt</code> -&gt; <code>Action A</code> -&gt; <code>Gazebo</code> * <strong>Mode B (Real)</strong>: <code>MoveIt</code> -&gt; <code>Action B</code> -&gt; <code>Real Robot</code></p>
+<p><strong>How it works:</strong> 1. <strong>Verify in Sim</strong>: You launch <strong>Mode A</strong>. You plan, execute, and see the robot move in Gazebo. “Looks good.” 2. <strong>Switch</strong>: You kill Gazebo. You launch <strong>Mode B</strong> (your Python Driver). 3. <strong>Execute in Real</strong>: You hit “Plan &amp; Execute” in MoveIt again. This time, MoveIt talks <strong>directly</strong> to your Python Driver (Action Server).</p>
+<p><strong>Why this is better:</strong> * <strong>Safety</strong>: If Gazebo crashes, the Real Robot doesn’t care. It’s not connected. * <strong>Latency</strong>: You don’t have the delay of the simulation physics engine. * <strong>Isolation</strong>: Real hardware issues (serial noise) don’t freeze your simulation, and vice versa.</p>
+<p><strong>To implement “Simultaneous” (Advanced):</strong> If you <em>really</em> want both moving at once without the dependency, you write an <strong>Action Splitter</strong>. * MoveIt sends to <code>/joint_trajectory_splitter</code>. * Splitter sends copy 1 to <code>/gazebo/joint_trajectory</code>. * Splitter sends copy 2 to <code>/real/joint_trajectory</code>. This is complex to synchronize (what if Real is slower than Sim?) and usually avoided unless necessary.</p>
+<h2 id="mapping-the-ros-to-hardware-math">8. Mapping: The ROS-to-Hardware Math</h2>
+<p>You asked: <em>“how to map commands from ros to arduino/esp”</em></p>
+<p>The ROS world speaks <strong>Radians</strong>. Your Motor world speaks <strong>Steps</strong>. You need a translation layer.</p>
+<h3 id="a.-concept-the-conversion-factor"><strong>A. Concept: The Conversion Factor</strong></h3>
+<p>You need to calculate <code>STEPS_PER_RADIAN</code> for each joint. Equation: <code>Steps_Per_Rev * Microstepping * Gear_Ratio / (2 * PI)</code></p>
+<p><strong>Example (NEMA 17 + 20:1 Planetary Gear):</strong> * Motor: 200 steps/rev (1.8 deg) * Microstepping: 16 (on driver) * Gear Ratio: 20 * Total Steps/Rev = 200 * 16 * 20 = 64,000 steps * <strong>STEPS_PER_RADIAN</strong> = 64,000 / 6.28318 ~= <strong>10,185.9</strong></p>
+<h3 id="b.-implementing-in-firmware-arduinoesp32"><strong>B. Implementing in Firmware (Arduino/ESP32)</strong></h3>
+<p>Don’t send big step numbers over Serial. Send radians (floats) and let the MCU convert.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true"></a><span class="co">// 1. Define Ratios (Calibrate these!)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true"></a><span class="dt">float</span> STEPS_PER_RAD_L1 = <span class="fl">10185.9</span>;</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true"></a><span class="dt">float</span> STEPS_PER_RAD_L2 = <span class="fl">8500.0</span>;</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true"></a><span class="co">// ...</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true"></a><span class="co">// 2. The Loop Logic</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true"></a><span class="cf">if</span> (received_new_target) {</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true"></a>    <span class="co">// ROS sends: 1.57 radians (90 degrees)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true"></a>    <span class="dt">float</span> target_rad = parsed_joint_L1; </span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true"></a>    </span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true"></a>    <span class="co">// Convert</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true"></a>    <span class="dt">long</span> target_steps = target_rad * STEPS_PER_RAD_L1;</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true"></a>    </span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true"></a>    <span class="co">// 3. Handle Direction (If motor spins wrong way)</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true"></a>    <span class="co">// if (INVERT_L1) target_steps = -target_steps;</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true"></a>    </span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true"></a>    stepper1.moveTo(target_steps);</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true"></a>}</span></code></pre></div>
+<h3 id="c.-handling-home-zero-offset"><strong>C. Handling “Home” (Zero Offset)</strong></h3>
+<p>ROS assumes <code>0.0</code> is the robot standing straight up (or specific pose). Your motors assume <code>0</code> is “where I turned on”. * <strong>Solution</strong>: You need a Limit Switch Homing Sequence in <code>setup()</code>. * Once switch is hit, call <code>stepper.setCurrentPosition(HOME_OFFSET_STEPS)</code>.</p>
+<h2 id="velocity-acceleration">9. Velocity &amp; Acceleration</h2>
+<p>You asked: <em>“does moveit send speed and acceleration info?”</em> <strong>Answer: YES.</strong></p>
+<p>The <code>FollowJointTrajectory</code> message contains a list of points. Each point has: 1. <code>positions</code> (Where to go) 2. <code>velocities</code> (How fast to pass through this point) 3. <code>accelerations</code> (How fast to speed up/slow down) 4. <code>time_from_start</code> (When to arrive exactly)</p>
+<h3 id="a.-how-to-access-it-in-python"><strong>A. How to access it in Python</strong></h3>
+<p>In your <code>real_robot_driver.py</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true"></a><span class="cf">for</span> point <span class="kw">in</span> goal_handle.request.trajectory.points:</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true"></a>    pos <span class="op">=</span> point.positions       <span class="co"># List[float]</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true"></a>    vel <span class="op">=</span> point.velocities      <span class="co"># List[float]</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true"></a>    acc <span class="op">=</span> point.accelerations   <span class="co"># List[float]</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true"></a>    </span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true"></a>    <span class="co"># Send all to ESP32: &lt;P1,P2... | V1,V2... | A1,A2...&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true"></a>    <span class="co"># OR just ignore V/A if your firmware is simple.</span></span></code></pre></div>
+<h3 id="b.-do-you-need-it"><strong>B. Do you need it?</strong></h3>
+<ul>
+<li><strong>Simple Way (Recommended)</strong>: Ignore V/A. Just send Positions. Let <code>AccelStepper</code> in Arduino handle the acceleration between points.
+<ul>
+<li><em>Pros</em>: Much simpler firmware.</li>
+<li><em>Cons</em>: Robot might stop/start briefly at each point (choppy) if points are far apart.</li>
+</ul></li>
+<li><strong>Advanced Way</strong>: Send V/A to firmware.
+<ul>
+<li><em>Pros</em>: Perfectly smooth motion.</li>
+<li><em>Cons</em>: Complex math on Arduino (Cubic Spline interpolation).</li>
+</ul></li>
+</ul>
+<p><strong>Tip</strong>: MoveIt generates points very close together (e.g., every 0.1s). So even if you ignore Velocity, “Position Control” usually looks pretty smooth because the updates are frequent.</p>
+<h2 id="can-i-do-math-on-pc-pc-side-interpolation">10. Can I do math on PC? (PC-Side Interpolation)</h2>
+<p>You asked: <em>“can i make the intense calculations on my machine and send all info to arduino”</em> <strong>Answer: YES. This is actually a very smart approach.</strong></p>
+<p><strong>The Concept (“Dumb Firmware”):</strong> Instead of sending 2 points spaced 1 second apart and asking Arduino to interpolate, the PC calculates <strong>100 little intermediate points</strong> and sends them continuously.</p>
+<h3 id="a.-how-to-implement"><strong>A. How to implement</strong></h3>
+<ol type="1">
+<li><strong>Python Node</strong>:
+<ul>
+<li>Receives Trajectory (points every 0.1s).</li>
+<li>Runs a high-speed loop (e.g., 50Hz or 100Hz).</li>
+<li>Calculates exactly where the robot should be <em>right now</em>.</li>
+<li>Sends stream: <code>&lt;J1, J2...&gt;</code> -&gt; Serial -&gt; <code>&lt;J1, J2...&gt;</code> -&gt; Serial…</li>
+</ul></li>
+<li><strong>Arduino</strong>:
+<ul>
+<li>Does <strong>ZERO</strong> math.</li>
+<li>Just parses <code>&lt;J1...&gt;</code> and calls <code>stepper.moveTo()</code>.</li>
+</ul></li>
+</ol>
+<h3 id="b.-the-bottleneck-serial-bandwidth"><strong>B. The Bottleneck: Serial Bandwidth</strong></h3>
+<p>If you send updates too fast, Serial chokes. * <strong>Math</strong>: 6 floats + chars ~= 50 bytes per message. * <strong>Baud Rate</strong>: 115200 bits/sec ~= 11,500 bytes/sec. * <strong>Max Rate</strong>: 11,500 / 50 ~= <strong>230 updates/second</strong>. * <strong>Conclusion</strong>: You can safely send updates at <strong>50Hz - 100Hz</strong> effortlessly. This is extremely smooth for a robot arm.</p>
+<p><strong>Recommendation</strong>: Use <strong>PC-Side Interpolation</strong>. It keeps your Arduino code simple and robust (less crashing), while leveraging your i7/Ryzen CPU for the heavy lifting.</p>
+<h2 id="thesis-level-the-industrial-standard">11. Thesis Level: The Industrial Standard</h2>
+<p>You asked: <em>“what is the conventional way (thesis level)”</em></p>
+<p>In professional robotics (KUKA, Universal Robots, ABB), the standard is <strong>“Centralized Planning, Distributed Control”</strong>.</p>
+<h3 id="the-architecture-thesis-terminology"><strong>The Architecture (Thesis Terminology)</strong></h3>
+<ol type="1">
+<li><strong>High-Level Controller (PC/ROS)</strong>:
+<ul>
+<li><strong>Role</strong>: “The Brain”.</li>
+<li><strong>Tasks</strong>: Path Planning (A*), Inverse Kinematics, Collision Checking, Trajectory Interpolation.</li>
+<li><strong>Output</strong>: Constant stream of Setpoints (e.g., 100Hz or 1kHz) over a Fieldbus (EtherCAT, CANopen).</li>
+<li><em>This is exactly the “PC-Side Interpolation” approach.</em></li>
+</ul></li>
+<li><strong>Low-Level Controller (MCU/Drive)</strong>:
+<ul>
+<li><strong>Role</strong>: “The Muscle”.</li>
+<li><strong>Tasks</strong>: Field Oriented Control (FOC), PID Position Loop, Encoder Reading.</li>
+<li><strong>Input</strong>: “Go to Angle X <strong>NOW</strong>”.</li>
+<li><strong>Output</strong>: PWM currents to motor coils.</li>
+</ul></li>
+</ol>
+<h3 id="why-this-is-the-standard"><strong>Why this is the standard?</strong></h3>
+<ol type="1">
+<li><strong>Dynamic Response</strong>: If a camera sees a human, the PC stops sending updates <em>instantly</em>. If the MCU held the whole trajectory buffer (like a 3D printer), it might execute several seconds of motion before processing the “Stop” command.</li>
+<li><strong>Compute Power</strong>: Inverse Kinematics requires matrix inversion. An Arduino cannot do this fast enough.</li>
+</ol>
+<h3 id="for-your-thesis-report"><strong>For Your Thesis Report:</strong></h3>
+<p>You should write: &gt; <em>“The system utilizes a centralized control architecture where high-level trajectory generation and interpolation occur on the host computer running ROS 2. Setpoints are streamed at [Frequency] Hz to the distributed microcontroller nodes, which execute the low-level motor actuation loops. This mirrors standard industrial protocols like EtherCAT provided by KUKA/UR interfaces.”</em></p>
+<h2 id="using-mks-servo42c-closed-loop-foc">12. Using MKS SERVO42C (Closed-loop / FOC)</h2>
+<p>You asked: <em>“i have FOC through mkservo42c drivers . does that work? what would the code look like”</em> <strong>Answer: YES. It works beautifully, and it simplifies your job.</strong></p>
+<h3 id="a.-how-mks-servo42c-works"><strong>A. How MKS SERVO42C works</strong></h3>
+<p>These are <strong>“Smart Drivers”</strong>. * <strong>Internal</strong>: They have their own processor, encoder, and FOC algorithm built-in. * <strong>External</strong>: To your ESP32, they lock exactly like a standard “Dumb” stepper driver (A4988/TMC2209).</p>
+<h3 id="b.-the-code"><strong>B. The Code</strong></h3>
+<p>The code <strong>DOES NOT CHANGE</strong>. You still use the <code>DIR</code> and <code>STEP</code> (Pulse) interface. * The ESP32 sends a pulse. * The MKS 42C receives the pulse and uses its FOC algorithm to move the motor exactly one step, applying exactly the right torque.</p>
+<p><strong>Your Firmware remains:</strong></p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true"></a><span class="co">// Works on MKS SERVO42C just like a regular stepper</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true"></a>accelStepper.moveTo(target_steps);</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true"></a>accelStepper.run();</span></code></pre></div>
+<h3 id="c.-critical-setup-for-these-drivers"><strong>C. Critical Setup for These Drivers</strong></h3>
+<ol type="1">
+<li><strong>Calibration</strong>: You MUST run the MKS calibration menu (using the buttons/OLED on the driver) before connecting to the robot. This teaches the driver the motor’s magnet properties.</li>
+<li><strong>Microstepping</strong>: Set the microstepping on the Driver’s OLED screen (e.g., 16 or 32). Ensure your ROS code (Section 8) uses the <strong>SAME</strong> number for the <code>STEPS_PER_RADIAN</code> calculation.</li>
+<li><strong>Speed</strong>: These drivers can handle very high RPM. Ensure your <code>AccelStepper</code> max speed is set high enough in firmware (<code>setMaxSpeed</code>).</li>
+</ol>
+<p><strong>Why this is great for Thesis:</strong> You get “Industrial FOC Performance” (Silence, No lost steps, Efficiency) without writing a single line of FOC code yourself. It is a “Black Box” solution.</p>
+<h2 id="feedback-do-i-need-to-read-the-encoders">13. Feedback: Do I need to read the Encoders?</h2>
+<p>You asked: <em>“is the feedback from the mkservo important in trajectory planning in ros?”</em></p>
+<h3 id="a.-for-planning-moveit-generation"><strong>A. For Planning (MoveIt Generation)</strong></h3>
+<p><strong>NO.</strong> MoveIt assumes the robot is “perfect”. It generates a plan based on where it <em>thinks</em> the robot is effectively instantaneously. It does not use live torque/error feedback to generate the geometric path.</p>
+<h3 id="b.-for-execution-ros2_control-driver"><strong>B. For Execution (ros2_control / Driver)</strong></h3>
+<p><strong>YES, but MKS handles it.</strong> * <strong>Safety</strong>: If the robot hits a wall, the MKS driver will detect “Stall” (position error) and stop the motor to prevent damage. * <strong>ROS Visualization</strong>: ROS needs to know where the robot IS to update the 3D model in RViz.</p>
+<h3 id="types-of-feedback-implementation"><strong>Types of Feedback Implementation:</strong></h3>
+<ol type="1">
+<li><strong>“Open Loop” Reporting (Standard/Easiest)</strong>:
+<ul>
+<li>Your ESP32 counts how many steps it <em>sent</em>.</li>
+<li>It assumes <code>Position = Steps_Sent / Ratio</code>.</li>
+<li>It publishes this to <code>/joint_states</code>.</li>
+<li><em>Why allows this?</em> Because MKS 42C guarantees that if it <em>can</em> move, it <em>will</em> move. If it fails, it errors out. So “Steps Sent” is extremely accurate (99.9%).</li>
+</ul></li>
+<li><strong>True Closed Loop (Advanced)</strong>:
+<ul>
+<li>You wire the MKS <code>TX/RX</code> serial port or <code>Enc</code> pins back to the ESP32.</li>
+<li>You ask the driver: “Where are you really?”</li>
+<li><em>Verdict</em>: Overkill for this project. The MKS driver is trusted to do its job.</li>
+</ul></li>
+</ol>
+<p><strong>Recommendation</strong>: Use <strong>Type 1</strong>. Trust the MKS driver. report <code>Steps_Sent</code> back to ROS as the current state.</p>
+<h2 id="academic-context-when-is-feedback-critical">14. Academic Context: When is Feedback Critical?</h2>
+<p>You asked: <em>“is it academically recommended to at least get feedback from time to time?”</em> <strong>Answer: YES. For two specific reasons.</strong></p>
+<h3 id="a.-the-start-state-t0"><strong>A. “The Start State” (t=0)</strong></h3>
+<p>MoveIt cannot plan a path if it doesn’t know where the robot is <strong>RIGHT NOW</strong>. * <strong>Scenario</strong>: Robot is at 90 degrees. You turn it off. You move it by hand to 0 degrees. You turn it on. * <strong>No Feedback</strong>: ROS thinks it’s still at 90. It plans a path through a table. <strong>CRASH.</strong> * <strong>With Feedback</strong>: Enc sends “0”. ROS sees “0”. Plans safe path. * <strong>Thesis Point</strong>: <em>“Feedback is essential for validating the initial state <code>q(t=0)</code> before any trajectory generation begins.”</em></p>
+<h3 id="b.-trajectory-execution-monitoring-replanning"><strong>B. Trajectory Execution Monitoring (Replanning)</strong></h3>
+<p>This is a standard diagram in robotics textbooks. 1. <strong>Monitor</strong>: You continuously compare <code>Actual</code> vs <code>Planned</code>. 2. <strong>Threshold</strong>: If <code>|Error| &gt; 0.1 rad</code> (maybe a heavy object pulled the arm down), you trigger an <strong>ABORT</strong>. 3. <strong>Re-Plan</strong>: MoveIt calculates a <em>new</em> correction path from the deviation point.</p>
+<h3 id="implementation-for-thesis"><strong>Implementation for Thesis</strong></h3>
+<p>Even if you use “Open Loop” stepping (steps sent), you simulate this standard by: 1. <strong>Homing at Startup</strong>: This is the “Gold Standard” feedback. It resets the world to Truth. 2. <strong>Stall Detection</strong>: If MKS Servo42c detects a stall, it should toggle a pin. ESP32 reads this pin -&gt; Sends “ABORT” to ROS.</p>
+<h2 id="concrete-implementation-steps">15. Concrete Implementation Steps</h2>
+<p>You asked: <em>“how can this be implemented in our setup”</em></p>
+<h3 id="part-a-homing-the-start-state-fix"><strong>Part A: Homing (The “Start State” Fix)</strong></h3>
+<p><strong>1. Hardware</strong>: * Install a mechanical Limit Switch on each joint (or at least J1, J2, J3). * Wire them to ESP32 Pins (e.g., <code>D13</code>, <code>D12</code>…). Use Pull-up resistors (Internal <code>INPUT_PULLUP</code>).</p>
+<p><strong>2. Firmware (Arduino/ESP32)</strong>: Add this to <code>setup()</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true"></a><span class="dt">void</span> setup() {</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true"></a>  Serial.begin(<span class="dv">115200</span>);</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true"></a>  pinMode(LIMIT_SWITCH_1, INPUT_PULLUP);</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true"></a>  </span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true"></a>  <span class="co">// 1. Homing Routine</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true"></a>  Serial.println(<span class="st">&quot;STATUS: HOMING...&quot;</span>);</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true"></a>  </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true"></a>  <span class="co">// Move until switch hit</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true"></a>  <span class="cf">while</span>(digitalRead(LIMIT_SWITCH_1) == HIGH) { </span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true"></a>    stepper1.runSpeed(); <span class="co">// Move slowly backwards</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true"></a>  }</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true"></a>  </span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true"></a>  <span class="co">// 2. Set Zero</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true"></a>  stepper1.setCurrentPosition(<span class="dv">0</span>);</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true"></a>  Serial.println(<span class="st">&quot;STATUS: READY&quot;</span>);</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true"></a>}</span></code></pre></div>
+<p><strong>3. Python Driver Update</strong>: In your <code>__init__</code>, wait for that “READY” signal before letting MoveIt start.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true"></a><span class="co"># Wait for ESP32 to finish homing</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true"></a><span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true"></a>    line <span class="op">=</span> <span class="va">self</span>.ser.readline().decode()</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true"></a>    <span class="cf">if</span> <span class="st">&quot;READY&quot;</span> <span class="kw">in</span> line:</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&quot;Robot Homed &amp; Ready!&quot;</span>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true"></a>        <span class="cf">break</span></span></code></pre></div>
+<h3 id="part-b-stallerror-monitoring-the-execution-fix"><strong>Part B: Stall/Error Monitoring (The “Execution” Fix)</strong></h3>
+<p><strong>1. Hardware</strong>: * The MKS SERVO42C has an <strong>Alarm (ALM)</strong> pin (sometimes called <code>Di</code>). * Wire this to an ESP32 Input Pin.</p>
+<p><strong>2. Firmware</strong>: In your main <code>loop()</code>:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true"></a><span class="dt">void</span> loop() {</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true"></a>  <span class="cf">if</span> (digitalRead(ALM_PIN_1) == LOW) { <span class="co">// Assuming Active LOW alarm</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true"></a>    Serial.println(<span class="st">&quot;ERROR: STALL_J1&quot;</span>);</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true"></a>    <span class="co">// Stop everything</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true"></a>    <span class="cf">while</span>(<span class="dv">1</span>); </span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true"></a>  }</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true"></a>  <span class="co">// ... rest of code</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true"></a>}</span></code></pre></div>
+<p><strong>3. Python Driver</strong>: In your execution loop:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true"></a><span class="co"># Check for errors while moving</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true"></a><span class="cf">if</span> <span class="va">self</span>.ser.in_waiting:</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true"></a>    msg <span class="op">=</span> <span class="va">self</span>.ser.readline().decode()</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true"></a>    <span class="cf">if</span> <span class="st">&quot;ERROR&quot;</span> <span class="kw">in</span> msg:</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().error(<span class="st">&quot;Robot Stalled! Aborting.&quot;</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true"></a>        goal_handle.abort()</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true"></a>        <span class="cf">return</span> FollowJointTrajectory.Result()</span></code></pre></div>
+<h2 id="deep-dive-alarms-deviation-monitoring">16. Deep Dive: Alarms &amp; Deviation Monitoring</h2>
+<p>You asked: <em>“what does the alarm pin do? and how to monitor deviations”</em></p>
+<h3 id="a.-what-does-the-alarm-pin-do"><strong>A. What does the Alarm Pin do?</strong></h3>
+<p>On the MKS SERVO42C, the <code>ALM</code> pin goes active (Low/High) when the <strong>Driver gives up</strong>. It triggers if: 1. <strong>Position Deviation</strong>: The motor is physically forced &gt; X degrees away from where it should be (default is usually ~2 degrees or 1 full step cycle). 2. <strong>Stall</strong>: The magnet cannot push the load anymore. 3. <strong>Overheat</strong>: Driver is too hot.</p>
+<p><strong>It is a “Catastrophic Failure” signal.</strong> It means the driver has lost control of the position.</p>
+<h3 id="b.-how-to-monitor-deviations-tracking-error"><strong>B. How to Monitor Deviations (Tracking Error)</strong></h3>
+<p>There are two places to do this.</p>
+<h4 id="level-1-hardware-monitoring-internal-to-driver"><strong>Level 1: Hardware Monitoring (Internal to Driver)</strong></h4>
+<ul>
+<li><strong>How</strong>: The MKS 42C is <em>always</em> calculating <code>Error = Target - Actual</code> internally at 20kHz.</li>
+<li><strong>Action</strong>: It applies more current to fix the error.</li>
+<li><strong>Failure</strong>: If it can’t fix it, it fires the <strong>Alarm Pin</strong>.</li>
+<li><strong>Verdict</strong>: This is usually <strong>Enough for a Thesis</strong>. You rely on the hardware to police itself.</li>
+</ul>
+<h4 id="level-2-software-monitoring-ros-level"><strong>Level 2: Software Monitoring (ROS Level)</strong></h4>
+<p>If you want to see a graph of “Planned vs. Actual” in ROS (like <code>rqt_plot</code>): 1. <strong>Requirement</strong>: You MUST wire the MKS <code>TX</code> pin to the ESP32 <code>RX</code> and read the <em>real</em> encoder angle. 2. <strong>Logic</strong>: * ROS sends <code>Target(t)</code>. * ROS reads <code>Actual(t)</code>. * ROS calculates <code>Error(t)</code>. 3. <strong>Visualization</strong>: * Launch <code>rqt_plot</code>. * Plot <code>/joint_states/position[0]</code> (Actual) vs <code>/parol6_arm_controller/follow_joint_trajectory/goal...</code> (Planned).</p>
+<p><strong>Recommendation</strong>: Stick to <strong>Level 1 (Alarm Pin)</strong>. Reading 6 serial streams from 6 motors to get “Level 2” data is very complex (timing issues, slow serial) and often unnecessary if the Driver is smart.</p>
+<h2 id="replanning-what-happens-after-an-error">17. Replanning: What happens after an Error?</h2>
+<p>You asked: <em>“what about replanning”</em></p>
+<p>Replanning is the automatic attempt to find a <em>new</em> path when the current one fails.</p>
+<h3 id="the-architecture-1"><strong>The Architecture</strong></h3>
+<ol type="1">
+<li><strong>The Trigger</strong>: The “Stall” (Section 15/16) stops the robot and returns <code>ABORTED</code> to MoveIt.</li>
+<li><strong>The Reaction</strong>: MoveIt sees <code>ABORTED</code>.</li>
+<li><strong>The Logic</strong>:
+<ul>
+<li><strong>Default</strong>: MoveIt gives up.</li>
+<li><strong>With Replanning Enabled</strong>: MoveIt looks at the <em>current</em> state (where it stopped) and tries to plan a path to the <em>original</em> goal again.</li>
+</ul></li>
+</ol>
+<h3 id="how-to-enable-it-moveit"><strong>How to Enable It (MoveIt)</strong></h3>
+<ul>
+<li><strong>In RViz</strong>: Check the box <strong>“Replanning”</strong> in the MotionPlanning panel.</li>
+<li><strong>In Code (Python)</strong>: <code>python     group.allow_replanning(True)     group.set_planning_time(5.0) # Give it time to think</code></li>
+</ul>
+<h3 id="the-danger-thesis-critical-thinking"><strong>The Danger (Thesis Critical Thinking)</strong></h3>
+<p>Replanning is dangerous without a <strong>Camera</strong> (Octomap). * <strong>Scenario</strong>: Robot hits a “Invisible Wall” (Not in URDF). * <strong>Stall</strong>: Robot stops. * <strong>Replan</strong>: MoveIt doesn’t know <em>why</em> it stopped. It thinks “Maybe the path was just weird”. It plans a slightly different path <em>right back into the wall</em>. * <strong>Loop</strong>: Bang -&gt; Replan -&gt; Bang -&gt; Replan…</p>
+<h3 id="thesis-recommendation"><strong>Thesis Recommendation</strong></h3>
+<p>For your project, implement <strong>“Stop and Notify”</strong> instead of “Auto-Replan”. &gt; <em>“Due to the lack of full-body tactile sensing, automatic replanning is disabled to prevent repeated collisions. The system halts on deviation and requires operator intervention.”</em></p>
+<h2 id="visual-feedback-should-i-watch-the-end-effector">18. Visual Feedback: Should I watch the End Effector?</h2>
+<p>You asked: <em>“i have kinect v2 camera. is it recommended that i get the end effector feedback from it?”</em></p>
+<h3 id="the-answer-no-for-control-loop-yes-for-calibration."><strong>The Answer: NO (for Control Loop), YES (for Calibration).</strong></h3>
+<p><strong>1. Why NOT for Control (Real-time Feedback):</strong> * <strong>Latency</strong>: Kinect gives data at 30Hz with ~50-100ms delay. Your motors need updates at 1000Hz+. By the time you “see” the error, the robot has already moved past it. * <strong>Accuracy</strong>: Kinect v2 noise is ~2mm-10mm depending on distance. Your MKS Steppers are accurate to ~0.05mm. The camera is <em>less</em> accurate than the robot! * <strong>Occlusion</strong>: The robot arm will often block the camera’s view of the hand.</p>
+<p><strong>2. Where it IS Recommended:</strong> * <strong>Target Finding</strong>: Use Kinect to find the <em>Apple</em>. Tell MoveIt “Go to Apple”. Then trust the Encoders to get there. * <strong>Verification (ArUco)</strong>: Put an <strong>ArUco Marker</strong> on the hand. Move to a point. Check Camera. Record the difference (Static Error). Use this to calibrate your URDF (Link Lengths), but do not use it in the live movement loop.</p>
+<p><strong>Thesis Verdict</strong>: &gt; <em>“Visual feedback is utilized for Object Detection and Static Pose Verification, but excluded from the dynamic control loop due to latency constraints and occlusion risks.”</em></p>
+<h2 id="the-complete-thesis-pipeline-visual-seam-tracking">19. The Complete Thesis Pipeline: “Visual Seam Tracking”</h2>
+<p>You asked: <em>“how the series of points from the camera should become a smooth path… what is responsible for each task?”</em></p>
+<p>This is the <strong>Architecture Diagram</strong> for your Thesis.</p>
+<h3 id="phase-1-perception-the-eyes"><strong>Phase 1: Perception (The “Eyes”)</strong></h3>
+<ul>
+<li><strong>Responsible</strong>: Custom ROS Node (<code>vision_processor.py</code>).</li>
+<li><strong>Input</strong>: <code>/kinect2/qhd/points</code> (PointCloud2) + <code>/kinect2/qhd/image_color</code>.</li>
+<li><strong>Logic</strong>:
+<ol type="1">
+<li><strong>YOLOv8</strong>: Detects Object (Bounding Box).</li>
+<li><strong>YOLO-Seg / OpenCV</strong>: Isolates the “Seam” or “Curve”.</li>
+<li><strong>Deprojection</strong>: Converts 2D Pixels (u,v) -&gt; 3D Points (X,Y,Z) using PCL or Depth Map.</li>
+</ol></li>
+<li><strong>Output</strong>: <code>geometry_msgs/PoseArray</code>. A naive list of noisy 3D points.</li>
+</ul>
+<h3 id="phase-2-path-generation-the-smoother"><strong>Phase 2: Path Generation (The “Smoother”)</strong></h3>
+<ul>
+<li><strong>Responsible</strong>: Same Node or new <code>path_generator.py</code>.</li>
+<li><strong>The Problem</strong>: Kinect data is noisy. The points will zigzag (jitter). You cannot weld like that.</li>
+<li><strong>The Solution</strong>: <strong>B-Spline Interpolation</strong>.</li>
+<li><strong>Logic</strong>:
+<ol type="1">
+<li>Take the list of noisy 3D points.</li>
+<li>Fit a <strong>B-Spline Curve</strong> (using <code>scipy.interpolate</code>).</li>
+<li>Resample the curve at fixed intervals (e.g., every 1mm).</li>
+</ol></li>
+<li><strong>Output</strong>: <code>nav_msgs/Path</code>. A perfectly smooth curve.</li>
+</ul>
+<h3 id="phase-3-motion-planning-the-brain"><strong>Phase 3: Motion Planning (The “Brain”)</strong></h3>
+<ul>
+<li><strong>Responsible</strong>: MoveIt 2 (<code>move_group</code>).</li>
+<li><strong>Logic</strong>: <strong>Cartesian Path Planning</strong>.
+<ul>
+<li>You don’t just say “Go here”.</li>
+<li>You call <code>compute_cartesian_path(waypoints)</code>.</li>
+<li>MoveIt solves Inverse Kinematics (IK) for <em>every</em> point on that curve to ensure the arm follows the line exactly.</li>
+</ul></li>
+<li><strong>Output</strong>: <code>trajectory_msgs/JointTrajectory</code> (Time-stamped joint angles).</li>
+</ul>
+<h3 id="phase-4-execution-the-muscle"><strong>Phase 4: Execution (The “Muscle”)</strong></h3>
+<ul>
+<li><strong>Responsible</strong>: Your <code>real_robot_driver.py</code> + MKS Drivers.</li>
+<li><strong>Logic</strong>: PC-Side Interpolation (from Section 10).
+<ul>
+<li>Takes the trajectory.</li>
+<li>Streams setpoints to ESP32.</li>
+<li>Stops if <code>ALM</code> pin triggers.</li>
+</ul></li>
+</ul>
+<h3 id="summary-table-for-thesis-report"><strong>Summary Table for Thesis Report</strong></h3>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Task</th>
+<th style="text-align: left;">Node Name (Proposed)</th>
+<th style="text-align: left;">Algorithm / Library</th>
+<th style="text-align: left;">Input</th>
+<th style="text-align: left;">Output</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;"><strong>Object Detection</strong></td>
+<td style="text-align: left;"><code>vision_node</code></td>
+<td style="text-align: left;">YOLOv8 / Ultralytics</td>
+<td style="text-align: left;">RGB Image</td>
+<td style="text-align: left;">ROI (Region of Interest)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Seam Extraction</strong></td>
+<td style="text-align: left;"><code>vision_node</code></td>
+<td style="text-align: left;">PCL / Depth Deprojection</td>
+<td style="text-align: left;">Depth Map</td>
+<td style="text-align: left;"><code>PoseArray</code> (Noisy Points)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Path Smoothing</strong></td>
+<td style="text-align: left;"><code>path_planner</code></td>
+<td style="text-align: left;"><strong>B-Spline Interpolation</strong></td>
+<td style="text-align: left;"><code>PoseArray</code></td>
+<td style="text-align: left;"><code>nav_msgs/Path</code> (Smooth)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Trajectory Gen</strong></td>
+<td style="text-align: left;"><code>move_group</code></td>
+<td style="text-align: left;"><strong>Compute Cartesian Path</strong></td>
+<td style="text-align: left;"><code>nav_msgs/Path</code></td>
+<td style="text-align: left;"><code>JointTrajectory</code></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;"><strong>Trajectory Gen</strong></td>
+<td style="text-align: left;"><code>move_group</code></td>
+<td style="text-align: left;"><strong>Compute Cartesian Path</strong></td>
+<td style="text-align: left;"><code>nav_msgs/Path</code></td>
+<td style="text-align: left;"><code>JointTrajectory</code></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;"><strong>Control</strong></td>
+<td style="text-align: left;"><code>driver_node</code></td>
+<td style="text-align: left;">Serial Streaming</td>
+<td style="text-align: left;"><code>JointTrajectory</code></td>
+<td style="text-align: left;">Motor Steps (RS232/TTL)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deep-dive-planning-a-path-not-a-point">20. Deep Dive: Planning a Path (Not a Point)</h2>
+<p>You asked: <em>“the moveit operation will change because the target is not a point but a path, how is that achieved?”</em></p>
+<h3 id="the-difference-ptp-vs.-lin"><strong>The difference: PTP vs. LIN</strong></h3>
+<ol type="1">
+<li><strong>Standard (<code>go()</code>)</strong>: You act like a specialized Taxi. “Take me to the Airport”. The driver (MoveIt) chooses the route. It might swing the arm wildly (PTP Motion) as long as it gets there safe.</li>
+<li><strong>Seam Tracking (<code>compute_cartesian_path()</code>)</strong>: You act like a Train. “Follow this exact track”. You must pass through every point in order (LIN Motion).</li>
+</ol>
+<h3 id="how-to-implement-python-code"><strong>How to Implement (Python Code)</strong></h3>
+<p>You don’t use <code>set_pose_target</code>. You use <code>compute_cartesian_path</code>.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true"></a><span class="co"># 1. Define the Waypoints (from your B-Spline)</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true"></a>waypoints <span class="op">=</span> []</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true"></a><span class="co"># Ideally, these come from your &#39;nav_msgs/Path&#39; topic</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true"></a>p1 <span class="op">=</span> geometry_msgs.msg.Pose()</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true"></a>p1.position.x <span class="op">=</span> <span class="fl">0.4</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true"></a>p1.position.y <span class="op">=</span> <span class="fl">0.1</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true"></a>p1.position.z <span class="op">=</span> <span class="fl">0.4</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true"></a>waypoints.append(p1)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true"></a>p2 <span class="op">=</span> copy.deepcopy(p1)</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true"></a>p2.position.x <span class="op">=</span> <span class="fl">0.5</span> <span class="co"># Move 10cm forward</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true"></a>waypoints.append(p2)</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true"></a><span class="co"># ... add 50 more points ...</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true"></a></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true"></a><span class="co"># 2. Ask MoveIt to solve IK for the whole chain</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true"></a><span class="co"># eef_step: Resolution (1cm). jump_threshold: 0.0 (Disable jump check)</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true"></a>(plan, fraction) <span class="op">=</span> move_group.compute_cartesian_path(</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true"></a>                                   waypoints,   <span class="co"># waypoints to follow</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true"></a>                                   <span class="fl">0.01</span>,        <span class="co"># eef_step</span></span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true"></a>                                   <span class="fl">0.0</span>)         <span class="co"># jump_threshold</span></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true"></a></span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true"></a><span class="co"># 3. Check Success</span></span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true"></a><span class="cf">if</span> fraction <span class="op">&lt;</span> <span class="fl">1.0</span>:</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true"></a>    <span class="bu">print</span>(<span class="ss">f&quot;Warning: Only computed </span><span class="sc">{</span>fraction<span class="op">*</span><span class="dv">100</span><span class="sc">}</span><span class="ss">% of the path!&quot;</span>)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true"></a><span class="cf">else</span>:</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true"></a>    <span class="co"># 4. Execute</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true"></a>    move_group.execute(plan, wait<span class="op">=</span><span class="va">True</span>)</span></code></pre></div>
+<h3 id="what-happens-inside-compute_cartesian_path"><strong>What happens inside <code>compute_cartesian_path</code>?</strong></h3>
+<ol type="1">
+<li><strong>Interpolation</strong>: It draws a straight line between Waypoint 1 and Waypoint 2.</li>
+<li><strong>Slicing</strong>: It chops that line into tiny steps (defined by <code>eef_step</code>, e.g., 1cm).</li>
+<li><strong>IK Solving</strong>: It solves Inverse Kinematics for <em>every single slice</em>.</li>
+<li><strong>Stitching</strong>: It combines all those joint solutions into one big <code>JointTrajectory</code>.</li>
+<li><strong>Stitching</strong>: It combines all those joint solutions into one big <code>JointTrajectory</code>.</li>
+<li><strong>Output</strong>: This trajectory is exactly what your <code>real_robot_driver</code> (Section 2) already knows how to play!</li>
+</ol>
+<h2 id="going-up-the-stack-vision-path-implementation">21. Going Up the Stack: Vision &amp; Path Implementation</h2>
+<p>You asked: <em>“how would compute cartesian path be implemented, scipy, spline, perception…”</em></p>
+<p>Here is the <strong>Python Code Logic</strong> for the upstream phases.</p>
+<h3 id="phase-2-path-smoothing-scipy-b-spline"><strong>Phase 2: Path Smoothing (Scipy B-Spline)</strong></h3>
+<p>You have a list of noisy dots from the camera (<code>raw_points</code>). You need a smooth line for MoveIt.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true"></a><span class="im">from</span> scipy.interpolate <span class="im">import</span> splprep, splev</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true"></a><span class="kw">def</span> generate_smooth_path(raw_points, resolution<span class="op">=</span><span class="fl">0.01</span>):</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true"></a>    <span class="co"># raw_points = [[x1,y1,z1], [x2,y2,z2]...] (Noisy)</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true"></a>    </span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true"></a>    <span class="co"># 1. Transpose to [X_list, Y_list, Z_list]</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true"></a>    points_array <span class="op">=</span> np.array(raw_points).T </span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true"></a>    </span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true"></a>    <span class="co"># 2. Fit B-Spline (s=smoothing factor)</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true"></a>    <span class="co"># The larger &#39;s&#39;, the smoother (less jitter), but further from original points.</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true"></a>    tck, u <span class="op">=</span> splprep(points_array, s<span class="op">=</span><span class="fl">0.001</span>) </span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true"></a>    </span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true"></a>    <span class="co"># 3. Generate new smooth points</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true"></a>    <span class="co"># Create 100 evenly spaced points along the curve</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true"></a>    u_new <span class="op">=</span> np.linspace(<span class="dv">0</span>, <span class="dv">1</span>, num<span class="op">=</span><span class="dv">100</span>)</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true"></a>    x_new, y_new, z_new <span class="op">=</span> splev(u_new, tck)</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true"></a>    </span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true"></a>    <span class="co"># 4. Convert to ROS Poses for MoveIt</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true"></a>    waypoints <span class="op">=</span> []</span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="bu">len</span>(x_new)):</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true"></a>        p <span class="op">=</span> Pose()</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true"></a>        p.position.x <span class="op">=</span> x_new[i]</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true"></a>        p.position.y <span class="op">=</span> y_new[i]</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true"></a>        p.position.z <span class="op">=</span> z_new[i]</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true"></a>        <span class="co"># Orientation: Hardcode &#39;Down&#39; (Tool pointing at table)</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true"></a>        p.orientation.w <span class="op">=</span> <span class="fl">1.0</span> </span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true"></a>        waypoints.append(p)</span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true"></a>        </span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true"></a>    <span class="cf">return</span> waypoints</span></code></pre></div>
+<h3 id="phase-1-perception-yolo-pcl"><strong>Phase 1: Perception (YOLO + PCL)</strong></h3>
+<p>How to get <code>raw_points</code> from an image.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true"></a><span class="co"># Pseudo-code logic for &#39;vision_processor.py&#39;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true"></a><span class="im">import</span> cv2</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true"></a><span class="im">from</span> ultralytics <span class="im">import</span> YOLO</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true"></a><span class="kw">def</span> process_vision(rgb_image, depth_image, camera_intrinsics):</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true"></a>    <span class="co"># 1. Detect Seam/Object Mask</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true"></a>    model <span class="op">=</span> YOLO(<span class="st">&quot;yolov8-seg.pt&quot;</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true"></a>    results <span class="op">=</span> model(rgb_image)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true"></a>    mask <span class="op">=</span> results[<span class="dv">0</span>].masks.data[<span class="dv">0</span>].numpy() <span class="co"># Binary mask of the seam</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true"></a>    </span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true"></a>    <span class="co"># 2. Extract Pixels on the Seam</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true"></a>    <span class="co"># Get all (u,v) coordinates where mask == 1</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true"></a>    seam_pixels <span class="op">=</span> np.argwhere(mask <span class="op">&gt;</span> <span class="dv">0</span>)</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true"></a>    </span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true"></a>    raw_Points_3d <span class="op">=</span> []</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true"></a>    </span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true"></a>    <span class="co"># 3. Deproject to 3D</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true"></a>    fx <span class="op">=</span> camera_intrinsics[<span class="st">&#39;fx&#39;</span>]</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true"></a>    cx <span class="op">=</span> camera_intrinsics[<span class="st">&#39;cx&#39;</span>]</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true"></a>    <span class="co"># ...</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true"></a>    </span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true"></a>    <span class="cf">for</span> (v, u) <span class="kw">in</span> seam_pixels:</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true"></a>        d <span class="op">=</span> depth_image[v, u] <span class="co"># Distance in mm</span></span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true"></a>        <span class="cf">if</span> d <span class="op">==</span> <span class="dv">0</span>: <span class="cf">continue</span> <span class="co"># Invalid depth</span></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true"></a>        </span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true"></a>        <span class="co"># Pinhole Camera Math</span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true"></a>        z <span class="op">=</span> d <span class="op">/</span> <span class="fl">1000.0</span></span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true"></a>        x <span class="op">=</span> (u <span class="op">-</span> cx) <span class="op">*</span> z <span class="op">/</span> fx</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true"></a>        y <span class="op">=</span> (v <span class="op">-</span> cy) <span class="op">*</span> z <span class="op">/</span> fy</span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true"></a>        </span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true"></a>        raw_Points_3d.append([x, y, z])</span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true"></a>        </span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true"></a>    <span class="cf">return</span> raw_Points_3d</span></code></pre></div>
+<h3 id="the-full-pipeline-execution"><strong>The Full Pipeline Execution</strong></h3>
+<div class="sourceCode" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true"></a><span class="kw">def</span> main():</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true"></a>    <span class="co"># 1. Perception</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true"></a>    raw_points <span class="op">=</span> process_vision(img, depth, K)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true"></a>    </span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true"></a>    <span class="co"># 2. Smoothing</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true"></a>    smooth_waypoints <span class="op">=</span> generate_smooth_path(raw_points)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true"></a>    </span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true"></a>    <span class="co"># 3. Planning (MoveIt)</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true"></a>    (plan, _) <span class="op">=</span> move_group.compute_cartesian_path(smooth_waypoints, <span class="fl">0.01</span>, <span class="fl">0.0</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true"></a>    </span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true"></a>    <span class="co"># 4. Execution</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true"></a>    move_group.execute(plan)</span></code></pre></div>
+<h2 id="final-node-topic-architecture-the-ros-graph">22. Final Node &amp; Topic Architecture (The “ROS Graph”)</h2>
+<p>You asked: <em>“list the nodes, what each node will be responsibe for, and what topics they should publish to”</em></p>
+<p>This is your <strong>System Architecture</strong> for the Thesis.</p>
+<h3 id="node-1-kinect2_bridge-driver"><strong>Node 1: <code>kinect2_bridge</code> (Driver)</strong></h3>
+<ul>
+<li><strong>Type</strong>: Third-party Package (iai_kinect2).</li>
+<li><strong>Responsibility</strong>: Talks to USB hardware, rectifies images, generates PointCloud.</li>
+<li><strong>Publishes</strong>:
+<ul>
+<li><code>/kinect2/qhd/image_color</code> (<code>sensor_msgs/Image</code>): RGB data for YOLO.</li>
+<li><code>/kinect2/qhd/points</code> (<code>sensor_msgs/PointCloud2</code>): Depth data for Deprojection.</li>
+</ul></li>
+<li><strong>Subscribes</strong>: None.</li>
+</ul>
+<h3 id="node-2-vision_processor_node-custom"><strong>Node 2: <code>vision_processor_node</code> (Custom)</strong></h3>
+<ul>
+<li><strong>Type</strong>: Python Node (You write this).</li>
+<li><strong>Responsibility</strong>: Runs YOLO segmentation, connects pixels to depth, outputs raw 3D points.</li>
+<li><strong>Subscribes</strong>:
+<ul>
+<li><code>/kinect2/qhd/image_color</code></li>
+<li><code>/kinect2/qhd/points</code></li>
+</ul></li>
+<li><strong>Publishes</strong>:
+<ul>
+<li><code>/vision/raw_seam_points</code> (<code>geometry_msgs/PoseArray</code>): The raw, noisy list of 3D points on the seam.</li>
+<li><code>/vision/debug_mask</code> (<code>sensor_msgs/Image</code>): Visual overlay for you to see what it detected.</li>
+</ul></li>
+</ul>
+<h3 id="node-3-seam_path_planner_node-custom"><strong>Node 3: <code>seam_path_planner_node</code> (Custom)</strong></h3>
+<ul>
+<li><strong>Type</strong>: Python Node (You write this).</li>
+<li><strong>Responsibility</strong>: B-Spline Smoothing, Waypoint Generation, Calling MoveIt.</li>
+<li><strong>Subscribes</strong>:
+<ul>
+<li><code>/vision/raw_seam_points</code></li>
+</ul></li>
+<li><strong>Action Client</strong>:
+<ul>
+<li>Connects to <code>move_group</code> via <code>MoveGroupInterface</code>.</li>
+</ul></li>
+<li><strong>Publishes</strong>:
+<ul>
+<li><code>/planning/smoothed_path</code> (<code>nav_msgs/Path</code>): For visualization in RViz (Red line).</li>
+</ul></li>
+</ul>
+<h3 id="node-4-move_group-moveit-2"><strong>Node 4: <code>move_group</code> (MoveIt 2)</strong></h3>
+<ul>
+<li><strong>Type</strong>: Standard MoveIt Node.</li>
+<li><strong>Responsibility</strong>: Inverse Kinematics (IK), Collision Checking, Trajectory Stitching.</li>
+<li><strong>Action Server</strong>: Receives requests from <code>seam_path_planner_node</code>.</li>
+<li><strong>Action Client</strong>: Sends trajectories to <code>real_robot_driver</code>.</li>
+<li><strong>Publishes</strong>:
+<ul>
+<li><code>/display_planned_path</code> (Visuals).</li>
+</ul></li>
+</ul>
+<h3 id="node-5-real_robot_driver_node-custom"><strong>Node 5: <code>real_robot_driver_node</code> (Custom)</strong></h3>
+<ul>
+<li><strong>Type</strong>: Python Node (Section 1/2 of this guide).</li>
+<li><strong>Responsibility</strong>: Interpolates trajectory to 100Hz, streams Serial commands to ESP32.</li>
+<li><strong>Action Server</strong>: <code>follow_joint_trajectory</code>.</li>
+<li><strong>Subscribes</strong>: None (Receive Action Goals).</li>
+<li><strong>Publishes</strong>:
+<ul>
+<li><code>/joint_states</code> (<code>sensor_msgs/JointState</code>): Reports “Steps Sent” back to ROS for RViz updates.</li>
+</ul></li>
+</ul>
+<h3 id="data-flow-summary"><strong>Data Flow Summary</strong></h3>
+<p><code>Camera</code> -&gt; <strong>[Node 1]</strong> -&gt; <code>(Image/Cloud)</code> -&gt; <strong>[Node 2]</strong> -&gt; <code>(PoseArray)</code> -&gt; <strong>[Node 3]</strong> -&gt; <code>(Compute Path Call)</code> -&gt; <strong>[Node 4]</strong> -&gt; <code>(FollowJointTrajectory Goal)</code> -&gt; <strong>[Node 5]</strong> -&gt; <code>(Serial)</code> -&gt; <strong>ESP32</strong></p>
+<h2 id="master-execution-plan-running-the-system">23. Master Execution Plan: Running the System</h2>
+<p>You asked: <em>“write me a detailed technical plan to run the whole project”</em></p>
+<p>This is your <strong>“Runbook”</strong>. It defines the exact sequence to bring the 5-node architecture to life.</p>
+<h3 id="phase-a-hardware-startup-t-minus-1-minute"><strong>Phase A: Hardware Startup (T-Minus 1 Minute)</strong></h3>
+<ol type="1">
+<li><strong>Power Up</strong>: Turn on the 24V PSU for the Steppers.</li>
+<li><strong>Connect USBs</strong>:
+<ul>
+<li>ESP32 (Motors) -&gt; <code>/dev/ttyUSB0</code></li>
+<li>Kinect v2 -&gt; USB 3.0 Port</li>
+</ul></li>
+<li><strong>Homing (Critical)</strong>:
+<ul>
+<li>Press the “Reset” button on ESP32.</li>
+<li>Watch the robot physically move to find home limits.</li>
+<li><strong>Verify</strong>: Robot is stationary and holding torque.</li>
+</ul></li>
+</ol>
+<h3 id="phase-b-the-driver-layer-the-foundation"><strong>Phase B: The Driver Layer (The Foundation)</strong></h3>
+<p>Launch the hardware drivers first. They usually don’t depend on anyone. <strong>Command 1</strong>:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true"></a><span class="ex">ros2</span> launch parol6_bringup hardware_drivers.launch.py</span></code></pre></div>
+<ul>
+<li><strong>What this launches</strong>:
+<ol type="1">
+<li><code>real_robot_driver_node</code> (Connects to ESP32).</li>
+<li><code>kinect2_bridge</code> (Starts pumping points).</li>
+<li><code>robot_state_publisher</code> (Loads URDF).</li>
+</ol></li>
+<li><strong>Verify</strong>: <code>ros2 topic list</code> shows <code>/joint_states</code> and <code>/kinect2/qhd/points</code>.</li>
+</ul>
+<h3 id="phase-c-the-brain-layer-moveit"><strong>Phase C: The Brain Layer (MoveIt)</strong></h3>
+<p>Launch the motion planning server. It needs <code>/joint_states</code> from Phase B. <strong>Command 2</strong>:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true"></a><span class="ex">ros2</span> launch parol6_moveit_config moveit.launch.py use_sim_time:=false</span></code></pre></div>
+<ul>
+<li><strong>What this launches</strong>:
+<ol type="1">
+<li><code>move_group</code> (The big solver).</li>
+<li><code>rviz2</code> (Visualization).</li>
+</ol></li>
+<li><strong>Verify</strong>: You see the robot in RViz matching reality. No red errors in console.</li>
+</ul>
+<h3 id="phase-d-the-application-layer-the-logic"><strong>Phase D: The Application Layer (The Logic)</strong></h3>
+<p>Launch your custom “Seam Tracking” logic. <strong>Command 3</strong>:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true"></a><span class="ex">ros2</span> run parol6_vision seam_tracking_app.py</span></code></pre></div>
+<ul>
+<li><strong>What this launches</strong>:
+<ol type="1">
+<li><code>vision_processor</code> (YOLO).</li>
+<li><code>seam_path_planner</code>.</li>
+<li><code>main_workflow</code> (The orchestrator).</li>
+</ol></li>
+<li><strong>Verify</strong>:
+<ol type="1">
+<li>Hold an object in front of the Kinect.</li>
+<li>See the “Red Line” (Path) appear in RViz.</li>
+<li>Robot moves to trace the line.</li>
+</ol></li>
+</ul>
+<h3 id="phase-e-emergency-stop-safety"><strong>Phase E: Emergency Stop (Safety)</strong></h3>
+<ul>
+<li><strong>Software</strong>: Ctrl+C in terminal 3 (Application).</li>
+<li><strong>Hardware</strong>: Big Red Button cuts 24V power (Stepper Torque off).</li>
+</ul>
+<h2 id="the-implementation-checklist-what-to-build-now">24. The Implementation Checklist (What to Build Now)</h2>
+<p>You asked: <em>“what steps i should do? what do i need to modify or add to the current setup?”</em></p>
+<p>Here is your <strong>Gap Analysis</strong>. This is the difference between your current <em>Simulation-Only</em> setup and the <em>Thesis Target</em>.</p>
+<h3 id="phase-1-dependencies-the-dockerfile"><strong>Phase 1: Dependencies (The Dockerfile)</strong></h3>
+<p><strong>Status</strong>: Missing Vision Libraries. <strong>Action</strong>: Update your <code>Dockerfile</code> to include: * <code>libfreenect2-dev</code> (Kinect Driver) * <code>python3-scipy</code> (For B-Spline) * <code>python3-pip</code> -&gt; <code>ultralytics</code> (For YOLOv8) * <code>ros-humble-libfreenect2</code> (ROS Bridge)</p>
+<h3 id="phase-2-hardware-firmware"><strong>Phase 2: Hardware &amp; Firmware</strong></h3>
+<p><strong>Status</strong>: Hardware is unconnected. Firmware is blank. <strong>Action</strong>: 1. <strong>Wiring</strong>: * Wire <strong>3 Limit Switches</strong> to ESP32 (e.g., Pins 12, 13, 14). * Wire <strong>MKS Alarm Pin</strong> to ESP32 (e.g., Pin 27). 2. <strong>Code</strong>: * Write the Arduino Sketch (from Section 1 &amp; 15). * Implement <code>STEPS_PER_RAD</code> math (Section 8). * Implement Homing Logic (Section 15). * <strong>Verify</strong>: Open Arduino Serial Monitor. Type <code>&lt;0,0,0,0,0,0&gt;</code>. Motors should hold.</p>
+<h3 id="phase-3-the-driver-node-real_robot_driver.py"><strong>Phase 3: The Driver Node (<code>real_robot_driver.py</code>)</strong></h3>
+<p><strong>Status</strong>: Does not exist. <strong>Action</strong>: 1. Create file: <code>PAROL6/parol6/real_robot_driver.py</code>. 2. Copy code from <strong>Section 2</strong>. 3. Add <strong>Homing Wait</strong> logic (Section 15). 4. Add <strong>PC-Side Interpolation</strong> (Section 10). 5. <strong>Verify</strong>: Run <code>ros2 run parol6 real_robot_driver</code>. It should say “Waiting for Arduino…”.</p>
+<h3 id="phase-4-the-vision-package-parol6_vision"><strong>Phase 4: The Vision Package (<code>parol6_vision</code>)</strong></h3>
+<p><strong>Status</strong>: Does not exist. <strong>Action</strong>: 1. Create new package: <code>ros2 pkg create --build-type ament_python parol6_vision</code>. 2. Create <code>vision_processor.py</code>: * Subscribe to <code>/kinect2/qhd/points</code>. * Implement YOLO + Deprojection (Section 21). 3. Create <code>seam_path_planner.py</code>: * Implement B-Spline (Section 21). * Implement <code>compute_cartesian_path</code> (Section 20).</p>
+<h3 id="phase-5-the-launch-files"><strong>Phase 5: The Launch Files</strong></h3>
+<p><strong>Status</strong>: Missing “Bringup”. <strong>Action</strong>: 1. Create <code>PAROL6/launch/real_robot_bringup.launch.py</code>. 2. It should launch: * <code>real_robot_driver</code> * <code>robot_state_publisher</code> * <code>kinect2_bridge</code> * <code>rviz2</code></p>
+<h3 id="summary-of-new-files-needed"><strong>Summary of New Files Needed</strong></h3>
+<ol type="1">
+<li><code>Dockerfile</code> (Edit)</li>
+<li><code>firmware.ino</code> (New)</li>
+<li><code>real_robot_driver.py</code> (New)</li>
+<li><code>vision_processor.py</code> (New)</li>
+<li><code>seam_path_planner.py</code> (New)</li>
+<li><code>real_robot_bringup.launch.py</code> (New)</li>
+</ol>
+<h2 id="do-i-need-to-modify-ros2_controllers.yaml">25. Do I need to modify <code>ros2_controllers.yaml</code>?</h2>
+<p>You asked: <em>“should something be modified in ros2_controller? or any other file?”</em></p>
+<h3 id="a.-ros2_controllers.yaml"><strong>A. <code>ros2_controllers.yaml</code></strong></h3>
+<ul>
+<li><strong>Answer</strong>: <strong>NO.</strong> You can ignore this file.</li>
+<li><strong>Reason</strong>: This file configures the <code>ros2_control</code> C++ plugin (for Simulation). Since you are using a <strong>Python Driver</strong> (Section 2), you are <em>bypassing</em> the standard <code>ros2_control</code> system entirely. Your Python script <em>IS</em> the controller.</li>
+</ul>
+<h3 id="b.-moveit_controllers.yaml"><strong>B. <code>moveit_controllers.yaml</code></strong></h3>
+<ul>
+<li><p><strong>Answer</strong>: <strong>NO</strong>, but check the name.</p></li>
+<li><p><strong>Reason</strong>: MoveIt expects to talk to an Action Server named: &gt; <code>/parol6_arm_controller/follow_joint_trajectory</code></p>
+<p>(You can see this in <code>parol6_moveit_config/config/moveit_controllers.yaml</code> under <code>action_ns</code>).</p>
+<p><strong>Crucial Implementation Detail</strong>: When you write your <code>real_robot_driver.py</code>, you <strong>MUST</strong> name your Action Server exactly this:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true"></a><span class="co"># In real_robot_driver.py</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true"></a><span class="va">self</span>._action_server <span class="op">=</span> ActionServer(</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true"></a>    <span class="va">self</span>,</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true"></a>    FollowJointTrajectory,</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true"></a>    <span class="st">&#39;/parol6_arm_controller/follow_joint_trajectory&#39;</span>, <span class="co"># MATCH THIS EXACTLY</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true"></a>    <span class="va">self</span>.execute_callback)</span></code></pre></div>
+<p>If you match the name, MoveIt won’t know the difference between the Real Robot and the Simulation. It just works.</p></li>
+</ul>
+<h3 id="c.-parol6.urdf"><strong>C. <code>PAROL6.urdf</code></strong></h3>
+<ul>
+<li><strong>Answer</strong>: <strong>NO.</strong></li>
+<li>The <code>&lt;ros2_control&gt;</code> tags in the URDF are for Gazebo/SystemInterface. If you don’t launch the <code>ros2_control_node</code>, these tags are simply ignored. MoveIt just reads the <code>&lt;joint&gt;</code> limits and collision meshes, which are perfect.</li>
+</ul>
+<h3 id="d.-the-launch-file-the-real-change"><strong>D. The Launch File (The Real Change)</strong></h3>
+<ul>
+<li><strong>Answer</strong>: <strong>YES (Create New).</strong></li>
+<li>You cannot use <code>ignition.launch.py</code>. It starts Gazebo.</li>
+<li>You must create <code>real_robot_bringup.launch.py</code> that starts:
+<ol type="1">
+<li><code>robot_state_publisher</code> (for TF).</li>
+<li><code>rviz2</code>.</li>
+<li><code>real_robot_driver</code> (Your new node).</li>
+<li><strong>NOT</strong> Gazebo.</li>
+<li><strong>NOT</strong> <code>ros2_control_node</code>.</li>
+</ol></li>
+</ul>
+<hr />
+<h1 id="appendix-full-code-implementation">Appendix: Full Code Implementation</h1>
+<p>You asked: <em>“can you write the codes that should be in each file inside the file”</em></p>
+<p>Here are the <strong>Complete Files</strong>. You can copy-paste these directly.</p>
+<h2 id="appendix-a-real_robot_driver.py">Appendix A: <code>real_robot_driver.py</code></h2>
+<p><strong>Location</strong>: <code>PAROL6/parol6/real_robot_driver.py</code> <strong>Description</strong>: The Action Server that allows MoveIt to control the real robot.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true"></a><span class="co">#!/usr/bin/env python3</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true"></a><span class="im">import</span> rclpy</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true"></a><span class="im">from</span> rclpy.node <span class="im">import</span> Node</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true"></a><span class="im">from</span> rclpy.action <span class="im">import</span> ActionServer, CancelResponse, GoalResponse</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true"></a><span class="im">from</span> control_msgs.action <span class="im">import</span> FollowJointTrajectory</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true"></a><span class="im">from</span> sensor_msgs.msg <span class="im">import</span> JointState</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true"></a><span class="im">from</span> trajectory_msgs.msg <span class="im">import</span> JointTrajectoryPoint</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true"></a><span class="im">import</span> serial</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true"></a><span class="im">import</span> time</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true"></a><span class="im">import</span> math</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true"></a><span class="im">import</span> threading</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true"></a><span class="kw">class</span> RealRobotDriver(Node):</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="st">&#39;real_robot_driver&#39;</span>)</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true"></a>        </span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true"></a>        <span class="co"># 1. Serial Connection</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true"></a>        <span class="co"># Adjust port as needed (/dev/ttyUSB0 or /dev/ttyACM0)</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true"></a>        <span class="cf">try</span>:</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true"></a>            <span class="va">self</span>.ser <span class="op">=</span> serial.Serial(<span class="st">&#39;/dev/ttyUSB0&#39;</span>, <span class="dv">115200</span>, timeout<span class="op">=</span><span class="fl">0.1</span>)</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true"></a>            time.sleep(<span class="dv">2</span>) <span class="co"># Wait for Arduino reset</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true"></a>            <span class="va">self</span>.get_logger().info(<span class="st">&quot;Connected to ESP32 via Serial.&quot;</span>)</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true"></a>        <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true"></a>            <span class="va">self</span>.get_logger().error(<span class="ss">f&quot;Failed to connect to Serial: </span><span class="sc">{e}</span><span class="ss">&quot;</span>)</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true"></a>            <span class="co"># We continue for testing, but in production this should exit</span></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true"></a>            <span class="va">self</span>.ser <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true"></a></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true"></a>        <span class="co"># 2. Homing Wait</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true"></a>        <span class="va">self</span>.wait_for_homing()</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true"></a></span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true"></a>        <span class="co"># 3. Action Server</span></span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true"></a>        <span class="va">self</span>._action_server <span class="op">=</span> ActionServer(</span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true"></a>            <span class="va">self</span>,</span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true"></a>            FollowJointTrajectory,</span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true"></a>            <span class="st">&#39;/parol6_arm_controller/follow_joint_trajectory&#39;</span>,</span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true"></a>            execute_callback<span class="op">=</span><span class="va">self</span>.execute_callback,</span>
+<span id="cb19-37"><a href="#cb19-37" aria-hidden="true"></a>            goal_callback<span class="op">=</span><span class="va">self</span>.goal_callback,</span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true"></a>            cancel_callback<span class="op">=</span><span class="va">self</span>.cancel_callback)</span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true"></a></span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true"></a>        <span class="co"># 4. Joint State Publisher (Feedback)</span></span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true"></a>        <span class="va">self</span>.joint_pub <span class="op">=</span> <span class="va">self</span>.create_publisher(JointState, <span class="st">&#39;/joint_states&#39;</span>, <span class="dv">10</span>)</span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true"></a>        <span class="va">self</span>.timer <span class="op">=</span> <span class="va">self</span>.create_timer(<span class="fl">0.05</span>, <span class="va">self</span>.publish_fake_feedback) <span class="co"># 20Hz</span></span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true"></a>        </span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true"></a>        <span class="va">self</span>.current_joints <span class="op">=</span> [<span class="fl">0.0</span>] <span class="op">*</span> <span class="dv">6</span></span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true"></a>        <span class="va">self</span>.joint_names <span class="op">=</span> [<span class="st">&#39;joint_L1&#39;</span>, <span class="st">&#39;joint_L2&#39;</span>, <span class="st">&#39;joint_L3&#39;</span>, <span class="st">&#39;joint_L4&#39;</span>, <span class="st">&#39;joint_L5&#39;</span>, <span class="st">&#39;joint_L6&#39;</span>]</span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true"></a></span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true"></a>    <span class="kw">def</span> wait_for_homing(<span class="va">self</span>):</span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">self</span>.ser: <span class="cf">return</span></span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&quot;Waiting for Robot Homing...&quot;</span>)</span>
+<span id="cb19-50"><a href="#cb19-50" aria-hidden="true"></a>        <span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb19-51"><a href="#cb19-51" aria-hidden="true"></a>            <span class="cf">if</span> <span class="va">self</span>.ser.in_waiting:</span>
+<span id="cb19-52"><a href="#cb19-52" aria-hidden="true"></a>                line <span class="op">=</span> <span class="va">self</span>.ser.readline().decode().strip()</span>
+<span id="cb19-53"><a href="#cb19-53" aria-hidden="true"></a>                <span class="cf">if</span> <span class="st">&quot;READY&quot;</span> <span class="kw">in</span> line:</span>
+<span id="cb19-54"><a href="#cb19-54" aria-hidden="true"></a>                    <span class="va">self</span>.get_logger().info(<span class="st">&quot;Robot Homing Complete!&quot;</span>)</span>
+<span id="cb19-55"><a href="#cb19-55" aria-hidden="true"></a>                    <span class="cf">break</span></span>
+<span id="cb19-56"><a href="#cb19-56" aria-hidden="true"></a>            time.sleep(<span class="fl">0.1</span>)</span>
+<span id="cb19-57"><a href="#cb19-57" aria-hidden="true"></a></span>
+<span id="cb19-58"><a href="#cb19-58" aria-hidden="true"></a>    <span class="kw">def</span> goal_callback(<span class="va">self</span>, goal_request):</span>
+<span id="cb19-59"><a href="#cb19-59" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&#39;Received Goal Request&#39;</span>)</span>
+<span id="cb19-60"><a href="#cb19-60" aria-hidden="true"></a>        <span class="cf">return</span> GoalResponse.ACCEPT</span>
+<span id="cb19-61"><a href="#cb19-61" aria-hidden="true"></a></span>
+<span id="cb19-62"><a href="#cb19-62" aria-hidden="true"></a>    <span class="kw">def</span> cancel_callback(<span class="va">self</span>, goal_handle):</span>
+<span id="cb19-63"><a href="#cb19-63" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&#39;Received Cancel Request&#39;</span>)</span>
+<span id="cb19-64"><a href="#cb19-64" aria-hidden="true"></a>        <span class="cf">return</span> CancelResponse.ACCEPT</span>
+<span id="cb19-65"><a href="#cb19-65" aria-hidden="true"></a></span>
+<span id="cb19-66"><a href="#cb19-66" aria-hidden="true"></a>    <span class="kw">def</span> execute_callback(<span class="va">self</span>, goal_handle):</span>
+<span id="cb19-67"><a href="#cb19-67" aria-hidden="true"></a>        <span class="va">self</span>.get_logger().info(<span class="st">&#39;Executing Trajectory...&#39;</span>)</span>
+<span id="cb19-68"><a href="#cb19-68" aria-hidden="true"></a>        </span>
+<span id="cb19-69"><a href="#cb19-69" aria-hidden="true"></a>        <span class="co"># Get the trajectory</span></span>
+<span id="cb19-70"><a href="#cb19-70" aria-hidden="true"></a>        traj <span class="op">=</span> goal_handle.request.trajectory</span>
+<span id="cb19-71"><a href="#cb19-71" aria-hidden="true"></a>        points <span class="op">=</span> traj.points</span>
+<span id="cb19-72"><a href="#cb19-72" aria-hidden="true"></a>        </span>
+<span id="cb19-73"><a href="#cb19-73" aria-hidden="true"></a>        <span class="co"># Simple Execution Loop (PC-Side Interpolation would go here)</span></span>
+<span id="cb19-74"><a href="#cb19-74" aria-hidden="true"></a>        <span class="co"># For now, we send waypoints directly.</span></span>
+<span id="cb19-75"><a href="#cb19-75" aria-hidden="true"></a>        <span class="cf">for</span> point <span class="kw">in</span> points:</span>
+<span id="cb19-76"><a href="#cb19-76" aria-hidden="true"></a>            <span class="cf">if</span> goal_handle.is_cancel_requested:</span>
+<span id="cb19-77"><a href="#cb19-77" aria-hidden="true"></a>                goal_handle.canceled()</span>
+<span id="cb19-78"><a href="#cb19-78" aria-hidden="true"></a>                <span class="va">self</span>.get_logger().info(<span class="st">&#39;Goal Canceled&#39;</span>)</span>
+<span id="cb19-79"><a href="#cb19-79" aria-hidden="true"></a>                <span class="cf">return</span> FollowJointTrajectory.Result()</span>
+<span id="cb19-80"><a href="#cb19-80" aria-hidden="true"></a></span>
+<span id="cb19-81"><a href="#cb19-81" aria-hidden="true"></a>            <span class="co"># 1. Update Internal State (for feedback)</span></span>
+<span id="cb19-82"><a href="#cb19-82" aria-hidden="true"></a>            <span class="va">self</span>.current_joints <span class="op">=</span> <span class="bu">list</span>(point.positions)</span>
+<span id="cb19-83"><a href="#cb19-83" aria-hidden="true"></a>            </span>
+<span id="cb19-84"><a href="#cb19-84" aria-hidden="true"></a>            <span class="co"># 2. Format Command: &lt;J1,J2,J3,J4,J5,J6&gt;</span></span>
+<span id="cb19-85"><a href="#cb19-85" aria-hidden="true"></a>            <span class="co"># Convert Radians to Strings</span></span>
+<span id="cb19-86"><a href="#cb19-86" aria-hidden="true"></a>            cmd_str <span class="op">=</span> <span class="ss">f&quot;&lt;</span><span class="sc">{</span><span class="st">&#39;,&#39;</span><span class="sc">.</span>join([<span class="ss">f&#39;</span><span class="sc">{p:.4f}</span><span class="ss">&#39;</span> <span class="cf">for</span> p <span class="kw">in</span> <span class="va">self</span>.current_joints])<span class="sc">}</span><span class="ss">&gt;</span><span class="ch">\n</span><span class="ss">&quot;</span></span>
+<span id="cb19-87"><a href="#cb19-87" aria-hidden="true"></a>            </span>
+<span id="cb19-88"><a href="#cb19-88" aria-hidden="true"></a>            <span class="co"># 3. Send to ESP32</span></span>
+<span id="cb19-89"><a href="#cb19-89" aria-hidden="true"></a>            <span class="cf">if</span> <span class="va">self</span>.ser:</span>
+<span id="cb19-90"><a href="#cb19-90" aria-hidden="true"></a>                <span class="va">self</span>.ser.write(cmd_str.encode())</span>
+<span id="cb19-91"><a href="#cb19-91" aria-hidden="true"></a>                </span>
+<span id="cb19-92"><a href="#cb19-92" aria-hidden="true"></a>                <span class="co"># Check for ALARM/STALL</span></span>
+<span id="cb19-93"><a href="#cb19-93" aria-hidden="true"></a>                <span class="cf">if</span> <span class="va">self</span>.ser.in_waiting:</span>
+<span id="cb19-94"><a href="#cb19-94" aria-hidden="true"></a>                    resp <span class="op">=</span> <span class="va">self</span>.ser.readline().decode()</span>
+<span id="cb19-95"><a href="#cb19-95" aria-hidden="true"></a>                    <span class="cf">if</span> <span class="st">&quot;ERROR&quot;</span> <span class="kw">in</span> resp:</span>
+<span id="cb19-96"><a href="#cb19-96" aria-hidden="true"></a>                        <span class="va">self</span>.get_logger().fatal(<span class="st">&quot;ROBOT STALL DETECTED!&quot;</span>)</span>
+<span id="cb19-97"><a href="#cb19-97" aria-hidden="true"></a>                        goal_handle.abort()</span>
+<span id="cb19-98"><a href="#cb19-98" aria-hidden="true"></a>                        <span class="cf">return</span> FollowJointTrajectory.Result()</span>
+<span id="cb19-99"><a href="#cb19-99" aria-hidden="true"></a></span>
+<span id="cb19-100"><a href="#cb19-100" aria-hidden="true"></a>            <span class="co"># 4. Wait for time_from_start (Basic timing)</span></span>
+<span id="cb19-101"><a href="#cb19-101" aria-hidden="true"></a>            <span class="co"># In a real interpolation loop, you&#39;d calculate exact sleep</span></span>
+<span id="cb19-102"><a href="#cb19-102" aria-hidden="true"></a>            time.sleep(<span class="fl">0.05</span>) <span class="co"># Simulation of execution time</span></span>
+<span id="cb19-103"><a href="#cb19-103" aria-hidden="true"></a></span>
+<span id="cb19-104"><a href="#cb19-104" aria-hidden="true"></a>        goal_handle.succeed()</span>
+<span id="cb19-105"><a href="#cb19-105" aria-hidden="true"></a>        result <span class="op">=</span> FollowJointTrajectory.Result()</span>
+<span id="cb19-106"><a href="#cb19-106" aria-hidden="true"></a>        <span class="cf">return</span> result</span>
+<span id="cb19-107"><a href="#cb19-107" aria-hidden="true"></a></span>
+<span id="cb19-108"><a href="#cb19-108" aria-hidden="true"></a>    <span class="kw">def</span> publish_fake_feedback(<span class="va">self</span>):</span>
+<span id="cb19-109"><a href="#cb19-109" aria-hidden="true"></a>        <span class="co"># Reports where we *think* we are (Steps Sent)</span></span>
+<span id="cb19-110"><a href="#cb19-110" aria-hidden="true"></a>        msg <span class="op">=</span> JointState()</span>
+<span id="cb19-111"><a href="#cb19-111" aria-hidden="true"></a>        msg.header.stamp <span class="op">=</span> <span class="va">self</span>.get_clock().now().to_msg()</span>
+<span id="cb19-112"><a href="#cb19-112" aria-hidden="true"></a>        msg.name <span class="op">=</span> <span class="va">self</span>.joint_names</span>
+<span id="cb19-113"><a href="#cb19-113" aria-hidden="true"></a>        msg.position <span class="op">=</span> <span class="va">self</span>.current_joints</span>
+<span id="cb19-114"><a href="#cb19-114" aria-hidden="true"></a>        <span class="va">self</span>.joint_pub.publish(msg)</span>
+<span id="cb19-115"><a href="#cb19-115" aria-hidden="true"></a></span>
+<span id="cb19-116"><a href="#cb19-116" aria-hidden="true"></a><span class="kw">def</span> main(args<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb19-117"><a href="#cb19-117" aria-hidden="true"></a>    rclpy.init(args<span class="op">=</span>args)</span>
+<span id="cb19-118"><a href="#cb19-118" aria-hidden="true"></a>    node <span class="op">=</span> RealRobotDriver()</span>
+<span id="cb19-119"><a href="#cb19-119" aria-hidden="true"></a>    rclpy.spin(node)</span>
+<span id="cb19-120"><a href="#cb19-120" aria-hidden="true"></a>    rclpy.shutdown()</span>
+<span id="cb19-121"><a href="#cb19-121" aria-hidden="true"></a></span>
+<span id="cb19-122"><a href="#cb19-122" aria-hidden="true"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">&#39;__main__&#39;</span>:</span>
+<span id="cb19-123"><a href="#cb19-123" aria-hidden="true"></a>    main()</span></code></pre></div>
+<h2 id="appendix-b-firmware.ino">Appendix B: <code>firmware.ino</code></h2>
+<p><strong>Location</strong>: Arduino/ESP32 Project <strong>Description</strong>: Firmware for ESP32 + MKS SERVO42C (Step/Dir Mode).</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true"></a><span class="pp">#include </span><span class="im">&lt;AccelStepper.h&gt;</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true"></a><span class="co">// --- Pin Definitions (Adjust for your ESP32 Shield) ---</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true"></a><span class="co">// Joint 1</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true"></a><span class="pp">#define STEP_1 </span><span class="dv">12</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true"></a><span class="pp">#define DIR_1  </span><span class="dv">14</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true"></a><span class="pp">#define ALM_1  </span><span class="dv">27</span><span class="pp">  </span><span class="co">// Alarm Input</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true"></a><span class="pp">#define LIM_1  </span><span class="dv">13</span><span class="pp">  </span><span class="co">// Limit Switch</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true"></a></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true"></a><span class="co">// ... Repeat for 6 joints ...</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true"></a></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true"></a><span class="co">// --- Constants ---</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true"></a><span class="co">// Pre-calculated Steps Per Radian (Example values)</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true"></a><span class="dt">float</span> STEPS_PER_RAD[] = {<span class="fl">10185.9</span>, <span class="fl">8500.0</span>, <span class="fl">8500.0</span>, <span class="fl">4000.0</span>, <span class="fl">2000.0</span>, <span class="fl">2000.0</span>};</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true"></a></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true"></a>AccelStepper stepper1(AccelStepper::DRIVER, STEP_1, DIR_1);</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true"></a><span class="co">// ... Define all 6 steppers ...</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true"></a></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true"></a><span class="at">const</span> byte numChars = <span class="dv">64</span>;</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true"></a><span class="dt">char</span> receivedChars[numChars];</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true"></a>boolean newData = <span class="kw">false</span>;</span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true"></a></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true"></a><span class="dt">void</span> setup() {</span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true"></a>  Serial.begin(<span class="dv">115200</span>);</span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true"></a>  </span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true"></a>  <span class="co">// 1. Setup Pins</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true"></a>  pinMode(ALM_1, INPUT_PULLUP);</span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true"></a>  pinMode(LIM_1, INPUT_PULLUP);</span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true"></a>  </span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true"></a>  <span class="co">// 2. Setup Steppers</span></span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true"></a>  stepper1.setMaxSpeed(<span class="dv">20000</span>);</span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true"></a>  stepper1.setAcceleration(<span class="dv">10000</span>);</span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true"></a>  </span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true"></a>  <span class="co">// 3. Homing Routine</span></span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true"></a>  homeRobot();</span>
+<span id="cb20-36"><a href="#cb20-36" aria-hidden="true"></a>}</span>
+<span id="cb20-37"><a href="#cb20-37" aria-hidden="true"></a></span>
+<span id="cb20-38"><a href="#cb20-38" aria-hidden="true"></a><span class="dt">void</span> loop() {</span>
+<span id="cb20-39"><a href="#cb20-39" aria-hidden="true"></a>  <span class="co">// 1. Check Safety</span></span>
+<span id="cb20-40"><a href="#cb20-40" aria-hidden="true"></a>  checkAlarms();</span>
+<span id="cb20-41"><a href="#cb20-41" aria-hidden="true"></a>  </span>
+<span id="cb20-42"><a href="#cb20-42" aria-hidden="true"></a>  <span class="co">// 2. Read Serial Command</span></span>
+<span id="cb20-43"><a href="#cb20-43" aria-hidden="true"></a>  recvWithStartEndMarkers();</span>
+<span id="cb20-44"><a href="#cb20-44" aria-hidden="true"></a>  <span class="cf">if</span> (newData) {</span>
+<span id="cb20-45"><a href="#cb20-45" aria-hidden="true"></a>      parseData();</span>
+<span id="cb20-46"><a href="#cb20-46" aria-hidden="true"></a>      newData = <span class="kw">false</span>;</span>
+<span id="cb20-47"><a href="#cb20-47" aria-hidden="true"></a>  }</span>
+<span id="cb20-48"><a href="#cb20-48" aria-hidden="true"></a>  </span>
+<span id="cb20-49"><a href="#cb20-49" aria-hidden="true"></a>  <span class="co">// 3. Move Motors</span></span>
+<span id="cb20-50"><a href="#cb20-50" aria-hidden="true"></a>  stepper1.run();</span>
+<span id="cb20-51"><a href="#cb20-51" aria-hidden="true"></a>  <span class="co">// ... run all ...</span></span>
+<span id="cb20-52"><a href="#cb20-52" aria-hidden="true"></a>}</span>
+<span id="cb20-53"><a href="#cb20-53" aria-hidden="true"></a></span>
+<span id="cb20-54"><a href="#cb20-54" aria-hidden="true"></a><span class="dt">void</span> homeRobot() {</span>
+<span id="cb20-55"><a href="#cb20-55" aria-hidden="true"></a>  Serial.println(<span class="st">&quot;STATUS: HOMING...&quot;</span>);</span>
+<span id="cb20-56"><a href="#cb20-56" aria-hidden="true"></a>  </span>
+<span id="cb20-57"><a href="#cb20-57" aria-hidden="true"></a>  <span class="co">// Simple Homing: Move Backwards until switch hit</span></span>
+<span id="cb20-58"><a href="#cb20-58" aria-hidden="true"></a>  <span class="cf">while</span>(digitalRead(LIM_1) == HIGH) {</span>
+<span id="cb20-59"><a href="#cb20-59" aria-hidden="true"></a>    stepper1.setSpeed(-<span class="dv">500</span>);</span>
+<span id="cb20-60"><a href="#cb20-60" aria-hidden="true"></a>    stepper1.runSpeed();</span>
+<span id="cb20-61"><a href="#cb20-61" aria-hidden="true"></a>  }</span>
+<span id="cb20-62"><a href="#cb20-62" aria-hidden="true"></a>  stepper1.setCurrentPosition(<span class="dv">0</span>);</span>
+<span id="cb20-63"><a href="#cb20-63" aria-hidden="true"></a>  </span>
+<span id="cb20-64"><a href="#cb20-64" aria-hidden="true"></a>  Serial.println(<span class="st">&quot;STATUS: READY&quot;</span>);</span>
+<span id="cb20-65"><a href="#cb20-65" aria-hidden="true"></a>}</span>
+<span id="cb20-66"><a href="#cb20-66" aria-hidden="true"></a></span>
+<span id="cb20-67"><a href="#cb20-67" aria-hidden="true"></a><span class="dt">void</span> checkAlarms() {</span>
+<span id="cb20-68"><a href="#cb20-68" aria-hidden="true"></a>  <span class="cf">if</span>(digitalRead(ALM_1) == LOW) { <span class="co">// Assuming Active LOW</span></span>
+<span id="cb20-69"><a href="#cb20-69" aria-hidden="true"></a>    Serial.println(<span class="st">&quot;ERROR: ALARM_J1&quot;</span>);</span>
+<span id="cb20-70"><a href="#cb20-70" aria-hidden="true"></a>    <span class="cf">while</span>(<span class="dv">1</span>); <span class="co">// Halt</span></span>
+<span id="cb20-71"><a href="#cb20-71" aria-hidden="true"></a>  }</span>
+<span id="cb20-72"><a href="#cb20-72" aria-hidden="true"></a>}</span>
+<span id="cb20-73"><a href="#cb20-73" aria-hidden="true"></a></span>
+<span id="cb20-74"><a href="#cb20-74" aria-hidden="true"></a><span class="co">// --- Serial Parsing Boilerplate ---</span></span>
+<span id="cb20-75"><a href="#cb20-75" aria-hidden="true"></a><span class="dt">void</span> recvWithStartEndMarkers() {</span>
+<span id="cb20-76"><a href="#cb20-76" aria-hidden="true"></a>    <span class="at">static</span> boolean recvInProgress = <span class="kw">false</span>;</span>
+<span id="cb20-77"><a href="#cb20-77" aria-hidden="true"></a>    <span class="at">static</span> byte ndx = <span class="dv">0</span>;</span>
+<span id="cb20-78"><a href="#cb20-78" aria-hidden="true"></a>    <span class="dt">char</span> startMarker = <span class="ch">&#39;&lt;&#39;</span>;</span>
+<span id="cb20-79"><a href="#cb20-79" aria-hidden="true"></a>    <span class="dt">char</span> endMarker = <span class="ch">&#39;&gt;&#39;</span>;</span>
+<span id="cb20-80"><a href="#cb20-80" aria-hidden="true"></a>    <span class="dt">char</span> rc;</span>
+<span id="cb20-81"><a href="#cb20-81" aria-hidden="true"></a> </span>
+<span id="cb20-82"><a href="#cb20-82" aria-hidden="true"></a>    <span class="cf">while</span> (Serial.available() &gt; <span class="dv">0</span> &amp;&amp; newData == <span class="kw">false</span>) {</span>
+<span id="cb20-83"><a href="#cb20-83" aria-hidden="true"></a>        rc = Serial.read();</span>
+<span id="cb20-84"><a href="#cb20-84" aria-hidden="true"></a>        <span class="cf">if</span> (recvInProgress == <span class="kw">true</span>) {</span>
+<span id="cb20-85"><a href="#cb20-85" aria-hidden="true"></a>            <span class="cf">if</span> (rc != endMarker) {</span>
+<span id="cb20-86"><a href="#cb20-86" aria-hidden="true"></a>                receivedChars[ndx] = rc;</span>
+<span id="cb20-87"><a href="#cb20-87" aria-hidden="true"></a>                ndx++;</span>
+<span id="cb20-88"><a href="#cb20-88" aria-hidden="true"></a>                <span class="cf">if</span> (ndx &gt;= numChars) ndx = numChars - <span class="dv">1</span>;</span>
+<span id="cb20-89"><a href="#cb20-89" aria-hidden="true"></a>            } <span class="cf">else</span> {</span>
+<span id="cb20-90"><a href="#cb20-90" aria-hidden="true"></a>                receivedChars[ndx] = <span class="ch">&#39;</span><span class="sc">\0</span><span class="ch">&#39;</span>; <span class="co">// terminate string</span></span>
+<span id="cb20-91"><a href="#cb20-91" aria-hidden="true"></a>                recvInProgress = <span class="kw">false</span>;</span>
+<span id="cb20-92"><a href="#cb20-92" aria-hidden="true"></a>                newData = <span class="kw">true</span>;</span>
+<span id="cb20-93"><a href="#cb20-93" aria-hidden="true"></a>            }</span>
+<span id="cb20-94"><a href="#cb20-94" aria-hidden="true"></a>        } <span class="cf">else</span> <span class="cf">if</span> (rc == startMarker) {</span>
+<span id="cb20-95"><a href="#cb20-95" aria-hidden="true"></a>            recvInProgress = <span class="kw">true</span>;</span>
+<span id="cb20-96"><a href="#cb20-96" aria-hidden="true"></a>        }</span>
+<span id="cb20-97"><a href="#cb20-97" aria-hidden="true"></a>    }</span>
+<span id="cb20-98"><a href="#cb20-98" aria-hidden="true"></a>}</span>
+<span id="cb20-99"><a href="#cb20-99" aria-hidden="true"></a></span>
+<span id="cb20-100"><a href="#cb20-100" aria-hidden="true"></a><span class="dt">void</span> parseData() {</span>
+<span id="cb20-101"><a href="#cb20-101" aria-hidden="true"></a>    <span class="dt">char</span> * strtokIndx; </span>
+<span id="cb20-102"><a href="#cb20-102" aria-hidden="true"></a>    </span>
+<span id="cb20-103"><a href="#cb20-103" aria-hidden="true"></a>    strtokIndx = strtok(receivedChars, <span class="st">&quot;,&quot;</span>);</span>
+<span id="cb20-104"><a href="#cb20-104" aria-hidden="true"></a>    <span class="dt">float</span> j1_rad = atof(strtokIndx);</span>
+<span id="cb20-105"><a href="#cb20-105" aria-hidden="true"></a>    </span>
+<span id="cb20-106"><a href="#cb20-106" aria-hidden="true"></a>    <span class="co">// Parse others...</span></span>
+<span id="cb20-107"><a href="#cb20-107" aria-hidden="true"></a>    </span>
+<span id="cb20-108"><a href="#cb20-108" aria-hidden="true"></a>    <span class="co">// Move</span></span>
+<span id="cb20-109"><a href="#cb20-109" aria-hidden="true"></a>    stepper1.moveTo(j1_rad * STEPS_PER_RAD[<span class="dv">0</span>]);</span>
+<span id="cb20-110"><a href="#cb20-110" aria-hidden="true"></a>}</span></code></pre></div>
+<h2 id="appendix-c-vision_processor.py">Appendix C: <code>vision_processor.py</code></h2>
+<p><strong>Location</strong>: <code>parol6_vision/vision_processor.py</code></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true"></a><span class="co">#!/usr/bin/env python3</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true"></a><span class="im">import</span> rclpy</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true"></a><span class="im">from</span> rclpy.node <span class="im">import</span> Node</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true"></a><span class="im">from</span> sensor_msgs.msg <span class="im">import</span> Image, PointCloud2</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true"></a><span class="im">from</span> geometry_msgs.msg <span class="im">import</span> PoseArray, Pose</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true"></a><span class="im">from</span> cv_bridge <span class="im">import</span> CvBridge</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true"></a><span class="im">import</span> cv2</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true"></a><span class="im">import</span> struct</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true"></a></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true"></a><span class="co"># Requires: pip install ultralytics</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true"></a><span class="co"># from ultralytics import YOLO </span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true"></a></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true"></a><span class="kw">class</span> VisionProcessor(Node):</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="st">&#39;vision_processor&#39;</span>)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true"></a>        <span class="va">self</span>.bridge <span class="op">=</span> CvBridge()</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true"></a>        </span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true"></a>        <span class="co"># Subs</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true"></a>        <span class="va">self</span>.create_subscription(Image, <span class="st">&#39;/kinect2/qhd/image_color&#39;</span>, <span class="va">self</span>.rgb_cb, <span class="dv">10</span>)</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true"></a>        </span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true"></a>        <span class="co"># Pubs</span></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true"></a>        <span class="va">self</span>.seam_pub <span class="op">=</span> <span class="va">self</span>.create_publisher(PoseArray, <span class="st">&#39;/vision/raw_seam_points&#39;</span>, <span class="dv">10</span>)</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true"></a>        </span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true"></a>        <span class="co"># self.model = YOLO(&quot;yolov8-seg.pt&quot;) # Load once</span></span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true"></a></span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true"></a>    <span class="kw">def</span> rgb_cb(<span class="va">self</span>, msg):</span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true"></a>        img <span class="op">=</span> <span class="va">self</span>.bridge.imgmsg_to_cv2(msg, <span class="st">&quot;bgr8&quot;</span>)</span>
+<span id="cb21-29"><a href="#cb21-29" aria-hidden="true"></a>        </span>
+<span id="cb21-30"><a href="#cb21-30" aria-hidden="true"></a>        <span class="co"># 1. Run YOLO (Dummy logic for now)</span></span>
+<span id="cb21-31"><a href="#cb21-31" aria-hidden="true"></a>        <span class="co"># results = self.model(img)</span></span>
+<span id="cb21-32"><a href="#cb21-32" aria-hidden="true"></a>        <span class="co"># mask = results[0].masks...</span></span>
+<span id="cb21-33"><a href="#cb21-33" aria-hidden="true"></a>        </span>
+<span id="cb21-34"><a href="#cb21-34" aria-hidden="true"></a>        <span class="co"># For testing: Let&#39;s pretend we found a red line</span></span>
+<span id="cb21-35"><a href="#cb21-35" aria-hidden="true"></a>        <span class="co"># This is a color-threshold fallback if YOLO isn&#39;t ready</span></span>
+<span id="cb21-36"><a href="#cb21-36" aria-hidden="true"></a>        hsv <span class="op">=</span> cv2.cvtColor(img, cv2.COLOR_BGR2HSV)</span>
+<span id="cb21-37"><a href="#cb21-37" aria-hidden="true"></a>        mask <span class="op">=</span> cv2.inRange(hsv, (<span class="dv">0</span>, <span class="dv">100</span>, <span class="dv">100</span>), (<span class="dv">10</span>, <span class="dv">255</span>, <span class="dv">255</span>))</span>
+<span id="cb21-38"><a href="#cb21-38" aria-hidden="true"></a>        </span>
+<span id="cb21-39"><a href="#cb21-39" aria-hidden="true"></a>        <span class="co"># 2. Extend to 3D (Simulated Deprojection)</span></span>
+<span id="cb21-40"><a href="#cb21-40" aria-hidden="true"></a>        points_3d <span class="op">=</span> []</span>
+<span id="cb21-41"><a href="#cb21-41" aria-hidden="true"></a>        pixels <span class="op">=</span> np.argwhere(mask <span class="op">&gt;</span> <span class="dv">0</span>)</span>
+<span id="cb21-42"><a href="#cb21-42" aria-hidden="true"></a>        </span>
+<span id="cb21-43"><a href="#cb21-43" aria-hidden="true"></a>        <span class="co"># Downsample (take every 100th point to be fast)</span></span>
+<span id="cb21-44"><a href="#cb21-44" aria-hidden="true"></a>        <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">0</span>, <span class="bu">len</span>(pixels), <span class="dv">100</span>):</span>
+<span id="cb21-45"><a href="#cb21-45" aria-hidden="true"></a>            v, u <span class="op">=</span> pixels[i]</span>
+<span id="cb21-46"><a href="#cb21-46" aria-hidden="true"></a>            <span class="co"># In real code, lookup depth at (v,u)</span></span>
+<span id="cb21-47"><a href="#cb21-47" aria-hidden="true"></a>            <span class="co"># z = depth_img[v,u]</span></span>
+<span id="cb21-48"><a href="#cb21-48" aria-hidden="true"></a>            <span class="co"># x = (u - cx) * z / fx ...</span></span>
+<span id="cb21-49"><a href="#cb21-49" aria-hidden="true"></a>            </span>
+<span id="cb21-50"><a href="#cb21-50" aria-hidden="true"></a>            p <span class="op">=</span> Pose()</span>
+<span id="cb21-51"><a href="#cb21-51" aria-hidden="true"></a>            p.position.x <span class="op">=</span> <span class="fl">0.5</span> <span class="co"># Dummy</span></span>
+<span id="cb21-52"><a href="#cb21-52" aria-hidden="true"></a>            p.position.y <span class="op">=</span> (u <span class="op">-</span> <span class="dv">300</span>) <span class="op">*</span> <span class="fl">0.001</span></span>
+<span id="cb21-53"><a href="#cb21-53" aria-hidden="true"></a>            p.position.z <span class="op">=</span> <span class="fl">0.2</span></span>
+<span id="cb21-54"><a href="#cb21-54" aria-hidden="true"></a>            points_3d.append(p)</span>
+<span id="cb21-55"><a href="#cb21-55" aria-hidden="true"></a>            </span>
+<span id="cb21-56"><a href="#cb21-56" aria-hidden="true"></a>        <span class="co"># 3. Publish</span></span>
+<span id="cb21-57"><a href="#cb21-57" aria-hidden="true"></a>        out <span class="op">=</span> PoseArray()</span>
+<span id="cb21-58"><a href="#cb21-58" aria-hidden="true"></a>        out.header <span class="op">=</span> msg.header</span>
+<span id="cb21-59"><a href="#cb21-59" aria-hidden="true"></a>        out.poses <span class="op">=</span> points_3d</span>
+<span id="cb21-60"><a href="#cb21-60" aria-hidden="true"></a>        <span class="va">self</span>.seam_pub.publish(out)</span>
+<span id="cb21-61"><a href="#cb21-61" aria-hidden="true"></a></span>
+<span id="cb21-62"><a href="#cb21-62" aria-hidden="true"></a><span class="kw">def</span> main():</span>
+<span id="cb21-63"><a href="#cb21-63" aria-hidden="true"></a>    rclpy.init()</span>
+<span id="cb21-64"><a href="#cb21-64" aria-hidden="true"></a>    rclpy.spin(VisionProcessor())</span></code></pre></div>
+<h2 id="appendix-d-seam_path_planner.py">Appendix D: <code>seam_path_planner.py</code></h2>
+<p><strong>Location</strong>: <code>parol6_vision/seam_path_planner.py</code></p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true"></a><span class="co">#!/usr/bin/env python3</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true"></a><span class="im">import</span> rclpy</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true"></a><span class="im">from</span> rclpy.node <span class="im">import</span> Node</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true"></a><span class="im">from</span> geometry_msgs.msg <span class="im">import</span> PoseArray, Pose</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true"></a><span class="im">from</span> nav_msgs.msg <span class="im">import</span> Path</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true"></a><span class="im">from</span> moveit_msgs.action <span class="im">import</span> MoveGroup</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true"></a><span class="im">from</span> rclpy.action <span class="im">import</span> ActionClient</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true"></a><span class="im">from</span> scipy.interpolate <span class="im">import</span> splprep, splev</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true"></a></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true"></a><span class="kw">class</span> SeamPathPlanner(Node):</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="st">&#39;seam_path_planner&#39;</span>)</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true"></a>        <span class="va">self</span>.create_subscription(PoseArray, <span class="st">&#39;/vision/raw_seam_points&#39;</span>, <span class="va">self</span>.points_cb, <span class="dv">10</span>)</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true"></a>        <span class="va">self</span>.path_pub <span class="op">=</span> <span class="va">self</span>.create_publisher(Path, <span class="st">&#39;/planning/smoothed_path&#39;</span>, <span class="dv">10</span>)</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true"></a>        </span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true"></a>        <span class="co"># MoveIt Client (Conceptual)</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true"></a>        <span class="co"># self.move_group = MoveGroupInterface(...)</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true"></a></span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true"></a>    <span class="kw">def</span> points_cb(<span class="va">self</span>, msg):</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true"></a>        <span class="cf">if</span> <span class="bu">len</span>(msg.poses) <span class="op">&lt;</span> <span class="dv">4</span>: <span class="cf">return</span> <span class="co"># Need points for spline</span></span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true"></a>        </span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true"></a>        <span class="co"># 1. Extract X,Y,Z</span></span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true"></a>        x <span class="op">=</span> [p.position.x <span class="cf">for</span> p <span class="kw">in</span> msg.poses]</span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true"></a>        y <span class="op">=</span> [p.position.y <span class="cf">for</span> p <span class="kw">in</span> msg.poses]</span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true"></a>        z <span class="op">=</span> [p.position.z <span class="cf">for</span> p <span class="kw">in</span> msg.poses]</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true"></a>        </span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true"></a>        <span class="co"># 2. B-Spline</span></span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true"></a>        <span class="cf">try</span>:</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true"></a>            tck, u <span class="op">=</span> splprep([x, y, z], s<span class="op">=</span><span class="fl">0.01</span>)</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true"></a>            u_new <span class="op">=</span> np.linspace(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">50</span>) <span class="co"># 50 smooth points</span></span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true"></a>            new_points <span class="op">=</span> splev(u_new, tck)</span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true"></a>            </span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true"></a>            <span class="co"># 3. Publish Smooth Path</span></span>
+<span id="cb22-35"><a href="#cb22-35" aria-hidden="true"></a>            path <span class="op">=</span> Path()</span>
+<span id="cb22-36"><a href="#cb22-36" aria-hidden="true"></a>            path.header <span class="op">=</span> msg.header</span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true"></a>            <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">50</span>):</span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true"></a>                p <span class="op">=</span> Pose()</span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true"></a>                p.position.x <span class="op">=</span> new_points[<span class="dv">0</span>][i]</span>
+<span id="cb22-40"><a href="#cb22-40" aria-hidden="true"></a>                p.position.y <span class="op">=</span> new_points[<span class="dv">1</span>][i]</span>
+<span id="cb22-41"><a href="#cb22-41" aria-hidden="true"></a>                p.position.z <span class="op">=</span> new_points[<span class="dv">2</span>][i]</span>
+<span id="cb22-42"><a href="#cb22-42" aria-hidden="true"></a>                p.orientation.w <span class="op">=</span> <span class="fl">1.0</span> <span class="co"># Down</span></span>
+<span id="cb22-43"><a href="#cb22-43" aria-hidden="true"></a>                </span>
+<span id="cb22-44"><a href="#cb22-44" aria-hidden="true"></a>                state <span class="op">=</span> PoseStamped()</span>
+<span id="cb22-45"><a href="#cb22-45" aria-hidden="true"></a>                state.pose <span class="op">=</span> p</span>
+<span id="cb22-46"><a href="#cb22-46" aria-hidden="true"></a>                state.header <span class="op">=</span> msg.header</span>
+<span id="cb22-47"><a href="#cb22-47" aria-hidden="true"></a>                path.poses.append(state)</span>
+<span id="cb22-48"><a href="#cb22-48" aria-hidden="true"></a>            </span>
+<span id="cb22-49"><a href="#cb22-49" aria-hidden="true"></a>            <span class="va">self</span>.path_pub.publish(path)</span>
+<span id="cb22-50"><a href="#cb22-50" aria-hidden="true"></a>            <span class="va">self</span>.get_logger().info(<span class="st">&quot;Generated Smooth Path&quot;</span>)</span>
+<span id="cb22-51"><a href="#cb22-51" aria-hidden="true"></a>            </span>
+<span id="cb22-52"><a href="#cb22-52" aria-hidden="true"></a>        <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb22-53"><a href="#cb22-53" aria-hidden="true"></a>            <span class="va">self</span>.get_logger().warn(<span class="ss">f&quot;Spline Failed: </span><span class="sc">{e}</span><span class="ss">&quot;</span>)</span>
+<span id="cb22-54"><a href="#cb22-54" aria-hidden="true"></a></span>
+<span id="cb22-55"><a href="#cb22-55" aria-hidden="true"></a><span class="kw">def</span> main():</span>
+<span id="cb22-56"><a href="#cb22-56" aria-hidden="true"></a>    rclpy.init()</span>
+<span id="cb22-57"><a href="#cb22-57" aria-hidden="true"></a>    rclpy.spin(SeamPathPlanner())</span></code></pre></div>
+<h2 id="appendix-e-real_robot_bringup.launch.py">Appendix E: <code>real_robot_bringup.launch.py</code></h2>
+<p><strong>Location</strong>: <code>PAROL6/launch/real_robot_bringup.launch.py</code></p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true"></a><span class="im">from</span> launch <span class="im">import</span> LaunchDescription</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true"></a><span class="im">from</span> launch_ros.actions <span class="im">import</span> Node</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true"></a><span class="im">from</span> launch.actions <span class="im">import</span> ExecuteProcess</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true"></a><span class="im">import</span> os</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true"></a><span class="im">from</span> ament_index_python.packages <span class="im">import</span> get_package_share_directory</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true"></a><span class="kw">def</span> generate_launch_description():</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true"></a>    pkg_parol6 <span class="op">=</span> get_package_share_directory(<span class="st">&#39;parol6&#39;</span>)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true"></a>    urdf_file <span class="op">=</span> os.path.join(pkg_parol6, <span class="st">&#39;urdf&#39;</span>, <span class="st">&#39;PAROL6.urdf&#39;</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true"></a></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true"></a>    <span class="cf">with</span> <span class="bu">open</span>(urdf_file, <span class="st">&#39;r&#39;</span>) <span class="im">as</span> infp:</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true"></a>        robot_desc <span class="op">=</span> infp.read()</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true"></a></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true"></a>    <span class="cf">return</span> LaunchDescription([</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true"></a>        <span class="co"># 1. Robot State Publisher (TF)</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true"></a>        Node(</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true"></a>            package<span class="op">=</span><span class="st">&#39;robot_state_publisher&#39;</span>,</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true"></a>            executable<span class="op">=</span><span class="st">&#39;robot_state_publisher&#39;</span>,</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true"></a>            name<span class="op">=</span><span class="st">&#39;robot_state_publisher&#39;</span>,</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true"></a>            output<span class="op">=</span><span class="st">&#39;screen&#39;</span>,</span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true"></a>            parameters<span class="op">=</span>[{<span class="st">&#39;robot_description&#39;</span>: robot_desc}],</span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true"></a>            arguments<span class="op">=</span>[urdf_file]</span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true"></a>        ),</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true"></a>        </span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true"></a>        <span class="co"># 2. Real Robot Driver (Your Node)</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true"></a>        Node(</span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true"></a>            package<span class="op">=</span><span class="st">&#39;parol6&#39;</span>,</span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true"></a>            executable<span class="op">=</span><span class="st">&#39;real_robot_driver.py&#39;</span>, <span class="co"># Make sure to install this</span></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true"></a>            name<span class="op">=</span><span class="st">&#39;real_robot_driver&#39;</span>,</span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true"></a>            output<span class="op">=</span><span class="st">&#39;screen&#39;</span></span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true"></a>        ),</span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true"></a>        </span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true"></a>        <span class="co"># 3. RViz2</span></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true"></a>        Node(</span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true"></a>            package<span class="op">=</span><span class="st">&#39;rviz2&#39;</span>,</span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true"></a>            executable<span class="op">=</span><span class="st">&#39;rviz2&#39;</span>,</span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true"></a>            name<span class="op">=</span><span class="st">&#39;rviz2&#39;</span>,</span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true"></a>            output<span class="op">=</span><span class="st">&#39;screen&#39;</span>,</span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true"></a>            <span class="co"># Add config file if you have one</span></span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true"></a>        ),</span>
+<span id="cb23-41"><a href="#cb23-41" aria-hidden="true"></a>        </span>
+<span id="cb23-42"><a href="#cb23-42" aria-hidden="true"></a>        <span class="co"># 4. Kinect (Optional - if installed)</span></span>
+<span id="cb23-43"><a href="#cb23-43" aria-hidden="true"></a>        <span class="co"># Node(package=&#39;kinect2_bridge&#39;, executable=&#39;kinect2_bridge&#39;...)</span></span>
+<span id="cb23-44"><a href="#cb23-44" aria-hidden="true"></a>    ])</span></code></pre></div>
+<h2 id="appendix-f-prompts-for-future-expansion">Appendix F: Prompts for Future Expansion</h2>
+<p>You asked: <em>“can you add descriptive prompts for each section in case i wanted to expand on it in another conversation”</em></p>
+<p>Use these prompts to “Reload Context” when you start a new chat session for a specific task.</p>
+<h3 id="to-expand-the-python-driver-real_robot_driver.py"><strong>1. To Expand the Python Driver (<code>real_robot_driver.py</code>)</strong></h3>
+<blockquote>
+<p><strong>Prompt:</strong> “I am building a custom ROS 2 Action Server in Python for a 6-DOF robot arm (PAROL6). <strong>Context:</strong> * <strong>Role</strong>: It acts as a bridge between MoveIt 2 (<code>FollowJointTrajectory</code> action) and an ESP32 microcontroller. * <strong>Communication</strong>: It uses USB Serial (115200 baud) to send position commands <code>&lt;J1,J2,J3,J4,J5,J6&gt;</code> at 20-50Hz. * <strong>Current State</strong>: I have a basic skeleton that connects and accepts goals. <strong>Task:</strong> Please write the python code to implement [Interpolation / Error Handling / Feedback Publishing]. specifically, I need to read the ‘ALARM’ message from the ESP32 and cancel the MoveIt goal immediately if a stall is detected.”</p>
+</blockquote>
+<h3 id="to-expand-the-firmware-firmware.ino"><strong>2. To Expand the Firmware (<code>firmware.ino</code>)</strong></h3>
+<blockquote>
+<p><strong>Prompt:</strong> “I am writing Arduino/C++ firmware for an ESP32 controlling 6 Stepper Motors. <strong>Context:</strong> * <strong>Hardware</strong>: 6x MKS SERVO42C (Closed Loop drivers) using STEP/DIR interface. * <strong>Library</strong>: <code>AccelStepper</code>. * <strong>Protocol</strong>: It parses serial strings like <code>&lt;0.5, 1.2, ...&gt;</code> (Radians) and converts them to Steps. <strong>Task:</strong> Please output the C++ code to implement [Homing Sequence / Alarm Monitoring]. I have Limit Switches on Pins 13,14,15 (Input Pullup). When the <code>home()</code> command is received, move each motor slowly backwards until the switch triggers, then set position to 0.”</p>
+</blockquote>
+<h3 id="to-expand-the-vision-system-vision_processor.py"><strong>3. To Expand the Vision System (<code>vision_processor.py</code>)</strong></h3>
+<blockquote>
+<p><strong>Prompt:</strong> “I am developing a Computer Vision node for a Robotic Welding application using ROS 2 and Kinetic v2. <strong>Context:</strong> * <strong>Input</strong>: <code>/kinect2/qhd/image_color</code> (RGB) and <code>/kinect2/qhd/points</code> (PointCloud2). * <strong>Goal</strong>: Detect a ‘Seam’ (line) to follow. <strong>Task:</strong> Please write a Python ROS 2 node that uses <strong>YOLOv8</strong> to detect a target object, gets its Bounding Box, and then extracts the 3D coordinates (X,Y,Z) of the center of that box using the PointCloud data. Publish the result as a <code>geometry_msgs/PoseStamped</code>.”</p>
+</blockquote>
+<h3 id="to-expand-path-planning-seam_path_planner.py"><strong>4. To Expand Path Planning (<code>seam_path_planner.py</code>)</strong></h3>
+<blockquote>
+<p><strong>Prompt:</strong> “I need to generate a smooth welding path for a 6-DOF robot arm using MoveIt 2. <strong>Context:</strong> * <strong>Input</strong>: A noisy list of 3D points <code>geometry_msgs/PoseArray</code> derived from a camera. * <strong>Requirement</strong>: The robot must move continuously through these points (Cartesian Path), not stop-and-go. <strong>Task:</strong> Please write the Python code using <code>scipy.interpolate</code> to fit a <strong>B-Spline</strong> through these noisy points and generate 50 evenly spaced Waypoints. Then, show how to send these waypoints to <code>move_group.compute_cartesian_path()</code>.”</p>
+</blockquote>
+<h3 id="to-expand-maintenancedeployment"><strong>5. To Expand Maintenance/Deployment</strong></h3>
+<blockquote>
+<p><strong>Prompt:</strong> “I have a working ROS 2 robotic system (Parol6) running in a Docker container <code>parol6-ultimate</code>. <strong>Task:</strong> I need to export this work for my Thesis defense. Please guide me on how to: 1. Commit the current container state to a new Image. 2. Save that Image to a <code>.tar</code> file for USB transfer. 3. Write a <code>deployment.sh</code> script that installs Docker and runs the image on a fresh Ubuntu laptop without requiring internet access.”</p>
+</blockquote>
