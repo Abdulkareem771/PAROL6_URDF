@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package format="3">
+    <name>parol6_hardware</name>
+    <version>1.0.0</version>
+    <description>Hardware interface for PAROL6 robot using ros2_control</description>
+
+    <maintainer email="your.email@example.com">PAROL6 Team</maintainer>
+    <license>MIT</license>
+
+    <buildtool_depend>ament_cmake</buildtool_depend>
+
+    <!-- ros2_control dependencies -->
+    <depend>hardware_interface</depend>
+    <depend>pluginlib</depend>
+    <depend>rclcpp</depend>
+    <depend>rclcpp_lifecycle</depend>
+
+    <!-- Serial communication -->
+    <depend>serial</depend>
+
+    <!-- For launch files -->
+    <exec_depend>controller_manager</exec_depend>
+    <exec_depend>ros2_control_node</exec_depend>
+    <exec_depend>joint_state_broadcaster</exec_depend>
+    <exec_depend>joint_trajectory_controller</exec_depend>
+
+    <test_depend>ament_lint_auto</test_depend>
+    <test_depend>ament_lint_common</test_depend>
+
+    <export>
+        <build_type>ament_cmake</build_type>
+        <!-- Declare hardware plugin -->
+        <hardware_interface plugin="${prefix}/parol6_hardware_plugin.xml"/>
+    </export>
+</package>

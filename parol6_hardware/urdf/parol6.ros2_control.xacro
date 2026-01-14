@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<!--
+  ros2_control configuration for PAROL6 robot
+  Day 1: SIL (Software-in-the-Loop) Validation
+  
+  This file adds ros2_control tags to the robot description.
+  
+  Usage: Include in main URDF with:
+    <xacro:include filename="$(find parol6_hardware)/urdf/parol6.ros2_control.xacro"/>
+    <xacro:parol6_ros2_control name="PAROL6Hardware" ... />
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyUSB0 baud_rate:=115200">
+    
+    <!-- ======================================================================
+         ros2_control Hardware Interface Configuration
+         =====================================================================-->
+    
+    <ros2_control name="${name}" type="system">
+      
+      <!-- Hardware Plugin -->
+      <hardware>
+        <plugin>parol6_hardware/PAROL6System</plugin>
+        
+        <!-- Serial communication parameters (for Day 2+) -->
+        <param name="serial_port">${serial_port}</param>
+        <param name="baud_rate">${baud_rate}</param>
+        <param name="timeout_ms">5</param>  <!-- Must be << loop period (40ms @ 25Hz) -->
+        
+        <!-- Logging -->
+        <param name="enable_logging">true</param>
+        <param name="log_dir">/workspace/logs/hw_interface</param>
+      </hardware>
+      
+      <!-- ====================================================================
+           Joint 1: L1 (Base rotation)
+           ===================================================================-->
+      <joint name="joint_L1">
+        <!-- Command interface: what we send TO hardware -->
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        
+        <!-- State interfaces: what we read FROM hardware -->
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+      <!-- ====================================================================
+           Joint 2: L2
+           ===================================================================-->
+      <joint name="joint_L2">
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+      <!-- ====================================================================
+           Joint 3: L3
+           ===================================================================-->
+      <joint name="joint_L3">
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+      <!-- ====================================================================
+           Joint 4: L4
+           ===================================================================-->
+      <joint name="joint_L4">
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+      <!-- ====================================================================
+           Joint 5: L5
+           ===================================================================-->
+      <joint name="joint_L5">
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+      <!-- ====================================================================
+           Joint 6: L6
+           ===================================================================-->
+      <joint name="joint_L6">
+        <command_interface name="position">
+          <param name="min">-3.14159</param>
+          <param name="max">3.14159</param>
+        </command_interface>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      
+    </ros2_control>
+    
+  </xacro:macro>
+
+</robot>

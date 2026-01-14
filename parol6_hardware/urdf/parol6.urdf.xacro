@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  Main URDF/xacro for PAROL6 with ros2_control
+  Day 1: SIL (Software-in-the-Loop) Validation
+  
+  This file combines:
+  1. Original PAROL6 URDF (robot geometry, visuals, collisions)
+  2. ros2_control hardware interface configuration
+  
+  Usage:
+    xacro parol6.urdf.xacro > parol6_with_ros2_control.urdf
+    
+  Or in launch file:
+    robot_description_content = Command([xacro, " ", xacro_file, " ", "use_ros2_control:=true"])
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="parol6">
+
+  <!-- Parameters -->
+  <xacro:arg name="use_ros2_control" default="true"/>
+  <xacro:arg name="serial_port" default="/dev/ttyUSB0"/>
+  <xacro:arg name="baud_rate" default="115200"/>
+
+  <!-- ========================================================================
+       Include Original PAROL6 URDF
+       ======================================================================== -->
+  <!-- Xacro can include plain URDF files directly - no conversion needed! -->
+  <xacro:include filename="$(find parol6)/urdf/PAROL6.urdf"/>
+
+  <!-- ========================================================================
+       ros2_control Configuration
+       ======================================================================== -->
+
+  <xacro:if value="$(arg use_ros2_control)">
+    <!-- Include ros2_control macro -->
+    <xacro:include filename="$(find parol6_hardware)/urdf/parol6.ros2_control.xacro"/>
+
+    <!-- Instantiate hardware interface -->
+    <xacro:parol6_ros2_control name="PAROL6Hardware" serial_port="$(arg serial_port)" baud_rate="$(arg baud_rate)"/>
+  </xacro:if>
+
+</robot>

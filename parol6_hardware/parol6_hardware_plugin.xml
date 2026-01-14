@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<library path="parol6_hardware">
+    <class name="parol6_hardware/PAROL6System" type="parol6_hardware::PAROL6System" base_class_type="hardware_interface::SystemInterface">
+        <description>
+      PAROL6 6-DOF robot hardware interface for ros2_control.
+      Communicates with ESP32 via serial UART to control MKServo motors.
+        </description>
+    </class>
+</library>
