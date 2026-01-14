@@ -73,4 +73,4 @@ echo "  ${GREEN}Stop container:${NC}     docker stop $CONTAINER_NAME"
 echo ""
 
 # Activate the environment
-source ultralytics_cpu_env/bin/activate
+#source ultralytics_cpu_env/bin/activate
