@@ -94,6 +94,26 @@ The `controller_manager` calls `read()` and `write()` cyclically.
 3.  `serial_->write(cmd_string)`
 4.  **Critical:** Do NOT wait for acknowledgement (non-blocking).
 
+### ⏲️ Timing Budget Allocation
+
+Deterministic timing is critical for real-time control. The 25 Hz loop (40ms period) is allocated as follows:
+
+| Component | Budget | Notes |
+|-----------|--------|-------|
+| Controller Manager scheduling | ~5 ms | Framework overhead |
+| `read()` execution | < 2 ms | Serial receive + parse |
+| `write()` execution | < 2 ms | Format + serial transmit |
+| Serial driver overhead | < 1 ms | Kernel + USB stack |
+| **Safety margin** | ~30 ms | Handles system load spikes |
+| **Total loop period** | 40 ms | 25 Hz |
+
+**Enforcement:**
+- Any sustained violation of these budgets **must block hardware deployment**.
+- Timing guards in `read()`/`write()` log warnings if > 5ms.
+- Performance testing required before increasing update rate.
+
+**Day 1 SIL Results:** 0.28ms jitter validates budget compliance.
+
 ---
 
 ## 5. 🛠️ Extension Guide

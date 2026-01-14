@@ -210,6 +210,51 @@ ros2 action send_goal /parol6_arm_controller/follow_joint_trajectory \
 
 ---
 
+## 🔐 Data Integrity and Ordering Strategy
+
+To prevent loss-of-order or stale command execution:
+
+### Sequence Number
+
+Each command frame includes a monotonically increasing sequence counter:
+```
+<seq, pos1, pos2, pos3, pos4, pos5, pos6>
+```
+
+**ESP32 validates:**
+- Sequence monotonicity (no backwards jumps)
+- Missing packets (gap detection)
+- Repeated frames (duplicate suppression)
+
+### Lost Packet Handling
+
+If ESP32 detects a gap in sequence numbers:
+
+1.  **Hold last valid command** - Do NOT extrapolate
+2.  **Do NOT jump to new position** - Prevents uncontrolled motion
+3.  **Report fault status** (Day 3+ via feedback)
+
+This prevents the robot from making unsafe jumps.
+
+### Host-Side Recovery
+
+If acknowledgements stall for > N cycles (Day 3+):
+
+1.  Trigger warning log
+2.  Optionally transition controller to `inactive`
+3.  Require manual restart
+
+### Packet Format Guarantees
+
+- **Fixed width:** `<seq,p1,p2,p3,p4,p5,p6>\n` (consistent parsing)
+- **Terminator:** `\n` ensures frame boundaries
+- **Precision:** `%.2f` balances resolution vs bandwidth
+- **No checksums (Day 2):** Serial UART has hardware CRC
+
+**Day 3+:** Add CRC16 for end-to-end integrity validation.
+
+---
+
 ## 🐛 Common Issues
 
 ### Issue: "Permission denied: /dev/ttyUSB0"
