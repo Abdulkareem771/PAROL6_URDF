@@ -126,17 +126,17 @@ CallbackReturn PAROL6System::on_configure(
     serial_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
     serial_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
     
-    // CRITICAL: Set 20 deciseconds (2000ms / 100) timeout to prevent indefinite blocking
-    // VTime is in deciseconds (1/10 second), VMin=0 means immediate return if no data
-    serial_.SetVTime(0);  // 0 deciseconds = non-blocking
-    serial_.SetVMin(1);   // Wait for at least 1 char (but return immediately per VTime)
+    // Non-blocking with timeout protection
+    // VTIME is in deciseconds (1 = 100 ms)
+    serial_.SetVTime(1);   // 100 ms timeout
+    serial_.SetVMin(0);    // No minimum characters required
 
     if (!serial_.IsOpen()) {
       RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
       return CallbackReturn::ERROR;
     }
 
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (non-blocking mode)", 
+    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (100ms timeout, non-blocking)", 
                 serial_port_.c_str(), baud_rate_);
 
   } catch (const std::exception &e) {
