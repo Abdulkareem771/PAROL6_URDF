@@ -169,11 +169,41 @@ def generate_launch_description():
     )
 
     # =========================================================================
+    # SPAWNER 1: Joint State Broadcaster
+    # =========================================================================
+    
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+    )
+
+    # =========================================================================
+    # SPAWNER 2: Joint Trajectory Controller  
+    # =========================================================================
+    
+    robot_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["parol6_arm_controller", "--controller-manager", "/controller_manager"],
+    )
+
+    # Delay starting trajectory controller until joint_state_broadcaster has started
+    delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=joint_state_broadcaster_spawner,
+            on_exit=[robot_controller_spawner],
+        )
+    )
+
+    # =========================================================================
     # LAUNCH DESCRIPTION
     # =========================================================================
     nodes = [
         control_node,
         robot_state_pub_node,
+        joint_state_broadcaster_spawner,
+        delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
     ]
 
     return LaunchDescription(declared_arguments + nodes)
