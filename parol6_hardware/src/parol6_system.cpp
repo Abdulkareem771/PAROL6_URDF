@@ -246,16 +246,89 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
 return_type PAROL6System::read(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Day 1: No-op (states stay at zero)
-  // This is OK for SIL validation - just proving the plumbing works
+  // Check if data is available (non-blocking)
+  if (!serial_.IsDataAvailable()) {
+    return return_type::OK;  // No data yet, not an error
+  }
   
-  // Day 3 TODO: Read from ESP32
-  // if (serial_->available()) {
-  //   std::string response = serial_->readline();
-  //   parse_feedback(response);  // Update hw_state_positions_, hw_state_velocities_
-  // }
-  
-  return return_type::OK;
+  try {
+    // Read line (blocking with timeout from serial port configuration)
+    std::string response;
+    serial_.ReadLine(response, '\n');
+    
+    // Parse: <ACK,SEQ,J1,J2,J3,J4,J5,J6>
+    if (response.empty() || response[0] != '<') {
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
+        "Invalid feedback format (missing '<')");
+      return return_type::OK;
+    }
+    
+    // Find closing bracket
+    size_t end_pos = response.find('>');
+    if (end_pos == std::string::npos) {
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
+        "Invalid feedback format (missing '>')");
+      return return_type::OK;
+    }
+    
+    // Extract content between < and >
+    std::string content = response.substr(1, end_pos - 1);
+    
+    // Tokenize by comma
+    std::vector<std::string> tokens;
+    size_t start = 0;
+    size_t comma_pos;
+    while ((comma_pos = content.find(',', start)) != std::string::npos) {
+      tokens.push_back(content.substr(start, comma_pos - start));
+      start = comma_pos + 1;
+    }
+    tokens.push_back(content.substr(start));  // Last token
+    
+    // Validate: should have ACK + SEQ + 6 joints = 8 tokens
+    if (tokens.size() != 8) {
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
+        "Invalid feedback: expected 8 tokens, got %zu", tokens.size());
+      return return_type::OK;
+    }
+    
+    // Validate ACK
+    if (tokens[0] != "ACK") {
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
+        "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
+      return return_type::OK;
+    }
+    
+    // Parse sequence number
+    uint32_t received_seq = std::stoul(tokens[1]);
+    
+    // Check for packet loss (after first packet)
+    if (first_feedback_received_) {
+      uint32_t expected_seq = last_received_seq_ + 1;
+      if (received_seq != expected_seq) {
+        RCLCPP_WARN(logger_, 
+          "⚠️ PACKET LOSS DETECTED! Expected seq %u, got %u (lost %u packets)",
+          expected_seq, received_seq, received_seq - expected_seq);
+      }
+    } else {
+      first_feedback_received_ = true;
+      RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
+    }
+    
+    last_received_seq_ = received_seq;
+    
+    // Parse joint positions (tokens 2-7)
+    for (size_t i = 0; i < 6; ++i) {
+      hw_state_positions_[i] = std::stod(tokens[i + 2]);
+    }
+    
+    // Success!
+    return return_type::OK;
+    
+  } catch (const std::exception& e) {
+    RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
+      "Error reading feedback: %s", e.what());
+    return return_type::OK;  // Don't fail the controller
+  }
 }
 
 // ============================================================================

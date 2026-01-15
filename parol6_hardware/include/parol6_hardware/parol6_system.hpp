@@ -71,7 +71,11 @@ private:
   LibSerial::SerialPort serial_;
   std::string serial_port_;
   int baud_rate_;
-  uint32_t seq_counter_ = 0;
+  uint32_t seq_counter_ = 0;  // TX sequence counter
+  
+  // Feedback tracking (RX)
+  uint32_t last_received_seq_ = 0;
+  bool first_feedback_received_ = false;
   
   // Clock for throttling logs
   rclcpp::Clock clock_;
