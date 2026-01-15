@@ -124,3 +124,24 @@ This automation provides:
 - Traceable engineering workflow
 - Evidence of professional tooling
 - Reproducible environment
+
+---
+
+## 👁️ View Generation
+
+We provide a helper script to generate standard engineering view filters.
+
+### How to Create Saved Views
+
+1. Run the generator:
+   ```bash
+   chmod +x scripts/generate_views.py
+   ./scripts/generate_views.py
+   ```
+2. **Click** the link for the view you want (e.g., "Hardware").
+3. In GitHub Projects, click the arrow next to the current view name.
+4. Select **"Save view"** (or "Save changes to new view").
+5. Name it (e.g., "Hardware").
+
+This process must be done manually once per view, as the API does not support creating saved views programmatically.
+
