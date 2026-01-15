@@ -246,18 +246,26 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
 return_type PAROL6System::read(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
+  // Vector safety check (prevent segfault on misconfiguration)
+  if (hw_state_positions_.size() < 6) {
+    RCLCPP_ERROR(logger_, "❌ State vector size invalid! Expected 6, got %zu", 
+                 hw_state_positions_.size());
+    return return_type::ERROR;
+  }
+  
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
     return return_type::OK;  // No data yet, not an error
   }
   
   try {
-    // Read line (blocking with timeout from serial port configuration)
+    // Read line (blocking with 2ms timeout from serial configuration)
     std::string response;
     serial_.ReadLine(response, '\n');
     
     // Parse: <ACK,SEQ,J1,J2,J3,J4,J5,J6>
     if (response.empty() || response[0] != '<') {
+      parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '<')");
       return return_type::OK;
@@ -266,6 +274,7 @@ return_type PAROL6System::read(
     // Find closing bracket
     size_t end_pos = response.find('>');
     if (end_pos == std::string::npos) {
+      parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '>')");
       return return_type::OK;
@@ -286,6 +295,7 @@ return_type PAROL6System::read(
     
     // Validate: should have ACK + SEQ + 6 joints = 8 tokens
     if (tokens.size() != 8) {
+      parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected 8 tokens, got %zu", tokens.size());
       return return_type::OK;
@@ -293,6 +303,7 @@ return_type PAROL6System::read(
     
     // Validate ACK
     if (tokens[0] != "ACK") {
+      parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
       return return_type::OK;
@@ -301,13 +312,20 @@ return_type PAROL6System::read(
     // Parse sequence number
     uint32_t received_seq = std::stoul(tokens[1]);
     
-    // Check for packet loss (after first packet)
+    // Wraparound-safe packet loss detection
     if (first_feedback_received_) {
       uint32_t expected_seq = last_received_seq_ + 1;
-      if (received_seq != expected_seq) {
+      
+      // Handle uint32_t wraparound (UINT32_MAX -> 0)
+      bool wraparound = (last_received_seq_ == UINT32_MAX && received_seq == 0);
+      bool sequence_ok = (received_seq == expected_seq) || wraparound;
+      
+      if (!sequence_ok) {
+        uint32_t lost_count = received_seq - expected_seq;
+        packets_lost_ += lost_count;
         RCLCPP_WARN(logger_, 
           "⚠️ PACKET LOSS DETECTED! Expected seq %u, got %u (lost %u packets)",
-          expected_seq, received_seq, received_seq - expected_seq);
+          expected_seq, received_seq, lost_count);
       }
     } else {
       first_feedback_received_ = true;
@@ -315,16 +333,24 @@ return_type PAROL6System::read(
     }
     
     last_received_seq_ = received_seq;
+    packets_received_++;
     
     // Parse joint positions (tokens 2-7)
     for (size_t i = 0; i < 6; ++i) {
       hw_state_positions_[i] = std::stod(tokens[i + 2]);
     }
     
+    // Log statistics every 5 minutes (thesis validation data)
+    RCLCPP_INFO_THROTTLE(logger_, clock_, 300000,
+      "📊 Stats: RX=%lu LOST=%lu ERR=%lu Loss%%=%.4f",
+      packets_received_, packets_lost_, parse_errors_,
+      packets_received_ > 0 ? (100.0 * packets_lost_ / packets_received_) : 0.0);
+    
     // Success!
     return return_type::OK;
     
   } catch (const std::exception& e) {
+    parse_errors_++;
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
       "Error reading feedback: %s", e.what());
     return return_type::OK;  // Don't fail the controller

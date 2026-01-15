@@ -77,6 +77,11 @@ private:
   uint32_t last_received_seq_ = 0;
   bool first_feedback_received_ = false;
   
+  // Performance metrics (for thesis validation)
+  uint64_t packets_received_ = 0;
+  uint64_t packets_lost_ = 0;
+  uint64_t parse_errors_ = 0;
+  
   // Clock for throttling logs
   rclcpp::Clock clock_;
 };
