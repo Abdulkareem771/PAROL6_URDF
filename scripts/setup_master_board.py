@@ -1,145 +1,357 @@
-import time
-import os
-import glob
-import re
-from playwright.sync_api import sync_playwright
+#!/usr/bin/env python3
+"""
+PAROL6 Project Board Automation (V4)
 
-REPO_URL = "https://github.com/Abdulkareem771/PAROL6_URDF"
-PROJECT_NAME = "PAROL6"
+Author: PAROL6 Project
+Purpose:
+    Fully automates GitHub Project V2 taxonomy:
+        - Creates required fields if missing
+        - Creates select options if missing
+        - Automatically classifies issues
+        - Idempotent and safe to re-run
+        - Friendly for future task additions
 
-def parse_issue_template(filepath):
-    """Extracts title, body, and labels from markdown template."""
-    with open(filepath, 'r') as f:
-        content = f.read()
+Dependencies:
+    - gh CLI authenticated
+    - jq installed
+
+Run:
+    ./scripts/setup_master_board.py
+"""
+
+import json
+import subprocess
+from typing import Dict, List
+
+# ============================================================
+# ======================= CONFIGURATION ======================
+# ============================================================
+
+OWNER = "Abdulkareem771"
+REPO  = "PAROL6_URDF"
+PROJECT_NUMBER = 1     # https://github.com/users/<user>/projects/1
+
+# ---------------- Field Definitions ----------------
+
+FIELDS = {
+    "Domain": [
+        "hardware",
+        "esp32",
+        "control",
+        "foc",
+        "ros",
+        "vision",
+        "robotics",
+        "ai",
+        "other",
+    ],
+    "Layer": [
+        "hardware",
+        "firmware",
+        "middleware",
+        "control",
+        "perception",
+        "planning",
+        "integration",
+        "tooling",
+        "documentation",
+    ],
+    "Maturity": [
+        "idea",
+        "prototype",
+        "validated",
+        "integrated",
+        "production",
+        "deprecated",
+    ],
+}
+
+DEFAULT_MATURITY = "idea"
+
+# ---------------- Classification Rules ----------------
+
+DOMAIN_KEYWORDS = {
+    "esp32":    ["esp32", "uart", "serial", "firmware"],
+    "foc":      ["foc", "current", "torque"],
+    "control":  ["control", "pid", "trajectory"],
+    "ros":      ["ros", "node", "launch"],
+    "vision":   ["vision", "camera", "yolo", "marker"],
+    "robotics": ["robot", "kinematic", "moveit"],
+    "ai":       ["ai", "model", "dataset", "training"],
+    "hardware": ["driver", "motor", "pcb", "sensor"],
+}
+
+DOMAIN_TO_LAYER = {
+    "hardware": "hardware",
+    "esp32": "firmware",
+    "ros": "middleware",
+    "control": "control",
+    "foc": "control",
+    "vision": "perception",
+    "robotics": "planning",
+    "ai": "perception",
+    "other": "tooling",
+}
+
+# ============================================================
+# ====================== UTILITIES ===========================
+# ============================================================
+
+def run(cmd: List[str]) -> str:
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip())
+    return result.stdout.strip()
+
+
+def gql(query: str) -> dict:
+    out = run(["gh", "api", "graphql", "-f", f"query={query}"])
+    return json.loads(out)
+
+
+def log(msg: str):
+    print(f"[AUTO] {msg}")
+
+# ============================================================
+# ====================== DISCOVERY ===========================
+# ============================================================
+
+def get_project_id() -> str:
+    query = f"""
+    query {{
+      user(login: "{OWNER}") {{
+        projectV2(number: {PROJECT_NUMBER}) {{
+          id
+        }}
+      }}
+    }}
+    """
+    data = gql(query)
+    return data["data"]["user"]["projectV2"]["id"]
+
+
+def get_fields(project_id: str) -> Dict[str, dict]:
+    query = f"""
+    query {{
+      node(id: "{project_id}") {{
+        ... on ProjectV2 {{
+          fields(first: 50) {{
+            nodes {{
+              ... on ProjectV2FieldCommon {{
+                id
+                name
+                dataType
+              }}
+              ... on ProjectV2SingleSelectField {{
+                options {{
+                  id
+                  name
+                }}
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+    data = gql(query)
+    fields = {}
+    for f in data["data"]["node"]["fields"]["nodes"]:
+        fields[f["name"]] = f
+    return fields
+
+
+def get_project_items(project_id: str) -> List[dict]:
+    query = f"""
+    query {{
+      node(id: "{project_id}") {{
+        ... on ProjectV2 {{
+          items(first: 100) {{
+            nodes {{
+              id
+              content {{
+                ... on Issue {{
+                  id
+                  number
+                  title
+                }}
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+    data = gql(query)
+    return data["data"]["node"]["items"]["nodes"]
+
+# ============================================================
+# ====================== FIELD CONTROL =======================
+# ============================================================
+
+def create_field(project_id: str, name: str, options: List[str]):
+    # Construct options string for GraphQL: [{name: "Opt1", color: GRAY, description: ""}, ...]
+    # We use GRAY as default color.
+    opts_str = ", ".join([f'{{name: "{o}", color: GRAY, description: ""}}' for o in options])
     
-    # Parse generic YAML frontmatter
-    meta = {}
-    if content.startswith('---'):
-        parts = content.split('---', 2)
-        if len(parts) >= 3:
-            yaml_block = parts[1]
-            body = parts[2].strip()
-            
-            for line in yaml_block.split('\n'):
-                if ':' in line:
-                    key, val = line.split(':', 1)
-                    meta[key.strip()] = val.strip().strip('"').strip("'")
-            
-            # Extract labels list specifically
-            labels_match = re.search(r'labels: \[(.*?)\]', yaml_block)
-            if labels_match:
-                meta['labels'] = [l.strip().strip('"').strip("'") for l in labels_match.group(1).split(',')]
-            
-            return meta, body
-    return None, None
+    mutation = f"""
+    mutation {{
+      createProjectV2Field(input: {{
+        projectId: "{project_id}",
+        name: "{name}",
+        dataType: SINGLE_SELECT,
+        singleSelectOptions: [{opts_str}]
+      }}) {{
+        projectV2Field {{
+          ... on ProjectV2FieldCommon {{
+            id
+          }}
+        }}
+      }}
+    }}
+    """
+    gql(mutation)
+    log(f"Field created: {name}")
 
-def get_track_from_labels(labels):
-    """Maps labels to track names."""
-    if not labels: return None
-    if 'vision' in labels: return '👁️ Vision'
-    if 'ai' in labels: return '🧠 AI'
-    if 'mobile' in labels: return '📱 Mobile'
-    if 'hardware' in labels or 'day2' in labels: return '🤖 Hardware'
-    return None
 
-def run_automation():
-    print(f"🚀 Starting automation for {PROJECT_NAME}...")
-    
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context()
-        page = context.new_page()
+def add_option(field_id: str, option: str):
+    # Depending on API, add_option might also require color/desc if strict.
+    # createProjectV2FieldOption input: name, fieldId, (color, description optional?)
+    # Usually they are optional for append, but let's see. 
+    # To be safe, adding them explicitly is better.
+    mutation = f"""
+    mutation {{
+      createProjectV2FieldOption(input: {{
+        fieldId: "{field_id}",
+        name: "{option}",
+        color: GRAY,
+        description: ""
+      }}) {{
+        projectV2FieldOption {{ id }}
+      }}
+    }}
+    """
+    gql(mutation)
+    log(f"  Option added: {option}")
 
-        # 1. Login Logic
-        print("🔵 Navigating to GitHub Login...")
-        page.goto("https://github.com/login")
-        print("👇 ACTION REQUIRED: Please log in repeatedly until you reach your dashboard.")
-        try:
-            page.wait_for_url("https://github.com/", timeout=0)
-            print("✅ Login Success!")
-        except:
-            print("❌ Login timed out.")
-            return
 
-        # 2. Go to Project
-        print(f"🔵 Opening Project: {PROJECT_NAME}")
-        projects_url = f"{REPO_URL}/projects?query=is%3Aopen"
-        page.goto(projects_url)
+def ensure_fields(project_id: str) -> Dict[str, dict]:
+    fields = get_fields(project_id)
+
+    for field_name, options_list in FIELDS.items():
+        if field_name not in fields:
+            create_field(project_id, field_name, options_list)
+            # Fetch again to get IDs
+            fields = get_fields(project_id)
+
+        field = fields[field_name]
+        existing = {o["name"] for o in field.get("options", [])}
+
+        for opt in options_list:
+            if opt not in existing:
+                add_option(field["id"], opt)
+
+    return get_fields(project_id)
+
+# ============================================================
+# ====================== CLASSIFICATION ======================
+# ============================================================
+
+def classify_domain(title: str) -> str:
+    t = title.lower()
+    for domain, keywords in DOMAIN_KEYWORDS.items():
+        if any(k in t for k in keywords):
+            return domain
+    return "other"
+
+
+def classify_layer(domain: str) -> str:
+    return DOMAIN_TO_LAYER.get(domain, "tooling")
+
+# ============================================================
+# ====================== FIELD UPDATE ========================
+# ============================================================
+
+def set_field(item_id: str, field_id: str, option_id: str):
+    mutation = f"""
+    mutation {{
+      updateProjectV2ItemFieldValue(input: {{
+        projectId: "{PROJECT_ID}",
+        itemId: "{item_id}",
+        fieldId: "{field_id}",
+        value: {{ singleSelectOptionId: "{option_id}" }}
+      }}) {{
+        projectV2Item {{ id }}
+      }}
+    }}
+    """
+    gql(mutation)
+
+
+def get_option_id(field: dict, name: str) -> str:
+    for opt in field["options"]:
+        if opt["name"] == name:
+            return opt["id"]
+    # If not found, create it on the fly? Or fail.
+    # Should be created by ensure_fields.
+    raise RuntimeError(f"Option not found: {name}")
+
+# ============================================================
+# ========================== MAIN ============================
+# ============================================================
+
+PROJECT_ID = ""
+
+def main():
+    global PROJECT_ID
+    log("Starting Project Automation")
+
+    PROJECT_ID = get_project_id()
+    fields = ensure_fields(PROJECT_ID)
+    items  = get_project_items(PROJECT_ID)
+
+    domain_field   = fields["Domain"]
+    layer_field    = fields["Layer"]
+    maturity_field = fields["Maturity"]
+
+    for item in items:
+        if not item or not item.get("content"):
+            continue
+
+        title = item["content"].get("title", "Unknown")
+        item_id = item["id"]
+        number = item["content"].get("number", "?")
+
+        domain = classify_domain(title)
+        layer  = classify_layer(domain)
         
-        # Click the project link (finding by partial text)
+        log(f"Processing #{number} | {title}")
+        log(f"  → Domain   = {domain}")
+        log(f"  → Layer    = {layer}")
+        log(f"  → Maturity = {DEFAULT_MATURITY}")
+
         try:
-            page.get_by_text(PROJECT_NAME, exact=False).first.click()
-            page.wait_for_load_state('networkidle')
-            print("✅ Project Board Opened")
+            set_field(
+                item_id,
+                domain_field["id"],
+                get_option_id(domain_field, domain),
+            )
+
+            set_field(
+                item_id,
+                layer_field["id"],
+                get_option_id(layer_field, layer),
+            )
+            
+            set_field(
+                item_id,
+                maturity_field["id"],
+                get_option_id(maturity_field, DEFAULT_MATURITY),
+            )
         except Exception as e:
-            print(f"❌ Could not find project '{PROJECT_NAME}'. Please open it manually.")
-            input("Press Enter once Project Board is open...")
+            log(f"  ❌ Failed to update item: {e}")
 
-        # 3. Create 'Track' Field (User said they did manual work, but let's verify/add)
-        print("\n🔧 Configuring 'Track' Field...")
-        # Note: UI automation for creating fields is fragile due to dynamic IDs.
-        # We will skip direct field creation to avoid breaking and focus on Issue Creation which is high value.
-        print("ℹ️  Skipping field creation (assumed manual). Focusing on Issue Population.")
-
-        # 4. Create Issues from Templates
-        print("\n📝 Creating Issues from Templates...")
-        templates = glob.glob(".github/ISSUE_TEMPLATE/*.md")
-        
-        for template_path in sorted(templates):
-            # Skip templates that shouldn't be auto-created (like generic bug_report) if desired, 
-            # but user wants to populate the board, so let's do the specific phase ones.
-            if "bug_report" in template_path: continue
-            
-            meta, body = parse_issue_template(template_path)
-            if not meta or not meta.get('title'): continue
-            
-            title = meta['title']
-            print(f"   Creating: {title}")
-            
-            # Go to New Issue page
-            page.goto(f"{REPO_URL}/issues/new")
-            
-            # If template chooser appears, skip it by going directly or clicking "Open a blank issue"
-            # Actually, easiest is just filling the blank issue form
-            page.goto(f"{REPO_URL}/issues/new/choose")
-            
-            # Check if this exact template exists in list and click it?
-            # Creating from scratch is safer to ensure title/body match EXACTLY what's on disk
-            page.goto(f"{REPO_URL}/issues/new")
-            
-            # Fill Title
-            page.get_by_placeholder("Title").fill(title)
-            
-            # Fill Body (using code view usually safer but plain text area works)
-            page.get_by_placeholder("Leave a comment").fill(body)
-            
-            # Add to Project (Metadata Sidebar)
-            # This is complex in UI. Easier to just create the issue first.
-            
-            # Submit
-            page.get_by_text("Submit new issue").click()
-            page.wait_for_load_state('networkidle')
-            print("     ✅ Issue Created")
-            
-            # Now Add to Project (Post-creation)
-            # Find the "Projects" gear on the right sidebar
-            try:
-                page.get_by_role("button", name="Projects").click()
-                page.get_by_placeholder("Filter projects").fill(PROJECT_NAME)
-                # Click the project in the menu
-                page.get_by_text(PROJECT_NAME, exact=False).first.click()
-                # Click away to save
-                page.keyboard.press("Escape")
-                print("     ✅ Added to Project")
-            except:
-                print("     ⚠️ Failed to add to Project (do it manually)")
-                
-            time.sleep(1) # Rate limit kindness
-
-        print("\n✅ Automation Complete!")
-        print("👉 Go to your Project Board and use the 'Track' field to organize items.")
-        input("Press Enter to close browser...")
-        browser.close()
+    log("Automation completed successfully")
 
 if __name__ == "__main__":
-    run_automation()
+    main()

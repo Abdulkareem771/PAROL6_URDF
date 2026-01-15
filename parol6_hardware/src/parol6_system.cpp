@@ -18,6 +18,7 @@
 #include <limits>
 #include <memory>
 #include <vector>
+#include <cinttypes>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -49,6 +50,17 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   }
 
   RCLCPP_INFO(logger_, "🚀 Day 1: SIL Validation - Initializing PAROL6 Hardware Interface");
+
+  // Read parameters
+  try {
+    serial_port_ = info_.hardware_parameters.at("serial_port");
+    baud_rate_ = std::stoi(info_.hardware_parameters.at("baud_rate"));
+  } catch (const std::out_of_range & e) {
+    RCLCPP_ERROR(logger_, "❌ Missing required hardware parameter: %s", e.what());
+    return CallbackReturn::ERROR;
+  }
+
+  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d", serial_port_.c_str(), baud_rate_);
 
   // Read joint names from URDF
   joint_names_.clear();
@@ -90,27 +102,38 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
 CallbackReturn PAROL6System::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "🔧 on_configure() - Day 1: SIL (no hardware)");
-  
-  // Day 2 TODO: Open serial port here
-  // Example:
-  // try {
-  //   serial_ = std::make_unique<serial::Serial>(
-  //     serial_port_, baud_rate_,
-  //     serial::Timeout::simpleTimeout(5));  // 5ms timeout
-  //   
-  //   if (!serial_->isOpen()) {
-  //     RCLCPP_ERROR(logger_, "❌ Failed to open serial port");
-  //     return CallbackReturn::ERROR;
-  //   }
-  //   
-  //   RCLCPP_INFO(logger_, "✓ Serial port opened: %s", serial_port_.c_str());
-  // } catch (std::exception& e) {
-  //   RCLCPP_ERROR(logger_, "❌ Serial error: %s", e.what());
-  //   return CallbackReturn::ERROR;
-  // }
+  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port...");
 
-  RCLCPP_INFO(logger_, "✅ on_configure() complete");
+  try {
+    serial_.Open(serial_port_);
+    
+    // Set Baud Rate
+    using LibSerial::BaudRate;
+    BaudRate baud;
+    switch (baud_rate_) {
+      case 9600: baud = BaudRate::BAUD_9600; break;
+      case 19200: baud = BaudRate::BAUD_19200; break;
+      case 38400: baud = BaudRate::BAUD_38400; break;
+      case 57600: baud = BaudRate::BAUD_57600; break;
+      case 115200: baud = BaudRate::BAUD_115200; break;
+      default:
+        RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
+        baud = BaudRate::BAUD_115200;
+    }
+    serial_.SetBaudRate(baud);
+
+    if (!serial_.IsOpen()) {
+      RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
+      return CallbackReturn::ERROR;
+    }
+
+    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d", serial_port_.c_str(), baud_rate_);
+
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
+    return CallbackReturn::ERROR;
+  }
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -248,32 +271,35 @@ return_type PAROL6System::read(
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Day 1: No-op (just log occasionally for debugging)
-  static size_t write_count = 0;
-  if (++write_count % 250 == 0)  // Log every 10 seconds @ 25Hz
-  {
-    RCLCPP_DEBUG(logger_, "write() called %zu times (Day 1: no hardware)", write_count);
-  }
+  // Format: <SEQ,J1,J2,J3,J4,J5,J6>
+  // Precision: %.2f (sufficient for 0.05 rad resolution)
+  char buffer[256];
   
-  // Day 2 TODO: Send command to ESP32
-  // Format command with %.2f precision (from implementation plan):
-  // char buffer[256];
-  // snprintf(buffer, sizeof(buffer),
-  //          "<%" PRIu32 ",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f>\n",
-  //          seq_++,
-  //          hw_command_positions_[0],
-  //          hw_command_positions_[1],
-  //          hw_command_positions_[2],
-  //          hw_command_positions_[3],
-  //          hw_command_positions_[4],
-  //          hw_command_positions_[5]);
-  //
-  // try {
-  //   serial_->write(buffer);
-  // } catch (serial::SerialException& e) {
-  //   RCLCPP_WARN_THROTTLE(logger_, *clock_, 1000, "Serial write timeout");
-  //   return return_type::ERROR;
-  // }
+  // Use PRIu32 for sequence number portability
+  // #include <inttypes.h> -> Already at top
+  
+  int written = snprintf(buffer, sizeof(buffer),
+           "<%" PRIu32 ",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f>\n",
+           seq_counter_++,
+           hw_command_positions_[0],
+           hw_command_positions_[1],
+           hw_command_positions_[2],
+           hw_command_positions_[3],
+           hw_command_positions_[4],
+           hw_command_positions_[5]);
+
+  if (written < 0 || written >= (int)sizeof(buffer)) {
+      RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
+      return return_type::ERROR;
+  }
+
+  try {
+    serial_.Write(buffer);
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_THROTTLE(logger_, clock_, 1000,
+                         "⚠️ Serial TX timeout/error: %s", e.what());
+    return return_type::ERROR;
+  }
   
   return return_type::OK;
 }

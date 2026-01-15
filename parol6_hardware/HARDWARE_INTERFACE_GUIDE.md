@@ -147,7 +147,32 @@ Deterministic timing is critical for real-time control. The 25 Hz loop (40ms per
 
 ---
 
+---
+
 ## 6. 🐛 Debugging Tips
+
+### 🔴 "Controller already loaded" Error
+If you see spawner errors like:
+`Controller 'joint_state_broadcaster' already loaded, skipping load_controller`
+
+**Cause:** The previous ROS session didn't close cleanly, or multiple spawners are running.
+**Fix:** Perform a **Clean Restart** (see below).
+
+### ♻️ Clean Restart Protocol (Golden Rule)
+To reset the system to a guaranteed known state:
+
+1.  **Stop ROS:** `Ctrl+C` in the launch terminal.
+2.  **Reset Container:**
+    ```bash
+    docker restart parol6_dev
+    ```
+3.  **Relaunch:**
+    ```bash
+    docker exec -it parol6_dev bash
+    source /opt/ros/humble/setup.bash
+    source install/setup.bash
+    ros2 launch parol6_hardware real_robot.launch.py
+    ```
 
 ### Fake Hardware Mode (Day 1)
 Currently, `read()` returns `OK` without doing anything. This is legitimate for checking:

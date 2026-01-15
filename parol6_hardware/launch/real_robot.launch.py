@@ -171,9 +171,6 @@ def generate_launch_description():
     # =========================================================================
     # SPAWNER 1: Joint State Broadcaster
     # =========================================================================
-    # Publishes /joint_states topic
-    # Reads position/velocity from hardware interface
-    # RViz and MoveIt subscribe to this topic
     
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
@@ -184,9 +181,6 @@ def generate_launch_description():
     # =========================================================================
     # SPAWNER 2: Joint Trajectory Controller  
     # =========================================================================
-    # Accepts FollowJointTrajectory action goals from MoveIt
-    # Sends position commands to hardware interface
-    # Started AFTER joint_state_broadcaster
     
     robot_controller_spawner = Node(
         package="controller_manager",

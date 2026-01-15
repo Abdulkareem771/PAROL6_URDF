@@ -137,6 +137,29 @@ Create these tabs to see specific work:
 2. Use templates to create tasks for all tracks
 3. Add them to the project and assign "Track" field
 
+### 3.2 Project Board Automation
+
+We use automation scripts to maintain the board structure and classification.
+
+**1. Automated Classification (`setup_master_board.py`)**  
+Run this script to automatically:
+- Create required fields (Domain, Layer, Maturity).
+- Classify issues based on title keywords (e.g., "ESP32" → Domain: Firmware).
+- Safe to run anytime by the lead developer.
+
+**2. One-Click View Generation (`generate_views.py`)**  
+This script provides instant links to filtered views.
+
+**How to Add Views:**
+1. Run `./scripts/generate_views.py`
+2. **Click** the generated link (e.g., "Vision").
+3. The board opens with the filter applied.
+4. Click **"Save"** (or "Save changes") next to the view name in the GitHub UI.
+5. Create a new view if needed and repeat.
+
+**Note for Teammates:**
+You normally do not need to run these scripts. The board structure is maintained by the lead. However, you can use `generate_views.py` to quickly find specific tasks without manually typing filters.
+
 ---
 
 ## 4. Git Branching Strategy
