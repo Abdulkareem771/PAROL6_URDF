@@ -82,6 +82,10 @@ private:
   uint64_t packets_lost_ = 0;
   uint64_t parse_errors_ = 0;
   
+  // Latency tracking (thesis evidence)
+  rclcpp::Time last_rx_time_;
+  double max_rx_period_ms_ = 0.0;
+  
   // Clock for throttling logs
   rclcpp::Clock clock_;
 };

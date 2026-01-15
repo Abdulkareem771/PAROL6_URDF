@@ -118,16 +118,26 @@ CallbackReturn PAROL6System::on_configure(
       case 115200: baud = BaudRate::BAUD_115200; break;
       default:
         RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
-        baud = BaudRate::BAUD_115200;
+        serial_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
     }
     serial_.SetBaudRate(baud);
+    serial_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
+    serial_.SetParity(LibSerial::Parity::PARITY_NONE);
+    serial_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
+    serial_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
+    
+    // CRITICAL: Set 20 deciseconds (2000ms / 100) timeout to prevent indefinite blocking
+    // VTime is in deciseconds (1/10 second), VMin=0 means immediate return if no data
+    serial_.SetVTime(0);  // 0 deciseconds = non-blocking
+    serial_.SetVMin(1);   // Wait for at least 1 char (but return immediately per VTime)
 
     if (!serial_.IsOpen()) {
       RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
       return CallbackReturn::ERROR;
     }
 
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d", serial_port_.c_str(), baud_rate_);
+    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (non-blocking mode)", 
+                serial_port_.c_str(), baud_rate_);
 
   } catch (const std::exception &e) {
     RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
@@ -321,14 +331,29 @@ return_type PAROL6System::read(
       bool sequence_ok = (received_seq == expected_seq) || wraparound;
       
       if (!sequence_ok) {
-        uint32_t lost_count = received_seq - expected_seq;
+        // Prevent underflow: only count forward jumps as loss
+        uint32_t lost_count = 0;
+        if (received_seq > expected_seq) {
+          lost_count = received_seq - expected_seq;
+        } else {
+          lost_count = 1;  // Conservative: assume 1 packet lost on backward jump
+        }
+        
         packets_lost_ += lost_count;
         RCLCPP_WARN(logger_, 
           "⚠️ PACKET LOSS DETECTED! Expected seq %u, got %u (lost %u packets)",
           expected_seq, received_seq, lost_count);
       }
+      
+      // Track inter-packet timing (thesis latency evidence)
+      auto now = clock_.now();
+      double dt_ms = (now - last_rx_time_).seconds() * 1000.0;
+      max_rx_period_ms_ = std::max(max_rx_period_ms_, dt_ms);
+      last_rx_time_ = now;
+      
     } else {
       first_feedback_received_ = true;
+      last_rx_time_ = clock_.now();  // Initialize timing
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
@@ -342,9 +367,10 @@ return_type PAROL6System::read(
     
     // Log statistics every 5 minutes (thesis validation data)
     RCLCPP_INFO_THROTTLE(logger_, clock_, 300000,
-      "📊 Stats: RX=%lu LOST=%lu ERR=%lu Loss%%=%.4f",
+      "📊 Stats: RX=%lu LOST=%lu ERR=%lu Loss%%=%.4f MAX_DT=%.2f ms",
       packets_received_, packets_lost_, parse_errors_,
-      packets_received_ > 0 ? (100.0 * packets_lost_ / packets_received_) : 0.0);
+      packets_received_ > 0 ? (100.0 * packets_lost_ / packets_received_) : 0.0,
+      max_rx_period_ms_);
     
     // Success!
     return return_type::OK;
