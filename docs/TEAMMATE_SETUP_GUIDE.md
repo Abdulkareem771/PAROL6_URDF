@@ -354,6 +354,7 @@ ros2 topic list | grep joint_states
 | What You Want to Do | Read This Document |
 |---------------------|--------------------|
 | **Set up from scratch** | This file (`docs/TEAMMATE_SETUP_GUIDE.md`) |
+| **Understand complete 5-phase plan** | `docs/ROS2_CONTROL_IMPLEMENTATION_PLAN.md` ⭐ |
 | **Understand Day 4/5 plan** | `docs/DAY4_DAY5_IMPLEMENTATION_PLAN.md` |
 | **Troubleshoot RViz issues** | `docs/RVIZ_SETUP_GUIDE.md` |
 | **Understand the C++ driver** | `parol6_hardware/HARDWARE_INTERFACE_GUIDE.md` |
@@ -365,6 +366,14 @@ ros2 topic list | grep joint_states
 | **Automate project board** | `scripts/PROJECT_AUTOMATION.md` |
 
 ### Core Documentation Files
+
+#### Architecture & Planning
+- **`docs/ROS2_CONTROL_IMPLEMENTATION_PLAN.md`** ⭐ MASTER PLAN
+  - Complete 5-phase migration strategy (SIL → EIL → HIL → PIL)
+  - Critical design decisions (update rate, non-blocking I/O, parsing)
+  - Validation taxonomy (academic terminology)
+  - Dual-gate validation strategy
+  - 3000+ lines of comprehensive guidance
 
 #### Setup & Onboarding
 - **`docs/TEAMMATE_SETUP_GUIDE.md`** (this file)
