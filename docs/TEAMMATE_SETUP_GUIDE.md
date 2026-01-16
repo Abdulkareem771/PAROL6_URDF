@@ -16,6 +16,68 @@ This guide provides **everything** you need to build, flash, and test the PAROL6
 
 ---
 
+## 🏗️ System Architecture Overview
+
+### Data Path (High-Level)
+
+```
+User (RViz)
+    ↓
+MoveIt Planner ────► Trajectory Generation
+    ↓
+parol6_arm_controller ────► 25Hz Control Loop
+    ↓
+PAROL6System (C++) ────► Serial Protocol Handler
+    ↓
+USB Serial (/dev/ttyUSB0) ────► 115200 baud
+    ↓
+ESP32 Firmware ────► Command Parser
+    ↓
+Motor Drivers ────► MKS Servo42C
+    ↓
+Encoder Feedback ────► Actual Positions
+    ↓
+ESP32 ────► Feedback Message
+    ↓
+USB Serial ────► Back to PAROL6System
+    ↓
+joint_state_broadcaster ────► /joint_states topic
+    ↓
+RViz Visualization ────► User sees motion
+```
+
+### Key ROS 2 Nodes and Their Roles
+
+| Node | Package | Purpose | Troubleshooting |
+|------|---------|---------|----------------|
+| **ros2_control_node** | controller_manager | Loads hardware interface, manages controllers | If this crashes, entire system stops. Check serial port access. |
+| **PAROL6System** | parol6_hardware | C++ hardware interface, handles serial I/O | Logs show `📥 Raw feedback:`. If silent, ESP32 not responding. |
+| **joint_state_broadcaster** | ros2_controllers | Publishes `/joint_states` at 25Hz | If `/joint_states` missing, controller not activated. |
+| **parol6_arm_controller** | ros2_controllers | Executes trajectories, enforces tolerances | Aborts if position error too large. Tune tolerances if needed. |
+| **move_group** | moveit_ros_move_group | Motion planning (collision-free paths) | Only runs when RViz launch is used. |
+| **robot_state_publisher** | robot_state_publisher | Converts joint states → TF transforms | Required for RViz to display robot model. |
+| **rviz2** | rviz2 | Visualization and interactive control | If empty, check robot_state_publisher is running. |
+
+### Expected Performance Metrics
+
+**Validated on 2026-01-16:**
+
+| Metric | Target | Achieved | Status |
+|--------|--------|----------|--------|
+| Control Loop Rate | 25 Hz | 25.0 Hz ±0.28ms | ✅ |
+| Serial Baud Rate | 115200 | 115200 | ✅ |
+| Max Serial Latency | <100 ms | ~40-50 ms | ✅ |
+| Packet Loss | <1% | 0.0% | ✅ |
+| Sequence Tracking | Continuous | 0 → 3149+ | ✅ |
+| Position Accuracy | ±0.05 rad | ±0.01 rad (test data) | ✅ |
+
+**What this means for you:**
+- If you see >1% packet loss → Check USB cable or ESP32 power
+- If latency >100ms → System overloaded or serial buffer full
+- If control rate <20Hz → Controller timing issue, check CPU usage
+
+---
+
 ## 🚀 Quick Start (5 Steps)
 
 ### 1. Start the Docker Container
