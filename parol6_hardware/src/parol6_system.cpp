@@ -272,6 +272,9 @@ return_type PAROL6System::read(
     // Read line (blocking with 2ms timeout from serial configuration)
     std::string response;
     serial_.ReadLine(response, '\n');
+
+    // DEBUG: Log raw feedback for validation (throttled)
+    RCLCPP_INFO_THROTTLE(logger_, clock_, 2000, "📥 Raw feedback: %s", response.c_str());
     
     // Parse: <ACK,SEQ,J1,J2,J3,J4,J5,J6>
     if (response.empty() || response[0] != '<') {
