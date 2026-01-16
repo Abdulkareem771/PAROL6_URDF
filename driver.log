@@ -1,0 +1,160 @@
+[INFO] [launch]: All log files can be found below /root/.ros/log/2026-01-16-14-58-49-819782-Kareem-Legion5-8133
+[INFO] [launch]: Default logging verbosity is set to INFO
+WARNING:root:[33;21mCannot infer URDF from `/workspace/install/parol6_moveit_config/share/parol6_moveit_config`. -- using config/parol6.urdf[0m
+WARNING:root:[33;21mCannot infer SRDF from `/workspace/install/parol6_moveit_config/share/parol6_moveit_config`. -- using config/parol6.srdf[0m
+[INFO] [static_transform_publisher-1]: process started with pid [8141]
+[INFO] [robot_state_publisher-2]: process started with pid [8143]
+[INFO] [real_robot_driver-3]: process started with pid [8145]
+[INFO] [move_group-4]: process started with pid [8147]
+[INFO] [rviz2-5]: process started with pid [8149]
+[static_transform_publisher-1] [WARN] [1768575529.960497633] []: Old-style arguments are deprecated; see --help for new-style arguments
+[static_transform_publisher-1] [INFO] [1768575529.985717306] [static_transform_publisher]: Spinning until stopped - publishing transform
+[static_transform_publisher-1] translation: ('0.000000', '0.000000', '0.000000')
+[static_transform_publisher-1] rotation: ('0.000000', '0.000000', '0.000000', '1.000000')
+[static_transform_publisher-1] from 'world' to 'base_link'
+[rviz2-5] QStandardPaths: XDG_RUNTIME_DIR not set, defaulting to '/tmp/runtime-root'
+[robot_state_publisher-2] [INFO] [1768575530.328111678] [robot_state_publisher]: got segment L1
+[robot_state_publisher-2] [INFO] [1768575530.328236774] [robot_state_publisher]: got segment L2
+[robot_state_publisher-2] [INFO] [1768575530.328256717] [robot_state_publisher]: got segment L3
+[robot_state_publisher-2] [INFO] [1768575530.328271499] [robot_state_publisher]: got segment L4
+[robot_state_publisher-2] [INFO] [1768575530.328286213] [robot_state_publisher]: got segment L5
+[robot_state_publisher-2] [INFO] [1768575530.328300577] [robot_state_publisher]: got segment L6
+[robot_state_publisher-2] [INFO] [1768575530.328314802] [robot_state_publisher]: got segment base_link
+[robot_state_publisher-2] [INFO] [1768575530.328329166] [robot_state_publisher]: got segment world
+[move_group-4] [INFO] [1768575530.347545996] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0.00215069 seconds
+[move_group-4] [INFO] [1768575530.347622560] [moveit_robot_model.robot_model]: Loading robot model 'parol6'...
+[real_robot_driver-3] [INFO] [1768575530.392222467] [real_robot_driver]: Logging enabled: /workspace/logs/driver_commands_20260116_145850.csv
+[rviz2-5] [INFO] [1768575530.567201757] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-5] [INFO] [1768575530.567409414] [rviz2]: OpenGl version: 4.6 (GLSL 4.6)
+[move_group-4] [WARN] [1768575530.572912249] [moveit_robot_model.robot_model]: Could not identify parent group for end-effector 'hand'
+[rviz2-5] [INFO] [1768575530.584505467] [rviz2]: Stereo is NOT SUPPORTED
+[rviz2-5] Warning: class_loader.impl: SEVERE WARNING!!! A namespace collision has occurred with plugin factory for class rviz_default_plugins::displays::InteractiveMarkerDisplay. New factory will OVERWRITE existing one. This situation occurs when libraries containing plugins are directly linked against an executable (the one running right now generating this message). Please separate plugins out into their own library or just don't link against the library and use either class_loader::ClassLoader/MultiLibraryClassLoader to open.
+[rviz2-5]          at line 253 in /opt/ros/humble/include/class_loader/class_loader/class_loader_core.hpp
+[move_group-4] [INFO] [1768575531.098103654] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Publishing maintained planning scene on 'monitored_planning_scene'
+[move_group-4] [INFO] [1768575531.098246551] [moveit.ros_planning_interface.moveit_cpp]: Listening to 'joint_states' for joint states
+[move_group-4] [INFO] [1768575531.098914589] [moveit_ros.current_state_monitor]: Listening to joint states on topic 'joint_states'
+[move_group-4] [INFO] [1768575531.099399141] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/attached_collision_object' for attached collision objects
+[move_group-4] [INFO] [1768575531.099416785] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[move_group-4] [INFO] [1768575531.099795402] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/planning_scene'
+[move_group-4] [INFO] [1768575531.099812140] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting world geometry update monitor for collision objects, attached objects, octomap updates.
+[move_group-4] [INFO] [1768575531.100254360] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'collision_object'
+[move_group-4] [INFO] [1768575531.100735076] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to 'planning_scene_world' for planning scene world geometry
+[move_group-4] [WARN] [1768575531.100884110] [moveit.ros.occupancy_map_monitor.middleware_handle]: Resolution not specified for Octomap. Assuming resolution = 0.1 instead
+[move_group-4] [ERROR] [1768575531.100898058] [moveit.ros.occupancy_map_monitor.middleware_handle]: No 3D sensor plugin(s) defined for octomap updates
+[move_group-4] [INFO] [1768575531.868352256] [moveit.ros_planning_interface.moveit_cpp]: Loading planning pipeline 'ompl'
+[move_group-4] [INFO] [1768575531.876372053] [moveit.ros_planning.planning_pipeline]: Using planning interface 'OMPL'
+[move_group-4] [INFO] [1768575531.878201537] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.path_tolerance' was not set. Using default value: 0.100000
+[move_group-4] [INFO] [1768575531.878218554] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.resample_dt' was not set. Using default value: 0.100000
+[move_group-4] [INFO] [1768575531.878225667] [moveit_ros.add_time_optimal_parameterization]: Param 'ompl.min_angle_change' was not set. Using default value: 0.001000
+[move_group-4] [INFO] [1768575531.878243800] [moveit_ros.fix_workspace_bounds]: Param 'ompl.default_workspace_bounds' was not set. Using default value: 10.000000
+[move_group-4] [INFO] [1768575531.878261444] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_bounds_error' was set to 0.100000
+[move_group-4] [INFO] [1768575531.878269603] [moveit_ros.fix_start_state_bounds]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[move_group-4] [INFO] [1768575531.878282854] [moveit_ros.fix_start_state_collision]: Param 'ompl.start_state_max_dt' was not set. Using default value: 0.500000
+[move_group-4] [INFO] [1768575531.878292408] [moveit_ros.fix_start_state_collision]: Param 'ompl.jiggle_fraction' was not set. Using default value: 0.020000
+[move_group-4] [INFO] [1768575531.878299661] [moveit_ros.fix_start_state_collision]: Param 'ompl.max_sampling_attempts' was not set. Using default value: 100
+[move_group-4] [INFO] [1768575531.878309913] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Add Time Optimal Parameterization'
+[move_group-4] [INFO] [1768575531.878317584] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Resolve constraint frames to robot links'
+[move_group-4] [INFO] [1768575531.878323861] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Workspace Bounds'
+[move_group-4] [INFO] [1768575531.878328673] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Bounds'
+[move_group-4] [INFO] [1768575531.878332997] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State In Collision'
+[move_group-4] [INFO] [1768575531.878337669] [moveit.ros_planning.planning_pipeline]: Using planning request adapter 'Fix Start State Path Constraints'
+[move_group-4] [INFO] [1768575531.903641568] [moveit.plugins.moveit_simple_controller_manager]: Added FollowJointTrajectory controller for parol6_arm_controller
+[move_group-4] [INFO] [1768575531.903756778] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575531.903774422] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575531.904317486] [moveit_ros.trajectory_execution_manager]: Trajectory execution is managing controllers
+[move_group-4] [INFO] [1768575531.904335618] [move_group.move_group]: MoveGroup debug mode is ON
+[move_group-4] [INFO] [1768575531.920944986] [move_group.move_group]: 
+[move_group-4] 
+[move_group-4] ********************************************************
+[move_group-4] * MoveGroup using: 
+[move_group-4] *     - ApplyPlanningSceneService
+[move_group-4] *     - ClearOctomapService
+[move_group-4] *     - CartesianPathService
+[move_group-4] *     - ExecuteTrajectoryAction
+[move_group-4] *     - GetPlanningSceneService
+[move_group-4] *     - KinematicsService
+[move_group-4] *     - MoveAction
+[move_group-4] *     - MotionPlanService
+[move_group-4] *     - QueryPlannersService
+[move_group-4] *     - StateValidationService
+[move_group-4] ********************************************************
+[move_group-4] 
+[move_group-4] [INFO] [1768575531.920994571] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context using planning plugin ompl_interface/OMPLPlanner
+[move_group-4] [INFO] [1768575531.921005451] [moveit_move_group_capabilities_base.move_group_context]: MoveGroup context initialization complete
+[move_group-4] [96mLoading 'move_group/ApplyPlanningSceneService'...
+[move_group-4] [0m[96mLoading 'move_group/ClearOctomapService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupCartesianPathService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupExecuteTrajectoryAction'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupGetPlanningSceneService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupKinematicsService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupMoveAction'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupPlanService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupQueryPlannersService'...
+[move_group-4] [0m[96mLoading 'move_group/MoveGroupStateValidationService'...
+[move_group-4] [0m[92m
+[move_group-4] You can start planning now!
+[move_group-4] 
+[real_robot_driver-3] [INFO] [1768575532.395207263] [real_robot_driver]: Connected to Microcontroller at /dev/pts/8
+[rviz2-5] [ERROR] [1768575533.684396491] [moveit_ros_visualization.motion_planning_frame]: Action server: /recognize_objects not available
+[rviz2-5] [INFO] [1768575533.698584598] [moveit_ros_visualization.motion_planning_frame]: MoveGroup namespace changed: / -> . Reloading params.
+[rviz2-5] [INFO] [1768575533.760429172] [moveit_rdf_loader.rdf_loader]: Loaded robot model in 0.00319173 seconds
+[rviz2-5] [INFO] [1768575533.760478559] [moveit_robot_model.robot_model]: Loading robot model 'parol6'...
+[rviz2-5] [WARN] [1768575533.971840890] [moveit_robot_model.robot_model]: Could not identify parent group for end-effector 'hand'
+[rviz2-5] [INFO] [1768575534.515195450] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Starting planning scene monitor
+[rviz2-5] [INFO] [1768575534.516083656] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Listening to '/monitored_planning_scene'
+[rviz2-5] [INFO] [1768575535.166249506] [interactive_marker_display_109100192813872]: Connected on namespace: /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic
+[rviz2-5] [INFO] [1768575535.175190261] [moveit_ros_visualization.motion_planning_frame]: group parol6_arm
+[rviz2-5] [INFO] [1768575535.175213493] [moveit_ros_visualization.motion_planning_frame]: Constructing new MoveGroup connection for group 'parol6_arm' in namespace ''
+[rviz2-5] [INFO] [1768575535.186888778] [interactive_marker_display_109100192813872]: Sending request for interactive markers
+[rviz2-5] [INFO] [1768575535.188381520] [move_group_interface]: Ready to take commands for planning group parol6_arm.
+[rviz2-5] [INFO] [1768575535.218926986] [interactive_marker_display_109100192813872]: Service response received for initialization
+[move_group-4] [INFO] [1768575547.671660842] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[rviz2-5] [INFO] [1768575547.672084972] [move_group_interface]: Plan and Execute request accepted
+[move_group-4] [INFO] [1768575547.672337115] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[move_group-4] [INFO] [1768575547.673029529] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768575547.673110096] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768575547.673123971] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768575547.673985556] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768575547.689986418] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575547.690012655] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575547.690055240] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [INFO] [1768575547.723099878] [moveit_ros.trajectory_execution_manager]: Starting trajectory execution ...
+[move_group-4] [INFO] [1768575547.723152903] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575547.723174538] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575547.723326195] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: sending trajectory to parol6_arm_controller
+[real_robot_driver-3] [INFO] [1768575547.725276300] [real_robot_driver]: Received Goal Request
+[move_group-4] [INFO] [1768575547.725610247] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: parol6_arm_controller started execution
+[move_group-4] [INFO] [1768575547.725637034] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Goal request accepted!
+[move_group-4] [ERROR] [1768575547.725674536] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[real_robot_driver-3] [INFO] [1768575547.726398270] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768575548.683333241] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Controller 'parol6_arm_controller' successfully finished
+[move_group-4] [ERROR] [1768575548.683401516] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [INFO] [1768575548.772940469] [moveit_ros.trajectory_execution_manager]: Completed trajectory execution with status SUCCEEDED ...
+[move_group-4] [INFO] [1768575548.773265186] [moveit_move_group_default_capabilities.move_action_capability]: Solution was found and executed.
+[rviz2-5] [INFO] [1768575548.774228945] [move_group_interface]: Plan and Execute request complete!
+[move_group-4] [INFO] [1768575569.268646364] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[move_group-4] [INFO] [1768575569.268774489] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[rviz2-5] [INFO] [1768575569.268856302] [move_group_interface]: Plan and Execute request accepted
+[move_group-4] [INFO] [1768575569.272929942] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768575569.273021799] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768575569.273034772] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768575569.273415869] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768575569.289706383] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575569.289729609] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575569.289769016] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [INFO] [1768575569.323235481] [moveit_ros.trajectory_execution_manager]: Starting trajectory execution ...
+[move_group-4] [INFO] [1768575569.323323571] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575569.323352586] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768575569.323469761] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: sending trajectory to parol6_arm_controller
+[real_robot_driver-3] [INFO] [1768575569.325121229] [real_robot_driver]: Received Goal Request
+[move_group-4] [INFO] [1768575569.325395544] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: parol6_arm_controller started execution
+[move_group-4] [INFO] [1768575569.325418490] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Goal request accepted!
+[move_group-4] [ERROR] [1768575569.326028288] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[real_robot_driver-3] [INFO] [1768575569.326248200] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768575570.232206480] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Controller 'parol6_arm_controller' successfully finished
+[move_group-4] [ERROR] [1768575570.232373193] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [INFO] [1768575570.322996602] [moveit_ros.trajectory_execution_manager]: Completed trajectory execution with status SUCCEEDED ...
+[move_group-4] [INFO] [1768575570.323339236] [moveit_move_group_default_capabilities.move_action_capability]: Solution was found and executed.
+[rviz2-5] [INFO] [1768575570.323701331] [move_group_interface]: Plan and Execute request complete!
+[rviz2-5] [INFO] [1768576881.203128814] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Stopping planning scene monitor
+[ERROR] [rviz2-5]: process has died [pid 8149, exit code -11, cmd '/opt/ros/humble/lib/rviz2/rviz2 -d /workspace/install/parol6_moveit_config/share/parol6_moveit_config/rviz/moveit.rviz --ros-args -r __node:=rviz2 --params-file /tmp/launch_params_v_2r8y64 --params-file /tmp/launch_params_dumhp_45 --params-file /tmp/launch_params_19_ofvx2 --params-file /tmp/launch_params_ivebcxud --params-file /tmp/launch_params_az6o7j8g'].
