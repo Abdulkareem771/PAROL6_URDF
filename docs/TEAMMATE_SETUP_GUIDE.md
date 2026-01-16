@@ -58,6 +58,42 @@ RViz Visualization ────► User sees motion
 | **robot_state_publisher** | robot_state_publisher | Converts joint states → TF transforms | Required for RViz to display robot model. |
 | **rviz2** | rviz2 | Visualization and interactive control | If empty, check robot_state_publisher is running. |
 
+### Where does ros2_control fit?
+
+**ros2_control** is the **hardware abstraction layer** that sits between high-level controllers (MoveIt, trajectory planners) and your physical hardware (ESP32, motors).
+
+```
+High-Level                ros2_control Framework              Hardware
+─────────────────────     ───────────────────────────────     ────────────────
+MoveIt / Planners   ──►   Controller Manager                 
+                           ├─► Joint Trajectory Controller    
+                           │   (parol6_arm_controller)        
+                           │                                    
+                           └─► Hardware Interface  ──────────► ESP32 + Motors
+                               (PAROL6System.cpp)              
+                                   │                            
+                                   ├─► write(): Send commands  
+                                   └─► read(): Get feedback    
+```
+
+**Key Concept:** ros2_control **decouples** trajectory planning from hardware communication.
+
+- **Controllers** (like `parol6_arm_controller`) don't know about serial ports or ESP32
+- **Hardware Interface** (`PAROL6System`) doesn't know about trajectories or MoveIt
+- They communicate through **standardized interfaces**: `CommandInterface` and `StateInterface`
+
+**Why this matters:**
+- ✅ Swap ESP32 for CAN bus → Only change `PAROL6System`, controllers stay the same
+- ✅ Add a gripper → Add new hardware interface, reuse existing controllers
+- ✅ Test in simulation → Use `FakeHardware`, same controllers
+
+**Files involved:**
+- `parol6_hardware/src/parol6_system.cpp` - Your custom hardware interface
+- `parol6_hardware/config/parol6_controllers.yaml` - Controller configuration
+- `parol6_hardware/urdf/parol6.ros2_control.xacro` - Hardware interface definition
+
+**Official docs:** https://control.ros.org/master/index.html
+
 ### Expected Performance Metrics
 
 **Validated on 2026-01-16:**
@@ -311,7 +347,123 @@ ros2 topic list | grep joint_states
 
 ---
 
-**Questions?** Contact Kareem or refer to:
-- `docs/RVIZ_SETUP_GUIDE.md`
-- `parol6_hardware/HARDWARE_INTERFACE_GUIDE.md`
-- `esp32_benchmark_idf/TESTING_WITH_ROS.md`
+## 📚 Important Documents Reference
+
+### Quick Reference by Task
+
+| What You Want to Do | Read This Document |
+|---------------------|--------------------|
+| **Set up from scratch** | This file (`docs/TEAMMATE_SETUP_GUIDE.md`) |
+| **Understand Day 4/5 plan** | `docs/DAY4_DAY5_IMPLEMENTATION_PLAN.md` |
+| **Troubleshoot RViz issues** | `docs/RVIZ_SETUP_GUIDE.md` |
+| **Understand the C++ driver** | `parol6_hardware/HARDWARE_INTERFACE_GUIDE.md` |
+| **See Day 3 validation proof** | `.gemini/antigravity/brain/.../day3_walkthrough.md` |
+| **Test ESP32 standalone** | `esp32_benchmark_idf/QUICK_START.md` |
+| **Understand ROS pipeline** | `esp32_benchmark_idf/ROS_SYSTEM_ARCHITECTURE.md` |
+| **Develop ESP32 firmware** | `esp32_benchmark_idf/DEVELOPER_GUIDE.md` |
+| **Set up Git workflow** | `docs/TEAM_WORKFLOW_GUIDE.md` |
+| **Automate project board** | `scripts/PROJECT_AUTOMATION.md` |
+
+### Core Documentation Files
+
+#### Setup & Onboarding
+- **`docs/TEAMMATE_SETUP_GUIDE.md`** (this file)
+  - Complete setup: build, flash, run, test
+  - System architecture overview
+  - Day 3 validation checklist
+
+- **`docs/DAY4_DAY5_IMPLEMENTATION_PLAN.md`**
+  - Day 4: Motor integration step-by-step
+  - Day 5: Validation procedures (engineering/thesis gates)
+  - Detailed wiring diagrams and troubleshooting
+
+#### Hardware & Firmware
+- **`parol6_hardware/HARDWARE_INTERFACE_GUIDE.md`**
+  - C++ driver architecture (`PAROL6System`)
+  - Serial protocol implementation
+  - Packet loss tracking, non-blocking I/O
+
+- **`PAROL6/firmware/esp32_motor_control.ino`**
+  - Day 4 motor control firmware (MKS Servo42C)
+  - Protocol implementation with inline comments
+  - Configuration parameters (steps/rev, microstepping)
+
+- **`esp32_benchmark_idf/DEVELOPER_GUIDE.md`**
+  - ESP-IDF concepts (FreeRTOS, UART, timers)
+  - Motor integration examples
+  - Debugging tips
+
+#### ROS & System Architecture
+- **`esp32_benchmark_idf/ROS_SYSTEM_ARCHITECTURE.md`**
+  - Complete ROS 2 pipeline (RViz → MoveIt → Driver → ESP32)
+  - Topics, actions, parameters explained
+  - How to add custom functionality
+
+- **`parol6_moveit_config/`**
+  - MoveIt configuration (SRDF, OMPL, kinematics)
+  - RViz config: `rviz/moveit.rviz`
+  - Controller config: `config/moveit_controllers.yaml`
+
+#### Troubleshooting
+- **`docs/RVIZ_SETUP_GUIDE.md`**
+  - Robot visibility issues
+  - Interactive markers not working
+  - Camera positioning, display settings
+
+- **`TROUBLESHOOTING.md`** (if exists)
+  - Common issues and solutions
+  - Build errors, runtime errors
+
+#### Validation & Evidence
+- **`.gemini/antigravity/brain/.../day3_walkthrough.md`**
+  - Day 3 validation evidence
+  - Raw feedback logs, sequence tracking proof
+  - Performance metrics table
+
+- **`logs/` directory**
+  - CSV logs: `driver_commands_*.csv`
+  - Contains positions, velocities, accelerations
+  - Use `scripts/quick_log_analysis.py` to analyze
+
+#### Project Management
+- **`docs/TEAM_WORKFLOW_GUIDE.md`**
+  - Git branch strategy
+  - Pull request process
+  - Code review guidelines
+
+- **`scripts/PROJECT_AUTOMATION.md`**
+  - GitHub Projects automation
+  - Task tracking setup
+
+### External Resources
+
+**ROS 2 Control:**
+- Official docs: https://control.ros.org/master/index.html
+- Hardware interface tutorial: https://control.ros.org/master/doc/ros2_control/hardware_interface/doc/writing_new_hardware_interface.html
+
+**MoveIt 2:**
+- Official docs: https://moveit.picknik.ai/main/index.html
+- Tutorials: https://moveit.picknik.ai/main/doc/tutorials/tutorials.html
+
+**ESP32:**
+- ESP-IDF Programming Guide: https://docs.espressif.com/projects/esp-idf/en/latest/
+- Arduino-ESP32: https://docs.espressif.com/projects/arduino-esp32/en/latest/
+
+**MKS Servo42C:**
+- GitHub: https://github.com/makerbase-mks/MKS-SERVO42C
+- Communication protocol: See firmware code comments
+
+---
+
+## 🆘 Getting Help
+
+**Questions?** Contact:
+- **Kareem** (Project Lead)
+- Repository: Check issues/discussions
+- Documentation: Start with files above
+
+**Recommended reading order for new teammates:**
+1. This file (setup)
+2. `HARDWARE_INTERFACE_GUIDE.md` (understand C++ driver)
+3. `ROS_SYSTEM_ARCHITECTURE.md` (complete picture)
+4. `DAY4_DAY5_IMPLEMENTATION_PLAN.md` (when ready for motors)
