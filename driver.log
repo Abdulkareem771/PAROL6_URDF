@@ -158,3 +158,95 @@ WARNING:root:[33;21mCannot infer SRDF from `/workspace/install/parol6_moveit_co
 [rviz2-5] [INFO] [1768575570.323701331] [move_group_interface]: Plan and Execute request complete!
 [rviz2-5] [INFO] [1768576881.203128814] [moveit_ros.planning_scene_monitor.planning_scene_monitor]: Stopping planning scene monitor
 [ERROR] [rviz2-5]: process has died [pid 8149, exit code -11, cmd '/opt/ros/humble/lib/rviz2/rviz2 -d /workspace/install/parol6_moveit_config/share/parol6_moveit_config/rviz/moveit.rviz --ros-args -r __node:=rviz2 --params-file /tmp/launch_params_v_2r8y64 --params-file /tmp/launch_params_dumhp_45 --params-file /tmp/launch_params_19_ofvx2 --params-file /tmp/launch_params_ivebcxud --params-file /tmp/launch_params_az6o7j8g'].
+[move_group-4] [INFO] [1768578203.763568812] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[move_group-4] [INFO] [1768578203.763710418] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[move_group-4] [INFO] [1768578203.772964967] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768578203.773023719] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768578203.773035246] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768578203.773374066] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768578203.793122549] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578203.793145602] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578203.793189055] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [INFO] [1768578203.823052201] [moveit_ros.trajectory_execution_manager]: Starting trajectory execution ...
+[move_group-4] [INFO] [1768578203.823104666] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578203.823174247] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578203.823315992] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: sending trajectory to parol6_arm_controller
+[move_group-4] [INFO] [1768578203.823924193] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: parol6_arm_controller started execution
+[move_group-4] [INFO] [1768578203.823943753] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Goal request accepted!
+[move_group-4] [INFO] [1768578203.824675606] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Controller 'parol6_arm_controller' successfully finished
+[move_group-4] [WARN] [1768578203.824716613] [moveit_ros.trajectory_execution_manager]: Controller handle parol6_arm_controller reports status PREEMPTED
+[move_group-4] [INFO] [1768578203.824740016] [moveit_ros.trajectory_execution_manager]: Completed trajectory execution with status PREEMPTED ...
+[real_robot_driver-3] [INFO] [1768578203.825241610] [real_robot_driver]: Received Goal Request
+[move_group-4] [ERROR] [1768578203.825470192] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[move_group-4] [ERROR] [1768578203.825665660] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[real_robot_driver-3] [INFO] [1768578203.826345466] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768578203.833165887] [moveit_move_group_default_capabilities.move_action_capability]: Solution found but controller failed during execution
+[real_robot_driver-3] [INFO] [1768578205.186456224] [real_robot_driver]: Received Goal Request
+[move_group-4] [ERROR] [1768578205.187480010] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [ERROR] [1768578205.187618741] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[real_robot_driver-3] [INFO] [1768578205.188265523] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768578215.445431557] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[move_group-4] [INFO] [1768578215.445577234] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[move_group-4] [INFO] [1768578215.470596857] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768578215.470654680] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768578215.470664667] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768578215.471001693] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768578215.489340850] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578215.489362499] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578215.489396578] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [INFO] [1768578215.510741595] [moveit_ros.trajectory_execution_manager]: Starting trajectory execution ...
+[move_group-4] [INFO] [1768578215.510807660] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578215.510827563] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578215.510944328] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: sending trajectory to parol6_arm_controller
+[move_group-4] [INFO] [1768578215.511383593] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: parol6_arm_controller started execution
+[move_group-4] [INFO] [1768578215.511404614] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Goal request accepted!
+[move_group-4] [INFO] [1768578215.511934456] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Controller 'parol6_arm_controller' successfully finished
+[move_group-4] [WARN] [1768578215.511963577] [moveit_ros.trajectory_execution_manager]: Controller handle parol6_arm_controller reports status PREEMPTED
+[move_group-4] [INFO] [1768578215.511978941] [moveit_ros.trajectory_execution_manager]: Completed trajectory execution with status PREEMPTED ...
+[real_robot_driver-3] [INFO] [1768578215.512776183] [real_robot_driver]: Received Goal Request
+[move_group-4] [ERROR] [1768578215.513019490] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[move_group-4] [ERROR] [1768578215.513061392] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[real_robot_driver-3] [INFO] [1768578215.513702342] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768578215.520854826] [moveit_move_group_default_capabilities.move_action_capability]: Solution found but controller failed during execution
+[real_robot_driver-3] [INFO] [1768578216.571271602] [real_robot_driver]: Received Goal Request
+[move_group-4] [ERROR] [1768578216.572101093] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [ERROR] [1768578216.572141666] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[real_robot_driver-3] [INFO] [1768578216.572535043] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [INFO] [1768578261.478320627] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[move_group-4] [INFO] [1768578261.478449341] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[move_group-4] [INFO] [1768578261.510795600] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768578261.510858978] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768578261.510871347] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768578261.511222620] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768578261.529254589] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578261.529275902] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578261.529310840] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [INFO] [1768578261.550594409] [moveit_ros.trajectory_execution_manager]: Starting trajectory execution ...
+[move_group-4] [INFO] [1768578261.550643672] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578261.550664565] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578261.550785453] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: sending trajectory to parol6_arm_controller
+[move_group-4] [INFO] [1768578261.551227776] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: parol6_arm_controller started execution
+[move_group-4] [INFO] [1768578261.551252722] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Goal request accepted!
+[real_robot_driver-3] [INFO] [1768578261.552586330] [real_robot_driver]: Received Goal Request
+[move_group-4] [ERROR] [1768578261.552786389] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[move_group-4] [ERROR] [1768578261.552811614] [moveit_simple_controller_manager.rclcpp_action]: unknown goal response, ignoring...
+[real_robot_driver-3] [INFO] [1768578261.553371401] [real_robot_driver]: Executing Trajectory...
+[move_group-4] [WARN] [1768578262.205925511] [moveit.simple_controller_manager.follow_joint_trajectory_controller_handle]: Controller 'parol6_arm_controller' failed with error PATH_TOLERANCE_VIOLATED: Aborted due to path tolerance violation
+[move_group-4] [WARN] [1768578262.205972071] [moveit_ros.trajectory_execution_manager]: Controller handle parol6_arm_controller reports status ABORTED
+[move_group-4] [INFO] [1768578262.205988541] [moveit_ros.trajectory_execution_manager]: Completed trajectory execution with status ABORTED ...
+[move_group-4] [INFO] [1768578262.210705900] [moveit_move_group_default_capabilities.move_action_capability]: Solution found but controller failed during execution
+[move_group-4] [ERROR] [1768578262.510796178] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [ERROR] [1768578262.510976856] [moveit_simple_controller_manager.rclcpp_action]: unknown result response, ignoring...
+[move_group-4] [INFO] [1768578267.628307091] [moveit_move_group_default_capabilities.move_action_capability]: Received request
+[move_group-4] [INFO] [1768578267.628568126] [moveit_move_group_default_capabilities.move_action_capability]: executing..
+[move_group-4] [INFO] [1768578267.629400513] [moveit_move_group_default_capabilities.move_action_capability]: Combined planning and execution request received for MoveGroup action. Forwarding to planning and execution pipeline.
+[move_group-4] [INFO] [1768578267.629489690] [moveit_ros.plan_execution]: Planning attempt 1 of at most 1
+[move_group-4] [INFO] [1768578267.629571523] [moveit_move_group_capabilities_base.move_group_capability]: Using planning pipeline 'ompl'
+[move_group-4] [INFO] [1768578267.630102418] [moveit.ompl_planning.model_based_planning_context]: Planner configuration 'parol6_arm' will use planner 'geometric::RRTConnect'. Additional configuration parameters will be set when the planner is constructed.
+[move_group-4] [INFO] [1768578267.646715985] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578267.646744298] [moveit.plugins.moveit_simple_controller_manager]: Returned 1 controllers in list
+[move_group-4] [INFO] [1768578267.646782850] [moveit_ros.trajectory_execution_manager]: Validating trajectory with allowed_start_tolerance 0.01
+[move_group-4] [ERROR] [1768578267.670671913] [moveit_ros.trajectory_execution_manager]: 
+[move_group-4] Invalid Trajectory: start point deviates from current robot state more than 0.01
+[move_group-4] joint 'joint_L1': expected: 0.858647, current: 0.29
+[move_group-4] [INFO] [1768578267.670777541] [moveit_move_group_default_capabilities.move_action_capability]: Solution found but controller failed during execution
