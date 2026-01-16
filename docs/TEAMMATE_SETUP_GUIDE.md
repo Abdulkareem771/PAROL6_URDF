@@ -218,7 +218,7 @@ ros2 topic echo /joint_states
 
 **Graphical plot:**
 ```bash
-rqt_plot /joint_states/position[0]:position[1]:position[2]
+ros2 run rqt_plot rqt_plot /joint_states/position[0]:position[1]:position[2]
 ```
 
 ---
