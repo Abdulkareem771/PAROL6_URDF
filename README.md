@@ -1,203 +1,396 @@
-# PAROL6 URDF - 6-DOF Robot Arm with ROS 2 Control
+# PAROL6 Single Motor ROS 2 Control Setup Guide
 
-**ROS 2 Humble | ros2_control | MoveIt 2 | Docker | ESP32**
+**Status:** ✅ Working - Single MKS Servo42C motor controlled via ROS 2 Control
 
-[![Day 1 SIL](https://img.shields.io/badge/Day%201-SIL%20Complete-success)]()
-[![ros2_control](https://img.shields.io/badge/ros2__control-Humble-blue)]()
-[![Docker](https://img.shields.io/badge/Docker-Ready-green)]()
+This guide walks you through setting up ROS 2 Control to command a single MKS Servo42C motor through an ESP32.
 
 ---
 
-## 🎯 Project Overview
+## 📋 Prerequisites
 
-PAROL6 is a 6-DOF robotic arm integrated with ROS 2 Humble, featuring:
-- **ros2_control** hardware interface
-- **ESP32** motor control via serial
-- **MoveIt 2** motion planning
-- **Docker** development environment
-- **Kinect v2** vision integration
+### Hardware
+- ESP32 development board
+- MKS Servo42C closed-loop stepper motor
+- USB cable (ESP32 to computer)
+- Motor power supply
 
-**Current Status:** 🚀 Day 1 SIL Validation Complete (25Hz, 0.28ms jitter)
+### Software
+- Arduino IDE with ESP32 board support
+- Docker installed
+- Linux host machine (Ubuntu recommended)
 
 ---
 
 ## 🚀 Quick Start
 
-### For Teammates (5 Minutes)
+### Step 1: Upload ESP32 Firmware 
+
+1. **Open Arduino IDE**
+
+2. **Load the firmware:**
+   ```
+   File → Open → PAROL6/firmware/ros_control/ros_control.ino
+   ```
+
+3. **Configure Arduino IDE:**
+   - Board: "ESP32 Dev Module"
+   - Upload Speed: 921600
+   - Port: Select your ESP32 port (e.g., `/dev/ttyUSB0`)
+
+4. **Install SERVO42C library:**
+   - Copy `SERVO42C/SERVO42C.h` and `SERVO42C/SERVO42C.cpp` to Arduino libraries folder
+   - Or place them in the same folder as `ros_control.ino`
+
+5. **Upload:**
+   - Click Upload button
+   - Wait for "Done uploading"
+
+6. **Verify (Optional):**
+   - Open Serial Monitor (115200 baud)
+   - You should see: `=== PAROL6 Open-Loop Control ===`
+   - Test with: `<0,1.5,0,0,0,0,0>`
+   - Motor should move to 1.5 radians
+
+---
+
+### Step 2: Wire the Motor
+
+**ESP32 to MKS Servo42C:**
+```
+ESP32 GPIO 16 (RX) → MKS TX
+ESP32 GPIO 17 (TX) → MKS RX
+ESP32 GND         → MKS GND
+```
+
+**Power:**
+- Connect 12-24V power supply to MKS motor driver
+- Do NOT power motor from ESP32
+
+---
+
+### Step 3: Launch ROS 2 Control
+
+1. **Navigate to workspace:**
+   ```bash
+   cd ~/Desktop/Servo42C\ 4\ ESP/PAROL6_URDF
+   ```
+
+2. **Start the system:**
+   ```bash
+   ./start_real_robot.sh
+   ```
+
+3. **What happens:**
+   - Docker container starts
+   - Dependencies install from cache (instant)
+   - Workspace builds
+   - ROS 2 Control launches
+   - RViz opens (3D visualization)
+
+4. **Expected output:**
+   ```
+   ✅ Serial opened successfully: /dev/ttyUSB0 @ 115200
+   ✅ First feedback received
+   [spawner]: Configured and activated joint_state_broadcaster
+   [spawner]: Configured and activated parol6_arm_controller
+   ```
+
+---
+
+### Step 4: Test Motor Control
+
+**Open a new terminal** and run:
 
 ```bash
-# 1. Clone repository
-git clone <your-repo-url>
-cd PAROL6_URDF
-
-# 2. Start Docker container
-./start_container.sh
-
-# 3. Enter container
-docker exec -it parol6_dev bash
-
-# 4. Build workspace
-cd /workspace
-colcon build --symlink-install
-source install/setup.bash
-
-# 5. Launch SIL validation
-ros2 launch parol6_hardware real_robot.launch.py
+# Move motor to 1.5 radians (~86 degrees)
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 action send_goal /parol6_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory \"{trajectory: {joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6], points: [{positions: [1.5, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 5}}]}}\""
 ```
 
-**See:** [parol6_hardware/README.md](parol6_hardware/README.md) for detailed setup
+**Expected result:**
+- Motor moves smoothly to 1.5 radians
+- Terminal shows: `Goal finished with status: SUCCEEDED`
 
 ---
 
-## 📁 Repository Structure
+## 🔧 Useful Commands
 
+### Check Joint States
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic echo /joint_states"
 ```
-PAROL6_URDF/
-├── README.md                    # This file
-├── start_container.sh           # Docker startup script
-├── .github/                     # GitHub Projects integration
-│   ├── ISSUE_TEMPLATE/          # Day 1-5 issue templates
-│   ├── workflows/               # Automation
-│   └── GITHUB_PROJECTS_SETUP.md # Team collaboration guide
-├── parol6_hardware/             # ⭐ ros2_control package
-│   ├── README.md                # Setup & troubleshooting
-│   ├── DAY1_BUILD_TEST_GUIDE.md # SIL validation guide
-│   ├── DAY2_SERIAL_TX_PLAN.md   # Next phase plan
-│   ├── HARDWARE_INTERFACE_GUIDE.md # Developer reference
-│   ├── src/                     # C++ hardware interface
-│   ├── launch/                  # Launch files
-│   ├── config/                  # Controller configuration
-│   └── urdf/                    # Robot description
-├── esp32_benchmark_idf/         # ESP32 firmware
-├── parol6_demos/                # MoveIt demo scripts
-├── docs/                        # 📚 Documentation
-│   ├── KINECT_INTEGRATION.md    # Vision setup
-│   ├── GET_STARTED.md           # Onboarding guide
-│   ├── TROUBLESHOOTING.md       # Common issues
-│   └── archived/                # Old documentation
-└── README.md                    # This file
+
+**Output:**
+```yaml
+position: [1.5, 0.0, 0.0, 0.0, 0.0, 0.0]
+```
+
+### Check Controllers
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 control list_controllers"
+```
+
+**Output:**
+```
+joint_state_broadcaster[joint_state_broadcaster/JointStateBroadcaster] active
+parol6_arm_controller[joint_trajectory_controller/JointTrajectoryController] active
+```
+
+### Move to Different Positions
+
+**Zero position:**
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 action send_goal /parol6_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory \"{trajectory: {joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6], points: [{positions: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 3}}]}}\""
+```
+
+**90 degrees (π/2 rad):**
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 action send_goal /parol6_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory \"{trajectory: {joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6], points: [{positions: [1.57, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 5}}]}}\""
 ```
 
 ---
 
-## 🔬 Development Phases
+## 📁 Key Files
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| **Day 1: SIL** | ✅ **COMPLETE** | Software-in-the-Loop validation (25Hz, 0.28ms jitter) |
-| **Day 2: Serial TX** | 📋 Planned | Implement serial transmission to ESP32 |
-| **Day 3: Feedback** | 📋 Planned | Close control loop with ESP32 feedback |
-| **Day 4: First Motion** | 📋 Planned | Safe hardware activation |
-| **Day 5: Validation** | 📋 Planned | Thesis-ready formal validation |
-
-**See:** [.gemini/.../task.md](.gemini/antigravity/brain/dc8d8804-d852-433b-a7ff-1bee8308aba2/task.md) for detailed roadmap
+| File | Purpose |
+|------|---------|
+| [`PAROL6/firmware/ros_control/ros_control.ino`](file:///home/far2deluxe/Desktop/Servo42C%204%20ESP/PAROL6_URDF/PAROL6/firmware/ros_control/ros_control.ino) | ESP32 firmware for motor control |
+| [`start_real_robot.sh`](file:///home/far2deluxe/Desktop/Servo42C%204%20ESP/PAROL6_URDF/start_real_robot.sh) | Launch script for ROS 2 Control |
+| [`parol6_hardware/config/parol6_controllers.yaml`](file:///home/far2deluxe/Desktop/Servo42C%204%20ESP/PAROL6_URDF/parol6_hardware/config/parol6_controllers.yaml) | Controller configuration (tolerances, update rate) |
+| [`.docker_cache/`](file:///home/far2deluxe/Desktop/Servo42C%204%20ESP/PAROL6_URDF/.docker_cache) | Cached packages (libserial, controllers) |
 
 ---
 
-## 📚 Key Documentation
+## ⚙️ Configuration
 
-### Getting Started
-- **[parol6_hardware/README.md](parol6_hardware/README.md)** - Main hardware interface guide
-- **[docs/GET_STARTED.md](docs/GET_STARTED.md)** - Team onboarding
-- **[.github/GITHUB_PROJECTS_SETUP.md](.github/GITHUB_PROJECTS_SETUP.md)** - Project management
+### ESP32 Firmware Settings
 
-### Technical Guides
-- **[parol6_hardware/HARDWARE_INTERFACE_GUIDE.md](parol6_hardware/HARDWARE_INTERFACE_GUIDE.md)** - Architecture & timing
-- **[parol6_hardware/DAY1_BUILD_TEST_GUIDE.md](parol6_hardware/DAY1_BUILD_TEST_GUIDE.md)** - Validation procedure
-- **[docs/KINECT_INTEGRATION.md](docs/KINECT_INTEGRATION.md)** - Vision integration
+**In `ros_control.ino`:**
+```cpp
+#define USB_BAUD 115200        // Serial to computer
+#define MOTOR_BAUD 38400       // Serial to MKS motor
+#define MOTOR_RX_PIN 16        // ESP32 RX pin
+#define MOTOR_TX_PIN 17        // ESP32 TX pin
+#define MOTOR_ADDR 0xE0        // MKS motor address
 
-### Development Plans
-- **[parol6_hardware/DAY2_SERIAL_TX_PLAN.md](parol6_hardware/DAY2_SERIAL_TX_PLAN.md)** - Next phase implementation
-
----
-
-## 🛠️ Technology Stack
-
-- **ROS 2:** Humble
-- **Control:** ros2_control, MoveIt 2
-- **Hardware:** ESP32 (serial @ 115200 baud)
-- **Simulation:** Gazebo Ignition
-- **Vision:** Kinect v2 (libfreenect2)
-- **Container:** Docker (parol6-ultimate:latest)
-
----
-
-## 👁️ Modular Vision Architecture
-
-We use a **swappable detector** strategy to parallelize work:
-
-```mermaid
-graph TD
-    A[Camera Input] --> B{Detector Layer}
-    B -->|Option 1: Fast| C[Red Marker Node]
-    B -->|Option 2: Parallel| D[YOLO Node]
-    B -->|Option 3: Final| E[Custom AI Node]
-    
-    C -->|Detection2DArray| F[Depth Matcher]
-    D -->|Detection2DArray| F
-    E -->|Detection2DArray| F
-    
-    F -->|Detection3DArray| G[Path Generator]
-    G -->|Robot Path| H[MoveIt Controller]
+// Movement threshold (filters excessive commands)
+if (abs(new_target - current_positions[0]) > 0.01) {  // 0.01 rad = ~0.6°
+  moveMotor(new_target);
+}
 ```
 
-**See:** [docs/TEAM_WORKFLOW_GUIDE.md](docs/TEAM_WORKFLOW_GUIDE.md#15-modular-vision-architecture)
+### Controller Tolerances
 
----
+**In `parol6_controllers.yaml`:**
+```yaml
+constraints:
+  goal_time: 10.0              # Allow 10 seconds to reach goal
+  joint_L1: 
+    trajectory: 2.0            # Allow 2 rad deviation during movement
+    goal: 0.1                  # Must reach within 0.1 rad at end
+```
 
-## 🎓 Thesis Integration
-
-This project includes:
-- ✅ Formal validation reports
-- ✅ Engineering gate criteria
-- ✅ Failure containment analysis
-- ✅ Performance metrics (timing, jitter)
-- ✅ GitHub Projects for progress tracking
-
-**See:** [parol6_hardware/README.md](parol6_hardware/README.md) - Formal Validation Statement
-
----
-
-## 👥 Team Collaboration
-
-**Using GitHub Projects:**
-1. Create issues from templates (`.github/ISSUE_TEMPLATE/`)
-2. Assign phases (Day 1-5)
-3. Track progress on project board
-4. Link code to tasks automatically
-
-**Guide:** [.github/GITHUB_PROJECTS_SETUP.md](.github/GITHUB_PROJECTS_SETUP.md)
+**Adjust these if:**
+- Motor aborts too early → Increase `trajectory` tolerance
+- Motor doesn't reach target → Increase `goal` tolerance
+- Movements too slow → Decrease `goal_time`
 
 ---
 
 ## 🐛 Troubleshooting
 
-**Common issues:**
-- **Build errors:** See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-- **Controller failures:** See [parol6_hardware/README.md](parol6_hardware/README.md#troubleshooting)
-- **Container issues:** Restart with `./start_container.sh`
+### Motor doesn't move
+
+**Check ESP32 connection:**
+```bash
+ls /dev/ttyUSB*
+```
+Should show `/dev/ttyUSB0` (or similar)
+
+**Fix permissions:**
+```bash
+sudo chmod 666 /dev/ttyUSB0
+```
+
+**Check Serial Monitor:**
+- Open Arduino IDE Serial Monitor (115200 baud)
+- Look for: `🎯 Moving J1: 0.000 → 1.500 rad`
+- If you see this, motor should move
+
+### "Goal finished with status: ABORTED"
+
+**Cause:** Motor can't reach target within tolerance
+
+**Fix:** Increase tolerances in `parol6_controllers.yaml`
+```yaml
+joint_L1: {trajectory: 5.0, goal: 0.2}  # More lenient
+```
+
+Then restart:
+```bash
+./start_real_robot.sh
+```
+
+### Packet loss warnings
+
+**Example:**
+```
+⚠️ PACKET LOSS DETECTED! Expected seq 2, got 3
+```
+
+**Cause:** ESP32 sends at 10Hz, ROS expects 25Hz
+
+**Fix (Optional):** Update ESP32 firmware:
+```cpp
+// Change line 79 in ros_control.ino:
+if (now - last_feedback >= 40) {  // 25 Hz instead of 10 Hz
+```
+
+**Note:** Packet loss warnings are cosmetic and don't affect functionality.
+
+### Build fails
+
+**Error:** `libserial-dev not found`
+
+**Fix:** Cached packages missing. Download them:
+```bash
+cd ~/Desktop/Servo42C\ 4\ ESP/PAROL6_URDF
+docker exec -it parol6_dev bash -c "cd /workspace && mkdir -p .docker_cache && cd .docker_cache && apt-get update && apt-get download libserial-dev libserial1"
+```
+
+### RViz doesn't open
+
+**Check X11 forwarding:**
+```bash
+xhost +local:docker
+```
+
+**Check DISPLAY:**
+```bash
+echo $DISPLAY
+```
+Should show `:0` or `:1`
 
 ---
 
-## 📊 Current Status
+## 🎯 Next Steps
 
-**Day 1 SIL Validation Results:**
-- ✅ Controllers: Both ACTIVE
-- ✅ Update rate: 25.000 Hz
-- ✅ Jitter: 0.28 ms (EXCELLENT)
-- ✅ Stability: 2,276+ samples
-- ✅ Status: **APPROVED for Day 2**
+### Scale to Multiple Motors
+
+1. **Wire additional motors** to ESP32 (use different GPIO pins)
+2. **Update firmware** to control all 6 joints
+3. **Test each motor** individually
+4. **Calibrate** joint limits and speeds
+
+### Add Real Encoder Feedback
+
+Currently using **open-loop** (trust commanded position). For better accuracy:
+
+1. Read MKS encoder via `motor.readEncoder()`
+2. Update `current_positions[]` with actual values
+3. Send real feedback to ROS
+
+### Integrate with MoveIt
+
+RViz is already running with MoveIt! Try:
+- Drag the interactive marker (orange sphere)
+- Click "Plan & Execute"
+- Motor should follow!
 
 ---
 
-## 🚀 Next Steps
+## 📊 System Architecture
 
-1. **Review Day 1:** [walkthrough.md](.gemini/antigravity/brain/dc8d8804-d852-433b-a7ff-1bee8308aba2/walkthrough.md)
-2. **Plan Day 2:** [DAY2_SERIAL_TX_PLAN.md](parol6_hardware/DAY2_SERIAL_TX_PLAN.md)
-3. **Create GitHub Project:** [GITHUB_PROJECTS_SETUP.md](.github/GITHUB_PROJECTS_SETUP.md)
+```
+┌─────────────┐
+│   RViz      │  ← Visualization
+│   MoveIt    │  ← Motion planning
+└──────┬──────┘
+       │
+┌──────▼──────────────────────┐
+│  ROS 2 Control              │
+│  - joint_state_broadcaster  │  ← Publishes /joint_states
+│  - parol6_arm_controller    │  ← Accepts trajectories
+└──────┬──────────────────────┘
+       │
+┌──────▼──────────────────────┐
+│  parol6_hardware            │  ← Hardware interface (C++)
+│  - Serial: /dev/ttyUSB0     │
+│  - Baud: 115200             │
+│  - Protocol: <SEQ,J1,...>   │
+└──────┬──────────────────────┘
+       │ USB
+┌──────▼──────────────────────┐
+│  ESP32                      │  ← Firmware (ros_control.ino)
+│  - Parses commands          │
+│  - Controls motor           │
+│  - Sends feedback           │
+└──────┬──────────────────────┘
+       │ UART (38400 baud)
+┌──────▼──────────────────────┐
+│  MKS Servo42C               │  ← Closed-loop stepper
+│  - Built-in encoder         │
+│  - Built-in PID             │
+│  - Position control         │
+└─────────────────────────────┘
+```
 
 ---
 
-**Version:** v1.0.0 (Day 1 SIL Complete)  
-**Last Updated:** 2026-01-14  
-**Contact:** PAROL6 Team
+## 🎓 Understanding the System
+
+### Communication Protocol
+
+**ROS → ESP32:**
+```
+<SEQ,J1,J2,J3,J4,J5,J6>
+Example: <123,1.5,0.0,0.0,0.0,0.0,0.0>
+```
+
+**ESP32 → ROS:**
+```
+<ACK,SEQ,J1,J2,J3,J4,J5,J6>
+Example: <ACK,123,1.50,0.00,0.00,0.00,0.00,0.00>
+```
+
+### How It Works
+
+1. **ROS sends trajectory** (e.g., move to 1.5 rad in 5 seconds)
+2. **Controller interpolates** into small steps (25 Hz)
+3. **Hardware interface** sends commands via serial
+4. **ESP32 receives** and filters (only significant changes)
+5. **ESP32 commands MKS** motor via `uartRunPulses()`
+6. **MKS motor** moves using built-in closed-loop control
+7. **ESP32 reports** commanded position back to ROS
+8. **ROS visualizes** in RViz
+
+---
+
+## ✅ Success Criteria
+
+You know it's working when:
+
+- ✅ Serial opens: `/dev/ttyUSB0 @ 115200`
+- ✅ First feedback received
+- ✅ Both controllers active
+- ✅ Motor moves to commanded positions
+- ✅ Goals finish with `SUCCEEDED`
+- ✅ RViz shows robot moving
+
+---
+
+## 📞 Support
+
+**Issues?** Check:
+1. ESP32 firmware uploaded correctly
+2. Motor wired correctly (TX/RX, power)
+3. Serial port permissions (`sudo chmod 666 /dev/ttyUSB0`)
+4. Docker container running (`docker ps`)
+5. Controllers active (`ros2 control list_controllers`)
+
+**Still stuck?** Review the troubleshooting section above.
+
+---
+
+**Status:** ✅ Single motor working with ROS 2 Control  
+**Last Updated:** 2026-01-18  
+**Next Milestone:** Scale to 6 motors
