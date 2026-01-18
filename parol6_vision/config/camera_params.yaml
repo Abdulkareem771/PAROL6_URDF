@@ -1,0 +1,37 @@
+### Camera Parameters Configuration
+# These values should be updated after camera calibration
+
+camera_intrinsics:
+  # Focal lengths (pixels)
+  fx: 1081.37  # Replace with calibrated value
+  fy: 1081.37  # Replace with calibrated value
+  
+  # Principal point (pixels)
+  cx: 959.5    # Image center X
+  cy: 539.5    # Image center Y
+  
+  # Distortion coefficients (if needed)
+  # k1, k2, p1, p2, k3
+  distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
+
+# Coordinate frames
+camera_frame: "camera_rgb_optical_frame"
+robot_base_frame: "base_link"
+
+# Static TF: Camera relative to robot base
+# UPDATE THESE VALUES AFTER CALIBRATION!
+camera_to_base_transform:
+  translation:
+   x: 0.5   # meters
+    y: 0.0
+    z: 0.6
+  rotation:  # Quaternion [x, y, z, w]
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    w: 1.0
+
+# Depth sensor limits
+depth_range:
+  min: 500.0    # mm (Kinect minimum)
+  max: 2000.0   # mm (Kinect reliable range)
