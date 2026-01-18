@@ -35,9 +35,10 @@ void setup() {
   Serial.begin(USB_BAUD);
   while (!Serial) delay(10);
   
-  Serial.println("=== PAROL6 Open-Loop Control ===");
-  Serial.println("Trusting MKS closed-loop system");
-  Serial.println();
+  // Startup messages disabled - keep serial clean for ROS
+  // Serial.println("=== PAROL6 Open-Loop Control ===");
+  // Serial.println("Trusting MKS closed-loop system");
+  // Serial.println();
   
   // Initialize motor serial
   Serial2.begin(MOTOR_BAUD, SERIAL_8N1, MOTOR_RX_PIN, MOTOR_TX_PIN);
@@ -54,9 +55,9 @@ void setup() {
   motor.setMicrostep(MICROSTEPS);
   delay(50);
   
-  Serial.println("READY - Send commands: <SEQ,J1,J2,J3,J4,J5,J6>");
-  Serial.println("Example: <0,1.5,0,0,0,0,0>");
-  Serial.println();
+  // Serial.println("READY - Send commands: <SEQ,J1,J2,J3,J4,J5,J6>");
+  // Serial.println("Example: <0,1.5,0,0,0,0,0>");
+  // Serial.println();
 }
 
 void loop() {
@@ -74,11 +75,12 @@ void loop() {
     }
   }
   
-  // Send feedback at 10 Hz
+  // Send feedback at 20 Hz (stable rate, prevents serial overflow)
   unsigned long now = millis();
-  if (now - last_feedback >= 100) {
+  if (now - last_feedback >= 50) {
     last_feedback = now;
     sendFeedback();
+    Serial.flush();  // Ensure message is sent before next one
   }
 }
 
@@ -132,15 +134,16 @@ void moveMotor(float target_rad) {
   uint8_t speed = 25;  // Medium speed
   uint8_t status;
   
-  Serial.print("🎯 Moving J1: ");
-  Serial.print(current_positions[0], 3);
-  Serial.print(" → ");
-  Serial.print(target_rad, 3);
-  Serial.print(" rad (");
-  Serial.print(dir == RUN_FWD ? "FWD" : "REV");
-  Serial.print(" ");
-  Serial.print(pulses);
-  Serial.println(" pulses)");
+  // Debug output disabled - interferes with ROS communication
+  // Serial.print("🎯 Moving J1: ");
+  // Serial.print(current_positions[0], 3);
+  // Serial.print(" → ");
+  // Serial.print(target_rad, 3);
+  // Serial.print(" rad (");
+  // Serial.print(dir == RUN_FWD ? "FWD" : "REV");
+  // Serial.print(" ");
+  // Serial.print(pulses);
+  // Serial.println(" pulses)");
   
   motor.uartRunPulses(speed, dir, pulses, status);
 }

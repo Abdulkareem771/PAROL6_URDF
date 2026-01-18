@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 25
+    update_rate: 20  # Match ESP32 feedback rate (20 Hz)
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
