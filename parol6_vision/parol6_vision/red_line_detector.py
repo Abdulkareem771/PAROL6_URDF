@@ -254,6 +254,8 @@ class RedLineDetector(Node):
         try:
             # Convert ROS Image message to OpenCV format (BGR)
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            # DEBUG
+            # self.get_logger().info(f"Received image: {cv_image.shape}")
         except Exception as e:
             self.get_logger().error(f'CV Bridge conversion failed: {e}')
             return
@@ -310,22 +312,33 @@ class RedLineDetector(Node):
         # Step 1: Color Segmentation
         mask = self.segment_red_color(image)
         pixels_before = np.count_nonzero(mask)
+        # DEBUG LOGGING
+        if pixels_before == 0:
+            self.get_logger().warn("Segmentation returned 0 pixels!")
+        else:
+            self.get_logger().info(f"Segmentation found {pixels_before} pixels")
         
         # Step 2: Morphological Processing
         mask_clean = self.apply_morphology(mask)
         pixels_after = np.count_nonzero(mask_clean)
+        # DEBUG
+        self.get_logger().info(f"Morphology output: {pixels_after} pixels")
         
         # Step 3: Skeletonization
         skeleton = self.skeletonize(mask_clean)
         
         # Step 4: Extract Contours
         contours = self.extract_contours(skeleton)
+        # DEBUG
+        self.get_logger().info(f"Extracted {len(contours)} contours")
         
         # Step 5: Process each contour into a WeldLine
         detected_lines = []
         for idx, contour in enumerate(contours):
             # Filter by minimum length
             if len(contour) < self.min_line_length:
+                # DEBUG
+                # self.get_logger().info(f"Contour {idx} rejected: length {len(contour)} < {self.min_line_length}")
                 continue
             
             # Order points along line
@@ -338,6 +351,8 @@ class RedLineDetector(Node):
             continuity = self.compute_continuity(simplified_points)
             retention = pixels_after / max(pixels_before, 1)
             confidence = retention * continuity
+            # DEBUG
+            self.get_logger().info(f"Line {idx}: Len={len(contour)}, Continuity={continuity:.2f}, Retention={retention:.2f}, Conf={confidence:.2f}")
             
             # Create WeldLine message
             line = WeldLine()
@@ -427,6 +442,10 @@ class RedLineDetector(Node):
         # Skeletonize
         skeleton_bool = morphology.skeletonize(mask_bool)
         
+        # DEBUG
+        skel_pixels = np.count_nonzero(skeleton_bool)
+        self.get_logger().info(f"Skeleton pixels: {skel_pixels}")
+        
         # Convert back to uint8
         skeleton = (skeleton_bool * 255).astype(np.uint8)
         
@@ -446,19 +465,31 @@ class RedLineDetector(Node):
         """
         contours, _ = cv2.findContours(
             skeleton,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_NONE  # Keep all points for now
+            cv2.RETR_LIST, 
+            cv2.CHAIN_APPROX_NONE
         )
         
-        # Convert contours to simpler format
-        # OpenCV contours are Nx1x2, we want Nx2
-        contours = [cnt.squeeze() for cnt in contours if cnt.squeeze().ndim == 2]
+        # DEBUG
+        self.get_logger().info(f"Raw contours from findContours: {len(contours)}")
         
-        # Filter by area (rough size check)
+        # Convert contours to simpler format (Nx2)
+        contours_nx2 = []
+        for cnt in contours:
+            # Reshape from (N, 1, 2) to (N, 2)
+            try:
+                cnt_reshaped = cnt.reshape(-1, 2)
+                contours_nx2.append(cnt_reshaped)
+            except Exception as e:
+                self.get_logger().warn(f"Failed to reshape contour: {e}")
+        
+        # Filter by length (number of points) instead of area
+        # Skeleton has 0 area, so contourArea check was killing it!
         contours = [
-            cnt for cnt in contours 
-            if cv2.contourArea(cnt.reshape(-1, 1, 2)) >= self.min_contour_area
+            cnt for cnt in contours_nx2 
+            if len(cnt) >= self.min_line_length
         ]
+        
+        self.get_logger().info(f"Contours after length filter: {len(contours)}")
         
         return contours
     

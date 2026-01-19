@@ -29,14 +29,23 @@ def generate_launch_description():
         output='screen'
     )
     
-    # 2. Depth Matcher Node (Commented out until implemented)
-    # depth_matcher_node = Node(
-    #     package='parol6_vision',
-    #     executable='depth_matcher',
-    #     name='depth_matcher',
-    #     parameters=[detection_params, camera_params],
-    #     output='screen'
-    # )
+    # 2. Depth Matcher Node
+    matcher_node = Node(
+        package='parol6_vision',
+        executable='depth_matcher',
+        name='depth_matcher',
+        parameters=[detection_params, camera_params],
+        output='screen'
+    )
+
+    # 3. Path Generator Node
+    generator_node = Node(
+        package='parol6_vision',
+        executable='path_generator',
+        name='path_generator',
+        parameters=[path_params],
+        output='screen'
+    )
 
     # RViz Node (Optional)
     rviz_node = Node(
@@ -51,6 +60,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_rviz_arg,
         detector_node,
-        # depth_matcher_node,
+        matcher_node,
+        generator_node,
         # rviz_node
     ])

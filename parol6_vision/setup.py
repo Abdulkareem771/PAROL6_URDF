@@ -34,4 +34,5 @@ setup(
             'moveit_controller = parol6_vision.moveit_controller:main',
         ],
     },
+    scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
 )
