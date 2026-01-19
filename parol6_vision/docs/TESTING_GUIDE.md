@@ -217,47 +217,281 @@ ros2 topic echo /vision/welding_path
 
 ## Troubleshooting
 
-### Issue: "No detections" (Empty `/vision/weld_lines_2d`)
+### Issue 1: Package Not Visible After Build ⚠️
 
-**Check 1: Verify image topic**
+**Symptom:**
 ```bash
-ros2 topic hz /kinect2/qhd/image_color_rect
-# If no data, camera driver isn't running
+ros2 pkg list | grep parol6
+# Only shows: parol6_msgs
+# Missing: parol6_vision
 ```
 
-**Check 2: Inspect debug image**
+**Root Cause:**
+Stale build artifacts preventing proper package registration in `AMENT_PREFIX_PATH`.
+
+**Solution:**
 ```bash
-ros2 run rqt_image_view rqt_image_view
-# Select /red_line_detector/debug_image
-# You should see the mask overlay
+# Inside Docker container
+cd /workspace
+
+# Clean the problematic package completely
+rm -rf build/parol6_vision install/parol6_vision
+
+# Rebuild with symlink-install (recommended for development)
+colcon build --packages-select parol6_vision --symlink-install
+
+# Re-source the workspace
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+# Verify both packages now appear
+ros2 pkg list | grep parol6
+# Expected:
+# parol6_msgs
+# parol6_vision
 ```
 
-**Check 3: Tune HSV parameters**
-- If lighting conditions differ, adjust HSV thresholds in `config/detection_params.yaml`
-- Red objects appear white in the mask; everything else should be black
+**Verify AMENT_PREFIX_PATH:**
+```bash
+echo $AMENT_PREFIX_PATH | tr ':' '\n'
+# Should include:
+# /workspace/install/parol6_vision
+# /workspace/install/parol6_msgs
+```
 
-### Issue: "ModuleNotFoundError: No module named 'rclpy'"
+---
 
-**Cause:** Trying to run the Python file directly outside ROS2 environment.
+### Issue 2: "ModuleNotFoundError: No module named 'rclpy'" ❌
+
+**Symptom:**
+```
+Traceback (most recent call last):
+  File "red_line_detector.py", line 74, in <module>
+    import rclpy
+ModuleNotFoundError: No module named 'rclpy'
+```
+
+**Cause:** Trying to run the Python file directly outside the ROS2 environment.
 
 **Solution:** Always use `ros2 run` or `ros2 launch`:
 ```bash
-# Wrong:
-python3 red_line_detector.py
+# ❌ Wrong (runs outside ROS2 context):
+python3 /workspace/src/parol6_vision/parol6_vision/red_line_detector.py
 
-# Correct:
+# ✅ Correct (uses ROS2 environment):
 ros2 run parol6_vision red_line_detector
+
+# ✅ Or use launch file:
+ros2 launch parol6_vision red_detector_only.launch.py
 ```
 
-### Issue: "TF Lookup Failed" in Depth Matcher
+---
 
-**Cause:** Static transform from camera to robot base not published.
+### Issue 3: "No detections" (Empty `/vision/weld_lines_2d`) 🔍
 
-**Solution:** Verify transform publisher:
+**Check 1: Verify image topic is publishing**
 ```bash
-ros2 run tf2_ros tf2_echo base_link kinect2_rgb_optical_frame
-# Should show the transform matrix
+ros2 topic hz /kinect2/qhd/image_color_rect
+# Expected: ~30 Hz (if camera is running)
+# If 0 Hz or error → Camera driver isn't running
 ```
+
+**Check 2: Inspect the detection mask**
+```bash
+ros2 run rqt_image_view rqt_image_view
+# Select topic: /red_line_detector/debug_image
+# Red objects should appear WHITE, everything else BLACK
+```
+
+**Check 3: Review detector logs**
+```bash
+# In the terminal running the detector, look for:
+[red_line_detector]: Segmentation found X pixels
+# If X = 0 → HSV color range needs tuning
+# If X > 0 but no detections → Check min_line_length parameter
+```
+
+**Check 4: Tune HSV parameters**
+Edit `config/detection_params.yaml`:
+```yaml
+red_line_detector:
+  ros__parameters:
+    hsv_lower_1: [0, 100, 100]     # Adjust based on your red marker
+    hsv_upper_1: [10, 255, 255]
+    hsv_lower_2: [170, 100, 100]
+    hsv_upper_2: [180, 255, 255]
+    min_line_length: 50             # Lower if detecting short lines
+```
+
+---
+
+### Issue 4: Test Collection Error 🧪
+
+**Symptom:**
+```
+ERROR collecting test session
+ModuleNotFoundError: No module named 'test_integration'
+```
+
+**Cause:** Test discovery is finding a file it can't import (e.g., launch files in test/ directory).
+
+**Quick Solution (Skip problematic tests):**
+```bash
+# Run specific test files only
+colcon test --packages-select parol6_vision --pytest-args test/test_detector.py -v
+colcon test --packages-select parol6_vision --pytest-args test/test_depth_matcher.py -v
+```
+
+**Permanent Solution:**
+Add `pytest.ini` to exclude launch files:
+```bash
+# Create /workspace/src/parol6_vision/pytest.ini
+[pytest]
+python_files = test_*.py
+python_classes = Test*
+python_functions = test_*
+```
+
+---
+
+### Issue 5: "TF Lookup Failed" in Depth Matcher ⚠️
+
+**Symptom:**
+```
+[depth_matcher]: Could not transform kinect2_rgb_optical_frame to base_link: 
+Lookup would require extrapolation into the future
+```
+
+**Cause:** Static transform from camera to robot base not published or timing mismatch.
+
+**Solution 1: Verify transform is published**
+```bash
+# Check if transform exists
+ros2 run tf2_ros tf2_echo base_link kinect2_rgb_optical_frame
+
+# If error → Static transform publisher not running
+# Check if test_integration.launch.py or vision_pipeline.launch.py includes:
+# static_transform_publisher node
+```
+
+**Solution 2: Check launch file**
+Ensure your launch file includes:
+```python
+Node(
+    package='tf2_ros',
+    executable='static_transform_publisher',
+    arguments=['0.5', '0.0', '1.0', '0', '0.707', '0', '0.707',
+               'base_link', 'kinect2_rgb_optical_frame']
+)
+```
+
+---
+
+### Issue 6: Build Fails with "LD_LIBRARY_PATH" Error 🔧
+
+**Symptom:**
+```
+ImportError: libparol6_msgs__rosidl_generator_py.so: cannot open shared object file
+```
+
+**Cause:** Custom message shared libraries not in library path.
+
+**Solution:**
+```bash
+# Add to your build/launch script:
+export LD_LIBRARY_PATH=/workspace/install/parol6_msgs/lib:$LD_LIBRARY_PATH
+
+# Or add to ~/.bashrc inside Docker:
+echo 'export LD_LIBRARY_PATH=/workspace/install/parol6_msgs/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+```
+
+---
+
+### Issue 7: "Extracted 0 contours" Despite Segmentation Success 🐛
+
+**Symptom:**
+```
+[red_line_detector]: Segmentation found 9317 pixels
+[red_line_detector]: Morphology output: 11881 pixels
+[red_line_detector]: Skeleton pixels: 401
+[red_line_detector]: Extracted 0 contours  ← Problem here
+```
+
+**Cause:** Contour filtering logic rejecting valid lines (e.g., by area instead of length).
+
+**Diagnosis:**
+Check if skeleton exists but contours are filtered:
+- If `Skeleton pixels > 0` but `Extracted = 0` → Filtering bug
+- If `Skeleton pixels = 0` → Skeletonization failed
+
+**Solution (already implemented in current code):**
+Filter skeletons by **length** not **area**, since 1-pixel wide lines have zero area:
+```python
+# ❌ Wrong (kills skeleton contours):
+contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= min_area]
+
+# ✅ Correct (checks point count):
+contours = [cnt for cnt in contours if len(cnt) >= min_line_length]
+```
+
+---
+
+### Issue 8: Permission Denied Errors in Docker 🔒
+
+**Symptom:**
+```
+Permission denied: '/workspace/build/parol6_vision/...'
+```
+
+**Cause:** Build directories owned by root inside Docker.
+
+**Solution:**
+```bash
+# Inside Docker container
+cd /workspace
+sudo chown -R $USER:$USER build install log
+
+# Or rebuild with current user:
+colcon build --packages-select parol6_vision
+```
+
+---
+
+### General Debugging Tips 💡
+
+**Enable Verbose Logging:**
+```bash
+# Set ROS2 log level to DEBUG
+export RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity}] [{name}]: {message}"
+ros2 run parol6_vision red_line_detector --ros-args --log-level debug
+```
+
+**Check Topic Connections:**
+```bash
+# See who's publishing/subscribing
+ros2 topic info /vision/weld_lines_2d
+
+# Monitor message flow
+ros2 topic hz /vision/weld_lines_2d
+ros2 topic echo /vision/weld_lines_2d --once
+```
+
+**Isolate Components:**
+Test components individually:
+1. Mock camera only
+2. Mock camera + detector only
+3. Mock camera + detector + depth matcher
+4. Full pipeline
+
+**Clean Rebuild:**
+```bash
+# Nuclear option - rebuild everything fresh
+cd /workspace
+rm -rf build install log
+colcon build --packages-select parol6_msgs parol6_vision
+source install/setup.bash
+```
+
 
 ---
 
