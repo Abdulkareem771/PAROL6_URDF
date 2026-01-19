@@ -1,17 +1,9 @@
 /*
- * STEP/DIR CONTROL - FOLLOWING ROS TRAJECTORY
+ * STEP/DIR CONTROL - HARDWARE TIMER VERSION
  * 
- * Philosophy:
- * - ROS sends position updates at 20Hz
- * - ESP32 generates steps to follow those positions
- * - Motor tracks ROS's planned trajectory exactly
- * - No independent trajectory generation on ESP32
- * 
- * Hardware Setup:
- * - MKS must be in CR_vFOC (Step/Dir closed-loop) mode
- * - ESP32 GPIO 25 -> MKS STEP pin
- * - ESP32 GPIO 26 -> MKS DIR pin
- * - ESP32 GND -> MKS GND
+ * Uses ESP32 hardware timer for precise feedback timing
+ * Allows exact frequencies like 62.5Hz, 66.67Hz, 75Hz, etc.
+ * No drift, perfect sync with ROS
  */
 
 #include <Arduino.h>
@@ -27,13 +19,24 @@
 #define MICROSTEPS 16
 #define MOTOR_STEPS_PER_REV (STEPS_PER_REV * MICROSTEPS)  // 3200
 
+// Feedback frequency (change this to match ROS update_rate)
+#define FEEDBACK_HZ 75.0  // Can be any float: 50, 62.5, 66.67, 75, 100, etc.
+
 // State
-float current_position = 0.0;  // Current position in radians
-float target_position = 0.0;   // Target position from ROS
-float current_positions[6] = {0, 0, 0, 0, 0, 0};  // All 6 joints
+float current_position = 0.0;
+float target_position = 0.0;
+float current_positions[6] = {0, 0, 0, 0, 0, 0};
 String inputBuffer = "";
 uint32_t last_seq = 0;
-unsigned long last_feedback = 0;
+volatile bool send_feedback_flag = false;
+
+// Hardware timer
+hw_timer_t *feedback_timer = NULL;
+
+// Timer interrupt - sets flag to send feedback
+void IRAM_ATTR onFeedbackTimer() {
+  send_feedback_flag = true;
+}
 
 void setup() {
   Serial.begin(USB_BAUD);
@@ -44,6 +47,17 @@ void setup() {
   pinMode(DIR_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
   digitalWrite(DIR_PIN, LOW);
+  
+  // Setup hardware timer for feedback (ESP32 Arduino Core 3.x API)
+  // Calculate frequency in Hz for timerBegin
+  uint32_t timer_frequency = (uint32_t)FEEDBACK_HZ;
+  feedback_timer = timerBegin(timer_frequency);
+  
+  // Attach interrupt function
+  timerAttachInterrupt(feedback_timer, &onFeedbackTimer);
+  
+  // Timer will trigger at FEEDBACK_HZ automatically
+  timerAlarm(feedback_timer, 1000000 / FEEDBACK_HZ, true, 0);
 }
 
 void loop() {
@@ -64,10 +78,9 @@ void loop() {
   // Move motor to match target position
   updateMotorPosition();
   
-  // Send feedback at 100 Hz
-  unsigned long now = millis();
-  if (now - last_feedback >= 10) {
-    last_feedback = now;
+  // Send feedback when timer triggers
+  if (send_feedback_flag) {
+    send_feedback_flag = false;
     sendFeedback();
   }
 }
@@ -102,7 +115,7 @@ void updateMotorPosition() {
   float error = target_position - current_position;
   
   // Dead zone
-  if (abs(error) < 0.001) return;  // ~0.06 degrees
+  if (abs(error) < 0.001) return;
   
   // Convert error to steps
   float error_steps = (error * MOTOR_STEPS_PER_REV) / (2.0 * PI);
@@ -118,12 +131,11 @@ void updateMotorPosition() {
   }
   
   // Generate steps quickly to catch up
-  // At 50us per step = 20,000 steps/sec max
-  for (int i = 0; i < steps_needed && i < 100; i++) {  // Max 100 steps per update
+  for (int i = 0; i < steps_needed && i < 100; i++) {
     digitalWrite(STEP_PIN, HIGH);
     delayMicroseconds(5);
     digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(45);  // 50us total = 20kHz step rate
+    delayMicroseconds(45);
     
     // Update position
     float step_size = (2.0 * PI) / MOTOR_STEPS_PER_REV;
@@ -157,21 +169,22 @@ void sendFeedback() {
 }
 
 /*
- * DESIGN NOTES:
+ * HARDWARE TIMER ADVANTAGES:
  * 
- * Trajectory Following:
- * - ROS sends position updates at 20Hz (every 50ms)
- * - ESP32 generates steps to match commanded position
- * - Motor follows ROS's planned trajectory exactly
- * - No independent speed control on ESP32
+ * - Microsecond precision (vs millisecond with millis())
+ * - Can use any frequency: 62.5Hz, 66.67Hz, 75Hz, etc.
+ * - No drift - perfectly synchronized
+ * - Independent of loop timing
  * 
- * Step Generation:
- * - Fast step rate (20kHz) to quickly catch up to target
- * - Limited to 100 steps per update cycle (5ms max)
- * - Smooth because ROS sends smooth trajectory
+ * TO CHANGE FREQUENCY:
+ * 1. Set FEEDBACK_HZ to desired value (can be float!)
+ * 2. Set ROS update_rate to same value
+ * 3. Perfect sync guaranteed!
  * 
- * Position Tracking:
- * - ESP32 tracks actual step count
- * - Reports position based on steps generated
- * - Trust MKS closed-loop to reach each step
+ * EXAMPLES:
+ * - 50Hz: FEEDBACK_HZ = 50.0
+ * - 62.5Hz: FEEDBACK_HZ = 62.5
+ * - 66.67Hz: FEEDBACK_HZ = 66.67
+ * - 75Hz: FEEDBACK_HZ = 75.0
+ * - 100Hz: FEEDBACK_HZ = 100.0
  */

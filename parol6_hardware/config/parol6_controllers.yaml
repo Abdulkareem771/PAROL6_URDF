@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 100  # Ultra-smooth step/dir control
+    update_rate: 100  # Smooth motion, acceptable packet loss
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster

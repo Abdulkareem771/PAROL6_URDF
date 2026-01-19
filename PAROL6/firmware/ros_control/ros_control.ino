@@ -76,12 +76,12 @@ void loop() {
     }
   }
   
-  // Send feedback at 20 Hz (stable rate, prevents serial overflow)
+  // Send feedback at 75 Hz (optimal: smooth + reliable)
   unsigned long now = millis();
-  if (now - last_feedback >= 50) {
+  if (now - last_feedback >= 13) {  // ~13.33ms = 75Hz
     last_feedback = now;
     sendFeedback();
-    Serial.flush();  // Ensure message is sent before next one
+    Serial.flush();
   }
 }
 
@@ -102,9 +102,8 @@ void processCommand(String cmd) {
     float new_target = val.toFloat();
     
     // Only control J1 (motor 1)
-    // Send command only when target changes significantly
-    // Smaller threshold = more frequent updates = smoother (but more commands)
-    if (i == 0 && abs(new_target - current_positions[0]) > 0.001) {  // ~0.86 degrees
+    // With 100Hz updates, use very small threshold for ultra-smooth motion
+    if (i == 0 && abs(new_target - current_positions[0]) > 0.001) {  // ~0.06 degrees
       moveMotor(new_target);
     }
     
