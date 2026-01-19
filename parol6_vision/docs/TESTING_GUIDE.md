@@ -455,7 +455,48 @@ sudo chown -R $USER:$USER build install log
 colcon build --packages-select parol6_vision
 ```
 
+
 ---
+
+### Issue 9: "ModuleNotFoundError: No module named 'skimage'" 📦
+
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'skimage'
+# Or 'sklearn', 'scipy'
+```
+
+**Cause:**
+Missing Python dependencies in the Docker container.
+
+**Solution:**
+Install the valid Debian packages inside the container:
+```bash
+docker exec parol6_dev apt-get update
+docker exec parol6_dev apt-get install -y python3-skimage python3-sklearn python3-scipy
+```
+
+---
+
+### Issue 10: "ModuleNotFoundError: No module named 'test_integration'" (during test collection) 🧪
+
+**Symptom:**
+```
+ERROR collecting test session
+E   ModuleNotFoundError: No module named 'test_integration'
+```
+
+**Cause:**
+`pytest` recursively searches for tests and mistakenly tries to import `launch/test_integration.launch.py` as a Python module because it lacks configuration to ignore that directory.
+
+**Solution:**
+Ensure `parol6_vision/setup.cfg` restricts test discovery to the `test/` directory:
+
+```ini
+[tool:pytest]
+testpaths = test
+```
+
 
 ### General Debugging Tips 💡
 
