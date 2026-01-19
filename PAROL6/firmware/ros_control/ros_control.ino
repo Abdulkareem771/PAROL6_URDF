@@ -13,7 +13,7 @@
 #include "SERVO42C.h"
 
 #define USB_BAUD 115200
-#define MOTOR_BAUD 38400
+#define MOTOR_BAUD 115200
 #define MOTOR_RX_PIN 16
 #define MOTOR_TX_PIN 17
 #define MOTOR_ADDR 0xE0
@@ -30,6 +30,7 @@ float current_positions[6] = {0, 0, 0, 0, 0, 0};
 String inputBuffer = "";
 uint32_t last_seq = 0;
 unsigned long last_feedback = 0;
+unsigned long last_motor_command = 0;  // For rate limiting motor commands
 
 void setup() {
   Serial.begin(USB_BAUD);
@@ -101,8 +102,9 @@ void processCommand(String cmd) {
     float new_target = val.toFloat();
     
     // Only control J1 (motor 1)
-    // Only send command if target changed significantly (>0.01 rad = ~0.6 degrees)
-    if (i == 0 && abs(new_target - current_positions[0]) > 0.01) {
+    // Send command only when target changes significantly
+    // Smaller threshold = more frequent updates = smoother (but more commands)
+    if (i == 0 && abs(new_target - current_positions[0]) > 0.001) {  // ~0.86 degrees
       moveMotor(new_target);
     }
     
@@ -117,33 +119,21 @@ void moveMotor(float target_rad) {
   float pulses_per_deg = (float)MOTOR_PULSES_PER_REV / 360.0;
   int32_t target_pulses = (int32_t)(target_deg * pulses_per_deg);
   
-  // Get current position (assume we're at last commanded position)
+  // Get current position
   float current_deg = current_positions[0] * (180.0 / PI);
   int32_t current_pulses = (int32_t)(current_deg * pulses_per_deg);
   
   int32_t delta = target_pulses - current_pulses;
   
   if (abs(delta) < 5) {
-    Serial.println("✓ Already at target");
-    return;
+    return;  // Already close enough
   }
   
-  // Send move command
+  // Send position command
   RunDirection dir = (delta > 0) ? RUN_FWD : RUN_REV;
   uint32_t pulses = abs(delta);
-  uint8_t speed = 25;  // Medium speed
+  uint8_t speed = 15;  // Slower speed for smoother movement
   uint8_t status;
-  
-  // Debug output disabled - interferes with ROS communication
-  // Serial.print("🎯 Moving J1: ");
-  // Serial.print(current_positions[0], 3);
-  // Serial.print(" → ");
-  // Serial.print(target_rad, 3);
-  // Serial.print(" rad (");
-  // Serial.print(dir == RUN_FWD ? "FWD" : "REV");
-  // Serial.print(" ");
-  // Serial.print(pulses);
-  // Serial.println(" pulses)");
   
   motor.uartRunPulses(speed, dir, pulses, status);
 }
