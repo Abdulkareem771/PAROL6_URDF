@@ -32,9 +32,9 @@ parol6_arm_controller:
     constraints:
       stopped_velocity_tolerance: 0.02
       goal_time: 0.0
-      joint_L1: { trajectory: 0.3, goal: 0.03 }
-      joint_L2: { trajectory: 0.3, goal: 0.03 }
-      joint_L3: { trajectory: 0.3, goal: 0.03 }
-      joint_L4: { trajectory: 0.3, goal: 0.03 }
-      joint_L5: { trajectory: 0.3, goal: 0.03 }
-      joint_L6: { trajectory: 0.3, goal: 0.03 }
+      joint_L1: { trajectory: 0.3, goal: 0.005 }
+      joint_L2: { trajectory: 0.3, goal: 0.005 }
+      joint_L3: { trajectory: 0.3, goal: 0.005 }
+      joint_L4: { trajectory: 0.3, goal: 0.005 }
+      joint_L5: { trajectory: 0.3, goal: 0.005 }
+      joint_L6: { trajectory: 0.3, goal: 0.005 }
