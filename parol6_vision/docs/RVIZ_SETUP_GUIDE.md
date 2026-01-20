@@ -151,6 +151,29 @@ ros2 launch parol6_vision test_integration.launch.py
 
 ## 🔧 Troubleshooting
 
+
+### Issue: Package Not Found Error
+
+**Error message:**
+```
+PackageNotFoundError: "package 'parol6_moveit_config' not found"
+```
+
+**Cause:** You only built `parol6_vision` but the launch file requires the full workspace.
+
+**Solution:**
+```bash
+cd /workspace
+source /opt/ros/humble/setup.bash
+colcon build --packages-up-to parol6_vision --symlink-install
+source install/setup.bash
+```
+
+This builds `parol6_vision` and all required dependencies including:
+- `parol6` (URDF)
+- `parol6_moveit_config` (MoveIt configs)
+- `parol6_msgs` (message definitions)
+
 ### Issue: Robot Model Not Visible
 
 **Solution 1: Check Joint States**
