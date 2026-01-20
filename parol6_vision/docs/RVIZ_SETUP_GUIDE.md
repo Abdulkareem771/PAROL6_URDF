@@ -18,15 +18,30 @@ Before starting, ensure you have:
 
 ## 🚀 Quick Start
 
-### Step 1: Enter Docker Container
+### Step 1: Enter Docker Container and Build
 
 ```bash
 docker exec -it parol6_dev bash
 cd /workspace
+```
+
+### Step 2: Build the Vision Package
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --packages-select parol6_vision --symlink-install
 source install/setup.bash
 ```
 
-### Step 2: Launch Camera Visualization
+**Note:** This step is **required** for first-time setup to install:
+- Launch files
+- RViz configuration files (`.rviz`)
+- Config files (`.yaml`)
+- Python node executables
+
+**Using `--symlink-install`:** Makes Python code changes take effect immediately without rebuilding. However, if you modify config files (`.yaml`, `.rviz`) or launch files, you'll need to rebuild.
+
+### Step 3: Launch Camera Visualization
 
 ```bash
 ros2 launch parol6_vision camera_setup.launch.py
