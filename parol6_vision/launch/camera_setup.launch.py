@@ -64,12 +64,17 @@ def generate_launch_description():
         arguments=["--x", "0.0", "--y", "0.0", "--z", "0.0", "--yaw", "0.0", "--pitch", "0.0", "--roll", "0.0", "--frame-id", "world", "--child-frame-id", "base_link"],
     )
 
-    # 4. Static TF (Camera -> Base Link)
+    # 4. Static TF (Base Link -> Kinect Base)
+    # The Kinect driver publishes kinect2_link -> kinect2_rgb_optical_frame internally
+    # We only need to position the kinect2_link in the robot's coordinate system
     static_tf_camera = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        arguments=['--x', '0.5', '--y', '0.0', '--z', '1.0', '--qx', '-0.5', '--qy', '0.5', '--qz', '-0.5', '--qw', '0.5', '--frame-id', 'base_link', '--child-frame-id', 'kinect2_rgb_optical_frame'],
+        # Position: 0.5m forward, 1.0m up, looking down at ~45 degrees
+        arguments=['--x', '0.5', '--y', '0.0', '--z', '1.0', 
+                   '--roll', '0.0', '--pitch', '0.785', '--yaw', '0.0',  # 45° pitch down
+                   '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
 

@@ -131,7 +131,11 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: true
+        kinect2_link:
+          Value: true
         kinect2_rgb_optical_frame:
+          Value: true
+        kinect2_ir_optical_frame:
           Value: true
         world:
           Value: true
@@ -143,8 +147,11 @@ Visualization Manager:
       Tree:
         world:
           base_link:
-            kinect2_rgb_optical_frame:
-              {}
+            kinect2_link:
+              kinect2_rgb_optical_frame:
+                {}
+              kinect2_ir_optical_frame:
+                {}
             L1:
               L2:
                 L3:
@@ -153,6 +160,29 @@ Visualization Manager:
                       L6:
                         {}
       Update Interval: 0
+      Value: true
+    - Class: rviz_default_plugins/PointCloud2
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: Camera 3D View
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /kinect2/qhd/points
+      Use Fixed Frame: true
+      Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
