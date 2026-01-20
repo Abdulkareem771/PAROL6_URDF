@@ -71,9 +71,9 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Position: 0.5m forward, 1.0m up, looking down at ~45 degrees
+        # Position: 0.5m forward, 1.0m up, looking DOWN at workspace (~45° pitch)
         arguments=['--x', '0.5', '--y', '0.0', '--z', '1.0', 
-                   '--roll', '0.0', '--pitch', '0.785', '--yaw', '0.0',  # 45° pitch down
+                   '--roll', '0.0', '--pitch', '-0.785', '--yaw', '0.0',  # -45° pitch (looking down)
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
