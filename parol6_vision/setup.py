@@ -15,9 +15,9 @@ setup(
         # Include launch files
         (os.path.join('share', package_name, 'launch'), 
          glob('launch/*.launch.py')),
-        # Include config files
+        # Include config files (.yaml and .rviz)
         (os.path.join('share', package_name, 'config'), 
-         glob('config/*.yaml')),
+         glob('config/*.yaml') + glob('config/*.rviz')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -32,6 +32,7 @@ setup(
             'depth_matcher = parol6_vision.depth_matcher:main',
             'path_generator = parol6_vision.path_generator:main',
             'moveit_controller = parol6_vision.moveit_controller:main',
+            'dummy_joint_publisher = parol6_vision.dummy_joint_publisher:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
