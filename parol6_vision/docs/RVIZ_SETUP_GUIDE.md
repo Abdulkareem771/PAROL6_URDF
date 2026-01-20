@@ -25,21 +25,28 @@ docker exec -it parol6_dev bash
 cd /workspace
 ```
 
-### Step 2: Build the Vision Package
+### Step 2: Build the Workspace
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-select parol6_vision --symlink-install
+colcon build --symlink-install
 source install/setup.bash
 ```
 
-**Note:** This step is **required** for first-time setup to install:
-- Launch files
-- RViz configuration files (`.rviz`)
-- Config files (`.yaml`)
-- Python node executables
+**Important:** The camera visualization requires these packages to be built:
+- `parol6` - Contains robot URDF
+- `parol6_moveit_config` - Contains MoveIt configuration and SRDF
+- `parol6_msgs` - Custom message definitions
+- `parol6_vision` - Vision pipeline and launch files
 
-**Using `--symlink-install`:** Makes Python code changes take effect immediately without rebuilding. However, if you modify config files (`.yaml`, `.rviz`) or launch files, you'll need to rebuild.
+**If you only want to build vision-related packages:**
+```bash
+colcon build --packages-up-to parol6_vision --symlink-install
+```
+
+This automatically builds `parol6_vision` and all its dependencies.
+
+**Note:** First build may take 2-5 minutes.
 
 ### Step 3: Launch Camera Visualization
 
