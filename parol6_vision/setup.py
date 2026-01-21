@@ -33,6 +33,7 @@ setup(
             'path_generator = parol6_vision.path_generator:main',
             'moveit_controller = parol6_vision.moveit_controller:main',
             'dummy_joint_publisher = parol6_vision.dummy_joint_publisher:main',
+            'hsv_inspector = parol6_vision.hsv_inspector_node:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
