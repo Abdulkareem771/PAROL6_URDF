@@ -118,8 +118,8 @@ class RedLineDetector(Node):
         
         # HSV Color Ranges - Red wraps around in HSV, so we use two ranges
         # Range 1: Low red (0-10 Hue degrees)
-        #self.declare_parameter('hsv_lower_1', [0, 100, 100])
-        #self.declare_parameter('hsv_upper_1', [10, 255, 255])
+        self.declare_parameter('hsv_lower_1', [0, 100, 100])
+        self.declare_parameter('hsv_upper_1', [10, 255, 255])
         
         # Range 2: High red (170-180 Hue degrees)
         self.declare_parameter('hsv_lower_2', [160, 160, 140])
