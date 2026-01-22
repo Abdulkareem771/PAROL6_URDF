@@ -132,7 +132,7 @@ class RedLineDetector(Node):
         
         # Line Extraction
         self.declare_parameter('min_line_length', 50)
-        self.declare_parameter('min_contour_area', 100)
+        self.declare_parameter('min_contour_area', 400)
         self.declare_parameter('douglas_peucker_epsilon', 2.0)
         
         # Quality Thresholds
