@@ -122,8 +122,8 @@ class RedLineDetector(Node):
         self.declare_parameter('hsv_upper_1', [10, 255, 255])
         
         # Range 2: High red (170-180 Hue degrees)
-        self.declare_parameter('hsv_lower_2', [160, 160, 140])
-        self.declare_parameter('hsv_upper_2', [180, 255, 180])
+        self.declare_parameter('hsv_lower_2', [160, 50, 0])
+        self.declare_parameter('hsv_upper_2', [180, 255, 255])
         
         # Morphological Operations
         self.declare_parameter('morphology_kernel_size', 5)
