@@ -39,12 +39,17 @@ docker exec -it parol6_dev bash
 cd /workspace
 source /opt/ros/humble/setup.bash
 
+# Prevent DDS domain mismatches between teammates
+unset ROS_DOMAIN_ID
+
 # Find your snapshot directory
 ls test_data/
 
 # Replay in loop
 ros2 bag play test_data/kinect_snapshot_YYYYMMDD_HHMMSS --loop
 ```
+
+> **Note:** Start bag replay **before** launching visualization to ensure `/tf_static` is available. If you see TF warnings, restart replay first, then launch the vision pipeline.
 
 ### Launch Vision Pipeline (New Terminal)
 ```bash

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kinect Snapshot Bag Recording Script
+# Kinect Snapshot Bag Recording Script (Production Grade)
 # Usage: ./record_kinect_snapshot.sh [duration_seconds] [output_name]
 
 set -e
@@ -8,8 +8,14 @@ set -e
 DURATION=${1:-3}  # Default 3 seconds
 OUTPUT_NAME=${2:-"kinect_snapshot_bag"}
 DATE=$(date +%Y%m%d_%H%M%S)
+ISO_DATE=$(date -Iseconds)
 OUTPUT_DIR="/workspace/test_data"
 FULL_OUTPUT="${OUTPUT_DIR}/${OUTPUT_NAME}_${DATE}"
+QOS_OVERRIDE="/workspace/src/parol6_vision/config/qos_override.yaml"
+MIN_MESSAGES=5  # Minimum messages to consider success
+
+# Git commit hash for reproducibility
+GIT_HASH=$(cd /workspace && git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Required topics
 TOPICS=(
@@ -25,10 +31,18 @@ echo "Kinect Snapshot Bag Recorder"
 echo "=========================================="
 echo "Duration: ${DURATION} seconds"
 echo "Output: ${FULL_OUTPUT}"
+echo "Git commit: ${GIT_HASH:0:8}"
 echo ""
 
 # Create output directory
 mkdir -p "${OUTPUT_DIR}"
+
+# Check if QoS override file exists
+if [ ! -f "${QOS_OVERRIDE}" ]; then
+    echo "⚠️  WARNING: QoS override file not found: ${QOS_OVERRIDE}"
+    echo "Recording may drop messages on some systems."
+    echo ""
+fi
 
 # Check if topics are available
 echo "Checking topic availability..."
@@ -65,21 +79,50 @@ echo "Starting recording in 2 seconds..."
 sleep 2
 
 echo "🔴 RECORDING..."
-timeout ${DURATION}s ros2 bag record \
-    /kinect2/qhd/image_color_rect \
-    /kinect2/qhd/image_depth_rect \
-    /kinect2/qhd/camera_info \
-    /tf \
-    /tf_static \
-    -o "${FULL_OUTPUT}" || true
+if [ -f "${QOS_OVERRIDE}" ]; then
+    timeout ${DURATION}s ros2 bag record \
+        --qos-profile-overrides-path "${QOS_OVERRIDE}" \
+        /kinect2/qhd/image_color_rect \
+        /kinect2/qhd/image_depth_rect \
+        /kinect2/qhd/camera_info \
+        /tf \
+        /tf_static \
+        -o "${FULL_OUTPUT}" || true
+else
+    # Fallback without QoS override
+    timeout ${DURATION}s ros2 bag record \
+        /kinect2/qhd/image_color_rect \
+        /kinect2/qhd/image_depth_rect \
+        /kinect2/qhd/camera_info \
+        /tf \
+        /tf_static \
+        -o "${FULL_OUTPUT}" || true
+fi
 
 echo "✅ Recording complete!"
 echo ""
 
-# Verify bag
-echo "Bag information:"
-echo "----------------------------------------"
-ros2 bag info "${FULL_OUTPUT}"
+# Verify bag contains messages
+echo "Validating bag contents..."
+BAG_INFO=$(ros2 bag info "${FULL_OUTPUT}" 2>&1)
+echo "$BAG_INFO"
+
+# Extract message count and validate
+MESSAGE_COUNT=$(echo "$BAG_INFO" | grep -oP 'Messages:\s+\K\d+' || echo "0")
+if [ "$MESSAGE_COUNT" -lt "$MIN_MESSAGES" ]; then
+    echo ""
+    echo "❌ ERROR: Bag contains insufficient messages (${MESSAGE_COUNT} < ${MIN_MESSAGES})"
+    echo "This usually means:"
+    echo "  - Topics were not publishing during recording"
+    echo "  - QoS mismatch prevented message capture"
+    echo "  - Duration was too short"
+    echo ""
+    echo "Bag directory: ${FULL_OUTPUT}"
+    exit 1
+fi
+
+echo ""
+echo "✅ Validation passed: ${MESSAGE_COUNT} messages recorded"
 echo "----------------------------------------"
 echo ""
 
@@ -88,10 +131,13 @@ METADATA_FILE="${FULL_OUTPUT}/metadata.json"
 cat > "${METADATA_FILE}" << EOF
 {
   "dataset_id": "${OUTPUT_NAME}_${DATE}",
-  "date": "${DATE}",
+  "date_iso": "${ISO_DATE}",
+  "date_compact": "${DATE}",
   "duration_sec": ${DURATION},
+  "git_commit": "${GIT_HASH}",
   "camera": "Kinect v2",
   "resolution": "960x540 (QHD)",
+  "message_count": ${MESSAGE_COUNT},
   "topics": [
     "/kinect2/qhd/image_color_rect",
     "/kinect2/qhd/image_depth_rect",
@@ -100,7 +146,8 @@ cat > "${METADATA_FILE}" << EOF
     "/tf_static"
   ],
   "environment": "Lab workspace",
-  "notes": "Captured for vision pipeline development"
+  "notes": "Captured for vision pipeline development",
+  "qos_override_used": $([ -f "${QOS_OVERRIDE}" ] && echo "true" || echo "false")
 }
 EOF
 
@@ -112,3 +159,5 @@ echo "  tar czf ${OUTPUT_NAME}_${DATE}.tar.gz ${OUTPUT_NAME}_${DATE}"
 echo ""
 echo "🔁 To replay:"
 echo "  ros2 bag play ${FULL_OUTPUT} --loop"
+echo ""
+echo "🎉 Success! Dataset ready for distribution."
