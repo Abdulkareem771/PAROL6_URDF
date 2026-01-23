@@ -157,6 +157,74 @@ EOF
 
 echo "✅ Metadata saved to: ${METADATA_FILE}"
 echo ""
+
+# Generate checksums for data integrity verification
+echo "Generating checksums for data integrity..."
+if ls ${FULL_OUTPUT}/*.db3 1> /dev/null 2>&1; then
+    sha256sum ${FULL_OUTPUT}/*.db3 > ${FULL_OUTPUT}/checksums.sha256
+    echo "✅ Checksums saved to: ${FULL_OUTPUT}/checksums.sha256"
+else
+    echo "⚠️  No .db3 files found for checksum generation"
+fi
+echo ""
+
+# Create auto-generated README in dataset folder
+README_FILE="${FULL_OUTPUT}/README.md"
+cat > "${README_FILE}" << READMEEOF
+# Kinect Snapshot Dataset
+
+## Dataset Information
+- **Dataset ID:** ${OUTPUT_NAME}_${DATE}
+- **Capture Date:** ${ISO_DATE}
+- **Duration:** ${DURATION} seconds
+- **Message Count:** ${MESSAGE_COUNT}
+- **Git Commit:** \`${GIT_HASH}\`
+
+## Camera Configuration
+- **Model:** Kinect v2
+- **Resolution:** 960x540 (QHD)
+- **Environment:** Lab workspace
+
+## Topics Recorded
+- \`/kinect2/qhd/image_color_rect\` - RGB image (rectified)
+- \`/kinect2/qhd/image_depth_rect\` - Depth map (rectified)
+- \`/kinect2/qhd/camera_info\` - Camera calibration
+- \`/tf\` - Dynamic transforms
+- \`/tf_static\` - Static transforms
+
+## Usage
+
+### Replay in Loop
+\`\`\`bash
+ros2 bag play $(basename ${FULL_OUTPUT}) --loop
+\`\`\`
+
+### Verify Integrity
+\`\`\`bash
+sha256sum -c checksums.sha256
+\`\`\`
+
+### View Bag Info
+\`\`\`bash
+ros2 bag info $(basename ${FULL_OUTPUT})
+\`\`\`
+
+## Files
+- \`metadata.json\` - Structured dataset metadata
+- \`checksums.sha256\` - Data integrity checksums
+- \`*.db3\` - ROS bag database files
+- \`metadata.yaml\` - ROS bag metadata
+
+## Notes
+Captured for vision pipeline development. See \`metadata.json\` for detailed information.
+
+---
+Generated automatically by \`record_kinect_snapshot.sh\`
+READMEEOF
+
+echo "✅ Dataset README created: ${README_FILE}"
+echo ""
+
 echo "📦 To compress for sharing:"
 echo "  cd ${OUTPUT_DIR}"
 echo "  tar czf ${OUTPUT_NAME}_${DATE}.tar.gz ${OUTPUT_NAME}_${DATE}"
@@ -164,4 +232,8 @@ echo ""
 echo "🔁 To replay:"
 echo "  ros2 bag play ${FULL_OUTPUT} --loop"
 echo ""
+echo "✅ To verify integrity:"
+echo "  cd ${FULL_OUTPUT} && sha256sum -c checksums.sha256"
+echo ""
 echo "🎉 Success! Dataset ready for distribution."
+
