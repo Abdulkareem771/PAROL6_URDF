@@ -14,8 +14,12 @@ FULL_OUTPUT="${OUTPUT_DIR}/${OUTPUT_NAME}_${DATE}"
 QOS_OVERRIDE="/workspace/src/parol6_vision/config/qos_override.yaml"
 MIN_MESSAGES=5  # Minimum messages to consider success
 
-# Git commit hash for reproducibility
-GIT_HASH=$(cd /workspace && git rev-parse HEAD 2>/dev/null || echo "unknown")
+# Git commit hash for reproducibility (robust check)
+if git -C /workspace rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    GIT_HASH=$(git -C /workspace rev-parse HEAD)
+else
+    GIT_HASH="not_a_git_repo"
+fi
 
 # Required topics
 TOPICS=(
