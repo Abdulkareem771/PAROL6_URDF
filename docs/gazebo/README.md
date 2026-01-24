@@ -6,8 +6,25 @@ This directory contains all Gazebo simulation documentation for the PAROL6 proje
 
 ## 📚 Documentation Files
 
-### [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md) ⭐
-**START HERE - Complete system overview for teammates**
+### [SIMPLE_LAUNCH.md](./SIMPLE_LAUNCH.md) ⭐⭐⭐
+**RECOMMENDED START - Simple independent launches**
+
+**Philosophy:** No combined scripts. No automation complexity.
+
+Covers:
+- Vision RViz (camera + detection)
+- MoveIt RViz (motion planning)  
+- Gazebo (simulation)
+- Each runs independently in separate terminals
+- ROS bag strategy (frozen datasets)
+- Digital twin progressive building
+
+**For:** Everyone - this is the cleanest approach
+
+---
+
+### [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)
+**Complete system overview for teammates**
 
 Covers:
 - System architecture (Gazebo + MoveIt RViz + Vision RViz)
@@ -64,8 +81,11 @@ Provides:
 
 ## 🚀 Quick Navigation
 
+**Want the simplest approach?** ⭐  
+→ **[SIMPLE_LAUNCH.md](./SIMPLE_LAUNCH.md)** - 3 independent launches, no scripts
+
 **First time with the PAROL6 system?**  
-→ Start with [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)  
+→ [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)  
   (Explains entire system: Gazebo + MoveIt + Vision)
 
 **First time using Gazebo specifically?**  

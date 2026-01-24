@@ -49,7 +49,94 @@ The PAROL6 project has **three independent visualization tools** that can run to
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Simple Launch Without ESP32 (Recommended)
+
+This section describes the **simplest and most reliable way** to run the system when no hardware is connected.
+
+Use this mode for:
+- Vision development
+- Motion planning validation
+- Gazebo visualization
+- Algorithm testing
+- Team development without ESP32
+
+⚠️ **This mode assumes:**
+- ESP32 is NOT connected
+- No ros2_control hardware interface running
+- Simulation and visualization only
+
+**Each subsystem runs independently in its own terminal.**
+
+---
+
+### 🟦 Option 1 — Vision RViz (Camera Visualization Only)
+
+Use this when working on:
+- Camera visualization
+- Vision algorithms
+- Bag replay datasets
+- YOLO development
+
+**Command:**
+```bash
+docker exec -it parol6_dev bash
+cd /workspace
+source install/setup.bash
+ros2 launch parol6_vision camera_setup.launch.py
+```
+
+---
+
+### 🟩 Option 2 — MoveIt RViz (Motion Planning Only)
+
+Use this when working on:
+- Kinematics validation
+- Path planning
+- Collision checking
+- Trajectory inspection
+
+**Command:**
+```bash
+docker exec -it parol6_dev bash
+cd /workspace
+source install/setup.bash
+ros2 launch parol6_moveit_config demo.launch.py use_sim_time:=false
+```
+
+---
+
+### 🟨 Option 3 — Gazebo (Simulation / Visualization Only)
+
+Use this when working on:
+- Robot visualization
+- Path execution in simulation
+- Digital twin validation
+- Collision debugging
+
+**Command:**
+```bash
+docker exec -it parol6_dev bash
+cd /workspace
+source install/setup.bash
+export IGN_GAZEBO_RESOURCE_PATH=/workspace/install/parol6/share:$IGN_GAZEBO_RESOURCE_PATH
+ros2 launch parol6 ignition.launch.py
+```
+
+---
+
+### ✅ Usage Rules
+
+- Each option runs independently
+- You may run one, two, or all three in separate terminals
+- No special launch ordering is required
+- **Do NOT connect ESP32 in this mode**
+- **Do NOT run hardware drivers in this mode**
+
+This intentionally avoids complex orchestration and makes debugging simple and reliable.
+
+---
+
+## 🚀 Getting Started (Detailed Options Below)
 
 ### Prerequisites
 
