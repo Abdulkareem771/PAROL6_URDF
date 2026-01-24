@@ -6,8 +6,23 @@ This directory contains all Gazebo simulation documentation for the PAROL6 proje
 
 ## 📚 Documentation Files
 
+### [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md) ⭐
+**START HERE - Complete system overview for teammates**
+
+Covers:
+- System architecture (Gazebo + MoveIt RViz + Vision RViz)
+- How all three visualization tools work together
+- Step-by-step launch instructions for each tool
+- Typical workflows (first launch, thesis validation, real robot)
+- Complete troubleshooting section
+- Tips for using Antigravity assistant
+
+**For:** New teammates, complete system understanding
+
+---
+
 ### [GAZEBO_GUIDE.md](./GAZEBO_GUIDE.md)
-**Complete Gazebo reference guide**
+**Detailed Gazebo reference guide**
 
 Covers:
 - Gazebo vs. Ignition comparison
@@ -49,8 +64,12 @@ Provides:
 
 ## 🚀 Quick Navigation
 
-**First time using Gazebo?**  
-→ Start with [GAZEBO_GUIDE.md](./GAZEBO_GUIDE.md) § Quick Start
+**First time with the PAROL6 system?**  
+→ Start with [COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)  
+  (Explains entire system: Gazebo + MoveIt + Vision)
+
+**First time using Gazebo specifically?**  
+→ See [GAZEBO_GUIDE.md](./GAZEBO_GUIDE.md) § Quick Start
 
 **Just need launch commands?**  
 → See [QUICK_START.md](./QUICK_START.md)

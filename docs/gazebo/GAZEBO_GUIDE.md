@@ -292,7 +292,7 @@ Per `parol6_vision/docs/GAZEBO_VALIDATION_PLAN.md`:
 ros2 bag play kinect_snapshot_20260124 --loop
 
 # Terminal 2: Gazebo
-ros2 launch parol6 gazebo.launch.py
+ros2 launch parol6 ignition.launch.py
 
 # Terminal 3: Vision
 ros2 launch parol6_vision camera_setup.launch.py
@@ -320,7 +320,7 @@ ros2 bag record /joint_states /tf /detected_lines_3d /welding_path
 
 3. **Launch Gazebo:**
    ```bash
-   ros2 launch parol6 gazebo.launch.py
+   ros2 launch parol6 ignition.launch.py
    ```
 
 4. **Wait 10-15 seconds** for initialization
@@ -331,7 +331,7 @@ ros2 bag record /joint_states /tf /detected_lines_3d /welding_path
 
 **Quick launch (one-liner):**
 ```bash
-docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 gazebo.launch.py"
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 ignition.launch.py"
 ```
 
 ---
