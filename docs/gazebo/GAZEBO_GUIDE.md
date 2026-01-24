@@ -127,7 +127,7 @@ ros2 bag play test_data/kinect_snapshot_* --loop
 ```bash
 docker exec -it parol6_dev bash
 cd /workspace && source install/setup.bash
-ros2 launch parol6 gazebo.launch.py
+ros2 launch parol6 ignition.launch.py
 ```
 
 **Terminal 3: Camera Visualization**
@@ -159,7 +159,7 @@ Just want to see the robot model in 3D simulation:
 ```bash
 docker exec -it parol6_dev bash
 cd /workspace && source install/setup.bash
-ros2 launch parol6 gazebo.launch.py
+ros2 launch parol6 ignition.launch.py
 ```
 
 **No RViz needed** - Gazebo has its own GUI
