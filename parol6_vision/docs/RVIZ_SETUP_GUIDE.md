@@ -41,7 +41,7 @@ source install/setup.bash
 
 **If you only want to build vision-related packages:**
 ```bash
-colcon build --packages-up-to parol6_vision --symlink-install
+colcon build --packages-select parol6_vision --symlink-install
 ```
 
 This automatically builds `parol6_vision` and all its dependencies.
