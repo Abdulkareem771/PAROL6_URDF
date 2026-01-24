@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, ExecuteProcess, RegisterEventHandler
+from launch.actions import IncludeLaunchDescription, ExecuteProcess, RegisterEventHandler, SetEnvironmentVariable
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
@@ -18,6 +18,15 @@ def generate_launch_description():
     # Read URDF
     with open(urdf_path, 'r') as urdf_file:
         robot_description = urdf_file.read()
+
+    # Set IGN_GAZEBO_RESOURCE_PATH to help Ignition find meshes
+    # parol6_package_path is /workspace/install/parol6/share/parol6
+    # We need /workspace/install/parol6/share
+    set_ign_resource_path = SetEnvironmentVariable(
+        name='IGN_GAZEBO_RESOURCE_PATH',
+        value=os.path.dirname(parol6_package_path)
+    )
+
 
     # Robot State Publisher
     robot_state_publisher_node = Node(
@@ -44,6 +53,7 @@ def generate_launch_description():
             'ign_args': '-r -v 4 empty.sdf'
         }.items()
     )
+
 
     # Spawn robot in Ignition
     spawn_robot = Node(
@@ -81,6 +91,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        set_ign_resource_path,
         robot_state_publisher_node,
         ignition_gazebo,
         spawn_robot,
@@ -98,3 +109,4 @@ def generate_launch_description():
             )
         ),
     ])
+
