@@ -20,10 +20,11 @@ Expected outcome (Day 1):
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -197,6 +198,23 @@ def generate_launch_description():
     )
 
     # =========================================================================
+    # INCLUDE: MoveIt Demo (RViz + Motion Planning)
+    # =========================================================================
+    
+    moveit_demo = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare("parol6_moveit_config"),
+                "launch",
+                "demo.launch.py"
+            ])
+        ]),
+        launch_arguments={
+            "use_sim_time": "false",
+        }.items(),
+    )
+
+    # =========================================================================
     # LAUNCH DESCRIPTION
     # =========================================================================
     nodes = [
@@ -204,6 +222,7 @@ def generate_launch_description():
         robot_state_pub_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
+        moveit_demo,
     ]
 
     return LaunchDescription(declared_arguments + nodes)
