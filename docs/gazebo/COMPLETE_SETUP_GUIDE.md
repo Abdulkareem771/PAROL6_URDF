@@ -662,9 +662,52 @@ After following this guide, you should be able to:
 - [  ] Troubleshoot common issues without help
 - [ ] Navigate documentation to find specific guides
 
+
+---
+
+## 🔧 Recent Fixes and Troubleshooting (2026-01-24)
+
+This section documents common issues encountered with the latest Docker image update and their solutions.
+
+### Issue 1: Robot Doesn't Render in Ignition
+
+**Symptoms:** Robot appears in entity tree but not in 3D viewport  
+**Cause:** `IGN_GAZEBO_RESOURCE_PATH` not set correctly
+
+**Solution:** Already fixed in [`ignition.launch.py`](file:///home/a7med/Desktop/PAROL6_URDF/PAROL6/launch/ignition.launch.py)
+
+---
+
+### Issue 2: parol6_vision Package Not Found
+
+**Solution:**
+```bash
+colcon build --symlink-install --packages-skip esp32_feedback
+```
+
+---
+
+### Issue 3: MoveIt Segmentation Fault with Ignition
+
+**Cause:** Controller manager conflict
+
+**Workaround:** Use MoveIt demo standalone (without Ignition) for planning
+
+---
+
+### Issue 4: PATH_TOLERANCE_VIOLATED Errors
+
+**Symptoms:** Second motion fails with path tolerance error  
+**Solution:** Already fixed in [`ros2_controllers.yaml`](file:///home/a7med/Desktop/PAROL6_URDF/parol6_moveit_config/config/ros2_controllers.yaml)
+
+Path tolerances now set to:
+- `trajectory: 0.1` rad (during execution)
+- `goal: 0.05` rad (at final position)
+
 ---
 
 ## 🆘 Getting Help
+
 
 **Check Documentation:**
 1. This guide (complete setup)
