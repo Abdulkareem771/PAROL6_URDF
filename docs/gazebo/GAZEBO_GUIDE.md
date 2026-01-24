@@ -17,21 +17,7 @@ Gazebo provides **visual simulation** of the robot for:
 
 ## 🔧 Gazebo vs. Ignition - Which to Use?
 
-### Standard Gazebo (Recommended ✅)
-
-**Launch file:** `ros2 launch parol6 gazebo.launch.py`
-
-**Pros:**
-- More stable
-- Better ROS 2 integration
-- Less network dependencies
-- Simpler troubleshooting
-
-**Cons:**
-- Older technology
-- Will be deprecated eventually
-
-### Ignition Gazebo (Advanced)
+### Ignition Gazebo (Recommended ✅)
 
 **Launch file:** `ros2 launch parol6 ignition.launch.py`
 
@@ -39,13 +25,27 @@ Gazebo provides **visual simulation** of the robot for:
 - Modern architecture
 - Better performance
 - Future-proof
+- Works reliably in your Docker setup
 
 **Cons:**
-- Network issues (tries to download models from fuel.ignitionrobotics.org)
-- More complex setup
-- May hang on first launch
+- May try to download models from fuel.ignitionrobotics.org on first launch
+- More complex architecture (but well-supported)
 
-**Recommendation for Your Thesis:** Use **Standard Gazebo** (`gazebo.launch.py`) for reliability.
+### Standard Gazebo (Alternative)
+
+**Launch file:** `ros2 launch parol6 gazebo.launch.py`
+
+**Pros:**
+- Simpler architecture
+- Well-documented legacy support
+
+**Cons:**
+- Older technology
+- Being deprecated
+- May have compatibility issues with current setup
+- Will be fully replaced by Ignition
+
+**Recommendation for Your Thesis:** Use **Ignition Gazebo** (`ignition.launch.py`) for best compatibility with your Docker environment.
 
 ---
 
@@ -58,13 +58,13 @@ docker exec -it parol6_dev bash
 cd /workspace && source install/setup.bash
 ```
 
-### Step 2: Launch Gazebo
+###Step 2: Launch Gazebo
 
 ```bash
-ros2 launch parol6 gazebo.launch.py
+ros2 launch parol6 ignition.launch.py
 ```
 
-**Expected:** Gazebo window opens with empty world
+**Expected:** Ignition Gazebo window opens with empty world
 
 **Wait 10-15 seconds** for full initialization
 
@@ -98,7 +98,7 @@ parol6_arm_controller[joint_trajectory_controller/JointTrajectoryController] act
 ```bash
 docker exec -it parol6_dev bash
 cd /workspace && source install/setup.bash
-ros2 launch parol6 gazebo.launch.py
+ros2 launch parol6 ignition.launch.py
 ```
 
 **Terminal 2: MoveIt + RViz** (after Gazebo loads)

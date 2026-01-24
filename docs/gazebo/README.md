@@ -79,11 +79,11 @@ Located in `PAROL6/launch/`:
 
 | File | Description | Use When |
 |------|-------------|----------|
-| `gazebo.launch.py` | Standard Gazebo (Classic) | **Default choice** - Most stable |
-| `ignition.launch.py` | Ignition Gazebo | Advanced users, future-proof |
-| `gazebo_classic.launch.py` | Legacy Gazebo | Compatibility only |
+| `ignition.launch.py` | Ignition Gazebo (Modern) | **Default choice** - Best compatibility |
+| `gazebo.launch.py` | Standard Gazebo (Classic) | Legacy/compatibility only |
+| `gazebo_classic.launch.py` | Legacy Gazebo | Old systems only |
 
-**Recommendation:** Use `gazebo.launch.py` for reliability.
+**Recommendation:** Use `ignition.launch.py` for best performance and compatibility.
 
 ---
 

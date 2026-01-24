@@ -2,14 +2,14 @@
 
 ## 🚀 Launch Commands
 
-### Standard Gazebo (Recommended)
-```bash
-docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 gazebo.launch.py"
-```
-
-### Ignition Gazebo (Alternative)
+### Ignition Gazebo (Recommended)
 ```bash
 docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 ignition.launch.py"
+```
+
+### Standard Gazebo (Alternative)
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 gazebo.launch.py"
 ```
 
 ---
