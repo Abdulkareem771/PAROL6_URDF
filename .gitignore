@@ -57,3 +57,5 @@ venvs/*
 # Temporarily container's start code
 #start_container.sh
 >>>>>>> real-robot-integration
+
+test_data/kinect_snapshot_20260126_231342/*
