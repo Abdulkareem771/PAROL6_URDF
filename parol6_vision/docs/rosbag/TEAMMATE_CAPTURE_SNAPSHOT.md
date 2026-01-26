@@ -7,9 +7,11 @@
 ## ✅ Prerequisites Checklist
 
 Before starting, verify:
+- [ ] You must to have the Red-Marker ROS bag "rosbag2_2026_01_26-23_26_59.zip"
 - [ ] Kinect v2 camera physically connected to USB 3.0 port
 - [ ] Docker container `parol6_dev` is running
 - [ ] You have the latest code from the `Red-Marker-Detection` branch
+
 
 ---
 
