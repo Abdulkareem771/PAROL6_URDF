@@ -111,8 +111,11 @@ cd /workspace
 source /opt/ros/humble/setup.bash
 
 # Record 3-second snapshot
-./src/parol6_vision/scripts/record_kinect_snapshot.sh 3 kinect_snapshot
+./parol6_vision/scripts/record_kinect_snapshot.sh 3 kinect_snapshot
 ```
+
+**You have to manually press Ca**
+
 
 **You'll see:**
 ```
