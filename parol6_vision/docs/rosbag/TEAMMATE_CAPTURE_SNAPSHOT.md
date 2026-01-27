@@ -7,7 +7,7 @@
 ## ✅ Prerequisites Checklist
 
 Before starting, verify:
-- [ ] You must to have the Red-Marker ROS bag "rosbag2_2026_01_26-23_26_59.zip"
+- [ ] You must to have the Red-Marker ROS bag "rosbag2_2026_01_26-23_26_59.zip" or "rosbag2_2026_01_26-23_26_59" folder from the GitHub.
 - [ ] Kinect v2 camera physically connected to USB 3.0 port
 - [ ] Docker container `parol6_dev` is running
 - [ ] You have the latest code from the `Red-Marker-Detection` branch
@@ -164,7 +164,7 @@ Press `Ctrl+C`
 ```bash
 cd /workspace
 source /opt/ros/humble/setup.bash
-ros2 bag play test_data/kinect_snapshot_YYYYMMDD_HHMMSS --loop
+ros2 bag play rosbag2_/kinect_snapshot_YYYYMMDD_HHMMSS --loop
 ```
 
 **Terminal 2 - Verify:**
