@@ -4,6 +4,125 @@ This document provides ready-to-use GitHub issue templates for the remaining vis
 
 ---
 
+## Issue #0: HSV Inspector Utility Tool (Development Aid)
+
+**Title:** `HSV Inspector Node - Interactive Parameter Tuning Tool`
+
+**Labels:** `utility`, `developer-tool`, `vision-pipeline`, `enhancement`
+
+**Milestone:** Vision Pipeline v1.0 (Supporting Tool)
+
+**Description:**
+
+### 📋 Overview
+Create an interactive HSV color space inspector tool that helps developers tune red line detection parameters in real-time by displaying pixel-level RGB and HSV values as the mouse moves over the camera feed.
+
+### 🎯 Objectives
+- Subscribe to live Kinect camera feed (`/kinect2/qhd/image_color_rect`)
+- Display camera image in OpenCV window
+- Show real-time RGB and HSV values at mouse cursor position
+- Provide visual feedback (crosshair, text overlay)
+- Enable rapid parameter tuning workflow for red line detector
+
+### ✅ Acceptance Criteria
+- [ ] ROS2 node implemented: `hsv_inspector_node.py`
+- [ ] Subscribes to configurable image topic (default: `/kinect2/qhd/image_color_rect`)
+- [ ] OpenCV window titled "HSV Inspector" displays live camera feed
+- [ ] Mouse move callback triggered on every cursor movement
+- [ ] Text overlay shows:
+  - Pixel coordinates `(x, y)`
+  - RGB values `(R, G, B)`
+  - HSV values `(H, S, V)`
+- [ ] Visual crosshair/circle at cursor position
+- [ ] Entry point registered in `setup.py`: `hsv_inspector = parol6_vision.hsv_inspector_node:main`
+- [ ] Node can be launched via: `ros2 run parol6_vision hsv_inspector`
+
+### 📚 Resources
+- Node implementation: `parol6_vision/parol6_vision/hsv_inspector_node.py`
+- Related config: `parol6_vision/config/detection_params.yaml`
+- Usage guide: To be documented in `RED_LINE_DETECTOR_GUIDE.md` (Tuning section)
+
+### 🧪 Testing Requirements
+- [ ] Test with live Kinect camera feed
+- [ ] Test with mock camera (`mock_camera_publisher.py`)
+- [ ] Verify correct HSV conversion (OpenCV BGR→HSV pipeline)
+- [ ] Test with different lighting conditions
+- [ ] Verify GUI responsiveness (no lag on mouse movement)
+
+### 📊 Usage Workflow
+
+**Developer workflow for HSV tuning:**
+1. Launch Kinect driver:
+   ```bash
+   ros2 launch kinect2_bridge kinect2_bridge.launch.py
+   ```
+
+2. Run HSV Inspector:
+   ```bash
+   ros2 run parol6_vision hsv_inspector
+   ```
+
+3. Hover mouse over red markers in the camera view
+
+4. Record HSV values for red regions
+
+5. Update `detection_params.yaml`:
+   ```yaml
+   hsv_lower_1: [0, 100, 100]    # Adjust based on readings
+   hsv_upper_1: [10, 255, 255]
+   hsv_lower_2: [160, 50, 0]
+   hsv_upper_2: [180, 255, 255]
+   ```
+
+6. Test with red line detector to validate
+
+### 🎨 Implementation Details
+
+**Key Features:**
+- **Real-time feedback:** Instant HSV display without recording/playback
+- **Lightweight:** Simple OpenCV GUI, no heavy dependencies
+- **Configurable topic:** Can inspect any image topic (not just Kinect)
+- **Development-only:** Not part of production pipeline
+
+**Technical Notes:**
+- Use `cv_bridge` for ROS→OpenCV conversion
+- HSV conversion: `cv2.cvtColor(image, cv2.COLOR_BGR2HSV)`
+- Mouse callback: `cv2.setMouseCallback("HSV Inspector", callback_function)`
+- Text overlay: `cv2.putText()` with contrasting color (red on image)
+- Circle marker: `cv2.circle()` to highlight cursor position
+
+### 🔗 Dependencies
+- Requires: Kinect v2 camera running (or mock camera)
+- Supports: Red Line Detector parameter tuning
+- Optional: RViz not required (standalone tool)
+
+### 📝 Documentation Tasks
+- [ ] Add section to `RED_LINE_DETECTOR_GUIDE.md`:
+  - "HSV Parameter Tuning with Inspector Tool"
+  - Screenshot showing HSV values being read
+  - Example values for different lighting conditions
+- [ ] Add usage example to `TESTING_GUIDE.md`
+- [ ] Create quick reference in README
+
+### 🎯 Success Metrics
+- Reduces HSV tuning time from 30+ minutes to < 5 minutes
+- Teammates can independently tune parameters
+- No trial-and-error with hardcoded values
+
+### 💡 Future Enhancements (Optional)
+- [ ] Trackbars for live HSV range visualization
+- [ ] Save/load HSV presets
+- [ ] Display histogram of HSV distribution
+- [ ] Region-of-interest (ROI) selection for batch sampling
+
+---
+
+**Priority:** **Medium** (Utility tool - very useful but not blocking)  
+**Estimated Effort:** 2-3 hours (already implemented, needs documentation)  
+**Status:** ✅ **IMPLEMENTED** - Needs documentation and testing
+
+---
+
 ## Issue #2: Depth Matcher - 3D Point Cloud Projection
 
 **Title:** `Implement Depth Matcher Node (3D Projection)`
