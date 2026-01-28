@@ -57,3 +57,7 @@ venvs/*
 # Temporarily container's start code
 #start_container.sh
 >>>>>>> real-robot-integration
+
+test_data/*
+rosbag2_2026_01_26-23_26_59/*
+rosbag2_2026_01_26-23_26_59.zip
