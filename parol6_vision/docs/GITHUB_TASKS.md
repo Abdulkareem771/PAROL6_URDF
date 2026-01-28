@@ -123,6 +123,205 @@ Create an interactive HSV color space inspector tool that helps developers tune 
 
 ---
 
+## Issue #1: Kinect Calibration Converter Tool
+
+**Title:** `Kinect v2 Calibration File Converter (OpenCV → ROS)`
+
+**Labels:** `utility`, `calibration`, `setup`, `enhancement`
+
+**Milestone:** Vision Pipeline v1.0 (Supporting Tool)
+
+**Description:**
+
+### 📋 Overview
+Create a conversion script that transforms Kinect v2 calibration files from OpenCV format (`calib_color.yaml`, `calib_pose.yaml`) to ROS-compatible `camera_params.yaml` format for use in the vision pipeline.
+
+### 🎯 Objectives
+- Read OpenCV calibration files from `parol6_vision/data/`
+- Extract camera intrinsic parameters (fx, fy, cx, cy, distortion)
+- Convert 3×3 rotation matrix to quaternion representation
+- Extract depth-to-color sensor alignment (informational)
+- Generate ROS-compatible YAML configuration file
+- Provide clear instructions for manual camera-robot calibration
+
+### ✅ Acceptance Criteria
+- [ ] Python script: `convert_kinect_calibration.py` (root directory)
+- [ ] Reads input from `parol6_vision/data/`:
+  - `calib_color.yaml` - Camera intrinsics
+  - `calib_pose.yaml` - Depth-RGB alignment
+- [ ] Outputs to: `parol6_vision/config/camera_params_calibrated.yaml`
+- [ ] Extracts intrinsic parameters:
+  - Focal lengths (fx, fy)
+  - Principal point (cx, cy)
+  - Distortion coefficients [k1, k2, p1, p2, k3]
+- [ ] Converts rotation matrix to quaternion using scipy
+- [ ] Includes depth→color transform (for reference)
+- [ ] Warns user about missing camera→robot calibration
+- [ ] Provides default placeholder values for extrinsic calibration
+
+### 📚 Resources
+- Conversion script: `convert_kinect_calibration.py`
+- Input calibration files: `parol6_vision/data/calib_*.yaml`
+- Output file: `parol6_vision/config/camera_params_calibrated.yaml`
+- Setup guide: `parol6_vision/docs/CALIBRATION_SETUP_GUIDE.md`
+
+### 🧪 Testing Requirements
+- [ ] Test with provided Kinect v2 calibration files
+- [ ] Verify intrinsic parameters match OpenCV source
+- [ ] Validate quaternion conversion (compare with online calculators)
+- [ ] Ensure output YAML is valid ROS format
+- [ ] Test script runs in Docker environment
+
+### 📊 Conversion Algorithm
+
+**Step 1: Camera Intrinsics**
+```python
+# From camera matrix:
+# [fx  0  cx]
+# [0  fy  cy]
+# [0   0   1]
+
+fx = matrix_data[0]  # Element [0,0]
+fy = matrix_data[4]  # Element [1,1]
+cx = matrix_data[2]  # Element [0,2]
+cy = matrix_data[5]  # Element [1,2]
+```
+
+**Step 2: Rotation Matrix → Quaternion**
+```python
+# 3x3 rotation matrix from calib_pose.yaml
+R = np.array(rot_data).reshape(3, 3)
+
+# Convert using scipy
+r = Rotation.from_matrix(R)
+quat = r.as_quat()  # [x, y, z, w]
+```
+
+**Step 3: Generate ROS YAML**
+```yaml
+/**:
+  ros__parameters:
+    camera_intrinsics:
+      fx: <extracted>
+      fy: <extracted>
+      cx: <extracted>
+      cy: <extracted>
+      distortion: [k1, k2, p1, p2, k3]
+    camera_to_base_transform:
+      translation: {x: 0.5, y: 0.0, z: 1.0}  # ⚠️ PLACEHOLDER
+      rotation: {x: -0.5, y: 0.5, z: -0.5, w: 0.5}  # ⚠️ PLACEHOLDER
+    depth_to_color_transform:
+      translation: {x: <extracted>, y: <extracted>, z: <extracted>}
+      rotation: {x: <converted>, y: <converted>, z: <converted>, w: <converted>}
+```
+
+### 🛠️ Usage Workflow
+
+**For Teammates:**
+1. Ensure Kinect calibration files exist in `parol6_vision/data/`
+2. Run conversion script:
+   ```bash
+   docker exec parol6_dev bash -c "cd /workspace && python3 convert_kinect_calibration.py"
+   ```
+3. Review generated file: `parol6_vision/config/camera_params_calibrated.yaml`
+4. **CRITICAL:** Measure camera-to-robot transform (see `CALIBRATION_SETUP_GUIDE.md`)
+5. Edit `camera_to_base_transform` section with real values
+6. Activate calibration:
+   ```bash
+   cp parol6_vision/config/camera_params_calibrated.yaml \
+      parol6_vision/config/camera_params.yaml
+   ```
+
+### 🔗 Dependencies
+- **Python packages:** `pyyaml`, `numpy`, `scipy`
+- **Input files:** Kinect v2 calibration (from manufacturer or custom calibration)
+- **Supports:** Depth Matcher node (Issue #2) - provides intrinsic parameters
+
+### 📝 What's Converted vs. What's Missing
+
+**✅ Automatically Converted (from Kinect files):**
+- Camera intrinsics (fx, fy, cx, cy)
+- Radial distortion (k1, k2, k3)
+- Tangential distortion (p1, p2)
+- Depth-RGB sensor offset (~52mm for Kinect v2)
+- Internal sensor rotation (typically < 1°)
+
+**⚠️ User Must Provide (Manual Calibration):**
+- Camera position relative to robot base (x, y, z in meters)
+- Camera orientation relative to robot (quaternion or Euler angles)
+- See `CALIBRATION_SETUP_GUIDE.md` for 3 calibration methods:
+  1. Manual measurement (±10-20mm)
+  2. ArUco marker method (±5mm)
+  3. Hand-eye calibration (±2-3mm)
+
+### 📊 Output Example
+
+```bash
+============================================================
+Kinect v2 Calibration Converter
+============================================================
+
+[1/4] Loading calibration files...
+[2/4] Extracting camera intrinsics...
+   fx: 1059.95 pixels
+   fy: 1053.93 pixels
+   cx: 954.88 pixels
+   cy: 523.74 pixels
+   Distortion: ['0.0563', '-0.0742', '0.0014', '-0.0017', '0.0241']
+
+[3/4] Extracting depth→color transform (internal calibration)...
+   Translation: {'x': -0.052, 'y': -0.0005, 'z': 0.0009}
+   Rotation (quat): {'x': -0.0009, 'y': -0.0054, 'z': 0.0084, 'w': 0.9999}
+
+[4/4] Generating camera_params.yaml...
+⚠️  WARNING: Using default camera→robot translation!
+   You MUST calibrate this for accurate 3D positioning!
+
+✅ Generated: /workspace/parol6_vision/config/camera_params_calibrated.yaml
+```
+
+### 🎓 Educational Value
+
+**Why This Tool Matters:**
+- **Thesis Defense:** Shows understanding of camera calibration mathematics
+- **Reproducibility:** Teammates can regenerate config from source calibration
+- **Modularity:** Separates intrinsic (Kinect-specific) from extrinsic (setup-specific) calibration
+- **Documentation:** Script itself is educational (rotation matrix → quaternion math)
+
+**Key Concepts Demonstrated:**
+- Pinhole camera model (intrinsic parameters)
+- OpenCV calibration format parsing
+- Rotation representations (matrix vs. quaternion)
+- Coordinate frame transformations
+- ROS parameter conventions
+
+### 📖 Documentation Tasks
+- [x] Script has inline documentation ✅
+- [x] `CALIBRATION_SETUP_GUIDE.md` explains usage ✅
+- [ ] Add section to `DEPTH_MATCHER_GUIDE.md` referencing this tool
+- [ ] Create visual diagram: Calibration data flow
+- [ ] Example calibration values for common setups
+
+### 🎯 Success Metrics
+- Teammates can convert calibration files independently
+- Intrinsic parameters validated (RMS error < 0.5 pixels)
+- Clear separation of "done" vs. "to-do" items
+- Reduces setup time from hours to minutes
+
+### 💡 Future Enhancements (Optional)
+- [ ] Support other camera formats (RealSense, Zed)
+- [ ] Automatic validation against known calibration patterns
+- [ ] GUI for entering camera-robot transform visually
+- [ ] Integration with hand-eye calibration tools
+
+---
+
+**Priority:** **High** (One-time setup, but critical for pipeline accuracy)  
+**Estimated Effort:** 3-4 hours (already implemented, needs testing + docs)  
+**Status:** ✅ **IMPLEMENTED** - Ready for teammate testing
+
+---
+
 ## Issue #2: Depth Matcher - 3D Point Cloud Projection
 
 **Title:** `Implement Depth Matcher Node (3D Projection)`
