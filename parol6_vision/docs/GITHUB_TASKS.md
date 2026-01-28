@@ -407,8 +407,9 @@ Implement the `path_generator` node that converts 3D weld line points into smoot
 
 ### 📚 Resources
 - Implementation plan: `implementation_plan.md` (Lines 299-356)
+- **Developer guide:** `parol6_vision/docs/PATH_GENERATOR_GUIDE.md` ✅
 - Configuration: `parol6_vision/config/path_params.yaml`
-- Utility module: `parol6_vision/utils/path_utils.py`
+- Node implementation: `parol6_vision/parol6_vision/path_generator.py`
 
 ### 🧪 Testing Requirements
 - [ ] Unit test with synthetic 3D points
@@ -428,6 +429,21 @@ Implement the `path_generator` node that converts 3D weld line points into smoot
 
 ### 📝 Notes
 **Scope:** Initial implementation assumes planar welding surfaces. Surface normal estimation from depth data is future work (document this in thesis as valid scoping).
+
+### 📖 Algorithm Documentation
+See `PATH_GENERATOR_GUIDE.md` for detailed explanations:
+- **PCA Point Ordering:** Why and how principal component analysis sorts unordered points
+- **B-Spline Mathematics:** Smoothing parameter tuning, C² continuity guarantees
+- **Arc-Length Reparameterization:** Ensuring uniform waypoint spacing (5mm)
+- **Orientation Generation:** Tangent-based coordinate frames for planar surfaces
+- **Parameter Tuning:** Complete guide for `spline_smoothing`, `waypoint_spacing`, `approach_angle_deg`
+- **Troubleshooting:** 6 common issues with step-by-step solutions
+
+---
+
+**Priority:** **High** (Critical for trajectory generation)  
+**Estimated Effort:** 6-8 hours (already implemented, guide complete)  
+**Status:** ✅ **IMPLEMENTED** - Node complete, guide complete, ready for testing
 
 ---
 
@@ -601,7 +617,7 @@ Finalize all documentation, create video tutorials, and ensure teammates can ind
 - [x] Depth Matcher Guide ✅
 - [x] Testing Guide ✅
 - [x] Calibration Setup Guide ✅
-- [ ] Path Generator Guide
+- [x] Path Generator Guide ✅
 - [ ] MoveIt Controller Guide
 - [ ] Troubleshooting Compendium
 
@@ -628,7 +644,7 @@ Finalize all documentation, create video tutorials, and ensure teammates can ind
 parol6_vision/docs/
 ├── RED_LINE_DETECTOR_GUIDE.md ✅
 ├── DEPTH_MATCHER_GUIDE.md ✅
-├── PATH_GENERATOR_GUIDE.md (TODO)
+├── PATH_GENERATOR_GUIDE.md ✅
 ├── MOVEIT_CONTROLLER_GUIDE.md (TODO)
 ├── TESTING_GUIDE.md ✅
 ├── CALIBRATION_SETUP_GUIDE.md ✅
