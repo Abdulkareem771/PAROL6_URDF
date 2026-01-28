@@ -1,0 +1,22 @@
+# QoS Profile Overrides for ROS Bag Recording
+# This ensures reliable message capture across different DDS configurations
+
+/kinect2/qhd/image_color_rect:
+  reliability: best_effort
+  durability: volatile
+
+/kinect2/qhd/image_depth_rect:
+  reliability: best_effort
+  durability: volatile
+
+/kinect2/qhd/camera_info:
+  reliability: reliable
+  durability: volatile
+
+/tf:
+  reliability: reliable
+  durability: volatile
+
+/tf_static:
+  reliability: reliable
+  durability: transient_local

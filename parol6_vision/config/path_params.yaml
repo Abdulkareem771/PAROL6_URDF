@@ -1,0 +1,53 @@
+### Path Generation and Welding Parameters
+
+path_generator:
+  ros__parameters:
+    # Spline smoothing
+    spline_degree: 3                # Cubic B-spline
+    spline_smoothing: 0.01          # Lower = tighter fit
+    waypoint_spacing: 0.005         # 5mm between waypoints
+    
+    # Orientation generation
+    approach_angle_deg: 45.0        # Torch angle relative to surface
+    torch_offset: [0.0, 0.0, 0.1]   # TCP offset in meters [X, Y, Z]
+    
+    # Trigger behavior
+    auto_generate: true             # Auto-generate on detection
+    min_points_for_path: 10         # Minimum 3D points required
+    
+    # Quality checks
+    max_curvature: 100.0            # rad/m (warn if exceeded)
+    min_path_length: 0.05           # 5cm minimum
+    max_path_length: 2.0            # 2m maximum
+    
+    # Performance
+    processing_timeout: 5.0         # seconds
+
+# MoveIt Controller Parameters
+moveit_controller:
+  ros__parameters:
+    # Planning group
+    planning_group: "parol6_arm"
+    end_effector_link: "link_6"
+    
+    # Velocity and acceleration scaling
+    max_velocity_scaling: 0.3       # 30% of max
+    max_acceleration_scaling: 0.3
+    
+    # Cartesian planning with fallback
+    cartesian_step_sizes: [0.002, 0.005, 0.010]  # Try in order (mm)
+    min_success_rates: [0.95, 0.95, 0.90]        # Corresponding thresholds
+    
+    # Welding process
+    approach_distance: 0.05         # 5cm above path start
+    retract_distance: 0.05          # 5cm retract after weld
+    weld_velocity: 0.01              # 10mm/s (constant velocity)
+    
+    # Safety
+    collision_checking: true
+    max_planning_time: 5.0          # seconds
+    max_retries: 3
+    
+    # Execution monitoring
+    goal_tolerance: 0.001           # 1mm position tolerance
+    path_tolerance: 0.005           # 5mm path deviation allowed

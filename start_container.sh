@@ -58,9 +58,12 @@ else
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+    --env QT_X11_NO_MITSHM=1 \
+    -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
     -v /dev:/dev \
     -w /workspace \
+    --shm-size=512m \
     $IMAGE_NAME \
     tail -f /dev/null
 

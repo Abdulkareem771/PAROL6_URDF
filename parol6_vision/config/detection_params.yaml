@@ -1,0 +1,51 @@
+### Red Line Detection Parameters
+# Tune these values based on your red marker and lighting conditions
+
+red_line_detector:
+  ros__parameters:
+    # HSV color ranges for red detection
+    # Red wraps around in HSV, so we use two ranges
+    
+    # Range 1: Low red (0-10 degrees)
+    hsv_lower_1: [0, 100, 100]      # [H, S, V]
+    hsv_upper_1: [10, 255, 255]
+    
+    # Range 2: High red (170-180 degrees)
+    hsv_lower_2: [170, 100, 100]
+    hsv_upper_2: [180, 255, 255]
+    
+    # Morphological operations
+    morphology_kernel_size: 5       # Larger = more smoothing
+    erosion_iterations: 1           # Remove noise
+    dilation_iterations: 2          # Fill gaps
+    
+    # Line extraction
+    min_line_length: 50             # Minimum pixels for valid line
+    min_contour_area: 100           # Minimum area (pixels²)
+    douglas_peucker_epsilon: 2.0    # Polyline approximation tolerance
+    
+    # Performance
+    processing_rate: 10.0           # Target Hz
+    publish_debug_images: true      # Enable debug visualization
+    
+    # Quality thresholds
+    min_confidence: 0.5             # Minimum confidence to publish
+    max_lines_per_frame: 5          # Maximum detections
+
+# Depth Matcher Parameters
+depth_matcher:
+  ros__parameters:
+    # Frame transformation
+    target_frame: "base_link"
+    
+    # Outlier filtering
+    outlier_std_threshold: 2.0      # Statistical outlier removal (σ)
+    min_valid_points: 10            # Minimum 3D points for valid line
+    max_depth: 2000.0               # Maximum depth (mm)
+    
+    # Message synchronization
+    sync_time_tolerance: 0.05       # seconds (50ms)
+    sync_queue_size: 10
+    
+    # Quality metrics
+    min_depth_quality: 0.7          # Minimum quality to publish
