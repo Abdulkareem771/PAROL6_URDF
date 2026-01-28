@@ -58,10 +58,6 @@ venvs/*
 #start_container.sh
 >>>>>>> real-robot-integration
 
-<<<<<<< HEAD
-test_data/*
-=======
 test_data/kinect_snapshot_20260126_231342/*
->>>>>>> origin/Red-Marker-Detection
 rosbag2_2026_01_26-23_26_59/*
 rosbag2_2026_01_26-23_26_59.zip
