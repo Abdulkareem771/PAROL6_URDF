@@ -35,7 +35,7 @@
 		```bash
 		ros2 launch kinect2_bridge rtabmap.launch.py
 	 ```
-	
+ros2 run rviz2 rviz2	
 5.	#	**Create a directory for your calibration data files**, for example:
 		```bash
 		mkdir ~/kinect_cal_data; cd ~/kinect_cal_data
