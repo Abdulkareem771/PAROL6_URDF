@@ -396,7 +396,7 @@ ros2 run rqt_image_view rqt_image_view
 
 **RTABMap (3D SLAM):**
 ```bash
-ros2 launch kinect2_bridge rtabmap.launch.py
+bash rtabmap_launch_example.sh
 ```
 
 ---
