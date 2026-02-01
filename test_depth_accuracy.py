@@ -44,7 +44,7 @@ class DepthTester(Node):
         self.get_logger().info('=' * 60)
         
         # Separate tracking for RGB and Depth clicks
-        self.rgb_click = None  # (x, y, r, g, b)
+        self.rgb_click = None  # (x, y, r, g, b, depth, std_dev)
         self.depth_click = None  # (x, y, depth, std_dev)
         
         self.measurement_mode = False
@@ -74,140 +74,150 @@ class DepthTester(Node):
             self.get_logger().error(f'Error processing color image: {str(e)}')
     
     def create_sidebar(self):
-        """Create sidebar with measurement table"""
+        """Create sidebar with measurement table - two-column layout"""
         sidebar = np.ones((self.image_height, self.sidebar_width, 3), dtype=np.uint8) * 40
         
         font = cv2.FONT_HERSHEY_SIMPLEX
-        y_offset = 30
-        line_height = 25
+        
+        # Column positions
+        col1_x = 10
+        col2_x = 155
         
         # Title
-        cv2.putText(sidebar, "MEASUREMENTS", (10, y_offset), 
+        y = 30
+        cv2.putText(sidebar, "MEASUREMENTS", (10, y), 
                    font, 0.7, (255, 255, 255), 2)
-        cv2.line(sidebar, (10, y_offset + 5), (self.sidebar_width - 10, y_offset + 5), 
+        cv2.line(sidebar, (10, y + 5), (self.sidebar_width - 10, y + 5), 
                 (100, 100, 100), 1)
-        y_offset += 25
         
         # Shot number
-        cv2.putText(sidebar, f"Shot #{self.shot_number}", (10, y_offset), 
+        cv2.putText(sidebar, f"Shot #{self.shot_number}", (10, y + 30), 
                    font, 0.5, (100, 200, 255), 1)
-        y_offset += line_height + 10
         
         # RGB Section
-        cv2.putText(sidebar, "RGB VIEW DATA:", (10, y_offset), 
+        y = 70
+        cv2.putText(sidebar, "RGB VIEW DATA:", (col1_x, y), 
                    font, 0.5, (100, 255, 100), 1)
-        y_offset += line_height
+        y += 22
         
         if self.rgb_click:
-            x, y, r, g, b = self.rgb_click
-            cv2.putText(sidebar, f"  Position: ({x}, {y})", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"  RGB: ({r}, {g}, {b})", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
+            x_pos, y_pos, r, g, b, depth_mm, std_mm = self.rgb_click
+            
+            # Left column: Position and RGB
+            cv2.putText(sidebar, f"Pos: ({x_pos},{y_pos})", (col1_x, y), 
+                       font, 0.35, (200, 200, 200), 1)
+            cv2.putText(sidebar, f"RGB: {r},{g},{b}", (col1_x, y + 16), 
+                       font, 0.35, (200, 200, 200), 1)
+            
             # Color swatch
-            cv2.rectangle(sidebar, (10, y_offset), (60, y_offset + 20), 
+            cv2.rectangle(sidebar, (col1_x, y + 20), (col1_x + 45, y + 38), 
                          (int(b), int(g), int(r)), -1)
-            y_offset += 25
+            cv2.rectangle(sidebar, (col1_x, y + 20), (col1_x + 45, y + 38), 
+                         (180, 180, 180), 1)
+            
+            # Right column: Distance data
+            if depth_mm > 0:
+                depth_m = depth_mm / 1000.0
+                cv2.putText(sidebar, f"{depth_m:.3f}m", (col2_x, y), 
+                           font, 0.38, (100, 255, 100), 1)
+                cv2.putText(sidebar, f"{depth_mm:.1f}mm", (col2_x, y + 16), 
+                           font, 0.35, (100, 255, 100), 1)
+                cv2.putText(sidebar, f"+/-{std_mm:.1f}mm", (col2_x, y + 32), 
+                           font, 0.32, (150, 150, 150), 1)
+            
+            y += 55
         else:
-            cv2.putText(sidebar, "  Click RGB view", (10, y_offset), 
-                       font, 0.4, (150, 150, 150), 1)
-            y_offset += line_height + 10
+            cv2.putText(sidebar, "Click RGB view", (col1_x, y), 
+                       font, 0.35, (150, 150, 150), 1)
+            y += 35
         
         # Divider
-        cv2.line(sidebar, (10, y_offset), (self.sidebar_width - 10, y_offset), 
+        cv2.line(sidebar, (10, y), (self.sidebar_width - 10, y), 
                 (100, 100, 100), 1)
-        y_offset += 15
+        y += 15
         
         # Depth Section
-        cv2.putText(sidebar, "DEPTH VIEW DATA:", (10, y_offset), 
+        cv2.putText(sidebar, "DEPTH VIEW DATA:", (col1_x, y), 
                    font, 0.5, (255, 200, 100), 1)
-        y_offset += line_height
+        y += 22
         
         if self.depth_click:
-            x, y, depth_mm, std_mm = self.depth_click
+            x_pos, y_pos, depth_mm, std_mm = self.depth_click
             depth_m = depth_mm / 1000.0
-            std_m = std_mm / 1000.0
             
-            cv2.putText(sidebar, f"  Position: ({x}, {y})", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"  Distance:", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"    {depth_m:.3f} m", (10, y_offset), 
-                       font, 0.4, (100, 255, 255), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"    {depth_mm:.1f} mm", (10, y_offset), 
-                       font, 0.4, (100, 255, 255), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"  Std Dev:", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"    +/- {std_mm:.1f} mm", (10, y_offset), 
-                       font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height
+            # Left column: Position
+            cv2.putText(sidebar, f"Pos: ({x_pos},{y_pos})", (col1_x, y), 
+                       font, 0.35, (200, 200, 200), 1)
+            
+            # Right column: Distance
+            cv2.putText(sidebar, f"{depth_m:.3f}m", (col2_x, y), 
+                       font, 0.38, (100, 255, 255), 1)
+            cv2.putText(sidebar, f"{depth_mm:.1f}mm", (col2_x, y + 16), 
+                       font, 0.35, (100, 255, 255), 1)
+            cv2.putText(sidebar, f"+/-{std_mm:.1f}mm", (col2_x, y + 32), 
+                       font, 0.32, (150, 150, 150), 1)
+            
+            y += 50
         else:
-            cv2.putText(sidebar, "  Click depth view", (10, y_offset), 
-                       font, 0.4, (150, 150, 150), 1)
-            y_offset += line_height + 10
+            cv2.putText(sidebar, "Click depth view", (col1_x, y), 
+                       font, 0.35, (150, 150, 150), 1)
+            y += 35
         
         # Divider
-        cv2.line(sidebar, (10, y_offset), (self.sidebar_width - 10, y_offset), 
+        cv2.line(sidebar, (10, y), (self.sidebar_width - 10, y), 
                 (100, 100, 100), 1)
-        y_offset += 15
+        y += 15
         
         # 3D Measurements Section
-        cv2.putText(sidebar, "3D MEASUREMENTS:", (10, y_offset), 
-                   font, 0.5, (255, 100, 255), 1)
-        y_offset += line_height
+        cv2.putText(sidebar, "3D MEASUREMENTS:", (col1_x, y), 
+                   font, 0.45, (255, 100, 255), 1)
+        y += 20
         
         if self.measurement_mode:
-            cv2.putText(sidebar, "  [ACTIVE]", (10, y_offset), 
-                       font, 0.4, (255, 100, 255), 1)
-            y_offset += line_height - 5
-            cv2.putText(sidebar, f"  Points: {len(self.measurement_points)}", 
-                       (10, y_offset), font, 0.4, (200, 200, 200), 1)
-            y_offset += line_height - 5
+            # Left: status, Right: point count
+            cv2.putText(sidebar, "[ACTIVE]", (col1_x, y), 
+                       font, 0.35, (255, 100, 255), 1)
+            cv2.putText(sidebar, f"Pts: {len(self.measurement_points)}", (col2_x, y), 
+                       font, 0.35, (200, 200, 200), 1)
             
-            # Show last distance measured
+            # Show last distance if available
             if len(self.measurement_points) >= 2:
                 dist = self.calculate_3d_distance(
                     self.measurement_points[-2], 
                     self.measurement_points[-1]
                 )
-                cv2.putText(sidebar, f"  Last Distance:", (10, y_offset), 
-                           font, 0.4, (200, 200, 200), 1)
-                y_offset += line_height - 5
-                cv2.putText(sidebar, f"    {dist:.1f} mm", (10, y_offset), 
-                           font, 0.4, (255, 100, 255), 1)
-                y_offset += line_height - 5
-                cv2.putText(sidebar, f"    {dist/10:.1f} cm", (10, y_offset), 
-                           font, 0.4, (255, 100, 255), 1)
+                y += 18
+                cv2.putText(sidebar, f"{dist:.1f}mm", (col1_x, y), 
+                           font, 0.37, (255, 100, 255), 1)
+                cv2.putText(sidebar, f"{dist/10:.1f}cm", (col2_x, y), 
+                           font, 0.37, (255, 100, 255), 1)
+            
+            y += 25
         else:
-            cv2.putText(sidebar, "  Press M to enable", (10, y_offset), 
-                       font, 0.4, (150, 150, 150), 1)
+            cv2.putText(sidebar, "Press M to enable", (col1_x, y), 
+                       font, 0.35, (150, 150, 150), 1)
+            y += 30
         
-        # Controls at bottom
-        y_offset = self.image_height - 100
-        cv2.line(sidebar, (10, y_offset), (self.sidebar_width - 10, y_offset), 
+        # Divider
+        cv2.line(sidebar, (10, y), (self.sidebar_width - 10, y), 
                 (100, 100, 100), 1)
-        y_offset += 20
-        cv2.putText(sidebar, "CONTROLS:", (10, y_offset), 
-                   font, 0.5, (255, 255, 100), 1)
-        y_offset += line_height - 5
-        cv2.putText(sidebar, "  SPACE - Next shot", (10, y_offset), 
-                   font, 0.35, (200, 200, 200), 1)
-        y_offset += line_height - 8
-        cv2.putText(sidebar, "  M - Measure mode", (10, y_offset), 
-                   font, 0.35, (200, 200, 200), 1)
-        y_offset += line_height - 8
-        cv2.putText(sidebar, "  C - Clear", (10, y_offset), 
-                   font, 0.35, (200, 200, 200), 1)
-        y_offset += line_height - 8
-        cv2.putText(sidebar, "  Q - Quit", (10, y_offset), 
-                   font, 0.35, (200, 200, 200), 1)
+        y += 15
+        
+        # Controls
+        cv2.putText(sidebar, "CONTROLS:", (col1_x, y), 
+                   font, 0.45, (255, 255, 100), 1)
+        y += 18
+        
+        # Two columns for controls
+        cv2.putText(sidebar, "SPACE - Shot", (col1_x, y), 
+                   font, 0.32, (200, 200, 200), 1)
+        cv2.putText(sidebar, "M - Measure", (col2_x, y), 
+                   font, 0.32, (200, 200, 200), 1)
+        y += 16
+        cv2.putText(sidebar, "C - Clear", (col1_x, y), 
+                   font, 0.32, (200, 200, 200), 1)
+        cv2.putText(sidebar, "Q - Quit", (col2_x, y), 
+                   font, 0.32, (200, 200, 200), 1)
         
         return sidebar
     
@@ -236,15 +246,60 @@ class DepthTester(Node):
             self.display_measurement(update_only=True)
     
     def handle_rgb_click(self, x, y):
-        """Handle click on RGB view"""
-        if self.frozen_color is None:
+        """Handle click on RGB view - now with depth lookup and 3D measurement support"""
+        if self.frozen_color is None or self.frozen_depth is None:
             return
         
         height, width = self.frozen_color.shape[:2]
         if 0 <= x < width and 0 <= y < height:
+            # Get RGB values
             b, g, r = self.frozen_color[y, x]
-            self.rgb_click = (x, y, int(r), int(g), int(b))
-            self.get_logger().info(f'RGB Click: ({x}, {y}) RGB=({r}, {g}, {b})')
+            
+            # Look up corresponding depth (images are registered/aligned)
+            depth_value = self.frozen_depth[y, x]
+            
+            # Calculate depth statistics
+            region_size = 20
+            y1 = max(0, y - region_size//2)
+            y2 = min(height, y + region_size//2)
+            x1 = max(0, x - region_size//2)
+            x2 = min(width, x + region_size//2)
+            
+            region = self.frozen_depth[y1:y2, x1:x2]
+            valid_depths = region[(region > 0) & ~np.isnan(region)]
+            
+            if len(valid_depths) > 0:
+                avg_depth_mm = np.mean(valid_depths)
+                std_depth_mm = np.std(valid_depths)
+            else:
+                avg_depth_mm = 0
+                std_depth_mm = 0
+            
+            # Store RGB click with depth info
+            self.rgb_click = (x, y, int(r), int(g), int(b), avg_depth_mm, std_depth_mm)
+            
+            # If in measurement mode, add point for 3D measurement
+            if self.measurement_mode and depth_value > 0 and not np.isnan(depth_value):
+                self.measurement_points.append((x, y, depth_value))
+                self.get_logger().info(
+                    f'3D Measurement Point {len(self.measurement_points)} (from RGB): '
+                    f'({x}, {y}) depth={depth_value:.1f}mm'
+                )
+                
+                if len(self.measurement_points) >= 2:
+                    dist = self.calculate_3d_distance(
+                        self.measurement_points[-2],
+                        self.measurement_points[-1]
+                    )
+                    self.get_logger().info(f'📏 Distance: {dist:.1f} mm ({dist/10:.1f} cm)')
+            
+            if avg_depth_mm > 0:
+                self.get_logger().info(
+                    f'RGB Click: ({x}, {y}) RGB=({r}, {g}, {b}) '
+                    f'Depth={avg_depth_mm:.1f}mm ± {std_depth_mm:.1f}mm'
+                )
+            else:
+                self.get_logger().info(f'RGB Click: ({x}, {y}) RGB=({r}, {g}, {b}) [No depth]')
     
     def handle_depth_click(self, x, y):
         """Handle click on Depth view"""
@@ -325,6 +380,16 @@ class DepthTester(Node):
             cv2.circle(color_display, (x, y), 10, (0, 255, 0), 2)
             cv2.drawMarker(color_display, (x, y), (0, 255, 0), 
                           cv2.MARKER_CROSS, 20, 2)
+            
+            # Draw measurement box if depth available
+            depth_mm = self.rgb_click[5]
+            if depth_mm > 0:
+                region_size = 20
+                y1 = max(0, y - region_size//2)
+                y2 = min(height, y + region_size//2)
+                x1 = max(0, x - region_size//2)
+                x2 = min(width, x + region_size//2)
+                cv2.rectangle(color_display, (x1, y1), (x2, y2), (0, 255, 0), 1)
         
         # Draw markers on Depth view (cyan for depth clicks)
         if self.depth_click:
@@ -341,19 +406,23 @@ class DepthTester(Node):
             x2 = min(width, x + region_size//2)
             cv2.rectangle(depth_colormap, (x1, y1), (x2, y2), (255, 255, 0), 1)
         
-        # Draw 3D measurement points (magenta)
+        # Draw 3D measurement points (magenta) on BOTH views
         if self.measurement_mode and len(self.measurement_points) > 0:
             for i, (px, py, _) in enumerate(self.measurement_points):
+                # Draw on both RGB and depth views
+                cv2.circle(color_display, (px, py), 6, (255, 0, 255), -1)
                 cv2.circle(depth_colormap, (px, py), 6, (255, 0, 255), -1)
+                cv2.putText(color_display, f"P{i+1}", (px+8, py-8),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
                 cv2.putText(depth_colormap, f"P{i+1}", (px+8, py-8),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 255), 1)
             
-            # Draw lines between pairs
+            # Draw lines between pairs on both views
             for i in range(0, len(self.measurement_points) - 1, 2):
                 p1 = self.measurement_points[i]
                 p2 = self.measurement_points[i + 1]
-                cv2.line(depth_colormap, (p1[0], p1[1]), (p2[0], p2[1]), 
-                        (255, 0, 255), 2)
+                cv2.line(color_display, (p1[0], p1[1]), (p2[0], p2[1]), (255, 0, 255), 2)
+                cv2.line(depth_colormap, (p1[0], p1[1]), (p2[0], p2[1]), (255, 0, 255), 2)
         
         # Add minimal labels
         font = cv2.FONT_HERSHEY_SIMPLEX
