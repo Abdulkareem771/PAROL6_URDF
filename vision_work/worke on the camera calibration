@@ -104,3 +104,4 @@ ros2 run rviz2 rviz2
 		```bash
 		docker stop parol6_dev
 		sleep 1
+ros2 launch parol6_vision camera_setup.launch.py
