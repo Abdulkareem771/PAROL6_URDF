@@ -9,13 +9,14 @@
 
 ## Executive Summary
 
-Successfully calibrated the Kinect V2 camera for the PAROL6 robot arm vision system. The calibration improves depth accuracy and color-depth alignment for robotic manipulation tasks such as object detection, grasping, and 3D scanning.
+Successfully calibrated the Kinect V2 camera for the PAROL6 robot arm vision system. The calibration improves depth accuracy and color-depth alignment for robotic manipulation tasks such as object detection, grasping, and 3D scanning. Developed a professional interactive measurement tool with two-column sidebar UI for easy verification and testing.
 
 **Key Achievements:**
 - ✅ Complete intrinsic and extrinsic calibration for color, IR, and depth cameras
 - ✅ Custom calibration data installed and verified as active
-- ✅ Developed depth accuracy testing tools
-- ✅ Created 3D measurement capabilities for real-world dimension verification
+- ✅ Developed professional depth testing tool with two-column sidebar UI
+- ✅ Created RGB-depth integrated measurement system
+- ✅ Implemented 3D measurement capabilities on both RGB and depth views
 - ✅ Calibration persisted in Docker image for reproducibility
 
 ---
