@@ -178,18 +178,54 @@ docker commit parol6_dev parol6-ultimate:latest
 
 ## Tools Developed
 
-### 1. Depth Accuracy Testing Tool
+### 1. Depth Accuracy Testing Tool - Professional UI
 
 **File:** `test_depth_accuracy.py`
 
-**Purpose:** Verify that camera depth measurements match real-world distances.
+**Purpose:** Interactive depth measurement tool with professional sidebar UI for verifying camera accuracy.
+
+**Interface Layout:**
+```
+┌────────────┬─────────────┬─────────────┐
+│  SIDEBAR   │  RGB VIEW   │ DEPTH VIEW  │
+│  (300px)   │  (512px)    │  (512px)    │
+│  Table     │  Clean      │  Clean      │
+└────────────┴─────────────┴─────────────┘
+```
 
 **Features:**
-- 📸 Snapshot mode - freeze frames for measurement
-- 📏 Point measurement - click to measure depth at any pixel
-- 📐 3D distance measurement - measure length/width of objects
-- 🔍 Zoom functionality - zoom in for precise measurements
-- 🎨 Side-by-side color + depth visualization
+
+1. **Professional Two-Column Sidebar**
+   - Left column: Labels, positions, status
+   - Right column: Distance values, measurements
+   - Compact layout using full 300px width
+   - No text overlapping
+
+2. **RGB View Integration**
+   - ✅ Click for pixel color (RGB values with color swatch)
+   - ✅ Automatic depth lookup from registered depth image
+   - ✅ Distance display (meters & millimeters)
+   - ✅ 3D measurements work on RGB clicks
+   - ✅ Green markers with measurement box overlay
+
+3. **Depth View Measurements**
+   - ✅ Independent click handling
+   - ✅ Position coordinates
+   - ✅ Distance with standard deviation
+   - ✅ Cyan markers with measurement box
+
+4. **3D Distance Measurements**
+   - ✅ Works on **both RGB and Depth views**
+   - ✅ Press `M` to toggle measurement mode
+   - ✅ Click 2 points to measure real-world distance
+   - ✅ Magenta markers appear on both views
+   - ✅ Uses calibrated camera intrinsics for accurate 3D calculations
+   - ✅ Results shown in mm and cm in sidebar
+
+5. **Snapshot Mode**
+   - Freeze frames for detailed analysis
+   - Clean video feeds without text overlays
+   - Shot counter for tracking measurements
 
 **Usage:**
 ```bash
@@ -198,24 +234,41 @@ python3 /workspace/test_depth_accuracy.py
 ```
 
 **Controls:**
-- `SPACE` - Capture snapshot
-- `M` - Toggle measurement mode
-- `C` - Clear measurements
-- `Mouse Click` - Measure point or add measurement point
+- `SPACE` - Capture/next snapshot
+- `M` - Toggle 3D measurement mode
+- `C` - Clear all measurements
+- `Mouse Click` - Measure (different actions for RGB vs Depth view)
 - `Q` - Quit
 
-**Measurement Modes:**
+**Sidebar Layout Example:**
+```
+MEASUREMENTS
+Shot #1
 
-1. **Point Mode** (Default)
-   - Click anywhere to measure depth at that point
-   - Shows distance in meters and millimeters
-   - Displays standard deviation over 20×20 pixel region
+RGB VIEW DATA:
+Pos: (281,255)      1.178m
+RGB: 116,93,52      1177.7mm
+[color swatch]      +/-483.2mm
 
-2. **3D Measurement Mode** (Press `M`)
-   - Click 2 points to measure real-world distance
-   - Accounts for perspective and depth
-   - Shows distance in mm and cm
-   - Can measure multiple objects
+DEPTH VIEW DATA:
+Pos: (203,240)      1.546m
+                    1545.6mm
+                    +/-1707.1mm
+
+3D MEASUREMENTS:
+[ACTIVE]            Pts: 2
+234.5mm             23.5cm
+
+CONTROLS:
+SPACE - Shot        M - Measure
+C - Clear           Q - Quit
+```
+
+**Technical Implementation:**
+- RGB-Depth image registration enables seamless depth lookup at RGB pixel coordinates
+- Camera intrinsics from SD camera_info (`fx=365.41, fy=365.41, cx=260.41, cy=206.64`)
+- 20×20 pixel region averaging for stable measurements
+- Two-column layout maximizes sidebar space efficiency
 
 ---
 
