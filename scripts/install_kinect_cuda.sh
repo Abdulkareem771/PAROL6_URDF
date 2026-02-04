@@ -1,22 +1,40 @@
 #!/bin/bash
 # Install Xbox Kinect v2 Drivers with CUDA Acceleration
-# optimized for systems with EXISTING CUDA 11.5
+# AUTO-FIX version for CUDA 11.5
 # Run as root
 
 set -e
 
-# 1. PRE-FLIGHT CHECK: Verify CUDA 11.5 is visible
+# ==========================================
+# 1. AUTO-DETECT & FIX CUDA PATH
+# ==========================================
+echo "🔍 Checking CUDA environment..."
+
+# If nvcc is NOT in the path, try to find it and add it
 if ! command -v nvcc &> /dev/null; then
-    echo "❌ Error: 'nvcc' not found in PATH."
-    echo "   Please export your CUDA path before running this script."
-    echo "   Example: export PATH=/usr/local/cuda-11.5/bin:\$PATH"
-    exit 1
+    if [ -f "/usr/local/cuda-11.5/bin/nvcc" ]; then
+        echo "   -> Found CUDA 11.5 at /usr/local/cuda-11.5"
+        export PATH=/usr/local/cuda-11.5/bin:$PATH
+        export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:$LD_LIBRARY_PATH
+    elif [ -f "/usr/local/cuda/bin/nvcc" ]; then
+        echo "   -> Found generic CUDA at /usr/local/cuda"
+        export PATH=/usr/local/cuda/bin:$PATH
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    else
+        echo "❌ Error: Could not find 'nvcc' automatically."
+        echo "   Please verify CUDA 11.5 is installed in /usr/local/cuda-11.5"
+        exit 1
+    fi
 fi
 
-echo "✅ Found CUDA Compiler: $(nvcc --version | grep release | awk '{print $5,$6}')"
+# Print final confirmation of what version we are using
+NVCC_PATH=$(which nvcc)
+echo "✅ Using CUDA Compiler: $NVCC_PATH"
+echo "   Version: $(nvcc --version | grep release | awk '{print $5,$6}')"
+echo "=========================================="
 
 echo "Installing dependencies..."
-# NOTE: removed 'nvidia-cuda-toolkit' to avoid conflict with your existing CUDA 11.5
+# NOTE: Removed 'nvidia-cuda-toolkit' to avoid conflicts
 apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -43,20 +61,21 @@ cd libfreenect2
 
 mkdir build && cd build
 
-# We explicitly point CMake to your CUDA compiler to be safe
+# We use the detected path to ensure CMake finds the right libs
+CUDA_ROOT=$(dirname $(dirname $(which nvcc)))
+
 cmake .. \
   -DENABLE_OPENGL=OFF \
   -DENABLE_CUDA=ON \
-  -DCUDA_TOOLKIT_ROOT_DIR=$(dirname $(dirname $(which nvcc))) \
+  -DCUDA_TOOLKIT_ROOT_DIR="$CUDA_ROOT" \
   -DENABLE_OPENCL=OFF \
   -DENABLE_TLS=ON
 
 # Verify CMake found it
 if grep -q "CUDA_FOUND:TRUE" CMakeCache.txt; then
-    echo "✅ CMake successfully linked against your CUDA 11.5."
+    echo "✅ CMake successfully linked against CUDA at $CUDA_ROOT"
 else
     echo "⚠️  WARNING: CMake did not find CUDA."
-    echo "   You may need to manually pass -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.5"
     exit 1
 fi
 
@@ -90,6 +109,12 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 # Add setup to bashrc if not present
 if ! grep -q "kinect_ws" /root/.bashrc; then
     echo "source /opt/kinect_ws/install/setup.bash" >> /root/.bashrc
+fi
+
+# Ensure the paths are persistent for future sessions too
+if ! grep -q "cuda-11.5" /root/.bashrc; then
+    echo "export PATH=/usr/local/cuda-11.5/bin:\$PATH" >> /root/.bashrc
+    echo "export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:\$LD_LIBRARY_PATH" >> /root/.bashrc
 fi
 
 echo ""
