@@ -1,40 +1,34 @@
 #!/bin/bash
 # Install Xbox Kinect v2 Drivers with CUDA Acceleration
-# AUTO-FIX version for CUDA 11.5
+# FIXED for path: /usr/lib/nvidia-cuda-toolkit/bin/nvcc
 # Run as root
 
 set -e
 
 # ==========================================
-# 1. AUTO-DETECT & FIX CUDA PATH
+# 1. SET CORRECT CUDA PATHS
 # ==========================================
-echo "🔍 Checking CUDA environment..."
+echo "🔍 Setting CUDA environment variables..."
 
-# If nvcc is NOT in the path, try to find it and add it
+# 1. Add the "bin" folder you found to the system PATH
+export PATH="/usr/lib/nvidia-cuda-toolkit/bin:$PATH"
+
+# 2. Add the library path (usually one level up in "lib64" or "lib")
+export LD_LIBRARY_PATH="/usr/lib/nvidia-cuda-toolkit/lib64:$LD_LIBRARY_PATH"
+
+# 3. Verify it works immediately
 if ! command -v nvcc &> /dev/null; then
-    if [ -f "/usr/local/cuda-11.5/bin/nvcc" ]; then
-        echo "   -> Found CUDA 11.5 at /usr/local/cuda-11.5"
-        export PATH=/usr/local/cuda-11.5/bin:$PATH
-        export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:$LD_LIBRARY_PATH
-    elif [ -f "/usr/lib/nvidia-cuda-toolkit/bin/nvcc" ]; then
-        echo "   -> Found generic CUDA at /usr/local/cuda"
-        export PATH=/usr/local/cuda/bin:$PATH
-        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    else
-        echo "❌ Error: Could not find 'nvcc' automatically."
-        echo "   Please verify CUDA 11.5 is installed in /usr/local/cuda-11.5"
-        exit 1
-    fi
+    echo "❌ Error: 'nvcc' is still not reachable."
+    echo "   Double check if the path is '/usr/lib/nvidia-cuda-toolkit/bin' or '/usr/lib/nvidia-toolkit/bin'"
+    exit 1
 fi
 
-# Print final confirmation of what version we are using
 NVCC_PATH=$(which nvcc)
-echo "✅ Using CUDA Compiler: $NVCC_PATH"
+echo "✅ CUDA Compiler Found: $NVCC_PATH"
 echo "   Version: $(nvcc --version | grep release | awk '{print $5,$6}')"
 echo "=========================================="
 
 echo "Installing dependencies..."
-# NOTE: Removed 'nvidia-cuda-toolkit' to avoid conflicts
 apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -52,7 +46,7 @@ apt-get update && apt-get install -y \
 # LIBFREENECT2
 ###############
 
-echo "Building libfreenect2 (WITH CUDA 11.5)..."
+echo "Building libfreenect2 (WITH CUDA)..."
 
 cd /tmp
 rm -rf libfreenect2
@@ -61,8 +55,8 @@ cd libfreenect2
 
 mkdir build && cd build
 
-# We use the detected path to ensure CMake finds the right libs
-CUDA_ROOT=$(dirname $(dirname $(which nvcc)))
+# Calculate root folder: /usr/lib/nvidia-cuda-toolkit
+CUDA_ROOT=$(dirname $(dirname "$NVCC_PATH"))
 
 cmake .. \
   -DENABLE_OPENGL=OFF \
@@ -97,13 +91,11 @@ mkdir -p /opt/kinect_ws/src
 cd /opt/kinect_ws/src
 
 rm -rf kinect2_ros2
-# Using the specific branch for acceleration
 git clone -b cuda-acceleration https://github.com/AryanRai/kinect2_ros2_cuda.git kinect2_ros2
 
 cd /opt/kinect_ws
 source /opt/ros/humble/setup.bash
 
-# Build the bridge
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # Add setup to bashrc if not present
@@ -111,10 +103,10 @@ if ! grep -q "kinect_ws" /root/.bashrc; then
     echo "source /opt/kinect_ws/install/setup.bash" >> /root/.bashrc
 fi
 
-# Ensure the paths are persistent for future sessions too
-if ! grep -q "cuda-11.5" /root/.bashrc; then
-    echo "export PATH=/usr/local/cuda-11.5/bin:\$PATH" >> /root/.bashrc
-    echo "export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:\$LD_LIBRARY_PATH" >> /root/.bashrc
+# Make the path permanent for future sessions
+if ! grep -q "nvidia-cuda-toolkit" /root/.bashrc; then
+    echo "export PATH=/usr/lib/nvidia-cuda-toolkit/bin:\$PATH" >> /root/.bashrc
+    echo "export LD_LIBRARY_PATH=/usr/lib/nvidia-cuda-toolkit/lib64:\$LD_LIBRARY_PATH" >> /root/.bashrc
 fi
 
 echo ""
