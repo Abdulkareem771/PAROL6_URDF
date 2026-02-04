@@ -57,6 +57,8 @@ else
     --privileged \
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
+    -e PATH="/usr/local/cuda-11.5/bin:$PATH" \
+    -e LD_LIBRARY_PATH="/usr/local/cuda-11.5/lib64:$LD_LIBRARY_PATH" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
