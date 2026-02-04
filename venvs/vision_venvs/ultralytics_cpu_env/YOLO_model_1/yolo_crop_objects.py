@@ -27,7 +27,7 @@ project_dir = current_dir.parent
 MODEL_PATH = project_dir / "YOLO_model_1" / "yolo_training" / "experiment_1" / "weights" / "best.pt"
 
 # Confidence threshold for detection (adjust based on your F1 curve)
-CONF_THRESHOLD = 0.25
+CONF_THRESHOLD = 0.5
 
 # IoU threshold for Non-Maximum Suppression
 IOU_THRESHOLD = 0.7
@@ -219,8 +219,8 @@ if __name__ == "__main__":
     # Uncomment and modify the path below to use
     
     process_image_folder(
-        input_folder= project_dir / "data" / "dataset_model_1" / "images" / "test",
-        output_folder= project_dir / "data" /"ROI_images"
+        input_folder= project_dir / "data" / "raw_model2_data",
+        output_folder= project_dir / "data" /"ROI_images" / "Model2_raw_data"
     )
     
     

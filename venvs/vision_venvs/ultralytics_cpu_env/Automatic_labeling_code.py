@@ -19,7 +19,10 @@ IMAGE_FOLDER = project_dir / "data" / "dataset_model_1" / "images" / "test"    #
 RESULTS_FOLDER = project_dir / "data" / "results_Auto_labeling"    # replace with your folder path
 
 # Confidence threshold for detection
-CONF_THRESHOLD = 0.5 
+CONF_THRESHOLD = 0.25
+
+# Path to single image to be labeled
+SINGLE_IMAGE_PATH = project_dir / "data" / "test6.jpg"    # replace with your folder path
 
 
 
@@ -48,4 +51,4 @@ def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
     return results
 
 # Usage
-detect_work_pieces(IMAGE_FOLDER)
+detect_work_pieces(SINGLE_IMAGE_PATH)
