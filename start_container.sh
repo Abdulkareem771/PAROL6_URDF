@@ -57,13 +57,19 @@ else
     --privileged \
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
-    -e PATH="/usr/bin/nvcc:$PATH" \
-    -e LD_LIBRARY_PATH="/usr/lib/nvidia-cuda-toolkit/bin/nvcc:$LD_LIBRARY_PATH" \
+    -e PATH="/usr/bin:$PATH" \
+    -e LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:$LD_LIBRARY_PATH" \
+    -e CUDA_HOME="/usr" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
     -v /dev:/dev \
+    -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
+    -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
+    -v /etc/nvcc.profile:/etc/nvcc.profile:ro \
+    -v /usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:ro \
+    -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
     -w /workspace \
     --shm-size=512m \
     $IMAGE_NAME \
