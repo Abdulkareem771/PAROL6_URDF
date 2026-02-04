@@ -7,7 +7,7 @@ project_dir = current_dir.parent.parent
 
 print(f"current_dir={current_dir}")
 print(f"project_dir={project_dir}")
-"""
+
 # Path to your trained model
 MODEL_PATH = project_dir / "YOLO" / "yolo_training" / "experiment_1" / "weights" / "best.pt"   # replace with your path
 
@@ -48,5 +48,3 @@ def detect_whiteboards(input_dir, output_dir = RESULTS_FOLDER ):
 
 # Usage
 detect_whiteboards(IMAGE_FOLDER)
-
-"""
