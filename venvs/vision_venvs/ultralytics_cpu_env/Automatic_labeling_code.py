@@ -2,28 +2,28 @@ from ultralytics import YOLO
 import os
 from pathlib import Path
 
-current_dir = Path(__file__).parent
-project_dir = current_dir.parent.parent
+current_dir = Path(__file__)
+project_dir = current_dir.parent
 
 print(f"current_dir={current_dir}")
 print(f"project_dir={project_dir}")
 
 
 # Path to your trained model
-MODEL_PATH = project_dir / "YOLO" / "yolo_training" / "experiment_1" / "weights" / "best.pt"   # replace with your path
+MODEL_PATH = project_dir / "YOLO_model_1" / "yolo_training" / "experiment_1" / "weights" / "best.pt"   # replace with your path
 
 # Path to the folder containing images to label
-IMAGE_FOLDER = project_dir / "src" / "data" / "image to label"     # replace with your folder path
+IMAGE_FOLDER = project_dir / "data" / "dataset_model_1" / "images" / "test"    # replace with your folder path
 
 # Path to the folder containing the labels files and images
-RESULTS_FOLDER = project_dir / "results"     # replace with your folder path
+RESULTS_FOLDER = project_dir / "data" / "results_Auto_labeling"    # replace with your folder path
 
 # Confidence threshold for detection
 CONF_THRESHOLD = 0.5 
 
 
 
-def detect_whiteboards(input_dir, output_dir = RESULTS_FOLDER ):
+def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
                     
     # Load model
     model = YOLO(MODEL_PATH)
@@ -39,7 +39,7 @@ def detect_whiteboards(input_dir, output_dir = RESULTS_FOLDER ):
         project=output_dir,
         name='labeling_images',
         exist_ok=True,
-        save_txt=True,
+        #save_txt=True,
         #save_conf=True,
         #stream=True
     )
@@ -48,4 +48,4 @@ def detect_whiteboards(input_dir, output_dir = RESULTS_FOLDER ):
     return results
 
 # Usage
-detect_whiteboards(IMAGE_FOLDER)
+detect_work_pieces(IMAGE_FOLDER)
