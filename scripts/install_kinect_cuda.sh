@@ -16,7 +16,7 @@ if ! command -v nvcc &> /dev/null; then
         echo "   -> Found CUDA 11.5 at /usr/local/cuda-11.5"
         export PATH=/usr/local/cuda-11.5/bin:$PATH
         export LD_LIBRARY_PATH=/usr/local/cuda-11.5/lib64:$LD_LIBRARY_PATH
-    elif [ -f "/usr/local/cuda/bin/nvcc" ]; then
+    elif [ -f "/usr/lib/nvidia-cuda-toolkit/bin/nvcc" ]; then
         echo "   -> Found generic CUDA at /usr/local/cuda"
         export PATH=/usr/local/cuda/bin:$PATH
         export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
