@@ -58,7 +58,7 @@ else
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
     -e PATH="/usr/bin:$PATH" \
-    -e LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/lib:$LD_LIBRARY_PATH" \
+    -e LD_LIBRARY_PATH="/usr/lib/nvidia:/usr/lib/nvidia-cuda-toolkit/lib64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" \
     -e CUDA_HOME="/usr" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
@@ -68,8 +68,14 @@ else
     -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
     -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
     -v /etc/nvcc.profile:/etc/nvcc.profile:ro \
-    -v /usr/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:ro \
     -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
+    -v /usr/include/cuda.h:/usr/include/cuda.h:ro \
+    -v /usr/include/cuda:/usr/include/cuda:ro \
+    -v /usr/include/cuda_runtime.h:/usr/include/cuda_runtime.h:ro \
+    -v /usr/include/cuda_runtime_api.h:/usr/include/cuda_runtime_api.h:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so:/usr/lib/x86_64-linux-gnu/libcudart.so:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/usr/lib/x86_64-linux-gnu/libcudart.so.11.0:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudadevrt.a:/usr/lib/x86_64-linux-gnu/libcudadevrt.a:ro \
     -w /workspace \
     --shm-size=512m \
     $IMAGE_NAME \
@@ -79,7 +85,6 @@ else
 fi
 
 echo ""
-echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Container Status: READY                                    ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
