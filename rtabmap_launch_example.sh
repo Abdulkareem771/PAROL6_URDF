@@ -19,9 +19,9 @@ source /opt/kinect_ws/install/setup.bash
 
 # Launch RTABMap with Kinect2 topics
 ros2 launch rtabmap_launch rtabmap.launch.py \
-    rgb_topic:=/kinect2/sd/image_color_rect \
-    depth_topic:=/kinect2/sd/image_depth_rect \
-    camera_info_topic:=/kinect2/sd/camera_info \
+    rgb_topic:=/kinect2/qhd/image_color_rect \
+    depth_topic:=/kinect2/qhd/image_depth_rect \
+    camera_info_topic:=/kinect2/qhd/camera_info \
     frame_id:=kinect2_rgb_optical_frame \
     approx_sync:=true \
     wait_imu_to_init:=false \

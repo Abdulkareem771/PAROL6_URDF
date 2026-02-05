@@ -58,8 +58,9 @@ else
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
     -e PATH="/usr/bin:$PATH" \
-    -e LD_LIBRARY_PATH="/usr/lib/nvidia:/usr/lib/nvidia-cuda-toolkit/lib64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" \
-    -e CUDA_HOME="/usr" \
+    -e LD_LIBRARY_PATH="/usr/lib/nvidia:/usr/lib/nvidia-cuda-toolkit/lib64:/host-cuda-libs:$LD_LIBRARY_PATH" \
+    -e CUDA_HOME="/usr/lib/nvidia-cuda-toolkit" \
+    -e CUDA_PATH="/usr/lib/nvidia-cuda-toolkit" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
@@ -69,13 +70,11 @@ else
     -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
     -v /etc/nvcc.profile:/etc/nvcc.profile:ro \
     -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
-    -v /usr/include/cuda.h:/usr/include/cuda.h:ro \
-    -v /usr/include/cuda:/usr/include/cuda:ro \
-    -v /usr/include/cuda_runtime.h:/usr/include/cuda_runtime.h:ro \
-    -v /usr/include/cuda_runtime_api.h:/usr/include/cuda_runtime_api.h:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudart.so:/usr/lib/x86_64-linux-gnu/libcudart.so:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/usr/lib/x86_64-linux-gnu/libcudart.so.11.0:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudadevrt.a:/usr/lib/x86_64-linux-gnu/libcudadevrt.a:ro \
+    -v /usr/lib/cuda:/usr/lib/cuda:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so:/host-cuda-libs/libcudart.so:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/host-cuda-libs/libcudart.so.11.0:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudadevrt.a:/host-cuda-libs/libcudadevrt.a:ro \
+    -v /usr/share/cmake-3.22/Modules:/host-cmake:ro \
     -w /workspace \
     --shm-size=512m \
     $IMAGE_NAME \
