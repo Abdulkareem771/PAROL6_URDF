@@ -12,10 +12,10 @@ current_dir = Path(__file__)
 project_dir = current_dir.parent
 
 # Path to the folder containing images to be cropped
-SOURCE_FOLDER = project_dir / "data" / "raw_model1_data"    # replace with your folder path
+SOURCE_FOLDER = project_dir / "data" / "raw_model2_data"    # replace with your folder path
 
 # Path to the folder containing the cropped images
-DEST_FOLDER = project_dir / "data" / "cropped_model1_data"    # replace with your folder path
+DEST_FOLDER = project_dir / "data" / "cropped_model2_data"    # replace with your folder path
 
 class ImageCropper:
     def __init__(self, source_folder=SOURCE_FOLDER, dest_folder=DEST_FOLDER):
