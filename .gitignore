@@ -65,3 +65,5 @@ venvs/vision_venvs/ultralytics_cpu_env/data/*
 venvs/vision_venvs/ultralytics_cpu_env/lib64/*
 venvs/vision_venvs/ultralytics_cpu_env/lib/*
 
+venvs/vision_venvs/ultralytics_cpu_env/yolo_training/*
+
