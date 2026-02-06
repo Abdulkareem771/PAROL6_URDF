@@ -1,19 +1,5 @@
 0.  # Start container directly
-		xhost +local:root
-		docker run -d --rm \
-		--name parol6_dev \
-		--network host \
-		--privileged \
-		--env DISPLAY=$DISPLAY \
-		-v /tmp/.X11-unix:/tmp/.X11-unix \
-		--env QT_X11_NO_MITSHM=1 \
-		-e XAUTHORITY=/tmp/.docker.xauth \
-		-v /dev:/dev \
-		-v "$(pwd)":/workspace \
-		--shm-size=512m \
-		parol6-ultimate:latest \
-		tail -f /dev/null
-
+		./start_container
 
 
 1.  # **Enter the container**:
@@ -28,14 +14,16 @@
 	    ```
 3.  # **Test the camera view**:
 		```bash
-		ros2 run rqt_image_view rqt_image_view
+		ros2 run rqt_image_view rqt_image_view 
+		or 
+		ros2 run rviz2 rviz2  #for rviz
 		```
 
 4.	# **Launch rtabmap to create 3D scans**:
 		```bash
 		ros2 launch kinect2_bridge rtabmap.launch.py
 	 ```
-ros2 run rviz2 rviz2	
+	
 5.	#	**Create a directory for your calibration data files**, for example:
 		```bash
 		mkdir ~/kinect_cal_data; cd ~/kinect_cal_data
@@ -104,4 +92,3 @@ ros2 run rviz2 rviz2
 		```bash
 		docker stop parol6_dev
 		sleep 1
-ros2 launch parol6_vision camera_setup.launch.py
