@@ -4,7 +4,7 @@
 
 set -e
 GPU_FLAG=""
-if docker info | grep -i nvidia >/dev/null 2>&1; then
+if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     GPU_FLAG="--gpus all"
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
 else
