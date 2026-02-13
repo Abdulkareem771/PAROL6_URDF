@@ -1,14 +1,14 @@
 joint_limits:
   joint_L1:
     has_velocity_limits: true
-    max_velocity: 6.0  # Increased for faster, smoother trajectories
+    max_velocity: 3.0  # Conservative: ~40% of 7.85 rad/s theoretical max
     has_acceleration_limits: true
-    max_acceleration: 4.0  # Increased for faster, smoother trajectories
+    max_acceleration: 2.0  # Prevents excessive mechanical stress on gearbox
   joint_L2:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 4.0  # Direct drive
     has_acceleration_limits: true
-    max_acceleration: 4.0
+    max_acceleration: 3.0  # Direct drive
   joint_L3:
     has_velocity_limits: true
     max_velocity: 6.0

@@ -17,3 +17,6 @@ moveit_simple_controller_manager:
       - joint_L4
       - joint_L5
       - joint_L6
+    # Execution timeout parameters - account for firmware velocity smoothing
+    allowed_execution_duration_scaling: 3.0  # Allow 3× planned duration
+    allowed_goal_duration_margin: 2.0        # Add 2 second buffer

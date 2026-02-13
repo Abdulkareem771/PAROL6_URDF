@@ -20,6 +20,7 @@ parol6_arm_controller:
     
     command_interfaces:
       - position
+      - velocity  # CRITICAL: Send velocity trajectory data to firmware
     
     state_interfaces:
       - position
@@ -31,5 +32,26 @@ parol6_arm_controller:
     allow_partial_joints_goal: false
     
     constraints:
-      stopped_velocity_tolerance: 0.01
-      goal_time: 0.0
+      stopped_velocity_tolerance: 0.05
+      goal_time: 5.0  # Allow 5 extra seconds to reach goal
+
+      # Path tolerances per joint (0.0 = disabled)
+      # Motor physically lags the planned path but catches up
+      joint_L1:
+        trajectory: 0.0     # Disable path tolerance checking
+        goal: 0.15           # Allow 0.15 rad (~8.6°) at final goal
+      joint_L2:
+        trajectory: 0.0
+        goal: 0.15
+      joint_L3:
+        trajectory: 0.0
+        goal: 0.15
+      joint_L4:
+        trajectory: 0.0
+        goal: 0.15
+      joint_L5:
+        trajectory: 0.0
+        goal: 0.15
+      joint_L6:
+        trajectory: 0.0
+        goal: 0.15

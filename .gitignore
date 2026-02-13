@@ -33,6 +33,10 @@ microros_esp32/
 *.swp
 *.swo
 *~
+color images to calibrate/
+vision_work/
+libfreenect2
+IR_Images_ToCalibrate/
 
 # OS
 .DS_Store
