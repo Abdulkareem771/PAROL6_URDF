@@ -10,7 +10,7 @@
 2.  #**Start the camera node**:
 	    ```bash
 	    source /opt/kinect_ws/install/setup.bash
-	    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml fps_limit:=2
+	    ros2 launch kinect2_bridge kinect2_bridge_gpu.yaml depth_method:=cuda reg_method:=cpu fps_limit:=2
 	    ```
 3.  # **Test the camera view**:
 		```bash

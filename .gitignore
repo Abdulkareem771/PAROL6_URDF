@@ -47,7 +47,7 @@ vision_work/rosbags/*
 vision_work/Checkboards/*
 vision_work/IR_Images_ToCalibrate/*
 vision_work/Sync_Images_ToCalibrate/*
-vision_work/color images to calibrate/*
+vision_work/color_calibrate/*
 # Wheel download directory
 wheels_linux_py310/*
 wheels/*

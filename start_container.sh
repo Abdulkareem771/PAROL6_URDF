@@ -12,7 +12,7 @@ else
 fi
 
 CONTAINER_NAME="parol6_dev"
-IMAGE_NAME="parol6-ultimate:latest"
+IMAGE_NAME="parol6-ultimate:cuda"
 
 # Colors
 GREEN='\033[0;32m'
@@ -66,6 +66,10 @@ else
     -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
     -v /dev:/dev \
+    -v /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro \
+    -v /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro \
+    -v /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro \
+    -v /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:ro \
     -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
     -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
     -v /etc/nvcc.profile:/etc/nvcc.profile:ro \
