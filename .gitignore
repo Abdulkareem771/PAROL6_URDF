@@ -37,6 +37,7 @@ color images to calibrate/
 vision_work/
 libfreenect2
 IR_Images_ToCalibrate/
+src/kinect2_ros2/
 
 # OS
 .DS_Store
@@ -61,3 +62,4 @@ venvs/*
 # Temporarily container's start code
 #start_container.sh
 >>>>>>> real-robot-integration
+src/kinect2_ros2
