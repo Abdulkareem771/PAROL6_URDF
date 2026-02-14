@@ -103,7 +103,7 @@ class DepthMatcher(Node):
         self.declare_parameter('min_depth_quality', 0.6)
         
         # Synchronization
-        self.declare_parameter('sync_time_tolerance', 0.1) # seconds
+        self.declare_parameter('sync_time_tolerance', 0.5) # seconds
         self.declare_parameter('sync_queue_size', 10)
         
         # Get values
@@ -301,6 +301,12 @@ class DepthMatcher(Node):
             
             # Visualize
             self.publish_markers(weld_lines_3d)
+        else:
+            self.get_logger().warn(
+                f'Received {len(lines_msg.lines)} 2D lines, but generated 0 3D lines. '
+                'Possible causes: TF failure, invalid depth values (0/NaN), '
+                'points out of range (min/max depth), or aggressive outlier filtering.'
+            )
             
     # ================================================================
     # UTIL FUNCTIONS
