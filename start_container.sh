@@ -12,7 +12,7 @@ else
 fi
 
 CONTAINER_NAME="parol6_dev"
-IMAGE_NAME="parol6-ultimate:cuda"
+IMAGE_NAME="parol6-ultimate:latest"
 
 # Colors
 GREEN='\033[0;32m'
@@ -72,7 +72,6 @@ else
     -v /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:ro \
     -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
     -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
-    -v /etc/nvcc.profile:/etc/nvcc.profile:ro \
     -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
     -v /usr/lib/cuda:/usr/lib/cuda:ro \
     -v /usr/lib/x86_64-linux-gnu/libcudart.so:/host-cuda-libs/libcudart.so:ro \

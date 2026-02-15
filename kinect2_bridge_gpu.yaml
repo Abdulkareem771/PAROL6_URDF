@@ -18,7 +18,7 @@ launch:
 
 - arg:
     name: "reg_method"
-    default: "opencl"
+    default: "cpu"
 
 - node:
     pkg: "kinect2_bridge"
@@ -50,7 +50,7 @@ launch:
           value: "$(var reg_method)"
 
         - name: "max_depth"  
-          value: 4.0
+          value: 8.0
 
         - name: "min_depth"  
           value: 0.1
