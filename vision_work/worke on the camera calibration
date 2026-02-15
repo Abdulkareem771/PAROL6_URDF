@@ -25,7 +25,9 @@
 	    ```bash
 	    source /opt/kinect_ws/install/setup.bash
 	    ros2 launch kinect2_bridge kinect2_bridge_launch.yaml fps_limit:=2
-	    ```
+	  #or 
+	   ros2 launch kinect2_bridge kinect2_bridge_launch.yaml depth_method:=opencl reg_method:=opencl
+	   ```
     #test the camera view
 	ros2 run rqt_image_view rqt_image_view
 
