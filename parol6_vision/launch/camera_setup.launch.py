@@ -85,7 +85,7 @@ def generate_launch_description():
         name='static_transform_publisher_camera',
         # Position: 0.5m forward, 1.0m up, looking DOWN at workspace (~45 degrees pitch)
         arguments=['--x', '0.5', '--y', '0.0', '--z', '1.0', 
-                   '--roll', '0.0', '--pitch', '-0.0', '--yaw', '0.0',  # -45 degrees pitch (looking down)
+                   '--qx', '0.0', '--qy', '0.609', '--qz', '0.0', '--qw', '0.793',  # Yaw=0, Pitch=75 (Forward-Down View)
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )

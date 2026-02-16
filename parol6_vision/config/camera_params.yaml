@@ -26,12 +26,12 @@
       translation:
         x: 0.5   # meters
         y: 0.0
-        z: 0.6
+        z: 1.0
       rotation:  # Quaternion [x, y, z, w]
         x: 0.0
-        y: 0.0
+        y: 0.609
         z: 0.0
-        w: 1.0
+        w: 0.793
 
     # Depth sensor limits
     depth_range:

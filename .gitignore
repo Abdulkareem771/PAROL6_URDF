@@ -37,9 +37,7 @@ microros_esp32/
 # OS
 .DS_Store
 Thumbs.db
-<<<<<<< HEAD
 logs/*.csv
-=======
 
 # Extracted datasets (RGB and Depth images)
 vision_work/extracted_dataset/*
@@ -56,7 +54,6 @@ venvs/*
 
 # Temporarily container's start code
 #start_container.sh
->>>>>>> real-robot-integration
 
 test_data/kinect_snapshot_20260126_231342/*
 rosbag2_2026_01_26-23_26_59/*
@@ -66,3 +63,4 @@ venv_310/*
 Yolo_data2_model/*
 YOLO dependencies/
 01Yolo_model2_data/
+vision_work/color_calibrate/*

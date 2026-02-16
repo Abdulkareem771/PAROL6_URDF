@@ -12,7 +12,7 @@ else
 fi
 
 CONTAINER_NAME="parol6_dev"
-IMAGE_NAME="parol6-ultimate:latest"
+IMAGE_NAME="parol6-ultimate:buckup"
 
 # Colors
 GREEN='\033[0;32m'
