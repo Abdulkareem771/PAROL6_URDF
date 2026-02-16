@@ -1,5 +1,10 @@
 # MoveIt uses this configuration for controller management
 
+trajectory_execution:
+  allowed_start_tolerance: 0.1  # Default 0.01 is too tight for encoder noise (~0.02 rad)
+  allowed_execution_duration_scaling: 10.0
+  allowed_goal_duration_margin: 5.0
+
 moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
 
 moveit_simple_controller_manager:
@@ -17,6 +22,3 @@ moveit_simple_controller_manager:
       - joint_L4
       - joint_L5
       - joint_L6
-    # Execution timeout parameters - account for firmware velocity smoothing
-    allowed_execution_duration_scaling: 3.0  # Allow 3× planned duration
-    allowed_goal_duration_margin: 2.0        # Add 2 second buffer

@@ -16,8 +16,8 @@
 #define NUM_MOTORS 6
 
 // Step/Dir pins per motor
-const int STEP_PINS[NUM_MOTORS] = {5, 25, 14, 12, 13, 15};
-const int DIR_PINS[NUM_MOTORS] = {2, 26, 27, 4, 16, 17};
+const int STEP_PINS[NUM_MOTORS] = {12, 25, 14, 5, 13, 15};
+const int DIR_PINS[NUM_MOTORS] = {4, 26, 27, 2, 16, 17};
 
 // Encoder PWM input pins (MT6816)
 const int ENCODER_PINS[NUM_MOTORS] = {27, 33, 25, 26, 34, 35};
@@ -25,7 +25,7 @@ const int ENCODER_PINS[NUM_MOTORS] = {27, 33, 25, 26, 34, 35};
 // Encoder enable flags (set true when encoder is physically connected)
 const bool ENCODER_ENABLED[NUM_MOTORS] = {
   true,   // J1: Encoder connected
-  false,  // J2: Not connected yet
+  true,  // J2: Encoder connected
   false,  // J3: Not connected yet
   false,  // J4: Not connected yet
   false,  // J5: Not connected yet
@@ -48,11 +48,23 @@ const int MICROSTEPS[NUM_MOTORS] = {
 // Gearbox ratios (motor revolutions per joint revolution)
 const float GEAR_RATIOS[NUM_MOTORS] = {
   20.0,  // J1: 20:1 gearbox
-  1.0,   // J2: Direct drive
+  20.0,   // J2: Direct drive
   1.0,   // J3: Direct drive
   1.0,   // J4: Direct drive
   1.0,   // J5: Direct drive
   1.0    // J6: Direct drive
+};
+
+// Motor direction sign (+1 or -1)
+// If encoder shows position going OPPOSITE to motor step direction, set to -1
+// This inverts the step direction to match encoder polarity
+const int MOTOR_DIR_SIGN[NUM_MOTORS] = {
+  1,   // J1: Normal
+  -1,  // J2: Inverted (encoder reads opposite to step direction)
+  1,   // J3: TBD
+  1,   // J4: TBD
+  1,   // J5: TBD
+  1    // J6: TBD
 };
 
 // ============================================================================
@@ -66,7 +78,7 @@ const int ENCODER_RESOLUTION = 4096;           // 12-bit = 4096 positions
 
 // Encoder zero offsets (radians at motor shaft, measured during calibration)
 const float ENCODER_OFFSETS[NUM_MOTORS] = {
-  -5.117,  // J1: Calibrated offset
+  0.0,  // J1: Calibrated offset -5.117
   0.0,     // J2-J6: TBD
   0.0,
   0.0,
@@ -88,8 +100,8 @@ const float ENCODER_OFFSETS[NUM_MOTORS] = {
 
 // Servo gains (position + velocity feedforward)
 const float Kp[NUM_MOTORS] = {
-  2.0,  // J1
-  2.0,  // J2
+  5.0,  // J1: Higher Kp for faster final approach
+  5.0,  // J2: Higher Kp for faster final approach
   2.0,  // J3
   2.0,  // J4
   2.0,  // J5
@@ -102,7 +114,7 @@ const float Kd[NUM_MOTORS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 // Maximum joint velocities (rad/s) - from joint_limits.yaml
 const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = {
   3.0,  // J1: Conservative for geared joint
-  4.0,  // J2
+  3.0,  // J2
   6.0,  // J3
   6.0,  // J4
   6.0,  // J5
