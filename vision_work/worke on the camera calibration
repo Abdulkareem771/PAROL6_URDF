@@ -33,24 +33,16 @@
 		```bash
 		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 record color
 		```
-
-
 7.	#	**Calibrate the intrinsics**: 
 		```bash
 		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 calibrate color
-
-
-
+		```
 8.  #    **Record images for the ir camera**:	
 		```bash
-	    ```bash
 		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 record ir
 		```
-
-
 9.  #    **Calibrate the intrinsics of the ir camera**: 
 		ros2 run kinect2_calibration kinect2_calibration_node chess5x7x0.03 calibrate ir
-
 
 
 10.	#	**Record images on both cameras synchronized**:
