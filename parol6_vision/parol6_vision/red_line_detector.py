@@ -692,7 +692,7 @@ class RedLineDetector(Node):
             
             # Set points (convert Point32 → Point for marker)
             marker.points = [
-                Point(x=p.x / 1000.0, y=p.y / 1000.0, z=1.0)  # Convert pixels → meters, Z=1.0 for visibility
+                Point(x=(p.x / 1000.0) * 0.45, y=(p.y / 1000.0) * 0.45, z=0.45)  # Reverted to Z=0.45m
                 for p in line.pixels
             ]
             
