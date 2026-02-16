@@ -32,7 +32,7 @@ results = model.train(
     workers=2,
     device='cpu',
     project=RESULTS_FOLDER,
-    name='experiment_5',
+    name='experiment_5_v2',
     patience=5,
 
 )
