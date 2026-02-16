@@ -1,22 +1,41 @@
 from ultralytics import YOLO
+import os
+from pathlib import Path
+
+current_dir = Path(__file__)
+project_dir = current_dir.parent.parent
+
+#print(f"current_dir={current_dir}")
+#print(f"project_dir={project_dir}")
+
+
+# Path to your Pre-trained model
+MODEL_PATH = project_dir / "yolo11n.pt"
+
+# Path to the dataset folder
+DATASET_FOLDER = project_dir / "data" / "dataset_model_1_v3" / "data.yaml"    # replace with your folder path
+
+# Path to the results folder
+RESULTS_FOLDER = project_dir / "yolo_training"   # replace with your folder path
+
+
 
 # Load a model
-model = YOLO("yolo11n.pt")  # load a pretrained model (recommended for training)
+model = YOLO(MODEL_PATH)  # load a pretrained model (recommended for training)
 
 # Train the model with 2 GPUs
 results = model.train(
-    data="data/dataset_model_1_v2/data.yaml",
+    data=DATASET_FOLDER,
     epochs=100,
     imgsz=640,
     batch=3,
     workers=2,
     device='cpu',
-    project='yolo_training',
-    name='experiment_2',
+    project=RESULTS_FOLDER,
+    name='experiment_3',
     patience=5,
 
 )
-
 
 
 
