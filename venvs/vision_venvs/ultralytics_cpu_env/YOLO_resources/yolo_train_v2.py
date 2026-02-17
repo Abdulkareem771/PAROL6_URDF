@@ -13,7 +13,7 @@ project_dir = current_dir.parent.parent
 MODEL_PATH = project_dir / "yolo11n.pt"
 
 # Path to the dataset folder
-DATASET_FOLDER = project_dir / "data" / "dataset_model_1_v7" / "data.yaml"    # replace with your folder path
+DATASET_FOLDER = project_dir / "data" / "dataset_model_1_v8" / "data.yaml"    # replace with your folder path
 
 # Path to the results folder
 RESULTS_FOLDER = project_dir / "yolo_training"   # replace with your folder path
@@ -32,7 +32,7 @@ results = model.train(
     workers=4,
     device='cpu',
     project=RESULTS_FOLDER,
-    name='experiment_7',
+    name='experiment_8',
     patience=5,
 
 )
