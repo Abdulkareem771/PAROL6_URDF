@@ -30,7 +30,7 @@ results = model.train(
     imgsz=640,
     device='cpu',
     project=RESULTS_FOLDER,
-    name='experiment_6_v2',
+    name='experiment_6_v3',
     patience=5,
 
 )
