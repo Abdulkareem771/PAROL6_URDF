@@ -16,13 +16,15 @@ MODEL_PATH = project_dir / "yolo_training" / "experiment_10" / "weights" / "best
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
 
 # Path to the folder containing the labels files and images
-RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_10"    # replace with your folder path
+#RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_8"    # replace with your folder path
+RESULTS_FOLDER = project_dir / "data" / "Models_testing"
+
 
 # Confidence threshold for detection
 CONF_THRESHOLD = 0.5
 
 # Path to single image to be labeled
-SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "photo_2026-02-19_00-55-52.jpg"    # replace with your folder path
+SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "990.jpg"    # replace with your folder path
 
 
 
@@ -40,7 +42,7 @@ def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
         conf=CONF_THRESHOLD,
         save=True,
         project=output_dir,
-        name='labeling_images_2',
+        name='labeling_images',
         exist_ok=True,
         #save_txt=True,
         #save_conf=True,
@@ -50,5 +52,8 @@ def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
     print(f"Detection complete! Results saved to: {output_dir}")
     return results
 
-# Usage
-detect_work_pieces(IMAGE_FOLDER)
+# Usage:
+
+#detect_work_pieces(RESULTS_FOLDER)
+
+detect_work_pieces(SINGLE_IMAGE_PATH)
