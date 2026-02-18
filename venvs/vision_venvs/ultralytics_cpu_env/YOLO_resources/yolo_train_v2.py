@@ -10,7 +10,7 @@ project_dir = current_dir.parent.parent
 
 
 # Path to your Pre-trained model
-MODEL_PATH = project_dir / "yolo11n.pt"
+MODEL_PATH = project_dir / "yolo8n.pt"
 
 # Path to the dataset folder
 DATASET_FOLDER = project_dir / "data" / "dataset_model_1_v8" / "data.yaml"    # replace with your folder path
