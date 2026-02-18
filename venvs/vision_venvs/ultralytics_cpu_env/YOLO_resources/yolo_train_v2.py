@@ -10,7 +10,7 @@ project_dir = current_dir.parent.parent
 
 
 # Path to your Pre-trained model
-MODEL_PATH = project_dir / "yolo11n.pt"
+MODEL_PATH = project_dir / "yolo8n.pt"
 
 # Path to the dataset folder
 DATASET_FOLDER = project_dir / "data" / "dataset_model_1_v9" / "data.yaml"    # replace with your folder path
@@ -32,7 +32,7 @@ results = model.train(
     workers=4,
     device='cpu',
     project=RESULTS_FOLDER,
-    name='experiment_9',
+    name='experiment_9_v2',
     patience=5,
 
 )
