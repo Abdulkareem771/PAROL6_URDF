@@ -10,14 +10,14 @@ print(f"project_dir={project_dir}")
 
 
 # Path to your trained model
-MODEL_PATH = project_dir / "yolo_training" / "experiment_10" / "weights" / "best.pt"   # replace with your path
+MODEL_PATH = project_dir / "yolo_training" / "experiment_11" / "weights" / "best.pt"   # replace with your path
 
 # Path to the folder containing images to label
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
 
 # Path to the folder containing the labels files and images
-#RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_8"    # replace with your folder path
-RESULTS_FOLDER = project_dir / "data" / "Models_testing"
+RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_11"    # replace with your folder path
+#RESULTS_FOLDER = project_dir / "data" / "Models_testing"
 
 
 # Confidence threshold for detection
@@ -54,6 +54,6 @@ def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
 
 # Usage:
 
-#detect_work_pieces(RESULTS_FOLDER)
+detect_work_pieces(IMAGE_FOLDER)
 
-detect_work_pieces(SINGLE_IMAGE_PATH)
+#detect_work_pieces(SINGLE_IMAGE_PATH)
