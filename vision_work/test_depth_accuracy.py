@@ -20,7 +20,7 @@ class DepthTester(Node):
         # Subscribe to depth image
         self.depth_sub = self.create_subscription(
             Image,
-            '/kinect2/sd/image_depth_rect',
+            '/kinect2/qhd/image_depth_rect',
             self.depth_callback,
             10
         )
@@ -28,7 +28,7 @@ class DepthTester(Node):
         # Subscribe to color image
         self.color_sub = self.create_subscription(
             Image,
-            '/kinect2/sd/image_color_rect',
+            '/kinect2/qhd/image_color_rect',
             self.color_callback,
             10
         )

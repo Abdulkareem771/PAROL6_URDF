@@ -1,4 +1,5 @@
 0.  # Start container directly
+		xhost +local:root	
 		./start_container
 
 
