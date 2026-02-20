@@ -24,6 +24,7 @@ def generate_launch_description():
             "config",
             "parol6.srdf"
         ))
+        .planning_pipelines(pipelines=["ompl"])
         .to_moveit_configs()
     )
 
@@ -78,7 +79,8 @@ def generate_launch_description():
         # Parameters can be loaded from yaml if needed, defaults are usually fine for testing
         parameters=[{
             'debug_image_topic': '/red_line_detector/debug_image',
-            'publish_debug_images': True
+            'publish_debug_images': True,
+            'use_sim_time': True
         }]
     )
 
@@ -93,7 +95,8 @@ def generate_launch_description():
             'min_depth_quality': 0.05,  # Very low for testing
             'max_depth': 5000.0,         # 5 meters
             'min_depth': 100.0,          # 10 cm
-            'min_valid_points': 2        # Detector only sends skeleton endpoints
+            'min_valid_points': 2,       # Detector only sends skeleton endpoints
+            'use_sim_time': True
         }]
     )
 

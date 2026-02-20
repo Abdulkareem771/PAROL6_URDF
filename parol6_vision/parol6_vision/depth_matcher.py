@@ -307,7 +307,8 @@ class DepthMatcher(Node):
                 # Calculate average width (placeholder logic - usually requires mask width)
                 line_3d.line_width = 0.003 # 3mm default assumption
                 
-                line_3d.header.stamp = lines_msg.header.stamp
+                # Use live clock, not bag timestamp - RViz rejects stale markers
+                line_3d.header.stamp = self.get_clock().now().to_msg()
                 line_3d.header.frame_id = self.target_frame
                 
                 weld_lines_3d.append(line_3d)
@@ -315,7 +316,7 @@ class DepthMatcher(Node):
         # 5. Publish
         if weld_lines_3d:
             msg_3d = WeldLine3DArray()
-            msg_3d.header.stamp = lines_msg.header.stamp
+            msg_3d.header.stamp = self.get_clock().now().to_msg()
             msg_3d.header.frame_id = self.target_frame
             msg_3d.lines = weld_lines_3d
             
