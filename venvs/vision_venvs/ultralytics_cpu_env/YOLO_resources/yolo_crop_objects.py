@@ -33,16 +33,16 @@ CONF_THRESHOLD = 0.5
 IOU_THRESHOLD = 0.7
 
 # Output folder for cropped images
-OUTPUT_FOLDER = project_dir / "data" / "ROI_images" / "experiment_10_results_cropped"
+OUTPUT_FOLDER = project_dir / "data" / "ROI_images" / "experiment_10_ROI_cropped_images"
 
 # Path to the folder containing images
-IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
+IMAGE_FOLDER = project_dir / "data" / "raw_images_ROI_model"    # replace with your folder path
 
 # Path to single image
 SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "20260219_224015.jpg"
 
 # Padding around bounding boxes (in pixels) - useful to include some context
-PADDING = 10  # Set to 0 for no padding
+PADDING = 20  # Set to 0 for no padding
 
 
 # ==================== MAIN FUNCTIONS ====================
