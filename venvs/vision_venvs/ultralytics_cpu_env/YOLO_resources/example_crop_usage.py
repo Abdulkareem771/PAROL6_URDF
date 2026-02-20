@@ -53,8 +53,8 @@ def example_batch_processing():
 def example_custom_settings():
     """Process with custom confidence threshold and padding."""
     process_single_image(
-        image_path="path/to/your/image.jpg",
-        output_folder="ROI_images",
+        image_path=SINGLE_IMAGE_PATH,
+        output_folder=RESULTS_FOLDER,
         conf_threshold=0.5,  # Higher confidence (fewer detections, more accurate)
         padding=20           # More padding around objects
     )
