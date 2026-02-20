@@ -97,6 +97,21 @@ def generate_launch_description():
         }]
     )
 
+    # 6b. Point Cloud XYZRGB — fuses color + depth into /points (PointCloud2)
+    # Executable name requires the _node suffix (depth_image_proc >= 3.x)
+    point_cloud_xyzrgb = Node(
+        package='depth_image_proc',
+        executable='point_cloud_xyzrgb_node',
+        name='point_cloud_xyzrgb',
+        output='screen',
+        remappings=[
+            ('/rgb/camera_info',        '/kinect2/qhd/camera_info'),
+            ('/rgb/image_rect_color',   '/kinect2/qhd/image_color_rect'),
+            ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
+        ],
+        parameters=[{'use_sim_time': True}]
+    )
+
     # 7. RViz2
     # Using the existing vision_debug.rviz or default
     rviz_config_file = os.path.join(pkg_vision, 'config', 'vision_debug.rviz')
@@ -140,6 +155,7 @@ def generate_launch_description():
         static_tf_optical,
         red_line_detector,
         depth_matcher,
+        point_cloud_xyzrgb,
         rviz_node,
         robot_state_publisher,
         joint_state_publisher

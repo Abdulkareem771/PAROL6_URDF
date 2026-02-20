@@ -230,9 +230,22 @@ Use this to pinpoint which stage is rejecting the line.
 
 ## Quick Start (Full Pipeline)
 
+### Option A — Single launch (recommended)
+
+```bash
+# All nodes including bag playback, detectors, point cloud, and RViz in one command:
+export XAUTHORITY=/tmp/.docker.xauth
+source /opt/ros/humble/setup.bash && source install/setup.bash
+ros2 launch parol6_vision test_depth_matcher_bag.launch.py
+```
+
+> The launch file now starts `point_cloud_xyzrgb_node` automatically — colored PointCloud2 appears on `/points` with no extra steps.
+
+### Option B — Manual (individual terminals)
+
 ```bash
 # Terminal 1 — Play bag (loop)
-ros2 bag play /workspace/parol6_vision/test_data/red_line_bag --loop
+ros2 bag play /workspace/rosbag2_2026_01_26-23_26_59 --loop
 
 # Terminal 2 — Red line detector
 source install/setup.bash
@@ -242,14 +255,25 @@ ros2 run parol6_vision red_line_detector
 source install/setup.bash
 ros2 run parol6_vision depth_matcher
 
-# Terminal 4 — Verify output
+# Terminal 4 — Point cloud (color + depth → PointCloud2)
+source /opt/ros/humble/setup.bash
+ros2 run depth_image_proc point_cloud_xyzrgb_node \
+  --ros-args \
+  -r /rgb/camera_info:=/kinect2/qhd/camera_info \
+  -r /rgb/image_rect_color:=/kinect2/qhd/image_color_rect \
+  -r /depth_registered/image_rect:=/kinect2/qhd/image_depth_rect \
+  -p use_sim_time:=true
+
+# Terminal 5 — Verify output
 ros2 topic echo /vision/weld_lines_3d
 
-# Terminal 5 — RViz visualization
+# Terminal 6 — RViz visualization
 export XAUTHORITY=/tmp/.docker.xauth
 source install/setup.bash
 ros2 launch parol6_vision camera_setup.launch.py
 ```
+
+> **Note on executable name:** In `depth_image_proc` ≥ 3.x the executable is `point_cloud_xyzrgb_node` (with `_node` suffix). Running `point_cloud_xyzrgb` gives `No executable found`.
 
 ### RViz Setup for Depth Matcher
 1. **Fixed Frame** → `base_link`
@@ -257,6 +281,10 @@ ros2 launch parol6_vision camera_setup.launch.py
 3. **Add** → `MarkerArray` → topic: `/red_line_detector/markers` (2D overlay reference)
 4. **Add** → `Image` → topic: `/kinect2/qhd/image_color_rect`
 5. **Add** → `Image` → topic: `/kinect2/qhd/image_depth_rect`
+6. **Add** → `PointCloud2` → topic: `/points` (colored 3-D point cloud from `point_cloud_xyzrgb_node`)
+   - Style: `Points`, Size: `2 px`
+   - Color Transformer: `RGB8`
+   - Verify `/points` is publishing: `ros2 topic hz /points` (expect ~15 Hz from bag)
 
 ---
 
