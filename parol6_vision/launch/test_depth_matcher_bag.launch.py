@@ -57,7 +57,7 @@ def generate_launch_description():
         # MATCHES camera_setup.launch.py: roll=90° (qx=0.7071, qw=0.7071)
         # This correctly orients the Kinect so it points forward along base_link +X
         arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
-                   '--qx', '0.7071', '--qy', '0.0', '--qz', '0.0', '--qw', '0.7071',
+                   '--qx', '0.0', '--qy', '0.7071', '--qz', '0.0', '--qw', '0.7071',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
