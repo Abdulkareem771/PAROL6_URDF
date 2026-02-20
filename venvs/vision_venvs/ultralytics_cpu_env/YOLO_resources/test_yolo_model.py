@@ -10,13 +10,13 @@ print(f"project_dir={project_dir}")
 
 
 # Path to your trained model
-MODEL_PATH = project_dir / "yolo_training" / "experiment_11" / "weights" / "best.pt"   # replace with your path
+MODEL_PATH = project_dir / "yolo_training" / "experiment_9" / "weights" / "best.pt"   # replace with your path
 
 # Path to the folder containing images to label
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
 
 # Path to the folder containing the labels files and images
-RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_11"    # replace with your folder path
+RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experiment_9"    # replace with your folder path
 #RESULTS_FOLDER = project_dir / "data" / "Models_testing"
 
 
@@ -24,7 +24,7 @@ RESULTS_FOLDER = project_dir / "data" / "Models_testing" / "test_results_experim
 CONF_THRESHOLD = 0.5
 
 # Path to single image to be labeled
-SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "990.jpg"    # replace with your folder path
+SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "20260219_224015.jpg"    # replace with your folder path
 
 
 
@@ -54,6 +54,6 @@ def detect_work_pieces(input_dir, output_dir = RESULTS_FOLDER ):
 
 # Usage:
 
-detect_work_pieces(IMAGE_FOLDER)
+#detect_work_pieces(IMAGE_FOLDER)
 
-#detect_work_pieces(SINGLE_IMAGE_PATH)
+detect_work_pieces(SINGLE_IMAGE_PATH)
