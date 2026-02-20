@@ -4,6 +4,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+from launch.conditions import IfCondition
 from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
@@ -37,9 +38,19 @@ def generate_launch_description():
     )
 
     # 2. RViz with Vision Config
+    use_rviz = LaunchConfiguration('use_rviz')
+    
     pkg_vision = get_package_share_directory('parol6_vision')
     rviz_config_file = os.path.join(pkg_vision, 'config', 'vision_debug.rviz')
     
+    # Declare launch argument
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Whether to start RViz'
+    )
+
+    # Update rviz_node condition
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -53,6 +64,7 @@ def generate_launch_description():
             moveit_config.robot_description_kinematics,
             {'use_sim_time': False},
         ],
+        condition=IfCondition(LaunchConfiguration('use_rviz'))
     )
 
     # 3. Static TF (World -> Base Link)
@@ -71,11 +83,41 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Position: 0.5m forward, 1.0m up, looking DOWN at workspace (~45° pitch)
-        arguments=['--x', '0.5', '--y', '0.0', '--z', '1.0', 
-                   '--roll', '0.0', '--pitch', '-0.785', '--yaw', '0.0',  # -45° pitch (looking down)
+        # Position: 0.3m forward, 0.45m up
+        # Quaternion: roll=90deg (yaw=0) → camera points forward (+X of base_link)
+        arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
+                   '--qx', '0.7071', '--qy', '0.0', '--qz', '0.0', '--qw', '0.7071',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
+    )
+
+    # 4.5. Static TF (Kinect Link -> RGB Optical Frame) (Fix for missing driver)
+    static_tf_optical = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_transform_publisher_optical',
+        arguments=['--x', '0.0', '--y', '0.0', '--z', '0.0',
+                   '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '-1.5708',
+                   '--frame-id', 'kinect2_link', '--child-frame-id', 'kinect2_rgb_optical_frame'],
+        output='screen'
+    )
+
+    # 4.6. Vision Pipeline Nodes
+    red_line_detector = Node(
+        package='parol6_vision',
+        executable='red_line_detector',
+        name='red_line_detector',
+        output='screen'
+    )
+
+    depth_matcher = Node(
+        package='parol6_vision',
+        executable='depth_matcher',
+        name='depth_matcher',
+        output='screen',
+        parameters=[
+            {'sync_time_tolerance': 0.5} # Ensure sync tolerance is set here too
+        ]
     )
 
     # 5. Robot State Publisher
@@ -123,11 +165,15 @@ def generate_launch_description():
         ]
 
     return LaunchDescription([
+        use_rviz_arg,
         static_tf_world,
         static_tf_camera,
+        static_tf_optical,
         robot_state_publisher,
         joint_state_publisher,
         move_group_node,
         ros2_control_node,
         rviz_node,
+        red_line_detector,
+        depth_matcher,
     ] + load_controllers)

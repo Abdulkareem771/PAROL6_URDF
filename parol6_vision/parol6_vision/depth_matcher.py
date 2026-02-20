@@ -103,7 +103,7 @@ class DepthMatcher(Node):
         self.declare_parameter('min_depth_quality', 0.6)
         
         # Synchronization
-        self.declare_parameter('sync_time_tolerance', 0.1) # seconds
+        self.declare_parameter('sync_time_tolerance', 0.5) # seconds
         self.declare_parameter('sync_queue_size', 10)
         
         # Get values
@@ -194,15 +194,14 @@ class DepthMatcher(Node):
         fx, fy = K[0], K[4]
         cx, cy = K[2], K[5]
         
-        # 2. Lookup Transform
-        # We need to transform from the camera frame (in header) to target_frame (base_link)
+        # 2. Lookup Transform (just verify it exists, actual transform happens per-point)
         try:
-            # Wait briefly for transform availability if needed, but in callback rely on buffer
             transform = self.tf_buffer.lookup_transform(
                 self.target_frame,
                 lines_msg.header.frame_id, 
                 rclpy.time.Time() # Get latest available
             )
+            _ = transform  # used below via do_transform_point
         except TransformException as ex:
             self.get_logger().warning(
                 f'Could not transform {lines_msg.header.frame_id} to {self.target_frame}: {ex}'
@@ -226,6 +225,19 @@ class DepthMatcher(Node):
             valid_count = 0
             total_count = len(line_2d.pixels)
             
+            # DEBUG: Log first few pixel depth values once per call
+            debug_samples = []
+            for pixel in line_2d.pixels[:5]:
+                u2, v2 = int(pixel.x), int(pixel.y)
+                if 0 <= u2 < cv_depth.shape[1] and 0 <= v2 < cv_depth.shape[0]:
+                    debug_samples.append(f"({u2},{v2})={cv_depth[v2,u2]}")
+            if debug_samples:
+                self.get_logger().info(
+                    f'DEBUG depth samples: {", ".join(debug_samples)} | '
+                    f'depth shape={cv_depth.shape}, dtype={cv_depth.dtype} | '
+                    f'min_d={self.min_depth}, max_d={self.max_depth}'
+                )
+
             for pixel in line_2d.pixels:
                 u, v = int(pixel.x), int(pixel.y)
                 
@@ -252,8 +264,11 @@ class DepthMatcher(Node):
                 z_c = depth_m
                 
                 # Create PointStamped for TF
+                # IMPORTANT: Use Time() (zero/latest) not the bag timestamp.
+                # The bag has old timestamps (Jan 2026) that won't exist in the live TF buffer.
                 pt_stamped = PointStamped()
-                pt_stamped.header = lines_msg.header
+                pt_stamped.header.frame_id = lines_msg.header.frame_id
+                pt_stamped.header.stamp = rclpy.time.Time().to_msg()
                 pt_stamped.point.x = x_c
                 pt_stamped.point.y = y_c
                 pt_stamped.point.z = z_c
@@ -264,6 +279,8 @@ class DepthMatcher(Node):
                     points_3d.append(pt_transformed.point)
                     valid_count += 1
                 except Exception as e:
+                    if valid_count == 0:  # Only log once per line to avoid spam
+                        self.get_logger().error(f'TF point transform failed: {e}')
                     pass # Skip point if transform fails
             
             # --- Outlier Filtering ---
@@ -271,6 +288,12 @@ class DepthMatcher(Node):
             
             # --- Quality Check ---
             depth_quality = valid_count / max(total_count, 1)
+            
+            self.get_logger().info(
+                f'Line stats: total={total_count}, valid_raw={valid_count}, '
+                f'filtered={len(filtered_points)}, quality={depth_quality:.2f} '
+                f'(need min_pts={self.min_points}, min_qual={self.min_quality})'
+            )
             
             if len(filtered_points) >= self.min_points and depth_quality >= self.min_quality:
                 # Create WeldLine3D message
@@ -284,7 +307,8 @@ class DepthMatcher(Node):
                 # Calculate average width (placeholder logic - usually requires mask width)
                 line_3d.line_width = 0.003 # 3mm default assumption
                 
-                line_3d.header.stamp = lines_msg.header.stamp
+                # Use live clock, not bag timestamp - RViz rejects stale markers
+                line_3d.header.stamp = self.get_clock().now().to_msg()
                 line_3d.header.frame_id = self.target_frame
                 
                 weld_lines_3d.append(line_3d)
@@ -292,7 +316,7 @@ class DepthMatcher(Node):
         # 5. Publish
         if weld_lines_3d:
             msg_3d = WeldLine3DArray()
-            msg_3d.header.stamp = lines_msg.header.stamp
+            msg_3d.header.stamp = self.get_clock().now().to_msg()
             msg_3d.header.frame_id = self.target_frame
             msg_3d.lines = weld_lines_3d
             
@@ -301,6 +325,12 @@ class DepthMatcher(Node):
             
             # Visualize
             self.publish_markers(weld_lines_3d)
+        else:
+            self.get_logger().warn(
+                f'Received {len(lines_msg.lines)} 2D lines, but generated 0 3D lines. '
+                'Possible causes: TF failure, invalid depth values (0/NaN), '
+                'points out of range (min/max depth), or aggressive outlier filtering.'
+            )
             
     # ================================================================
     # UTIL FUNCTIONS

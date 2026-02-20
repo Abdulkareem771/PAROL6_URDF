@@ -4,7 +4,7 @@
 
 set -e
 GPU_FLAG=""
-if docker info | grep -i nvidia >/dev/null 2>&1; then
+if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     GPU_FLAG="--gpus all"
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
 else
@@ -85,6 +85,13 @@ else
 
     echo -e "${GREEN}[✓]${NC} Container created and started"
 fi
+
+# Always refresh xauth token so RViz/GUI apps work in all terminals
+echo -e "${BLUE}[INFO]${NC} Refreshing X11 auth token for GUI support..."
+xauth nlist $DISPLAY 2>/dev/null | sed 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge - 2>/dev/null || true
+docker cp /tmp/.docker.xauth parol6_dev:/tmp/.docker.xauth 2>/dev/null && \
+    echo -e "${GREEN}[✓]${NC} X11 auth token injected — RViz will work in all terminals" || \
+    echo -e "${YELLOW}[!]${NC} Could not inject X11 auth (GUI may not work)"
 
 echo ""
 echo "║  Container Status: READY                                    ║"
