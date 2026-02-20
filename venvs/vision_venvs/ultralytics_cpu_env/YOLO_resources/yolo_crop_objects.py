@@ -33,7 +33,7 @@ CONF_THRESHOLD = 0.5
 IOU_THRESHOLD = 0.7
 
 # Output folder for cropped images
-OUTPUT_FOLDER = project_dir / "data" / "ROI_images"
+OUTPUT_FOLDER = project_dir / "data" / "ROI_images" / "experiment_10_results_cropped"
 
 # Path to the folder containing images
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
