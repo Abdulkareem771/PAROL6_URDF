@@ -35,7 +35,8 @@ def generate_launch_description():
     
     play_bag = ExecuteProcess(
         cmd=['ros2', 'bag', 'play', bag_path, '--loop',
-             '--remap', '/tf_static:=/tf_static_bag_discard'],
+             '--remap', '/tf_static:=/tf_static_bag_discard',
+             '--remap', '/tf:=/tf_bag_discard'],
         output='screen'
     )
 
