@@ -66,7 +66,7 @@ if __name__ == "__main__":
     # Uncomment the example you want to run:
     
     #example_single_image()
-    # example_batch_processing()
+    example_batch_processing()
     # example_custom_settings()
     
     print("Please uncomment one of the examples above to run.")
