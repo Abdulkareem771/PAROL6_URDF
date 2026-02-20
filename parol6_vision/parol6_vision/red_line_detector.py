@@ -359,14 +359,16 @@ class RedLineDetector(Node):
             line.id = f"red_line_{idx}"
             line.confidence = float(confidence)
             
-            # Convert to Point32 (ROS message type)
+            # IMPORTANT: Use all ordered skeleton points for pixels, NOT simplified.
+            # The depth_matcher needs dense pixel samples for 3D reconstruction.
+            # simplified_points (Douglas-Peucker) reduces ~85 pts → 2 endpoints for straight lines.
             line.pixels = [
                 Point32(x=float(pt[0]), y=float(pt[1]), z=0.0)
-                for pt in simplified_points
+                for pt in ordered_points
             ]
             
             # Compute bounding box
-            line.bbox_min, line.bbox_max = self.compute_bbox(simplified_points)
+            line.bbox_min, line.bbox_max = self.compute_bbox(ordered_points)
             
             detected_lines.append(line)
         

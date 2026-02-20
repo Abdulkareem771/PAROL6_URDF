@@ -92,7 +92,8 @@ def generate_launch_description():
             'sync_time_tolerance': 0.5,
             'min_depth_quality': 0.05,  # Very low for testing
             'max_depth': 5000.0,         # 5 meters
-            'min_depth': 100.0           # 10 cm
+            'min_depth': 100.0,          # 10 cm
+            'min_valid_points': 2        # Detector only sends skeleton endpoints
         }]
     )
 

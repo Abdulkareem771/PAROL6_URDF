@@ -1,0 +1,16 @@
+digraph G {
+"world" -> "base_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"kinect2_link" -> "kinect2_rgb_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "kinect2_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"kinect2_rgb_optical_frame" -> "kinect2_ir_optical_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "L1"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+"L1" -> "L2"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+"L2" -> "L3"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+"L3" -> "L4"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+"L4" -> "L5"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+"L5" -> "L6"[label=" Broadcaster: default_authority\nAverage rate: 10.344\nBuffer length: 2.9\nMost recent transform: 1771590273.330571\nOldest transform: 1771590270.430262\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1771590273.3895805"[ shape=plaintext ] ;
+}->"world";
+}
