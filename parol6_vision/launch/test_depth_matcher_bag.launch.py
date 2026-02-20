@@ -34,7 +34,8 @@ def generate_launch_description():
     bag_path = '/workspace/rosbag2_2026_01_26-23_26_59'
     
     play_bag = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', bag_path, '--loop'],
+        cmd=['ros2', 'bag', 'play', bag_path, '--loop',
+             '--remap', '/tf_static:=/tf_static_bag_discard'],
         output='screen'
     )
 
@@ -52,8 +53,10 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45', 
-                   '--qx', '0.5', '--qy', '0.5', '--qz', '0.5', '--qw', '0.5',
+        # BASELINE TEST: identity quaternion
+        # Camera looks in +X of base_link (forward)
+        arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
+                   '--qx', '0.0', '--qy', '0.0', '--qz', '0.0', '--qw', '1.0',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
