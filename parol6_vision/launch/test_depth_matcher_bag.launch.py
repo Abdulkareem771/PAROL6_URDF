@@ -35,7 +35,8 @@ def generate_launch_description():
     
     play_bag = ExecuteProcess(
         cmd=['ros2', 'bag', 'play', bag_path, '--loop',
-             '--remap', '/tf_static:=/tf_static_bag_discard'],
+             '--remap', '/tf_static:=/tf_static_bag_discard',
+             '--remap', '/tf:=/tf_bag_discard'],
         output='screen'
     )
 
@@ -53,10 +54,10 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # BASELINE TEST: identity quaternion
-        # Camera looks in +X of base_link (forward)
+        # MATCHES camera_setup.launch.py: roll=90° (qx=0.7071, qw=0.7071)
+        # This correctly orients the Kinect so it points forward along base_link +X
         arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
-                   '--qx', '0.0', '--qy', '0.0', '--qz', '0.0', '--qw', '1.0',
+                   '--qx', '0.0', '--qy', '0.7071', '--qz', '0.0', '--qw', '0.7071',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
