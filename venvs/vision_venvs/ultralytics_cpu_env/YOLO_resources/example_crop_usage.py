@@ -23,7 +23,7 @@ MODEL_PATH = project_dir / "yolo_training" / "experiment_9" / "weights" / "best.
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
 
 # Path to the folder containing the cropped images "ROI"
-RESULTS_FOLDER = project_dir / "data" / "ROI_images"
+RESULTS_FOLDER = project_dir / "data" / "ROI_images" / "experiment_10_results_cropped"
 #RESULTS_FOLDER = project_dir / "data" / "ROI_images"
 
 # Path to single image
