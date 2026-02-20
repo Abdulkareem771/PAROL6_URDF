@@ -24,7 +24,7 @@ project_dir = current_dir.parent
 # ==================== CONFIGURATION ====================
 
 # Path to your trained YOLO model
-MODEL_PATH = project_dir / "YOLO_model_1" / "yolo_training" / "experiment_1" / "weights" / "best.pt"
+MODEL_PATH = project_dir / "yolo_training" / "experiment_10" / "weights" / "best.pt"   # replace with your path
 
 # Confidence threshold for detection (adjust based on your F1 curve)
 CONF_THRESHOLD = 0.5
@@ -35,13 +35,19 @@ IOU_THRESHOLD = 0.7
 # Output folder for cropped images
 OUTPUT_FOLDER = project_dir / "data" / "ROI_images"
 
+# Path to the folder containing images
+IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
+
+# Path to single image
+SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "20260219_224015.jpg"
+
 # Padding around bounding boxes (in pixels) - useful to include some context
 PADDING = 10  # Set to 0 for no padding
 
 
 # ==================== MAIN FUNCTIONS ====================
 
-def detect_and_crop_objects(image_path, model, output_dir, conf_threshold=CONF_THRESHOLD, 
+def detect_and_crop_objects(image_path=SINGLE_IMAGE_PATH, model=MODEL_PATH, output_dir=OUTPUT_FOLDER, conf_threshold=CONF_THRESHOLD, 
                            iou_threshold=IOU_THRESHOLD, padding=PADDING):
     """
     Detect objects in an image and crop them to separate files.
@@ -153,7 +159,7 @@ def process_single_image(image_path, model_path=MODEL_PATH, output_folder=OUTPUT
     print(f"  Cropped images saved to: {output_folder}/")
 
 
-def process_image_folder(input_folder, model_path=MODEL_PATH, output_folder=OUTPUT_FOLDER,
+def process_image_folder(input_folder=IMAGE_FOLDER, model_path=MODEL_PATH, output_folder=OUTPUT_FOLDER,
                         conf_threshold=CONF_THRESHOLD, iou_threshold=IOU_THRESHOLD,
                         padding=PADDING):
     """
@@ -219,8 +225,8 @@ if __name__ == "__main__":
     # Uncomment and modify the path below to use
     
     process_image_folder(
-        input_folder= project_dir / "data" / "raw_model2_data",
-        output_folder= project_dir / "data" /"ROI_images" / "Model2_raw_data"
+        input_folder= IMAGE_FOLDER,
+        output_folder= OUTPUT_FOLDER
     )
     
     

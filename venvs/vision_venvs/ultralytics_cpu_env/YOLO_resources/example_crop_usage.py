@@ -19,7 +19,7 @@ project_dir = current_dir.parent
 # Path to your trained model
 MODEL_PATH = project_dir / "yolo_training" / "experiment_9" / "weights" / "best.pt"   # replace with your path
 
-# Path to the folder containing images to label
+# Path to the folder containing images
 IMAGE_FOLDER = project_dir / "data" / "Images_to_test"    # replace with your folder path
 
 # Path to the folder containing the cropped images "ROI"
