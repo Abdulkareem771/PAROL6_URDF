@@ -43,6 +43,21 @@ ROS Bag (Kinect v2)
 | 3D position (base_link) | X≈1.41m, Y≈−0.08→−0.15m, Z≈0.16m |
 | Publish rate | ~2 Hz (limited by bag loop ~10s / 21 depth frames) |
 | Topic | `/vision/weld_lines_3d` ✅ |
+| OpenGL version (RViz) | 4.6 / GLSL 4.6 (confirmed GPU rendering works) |
+
+### Live Log Output (Confirmed Working State)
+
+This is what correct healthy output looks like in the terminal:
+
+```
+[depth_matcher] DEBUG depth samples: (470,125)=1096, (469,125)=1097 | depth shape=(540, 960), dtype=uint16 | min_d=300.0, max_d=2000.0
+[depth_matcher] Line stats: total=128, valid_raw=128, filtered=128, quality=1.00 (need min_pts=10, min_qual=0.6)
+[depth_matcher] Published 1 3D weld lines
+[red_line_detector] Frame 105: Detected 1 line(s), confidences: ['1.45']
+[red_line_detector] Frame 106: Detected 1 line(s), confidences: ['1.48']
+```
+
+> If you see `Published 0 3D weld lines` or the `Line stats` show `total=2` → see Bug 1 above.
 
 ---
 
@@ -106,20 +121,57 @@ pt_stamped.header.stamp = rclpy.time.Time().to_msg()
 
 **Root Cause:** Container was started with `-e XAUTHORITY=/tmp/.docker.xauth` but that file was **never created or copied** into the container. X11 authentication failed silently.
 
+**Diagnosis steps run:**
+```bash
+# 1. Check DISPLAY inside container
+docker exec parol6_dev bash -c "echo DISPLAY=$DISPLAY"
+# → DISPLAY=:0  ✅ (correct)
+
+# 2. Check X11 socket is mounted
+docker exec parol6_dev bash -c "ls /tmp/.X11-unix/"
+# → X0  ✅ (socket present)
+
+# 3. Check xauth file inside container
+docker exec parol6_dev bash -c "ls -la /tmp/.docker.xauth"
+# → ls: cannot access '/tmp/.docker.xauth': No such file or directory  ❌ (root cause!)
+
+# 4. Allow Docker X access from host
+xhost +local:docker
+# → non-network local connections being added to access control list  ✅
+```
+
 **Fix:**
 ```bash
-# On host (run once, or via start_container.sh):
+# On host — generate auth token and inject into container:
 xauth nlist $DISPLAY | sed 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge -
 docker cp /tmp/.docker.xauth parol6_dev:/tmp/.docker.xauth
 ```
 
-`start_container.sh` now auto-runs this every time. `XAUTHORITY=/tmp/.docker.xauth` is also set in `/etc/bash.bashrc` inside the container.
+`start_container.sh` now auto-runs this every time. `XAUTHORITY=/tmp/.docker.xauth` is also added to `/etc/bash.bashrc` inside the container so every new `docker exec` terminal inherits it automatically.
 
 **In any terminal inside the container (if needed manually):**
 ```bash
 export XAUTHORITY=/tmp/.docker.xauth
 export QT_X11_NO_MITSHM=1
 ```
+
+---
+
+### Bug 5 — RViz Crashes with `AMENT_PREFIX_PATH not set`
+
+**Symptom:** Running `rviz2` without sourcing ROS first gives:
+```
+terminate called after throwing an instance of 'std::runtime_error'
+  what():  Environment variable 'AMENT_PREFIX_PATH' is not set or empty
+```
+
+**Fix:** Always source ROS before launching anything:
+```bash
+source /opt/ros/humble/setup.bash
+source /workspace/install/setup.bash  # your workspace
+```
+
+> The `/etc/bash.bashrc` inside the container does NOT auto-source ROS — you must do it in every terminal or add it to `~/.bashrc`.
 
 ---
 
