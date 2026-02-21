@@ -54,8 +54,9 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
-                   '--qx', '0.0', '--qy', '0.0', '--qz', '0.0', '--qw', '1.0',
+        # Camera 1.2 m in front of robot, 1.0 m high, looking back+down at workspace
+        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
+                   '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
