@@ -86,8 +86,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "serial_port",
-            default_value="/dev/ttyUSB0",
-            description="Serial port for ESP32",
+            default_value="/dev/ttyACM0",
+            description="Serial port for Teensy 4.1 (native USB = /dev/ttyACM0)",
         )
     )
 

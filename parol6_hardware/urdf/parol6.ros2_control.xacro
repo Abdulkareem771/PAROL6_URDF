@@ -11,7 +11,7 @@
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyUSB0 baud_rate:=115200">
+  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyACM0 baud_rate:=115200">
     
     <!-- ======================================================================
          ros2_control Hardware Interface Configuration
