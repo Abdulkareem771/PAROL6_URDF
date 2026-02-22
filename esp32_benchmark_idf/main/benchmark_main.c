@@ -88,12 +88,14 @@ static void process_command(const char* msg) {
     stats.last_seq_num = seq;
     stats.packets_received++;
     
-    // Send ACK
-    printf("<ACK,%lu,%lld>\n", seq, timestamp_us);
+    // Send ACK matching parol6_system.cpp strict 8-token requirement
+    // Format: <ACK,SEQ,J1,J2,J3,J4,J5,J6>
+    printf("<ACK,%lu,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n", 
+           seq, joints[0], joints[1], joints[2], joints[3], joints[4], joints[5]);
     
     // Log received data
-    ESP_LOGI(TAG, "SEQ:%lu J:[%.3f,%.3f,%.3f,%.3f,%.3f,%.3f]",
-             seq, joints[0], joints[1], joints[2], joints[3], joints[4], joints[5]);
+    // ESP_LOGI(TAG, "SEQ:%lu J:[%.3f,%.3f,%.3f,%.3f,%.3f,%.3f]",
+    //          seq, joints[0], joints[1], joints[2], joints[3], joints[4], joints[5]);
 }
 
 static void uart_task(void *arg) {

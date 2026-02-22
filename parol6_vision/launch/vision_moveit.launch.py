@@ -53,6 +53,17 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
+    # =========================================================================================
+    # HARDWARE INJECTION: Connect the real PAROL6System plugin to the flashed ESP32.
+    # The PAROL6.urdf hardcodes the IgnitionSystem, which crashes if Gazebo isn't running.
+    # We replace it with PAROL6System, and point it to /dev/ttyUSB0.
+    # =========================================================================================
+    moveit_config.robot_description['robot_description'] = \
+        moveit_config.robot_description['robot_description'].replace(
+            'ign_ros2_control/IgnitionSystem',
+            'parol6_hardware/PAROL6System</plugin>\n      <param name="serial_port">/dev/ttyUSB0</param>\n      <param name="baud_rate">115200</param><plugin>'
+        )
+
     ros2_controllers_yaml = os.path.join(pkg_moveit, 'config', 'ros2_controllers.yaml')
 
     # ── 1. Bag Player (conditional) ────────────────────────────────────
@@ -107,7 +118,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'publish_debug_images': True,
-            'use_sim_time': True,
+            'use_sim_time': False,
         }]
     )
 
@@ -122,7 +133,7 @@ def generate_launch_description():
             'max_depth': 5000.0,
             'min_depth': 100.0,
             'min_valid_points': 2,
-            'use_sim_time': True,
+            'use_sim_time': False,
         }]
     )
 
@@ -138,7 +149,7 @@ def generate_launch_description():
             'approach_angle_deg': 45.0,
             'auto_generate': True,
             'min_points_for_path': 3,
-            'use_sim_time': True,
+            'use_sim_time': False,
         }]
     )
 
@@ -151,13 +162,13 @@ def generate_launch_description():
         parameters=[{
             'planning_group': 'parol6_arm',
             'base_frame': 'base_link',
-            'end_effector_link': 'link_6',
+            'end_effector_link': 'L6',
             'approach_distance': 0.05,
             'weld_velocity': 0.01,
             # auto_execute=False → use service call to trigger:
             #   ros2 service call /moveit_controller/execute_welding_path std_srvs/srv/Trigger {}
             'auto_execute': False,
-            'use_sim_time': True,
+            'use_sim_time': False,
         }],
     )
 
@@ -172,63 +183,10 @@ def generate_launch_description():
             ('/rgb/image_rect_color',        '/kinect2/qhd/image_color_rect'),
             ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
         ],
-        parameters=[{'use_sim_time': True}]
+        parameters=[{'use_sim_time': False}]
     )
 
-    # ── 5. MoveIt – move_group (fake hardware, no ESP32 needed) ────────
-    move_group_node = Node(
-        package='moveit_ros_move_group',
-        executable='move_group',
-        output='screen',
-        parameters=[moveit_config.to_dict()],
-    )
 
-    # ── 6. ros2_control (FakeSystem) ───────────────────────────────────
-    ros2_control_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        parameters=[moveit_config.robot_description, ros2_controllers_yaml],
-        output='both',
-    )
-
-    joint_state_broadcaster_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster'],
-        output='screen',
-    )
-
-    arm_controller_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['parol6_arm_controller'],
-        output='screen',
-    )
-
-    # ── 7. Robot State Publisher ────────────────────────────────────────
-    robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='both',
-        parameters=[moveit_config.robot_description],
-    )
-
-    # ── 8. RViz  (vision_debug.rviz = vision overlays + MotionPlanning) ─
-    rviz_config = os.path.join(pkg_vision, 'config', 'vision_debug.rviz')
-    rviz_node = Node(
-        package='rviz2',
-        executable='rviz2',
-        name='rviz2',
-        arguments=['-d', rviz_config],
-        parameters=[
-            moveit_config.robot_description,
-            moveit_config.robot_description_semantic,
-            moveit_config.planning_pipelines,
-            moveit_config.robot_description_kinematics,
-        ],
-        output='screen',
-    )
 
     return LaunchDescription([
         use_bag_arg,
@@ -244,12 +202,4 @@ def generate_launch_description():
         path_generator,
         moveit_controller,
         point_cloud_xyzrgb,
-        # MoveIt
-        move_group_node,
-        ros2_control_node,
-        joint_state_broadcaster_spawner,
-        arm_controller_spawner,
-        robot_state_publisher,
-        # Visualization
-        rviz_node,
     ])
