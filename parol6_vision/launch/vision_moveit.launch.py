@@ -141,6 +141,25 @@ def generate_launch_description():
         }]
     )
 
+    # ── 3b. MoveIt Controller (path follower) ──────────────────────────
+    moveit_controller = Node(
+        package='parol6_vision',
+        executable='moveit_controller',
+        name='moveit_controller',
+        output='screen',
+        parameters=[{
+            'planning_group': 'parol6_arm',
+            'base_frame': 'base_link',
+            'end_effector_link': 'link_6',
+            'approach_distance': 0.05,
+            'weld_velocity': 0.01,
+            # auto_execute=False → use service call to trigger:
+            #   ros2 service call /moveit_controller/execute_welding_path std_srvs/srv/Trigger {}
+            'auto_execute': False,
+            'use_sim_time': True,
+        }],
+    )
+
     # ── 4. Point Cloud (RViz 3D view) ──────────────────────────────────
     point_cloud_xyzrgb = Node(
         package='depth_image_proc',
@@ -222,6 +241,7 @@ def generate_launch_description():
         red_line_detector,
         depth_matcher,
         path_generator,
+        moveit_controller,
         point_cloud_xyzrgb,
         # MoveIt
         move_group_node,

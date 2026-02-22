@@ -60,10 +60,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from nav_msgs.msg import Path
-from moveit_msgs.msg import MoveItErrorCodes, RobotTrajectory
+from moveit_msgs.msg import (
+    MoveItErrorCodes, RobotTrajectory,
+    Constraints, PositionConstraint, OrientationConstraint, BoundingVolume
+)
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
 from geometry_msgs.msg import PoseStamped, Pose
+from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 
 import copy
@@ -93,6 +97,9 @@ class MoveItController(Node):
         # Process offsets
         self.declare_parameter('approach_distance', 0.05)
         self.declare_parameter('weld_velocity', 0.01) # m/s
+
+        # Auto-execute: if True, run sequence every time a new path arrives
+        self.declare_parameter('auto_execute', False)
         
         self.group_name = self.get_parameter('planning_group').value
         self.base_frame = self.get_parameter('base_frame').value
@@ -100,6 +107,7 @@ class MoveItController(Node):
         self.step_sizes = self.get_parameter('cartesian_step_sizes').value
         self.thresholds = self.get_parameter('min_success_rates').value
         self.approach_dist = self.get_parameter('approach_distance').value
+        self.auto_execute = self.get_parameter('auto_execute').value
         
         # ============================================================
         # ROS INTERFACES
@@ -145,9 +153,12 @@ class MoveItController(Node):
         self.get_logger().info('MoveIt Controller initialized')
         
     def path_callback(self, msg):
-        """Buffer latest path"""
+        """Buffer latest path; auto-execute if configured"""
         self.latest_path = msg
         self.get_logger().info(f'Received path with {len(msg.poses)} points')
+        if self.auto_execute and not self.execution_in_progress:
+            self.get_logger().info('auto_execute=True — starting welding sequence')
+            self.execute_welding_sequence(msg)
 
     def trigger_execution(self, request, response):
         """Service callback to start execution"""
@@ -258,23 +269,79 @@ class MoveItController(Node):
         return None
 
     def move_to_pose(self, pose_stamped):
-        """Move to a single pose using standard MoveGroup planner"""
+        """
+        Move end-effector to a target pose using MoveGroup joint-space planning.
+        Sends a full MotionPlanRequest via the 'move_action' action server.
+        """
+        self.get_logger().info(
+            f'Approach target: x={pose_stamped.pose.position.x:.3f}, '
+            f'y={pose_stamped.pose.position.y:.3f}, '
+            f'z={pose_stamped.pose.position.z:.3f}'
+        )
+
+        if not self.move_group_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error('MoveGroup action server not available')
+            return False
+
+        # --- Build position constraint (1 cm tolerance box around target) ---
+        prim = SolidPrimitive()
+        prim.type = SolidPrimitive.BOX
+        prim.dimensions = [0.01, 0.01, 0.01]
+
+        bv = BoundingVolume()
+        bv.primitives = [prim]
+        bv.primitive_poses = [pose_stamped.pose]
+
+        pos_con = PositionConstraint()
+        pos_con.header = pose_stamped.header
+        pos_con.link_name = self.ee_link
+        pos_con.constraint_region = bv
+        pos_con.weight = 1.0
+
+        # --- Build orientation constraint (±0.1 rad tolerance) ---
+        ori_con = OrientationConstraint()
+        ori_con.header = pose_stamped.header
+        ori_con.link_name = self.ee_link
+        ori_con.orientation = pose_stamped.pose.orientation
+        ori_con.absolute_x_axis_tolerance = 0.1
+        ori_con.absolute_y_axis_tolerance = 0.1
+        ori_con.absolute_z_axis_tolerance = 0.1
+        ori_con.weight = 1.0
+
+        goal_constraints = Constraints()
+        goal_constraints.position_constraints = [pos_con]
+        goal_constraints.orientation_constraints = [ori_con]
+
+        # --- Build MoveGroup Goal ---
         goal = MoveGroup.Goal()
         goal.request.group_name = self.group_name
-        
-        # Set target pose constraint
-        # (Simplified construction - in real usage would build Constraints message)
-        # For this skeleton, we assume a wrapper or direct usage of moveit_py is available
-        # or we rely on the user to have the move_group action server running.
-        
-        # Note: Implementing full MoveGroup action client construction is verbose.
-        # Ideally we'd use moveit_commander (Python) but it's not fully ported to ROS2.
-        # moveit_py is the new way, but requires complex setup.
-        # For this node, we will assume we can send a simple trajectory or use a helper.
-        
-        # Returning True for now as a placeholder for the concept
-        self.get_logger().info(f"Moving to pose: {pose_stamped.pose.position.x:.2f}, ...")
-        return True 
+        goal.request.num_planning_attempts = 5
+        goal.request.allowed_planning_time = 10.0
+        goal.request.max_velocity_scaling_factor = 0.3
+        goal.request.max_acceleration_scaling_factor = 0.3
+        goal.request.goal_constraints = [goal_constraints]
+        goal.planning_options.plan_only = False  # plan AND execute
+
+        future = self.move_group_client.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, future)
+        handle = future.result()
+
+        if not handle.accepted:
+            self.get_logger().error('Approach goal rejected by MoveGroup')
+            return False
+
+        res_future = handle.get_result_async()
+        rclpy.spin_until_future_complete(self, res_future)
+        result = res_future.result()
+
+        ok = result.result.error_code.val == MoveItErrorCodes.SUCCESS
+        if ok:
+            self.get_logger().info('Approach move succeeded')
+        else:
+            self.get_logger().error(
+                f'Approach move failed — MoveIt error code: {result.result.error_code.val}'
+            )
+        return ok
 
     def execute_trajectory_action(self, trajectory):
         """Execute a computed trajectory"""
