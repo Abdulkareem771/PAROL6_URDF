@@ -25,8 +25,10 @@ parol6_arm_controller:
     # Command and state interfaces must match what is defined in the URDF <ros2_control> block
     command_interfaces:
       - position
+      - velocity  # NEW: Enable velocity commands
     state_interfaces:
       - position
+      - velocity  # NEW: Read velocity feedback
     
     allow_partial_joints_goal: false
     constraints:
