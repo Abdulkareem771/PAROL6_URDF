@@ -79,11 +79,12 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Camera is 1.2 m in front of robot base, 1.0 m up, looking back+down
-        # yaw=pi  → faces toward -X (toward robot)
-        # pitch=+0.52 rad (+30° = tilts DOWN after yaw=π flip) → tilts down toward workspace
-        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
-                   '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
+        # TEST POSITION: Camera tilted down (pitch=-0.52) to bring weld pixels into reach.
+        # Red line is at v≈125, cy≈270: without pitch it adds +0.29m to base_z.
+        # Pitch=-0.52 rad + z=0.10m → back-projects to z≈0.30–0.40m, x≈0.35m ✓
+        # Real position (restore later): x=1.2, z=0.65, pitch=0.0
+        arguments=['--x', '1.44', '--y', '0.0', '--z', '0.10',
+                   '--yaw', '1.5708', '--pitch', '-0.52', '--roll', '-1.5708',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
