@@ -76,7 +76,56 @@ Confidence = (Retention Ratio) * (Continuity Score)
 | `min_confidence` | float | 0.5 | Threshold for publishing a line |
 | `morphology_kernel_size` | int | 5 | Size of structuring element for erosion/dilation |
 
-## 5. Development & Troubleshooting
+## 5. Development 
+### 5.1 📊 HSV Color Space Tuning
+
+**Developer workflow for HSV tuning:**
+1. Launch Kinect driver:
+   ```bash
+   ros2 launch kinect2_bridge kinect2_bridge.launch.py
+   ```
+
+2. Run HSV Inspector:
+   ```bash
+   ros2 run parol6_vision hsv_inspector
+   ```
+
+3. Hover mouse over red markers in the camera view
+
+4. Record HSV values for red regions
+
+5. Update `detection_params.yaml`:
+   ```yaml
+   hsv_lower_1: [0, 100, 100]    # Adjust based on readings
+   hsv_upper_1: [10, 255, 255]
+   hsv_lower_2: [160, 50, 0]
+   hsv_upper_2: [180, 255, 255]
+   ```
+
+6. Test with red line detector to validate
+
+### 🎨 Implementation Details
+
+**Key Features:**
+- **Real-time feedback:** Instant HSV display without recording/playback
+- **Lightweight:** Simple OpenCV GUI, no heavy dependencies
+- **Configurable topic:** Can inspect any image topic (not just Kinect)
+- **Development-only:** Not part of production pipeline
+
+**Technical Notes:**
+- Use `cv_bridge` for ROS→OpenCV conversion
+- HSV conversion: `cv2.cvtColor(image, cv2.COLOR_BGR2HSV)`
+- Mouse callback: `cv2.setMouseCallback("HSV Inspector", callback_function)`
+- Text overlay: `cv2.putText()` with contrasting color (red on image)
+- Circle marker: `cv2.circle()` to highlight cursor position
+
+### 🔗 Dependencies
+- Requires: Kinect v2 camera running (or mock camera)
+- Supports: Red Line Detector parameter tuning
+- Optional: RViz not required (standalone tool)
+
+
+## 6. Troubleshooting
 
 ### Simulating/Testing
 You can run the detector in isolation using the provided test launch file:

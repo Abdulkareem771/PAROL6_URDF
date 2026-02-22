@@ -4,7 +4,7 @@
 
 set -e
 GPU_FLAG=""
-if docker info | grep -i nvidia >/dev/null 2>&1; then
+if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
     GPU_FLAG="--gpus all"
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
 else
@@ -57,11 +57,27 @@ else
     --privileged \
     $GPU_FLAG \
     -e DISPLAY=$DISPLAY \
+    -e PATH="/usr/bin:$PATH" \
+    -e LD_LIBRARY_PATH="/usr/lib/nvidia:/usr/lib/nvidia-cuda-toolkit/lib64:/host-cuda-libs:$LD_LIBRARY_PATH" \
+    -e CUDA_HOME="/usr/lib/nvidia-cuda-toolkit" \
+    -e CUDA_PATH="/usr/lib/nvidia-cuda-toolkit" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
     -v /dev:/dev \
+    -v /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro \
+    -v /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro \
+    -v /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro \
+    -v /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:ro \
+    -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
+    -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
+    -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
+    -v /usr/lib/cuda:/usr/lib/cuda:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so:/host-cuda-libs/libcudart.so:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/host-cuda-libs/libcudart.so.11.0:ro \
+    -v /usr/lib/x86_64-linux-gnu/libcudadevrt.a:/host-cuda-libs/libcudadevrt.a:ro \
+    -v /usr/share/cmake-3.22/Modules:/host-cmake:ro \
     -w /workspace \
     --shm-size=512m \
     $IMAGE_NAME \
@@ -70,8 +86,14 @@ else
     echo -e "${GREEN}[✓]${NC} Container created and started"
 fi
 
+# Always refresh xauth token so RViz/GUI apps work in all terminals
+echo -e "${BLUE}[INFO]${NC} Refreshing X11 auth token for GUI support..."
+xauth nlist $DISPLAY 2>/dev/null | sed 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge - 2>/dev/null || true
+docker cp /tmp/.docker.xauth parol6_dev:/tmp/.docker.xauth 2>/dev/null && \
+    echo -e "${GREEN}[✓]${NC} X11 auth token injected — RViz will work in all terminals" || \
+    echo -e "${YELLOW}[!]${NC} Could not inject X11 auth (GUI may not work)"
+
 echo ""
-echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Container Status: READY                                    ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""

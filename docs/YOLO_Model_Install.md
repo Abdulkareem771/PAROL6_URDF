@@ -14,13 +14,27 @@
 ---
 
 ## 📌 Purpose of This Guide
-This document explains how to:
+This document explains **how to install and use the YOLOv11 object detection model inside an existing Docker container running ROS 2 Humble, without modifying the Dockerfile.**
 
 ✔ Run **YOLO object detection inside Docker**  
 ✔ Use it on **CPU or GPU**  
 ✔ Integrate it with **ROS 2 Humble**  
 ✔ **Train YOLO on your own dataset**  
-✔ Avoid common problems we’ve already faced  
+✔ Avoid common problems we’ve already faced 
+
+Instead of changing the image, we:
+
+- Use a **Python virtual environment (venv)** inside the container.
+- Install YOLOv11 and its dependencies locally.
+- Keep the Docker image **clean, reusable, and consistent.**
+- Avoid dependency conflicts with system Python and ROS 2.
+
+This guide is written so that:
+    
+- New team members can follow it end-to-end.
+- Everyone installs things the same way.
+- We minimize debugging time and environment drift.
+
 
 Following the same steps keeps our environments consistent and reduces wasted debugging time.
 
@@ -28,287 +42,227 @@ Following the same steps keeps our environments consistent and reduces wasted de
 
 # 🚀 1. System Requirements
 
-### ✅ Host System
-- Ubuntu **22.04**
-- ROS 2 **Humble**
-- Docker installed
+This guide assumes:
 
-Install Docker if needed:
+- **Host OS:** Ubuntu 22.04
+- **ROS Version:** ROS 2 Humble
+- **Docker:** Already installed and working
+- **Docker Image:** Already contains ROS 2 Humble
+- **No Dockerfile changes allowed**
+- **Internet access inside container** (for pip installs)
+
+---
+# 2. Why Use a Python Virtual Environment Inside Docker?
+
+Even though Docker is already an isolated environment, **ROS 2 Humble relies on system Python**, and installing ML libraries globally can cause:
+
+- Conflicts with ROS Python packages
+- Broken `rclpy` or OpenCV bindings
+- Hard-to-reproduce bugs across machines
+
+Using `venv`:
+- Keeps YOLO dependencies isolated
+- Makes rollback easy
+- Avoids breaking ROS
+- Works without touching Dockerfile
+
+---
+
+# 3. Start and Enter the Docker Container
+
+Start your container as usual:
+
 ```bash
-sudo apt install docker.io
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
+docker start parol6_dev
+docker exec -it parol6_dev bash
 ```
+Verify ROS is available:
 
-Logout and log back in.
-
-Confirm Docker works:
-```bash
-docker run hello-world
+```bash 
+source /opt/ros/humble/setup.bash
+ros2 --help
 ```
 
 ---
 
-# 🧩 2. Pull Base ROS 2 Docker Image
+# 4. Install Required System Packages (Inside Container)
+
+These packages are safe to install and do NOT affect the Dockerfile.
 
 ```bash
-docker pull ros:humble
+apt update && apt install -y \
+    python3-venv \
+    python3-pip \
+    python3-dev \
+    git \
+    libgl1 \
+    libglib2.0-0
 ```
 
-Verify:
-```bash
-docker images
-```
+Why these are needed:
+
+- `python3-venv`: create virtual environments
+
+- `python3-dev`: compile Python wheels
+
+- `libgl1, libglib2.0-0`: OpenCV GUI & image support
+
 
 ---
 
-# 🟦 3. Run YOLO Inside Docker — CPU-Only (Simplest Setup)
+# 5. Create a Python Virtual Environment
 
-This works on any machine — no GPU required.
+Choose a location **outside ROS workspace**:
 
-Start a ROS Humble container:
 ```bash
-docker run -it --name yolo_cpu --net=host --ipc=host ros:humble bash
+mkdir -p /opt/venvs
+python3 -m venv /opt/venvs/yolo
 ```
 
-You are now **inside the container shell**.
+Activate the environment:
+
+```bash
+source /opt/venvs/yolo/bin/activate
+```
+Confirm:
+
+```bash
+which python
+# Should point to /opt/venvs/yolo/bin/python
+```
+Upgrade pip tools:
+
+```bash
+pip install --upgrade pip setuptools wheel
+```
+
 
 ---
 
-## 🔧 3.1 Install Dependencies (Inside the Container)
+# 6. Install YOLOv11 and Dependencies
+## 6.1 Install YOLO (Ultralytics)
+```bash
+pip install ultralytics
+```
+
+Verify installation:
 
 ```bash
-apt update
-apt install -y python3 python3-pip python3-opencv git
-pip3 install --upgrade pip
+yolo --help
 ```
 
----
+## 6.2 Install PyTorch (CPU or GPU)
 
-## 🤖 3.2 Install YOLO (Ultralytics — YOLOv11)
+**CPU-only (recommended unless CUDA is configured):**
+```bash
+pip install torch torchvision torchaudio
+```
+
+**GPU (CUDA 11.8 example):**
+
+```bash 
+pip install torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu118
+```
+
+**Or When you install YOLO (Ultralytics) by `pip install ultralytics`, it will automatically install the all requirements for both CPU and GPU as we did**
+
+Verify PyTorch:
 
 ```bash
-pip3 install ultralytics
+python - <<EOF
+import torch
+print("Torch:", torch.__version__)
+print("CUDA available:", torch.cuda.is_available())
+EOF
 ```
 
-Verify:
+
+# 7. Download and Test YOLOv11
+## 7.1 Quick Sanity Test
 ```bash
-yolo
+yolo predict model=yolo11n.pt source=https://ultralytics.com/images/bus.jpg
 ```
+Expected:
 
-You should see the YOLO CLI help menu.
+- Image downloaded
 
----
+- Detection output printed
 
-## 🧪 3.3 Test YOLO Detection
+- Annotated image saved
 
-```bash
-yolo predict model=yolov11n.pt source='https://ultralytics.com/images/bus.jpg'
-```
+--- 
 
-Results appear in:
-
-```
-runs/predict/
-```
-
-🎉 **YOLO now runs on CPU inside Docker**
-
----
-
-# ⚡ 4. Run YOLO Inside Docker — With GPU (NVIDIA)
-
-Recommended for **real-time performance**.
-
----
-
-## 🔹 4.1 Install NVIDIA Docker Runtime (Host Machine Only)
-
-```bash
-sudo apt install nvidia-container-toolkit
-sudo nvidia-ctk runtime configure
-sudo systemctl restart docker
-```
-
-Verify GPU access inside Docker:
-```bash
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
-```
-
-You should see your GPU details.
-
----
-
-## 🔹 4.2 Start ROS Container WITH GPU
-
-```bash
-docker run -it --gpus all --name yolo_gpu --net=host --ipc=host ros:humble bash
-```
-
----
-
-## 🔹 4.3 Install Dependencies (Inside Container)
-
-```bash
-apt update
-apt install -y python3 python3-pip python3-opencv git
-pip3 install --upgrade pip
-```
-
----
-
-## 🔹 4.4 Install PyTorch With CUDA Support
-
-```bash
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-```
-
-Verify GPU is detected:
-
-```bash
-python3 -c "import torch; print(torch.cuda.is_available())"
-```
-
-Expected output:
-```
-True
-```
-
----
-
-## 🔹 4.5 Install YOLO
-
-```bash
-pip3 install ultralytics
-```
-
----
-
-## 🔹 4.6 Run YOLO (GPU Accelerated)
-
-```bash
-yolo predict model=yolov11n.pt source=0
-```
-
-GPU will be used automatically 🎉
-
----
-
-# 🤝 5. Using YOLO With ROS 2
-
-Install ROS–OpenCV bridge inside the container:
-
-```bash
-apt install -y ros-humble-cv-bridge ros-humble-image-transport
-pip3 install numpy
-```
-
----
-
-## Example ROS2 YOLO Node (`yolo_node.py`)
-
+# 8. Using YOLOv11 in Python
+## 8.1 Minimal Python Test
 ```python
+from ultralytics import YOLO
+
+model = YOLO("yolo11n.pt")
+results = model("image.jpg")
+
+for r in results:
+    print(r.boxes.cls)
+```
+
+---
+
+# 9. Using YOLOv11 with ROS 2
+## 9.1 Important Rule
+
+**Always source ROS first, then activate the virtual environment**
+
+Correct order:
+```bash
+source /opt/ros/humble/setup.bash
+source /opt/venvs/yolo/bin/activate
+```
+## 9.2 ROS 2 Python Node Example
+```python 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
 from ultralytics import YOLO
-import cv2
 
 class YoloNode(Node):
     def __init__(self):
         super().__init__('yolo_node')
-        self.model = YOLO('yolov11n.pt')
-        self.bridge = CvBridge()
-        self.subscription = self.create_subscription(
-            Image, '/camera/image_raw', self.callback, 10)
+        self.model = YOLO("yolo11n.pt")
+        self.get_logger().info("YOLOv11 loaded")
 
-    def callback(self, msg):
-        frame = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
-        results = self.model(frame)
-        annotated = results[0].plot()
-        cv2.imshow("YOLOv11", annotated)
-        cv2.waitKey(1)
+def main():
+    rclpy.init()
+    node = YoloNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
 
-rclpy.init()
-rclpy.spin(YoloNode())
+if __name__ == "__main__":
+    main()
 ```
 
-You may later:
-✔ change the topic  
-✔ publish results  
-✔ add filtering  
-
----
-
-# 🎯 6. Training YOLO on Our Dataset
-
-This works on CPU or GPU.
-
----
-
-## 📁 6.1 Dataset Folder Structure
-
-```
-dataset/
- ├── images/train
- ├── images/val
- ├── labels/train
- └── labels/val
-```
-
-Labels use format:
-```
-class x_center y_center width height
-```
-(all values normalized 0–1)
-
----
-
-## 📝 6.2 Create `data.yaml`
-
-```yaml
-train: dataset/images/train
-val: dataset/images/val
-
-nc: 3
-names: ['class1', 'class2', 'class3']
-```
-
----
-
-## 🏋️ 6.3 Start Training
+Run it with:
 
 ```bash
-yolo train model=yolov11n.pt data=data.yaml epochs=100 imgsz=640
-```
-
-Training output:
-```
-runs/train/
+python3 yolo_node.py
 ```
 
 ---
 
-# 📦 7. Save Container State
-
-So we don’t reinstall every time:
-
+# 10. Make Activation Easier (Recommended)
+Add this alias:
 ```bash
-exit
-docker commit yolo_gpu yolo_ready
+echo "alias yoloenv='source /opt/ros/humble/setup.bash && source /opt/venvs/yolo/bin/activate'" >> ~/.bashrc
+source ~/.bashrc
 ```
-
-Next use:
+Now simply run:
 
 ```bash
-docker run -it --gpus all --net=host --ipc=host yolo_ready bash
+yoloenv
 ```
 
 ---
 
-# 🛑 8. Troubleshooting & Common Issues
-
+# 12. Troubleshooting (Common Issues We Faced)
 ## 🟡 GPU Not Detected
 
 Check host:
@@ -397,7 +351,159 @@ Logout + login.
 
 ---
 
-# 💡 9. Why We Use YOLOv11 (Ultralytics)
+### ❌ `ModuleNotFoundError: ultralytics`
+
+Cause:
+
+-  Virtual environment not activated
+
+Fix:
+
+```bash
+
+source /opt/venvs/yolo/bin/activate
+```
+---
+
+### ❌ `ImportError: libGL.so.1 not found`
+Fix:
+
+```bash 
+apt install -y libgl1
+```
+
+---
+
+### ❌ `cv2.imshow()` crashes
+
+Cause:
+
+- No display in Docker
+
+Fix:
+
+- Use `cv2.imwrite()`
+
+- Or run container with X11 forwarding
+
+- Or use headless inference only
+
+
+
+
+### ❌ `ROS node crashes after installing PyTorch`
+Cause:
+
+- Installed packages globally instead of venv
+
+Fix:
+
+```bash
+pip uninstall torch torchvision
+# Reinstall inside venv
+```
+
+---
+
+### ❌ `CUDA not detected`
+
+Check:
+
+```bash
+nvidia-smi
+```
+
+Ensure:
+
+- NVIDIA Container Toolkit installed on host
+
+- Docker run command includes `--gpus all`
+
+---
+
+### ❌ `rclpy` not found inside venv
+
+Cause:
+
+- ROS not sourced before venv
+
+Fix:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /opt/venvs/yolo/bin/activate
+```
+
+---
+
+
+# 🎯 11. Training YOLO on Our Dataset
+
+This works on CPU or GPU.
+
+---
+
+## 📁 11.1 Dataset Folder Structure
+
+```
+dataset/
+ ├── images/train
+ ├── images/val
+ ├── labels/train
+ └── labels/val
+```
+
+Labels use format:
+```
+class x_center y_center width height
+```
+(all values normalized 0–1)
+
+---
+
+## 📝 11.2 Create `data.yaml`
+
+```yaml
+train: dataset/images/train
+val: dataset/images/val
+
+nc: 3
+names: ['class1', 'class2', 'class3']
+```
+
+---
+
+## 🏋️ 11.3 Start Training
+
+```bash
+yolo train model=yolov11n.pt data=data.yaml epochs=100 imgsz=640
+```
+
+Training output:
+```
+runs/train/
+```
+
+---
+
+# 📦 12. Save Container State
+
+So we don’t reinstall every time:
+
+```bash
+exit
+docker commit parol6_dev parol6-ultimate:latest
+```
+
+Next use:
+
+```bash
+docker run -it --gpus all --net=host --ipc=host yolo_ready bash
+```
+
+---
+
+# 💡 13. Why We Use YOLOv11 (Ultralytics)
 
 ✔ Easy installation  
 ✔ Active support  
@@ -407,19 +513,50 @@ Logout + login.
 
 ---
 
-# 🙏 10. Team Rules (Consistency Matters)
+# 🙏 14. Team Rules (Consistency Matters)
 
 Please follow:
 
-✔ Use YOLO **inside Docker**  
-✔ Prefer **YOLOv11** unless discussed  
-✔ Keep Python version **3.8–3.11**  
-✔ Save working containers using `docker commit`  
-✔ Share consistent dataset structure  
+✔ Use YOLO **inside Docker**   
+✔ Prefer **YOLOv11** unless discussed      
+✔ Keep Python version **3.8–3.11**     
+✔ Save working containers using `docker commit`    
+✔ Share consistent dataset structure.  
+✔ ❗ Never install ML libraries with `apt`.    
+✔ ❗ Never `pip install` without activating venv.  
+✔ Always use `/opt/venvs/yolo`.    
+✔ Keep ROS Python clean.   
+✔ Document any new dependency.  
 
 ---
 
-# 📩 11. Reporting Issues
+
+# 15. Summary
+
+This workflow:
+
+- Requires no Dockerfile changes
+
+- Is safe for ROS 2 Humble
+
+- Is repeatable across machines
+
+- Keeps ML and ROS dependencies isolated
+
+- Minimizes environment-related bugs
+
+If everyone follows this document, we avoid:
+
+- Broken ROS installs
+
+- Dependency mismatches
+
+- “Works on my machine” issues
+
+ 
+---
+
+# 📩 16. Reporting Issues
 
 When something fails, please share:
 
@@ -431,6 +568,7 @@ When something fails, please share:
 This helps us support each other faster.
 
 ---
+
 
 # 🎉 Done!
 
