@@ -5,7 +5,9 @@
 class AlphaBetaFilter {
 public:
     AlphaBetaFilter(float alpha, float beta, float dt_s) 
-        : alpha_(alpha), beta_(beta), dt_(dt_s) {}
+        : alpha_(alpha), beta_(beta), dt_(dt_s) {
+        beta_dt_inv_ = beta_ / dt_s;
+    }
 
     void set_initial_position(float initial_rad) {
         estimated_pos_ = initial_rad;
@@ -32,7 +34,7 @@ public:
         
         // 4. Observer Update Step
         estimated_pos_ += alpha_ * residual;
-        estimated_vel_ += (beta_ / dt_) * residual;
+        estimated_vel_ += beta_dt_inv_ * residual;
     }
     
     float get_position() const { return estimated_pos_; }
@@ -44,4 +46,5 @@ private:
     float last_raw_angle_ = 0.0f;
     float turn_offset_ = 0.0f;
     float alpha_, beta_, dt_;
+    float beta_dt_inv_;
 };

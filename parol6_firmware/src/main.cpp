@@ -49,39 +49,53 @@ void set_motor_velocity(int axis, float velocity) {
 void run_control_loop_isr() {
     float current_velocities[NUM_AXES]; 
     float current_positions[NUM_AXES];
+    float commanded_velocities[NUM_AXES];
     
     // Strict Control Law: Kp Proportional Gains
     const float Kp[NUM_AXES] = { 20.0f, 20.0f, 20.0f, 20.0f, 20.0f, 20.0f };
 
+    // 1. Compute Math for All Axes First
     for (int i = 0; i < NUM_AXES; i++) {
-        // 1. Read Hardware Abstraction Layer
+        // A. Read Hardware Abstraction Layer
         float raw_pos = encoder_hal[i].read_angle();
         
-        // 2. Update Observer
+        // B. Update Observer
         observer[i].update(raw_pos);
         float actual_pos = observer[i].get_position();
         float actual_vel = observer[i].get_velocity();
         current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
         
-        // 3. Get 1ms Interpolated Setpoint
+        // C. Get 1ms Interpolated Setpoint
         float cmd_pos, cmd_vel_ff;
         interpolator[i].tick_1ms(cmd_pos, cmd_vel_ff);
         
-        // 4. Strict Control Law (P + FF)
+        // D. Strict Control Law (P + FF)
         float pos_error = cmd_pos - actual_pos;
         float velocity_command = cmd_vel_ff + (Kp[i] * pos_error);
         
-        // 5. Motor Hal Output
-        if (supervisor.get_state() == SafetySupervisor::NOMINAL) {
-            set_motor_velocity(i, velocity_command);
+        // E. Output Saturation (Clamping)
+        const float MAX_VEL_CMD = 15.0f;
+        if (velocity_command > MAX_VEL_CMD) velocity_command = MAX_VEL_CMD;
+        if (velocity_command < -MAX_VEL_CMD) velocity_command = -MAX_VEL_CMD;
+        
+        // Cache safe command
+        commanded_velocities[i] = velocity_command;
+    }
+    
+    // 2. Safety check uses observer velocities and monotonic tick
+    static uint32_t tick_ms = 0;
+    tick_ms++;
+    supervisor.update(tick_ms, current_velocities);
+
+    // 3. Motor Hal Output safely governed by Supervisor
+    for(int i = 0; i < NUM_AXES; i++) {
+        if (supervisor.is_safe()) {
+            set_motor_velocity(i, commanded_velocities[i]);
         } else {
             set_motor_velocity(i, 0.0f); // Fast stop on fault
         }
     }
-    
-    // Safety check uses observer velocities
-    supervisor.update(millis(), current_velocities);
 }
 
 // -------------------------------------------------------------------------
