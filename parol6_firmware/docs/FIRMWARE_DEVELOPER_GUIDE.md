@@ -39,10 +39,10 @@ Where possible, generic math modules (`Interpolator`, `AlphaBetaFilter`) should 
 ## 5. Code Concepts Glossary
 
 ### The Monotonic Tick
-Inside `run_control_loop_isr()`, you will see `static uint32_t tick_ms = 0; tick_ms++;`. We do not use Arduino's `millis()` inside the hardware timer because `millis()` relies on the internal SysTick interrupt. Managing interrupts within interrupts can lead to unpredictable latency. A local, monotonic variable incrementing at 1 kHz guarantees perfectly equidistant time steps.
+Inside `run_control_loop_isr()`, you will see `system_tick_ms++;`. We do not use Arduino's `millis()` inside the hardware timer because `millis()` relies on the internal SysTick interrupt. Managing interrupts within interrupts can lead to unpredictable latency. A local, monotonic variable incrementing at 1 kHz guarantees perfectly equidistant time steps.
 
 ### Output Saturation (Clamping)
-The `Control Law` implements `velocity_command = cmd_vel_ff + (Kp * pos_error)`. However, mathematical spikes (caused by a noisy encoder or a sudden large waypoint jump) could command the motor to an unsafe infinite velocity. The variable is immediately passed through a `MAX_VEL_CMD` threshold to physically saturate the hardware request.
+The `Control Law` implements `velocity_command = cmd_vel_ff + (Kp * pos_error)`. Mathematical spikes (caused by a noisy encoder or a sudden large waypoint jump) could command the motor to an unsafe infinite velocity. The variable is immediately passed through a `MAX_VEL_CMD` threshold to physically saturate the hardware request.
 
 ### Innovation & Unwrapping
 In the `AlphaBetaFilter`, the code continually checks if `delta > M_PI`. Magnetic encoders report absolute angles (e.g., $0$ to $2\pi$). When a joint spins past the zero point, the reading snaps from $6.28$ to $0.00$. The filter catches this mathematical discontinuity using the `M_PI` bounds and subtracts $2\pi$, presenting a continuous, unwrapped multi-turn angle to the control loop.
@@ -50,3 +50,4 @@ In the `AlphaBetaFilter`, the code continually checks if `delta > M_PI`. Magneti
 ### ISR Array Caching
 `run_control_loop_isr()` computes the mathematical commands (`commanded_velocities[i]`) for *all* 6 axes before applying physical voltages. 
 **Why?** If Axis 0 passes safety, but Axis 5 triggers a runaway fault, applying voltages sequentially would cause Axis 0 to jump momentarily before the system halted. By caching the math, calculating safety, and *then* applying the outputs, the entire arm halts synchronously.
+

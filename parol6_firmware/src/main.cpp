@@ -36,6 +36,7 @@ MicrosEncoder encoder_hal[NUM_AXES] = {
 };
 
 IntervalTimer controlTimer;
+volatile uint32_t system_tick_ms = 0;
 
 // Fake Motor Output HAL for Phase 1 compilation
 void set_motor_velocity(int axis, float velocity) {
@@ -83,10 +84,9 @@ void run_control_loop_isr() {
         commanded_velocities[i] = velocity_command;
     }
     
-    // 2. Safety check uses observer velocities and monotonic tick
-    static uint32_t tick_ms = 0;
-    tick_ms++;
-    supervisor.update(tick_ms, current_velocities);
+    // 2. Safety check uses observer velocities and unified monotonic tick
+    system_tick_ms++;
+    supervisor.update(system_tick_ms, current_velocities);
 
     // 3. Motor Hal Output safely governed by Supervisor
     for(int i = 0; i < NUM_AXES; i++) {
@@ -103,7 +103,7 @@ void run_control_loop_isr() {
 // -------------------------------------------------------------------------
 void setup() {
     transport.init(115200);
-    supervisor.init(millis());
+    supervisor.init(0);
 
     for (int i = 0; i < NUM_AXES; i++) {
         encoder_hal[i].init();
@@ -126,18 +126,27 @@ void loop() {
         cmd = rx_queue.shift();
         interrupts();
 
-        supervisor.feed_watchdog(millis());
+        supervisor.feed_watchdog(system_tick_ms);
+
+        // Dynamically compute the duration since the last valid ROS packet
+        static uint32_t last_cmd_ts = 0;
+        uint32_t delta_ms = 40; // Default fallback (25Hz)
+        if (last_cmd_ts != 0 && system_tick_ms > last_cmd_ts) {
+            delta_ms = system_tick_ms - last_cmd_ts;
+            // Cap the duration to prevent massive interpolation swings if a packet drops
+            if (delta_ms > 100) delta_ms = 100;
+        }
+        last_cmd_ts = system_tick_ms;
 
         for (int i = 0; i < NUM_AXES; i++) {
-            // Wait expected ROS delta is roughly 40ms (25Hz)
-            interpolator[i].set_target(cmd.positions[i], cmd.velocities[i], 40); 
+            interpolator[i].set_target(cmd.positions[i], cmd.velocities[i], delta_ms); 
         }
     }
 
     // 3. Provide background status telemetry (10 Hz roughly)
     static uint32_t last_print = 0;
-    if (millis() - last_print > 100) {
-        last_print = millis();
+    if (system_tick_ms - last_print > 100) {
+        last_print = system_tick_ms;
         // Feedback data gathering requires brief interrupt lock to prevent tearing
         float pos[NUM_AXES], vel[NUM_AXES];
         noInterrupts();
