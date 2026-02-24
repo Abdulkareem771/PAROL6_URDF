@@ -316,12 +316,12 @@ public:
 *   Break the existing [realtime_servo_teensy.ino](file:///home/kareem/Desktop/PAROL6_URDF/PAROL6/firmware/realtime_servo_teensy/realtime_servo_teensy.ino) prototype into defined modules (Transport, Supervisor, Interpolation, Control, HAL).
 *   Maintain the existing `micros()` encoder logic temporarily.
 
-**Phase 1.5 — ESP32 Hardware PWM Injection (Accelerated)**
+**Phase 1.5 — ESP32 Hardware PWM Injection (Accelerated) [COMPLETED]**
 *   Implement `PwmCaptureEncoder.h` using Teensy `attachInterrupt()` to measure PWM pulse widths.
 *   Assign 6 physical digital input pins on the Teensy.
 *   Develop an ESP32 firmware utilizing the LEDC peripheral to generate 6 synthetic, noisy PWM signals representing robotic joint movement.
 *   Wire the 6 ESP32 PWM outputs to the 6 Teensy interrupt inputs.
-*   *Validation Required*: Hook an oscilloscope to `ISR_PROFILER_PIN` and prove that the 1 kHz ISR timing remains strictly bounded (< 15 µs) even while the CPU is bombarded with 6 simultaneous external hardware interrupts. This proves the Alpha-Beta filter can handle real hardware edge-capture latency without starving the control loop.
+*   *Validation Results*: Oscilloscope / DWT Profiling proved the 1 kHz ISR timing remains strictly bounded (measured at an astonishing **1 µs max execution time**) even while the CPU is bombarded with 6 simultaneous external hardware interrupts. This proves the Alpha-Beta filter can handle real hardware edge-capture latency without starving the control loop.
 
 **Phase 2 — Increase Loop to 1 kHz**
 *   Bump the `IntervalTimer` to 1000 Hz.

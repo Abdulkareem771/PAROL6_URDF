@@ -47,6 +47,10 @@ void isr_enc5() { encoder_hal[5].handle_interrupt(); }
 IntervalTimer controlTimer;
 volatile uint32_t system_tick_ms = 0;
 
+// Software Profiler tracking (Phase 1.5)
+volatile uint32_t max_isr_time_us = 0;
+volatile uint32_t last_isr_time_us = 0;
+
 // Fake Motor Output HAL for Phase 1 compilation
 void set_motor_velocity(int axis, float velocity) {
     // Write physical PWM to motor driver
@@ -57,6 +61,7 @@ void set_motor_velocity(int axis, float velocity) {
 // 1 kHz Hardware Timer ISR (Strict Real-Time Execution)
 // -------------------------------------------------------------------------
 void run_control_loop_isr() {
+    uint32_t start_cycles = ARM_DWT_CYCCNT; // Start cycle profiling
     digitalWriteFast(ISR_PROFILER_PIN, HIGH);
     
     float current_velocities[NUM_AXES]; 
@@ -109,6 +114,16 @@ void run_control_loop_isr() {
     }
     
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
+    
+    // Calculate profiling metrics
+    uint32_t end_cycles = ARM_DWT_CYCCNT;
+    uint32_t cycles_taken = end_cycles - start_cycles;
+    uint32_t time_taken_us = cycles_taken / (F_CPU / 1000000); // 600 MHz = 600 cycles/us
+    
+    last_isr_time_us = time_taken_us;
+    if (time_taken_us > max_isr_time_us) {
+        max_isr_time_us = time_taken_us;
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -117,6 +132,10 @@ void run_control_loop_isr() {
 void setup() {
     pinMode(ISR_PROFILER_PIN, OUTPUT);
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
+    
+    // Enable ARM Cycle Counter for precise software profiling
+    ARM_DEMCR |= ARM_DEMCR_TRCENA;
+    ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
     
     transport.init(115200);
     supervisor.init(0);
@@ -180,7 +199,15 @@ void loop() {
         }
         interrupts();
         
+        
         static uint32_t seq = 0;
         transport.send_feedback(seq++, pos, vel);
+        
+        // Print Profiling Stats
+        // Reset max_isr_time occasionally so we can see if spikes happen continuously or just once
+        if (seq % 10 == 0) {
+            // Serial.printf("ISR Profiler | Last: %lu us | Max: %lu us\n", last_isr_time_us, max_isr_time_us);
+            max_isr_time_us = 0; // Reset peak tracker
+        }
     }
 }
