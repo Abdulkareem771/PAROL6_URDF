@@ -11,6 +11,7 @@
 // -------------------------------------------------------------------------
 
 static const int NUM_AXES = 6;
+#define ISR_PROFILER_PIN 13 // Standard LED Pin on Teensy for oscilloscope hookup
 
 // RTOS/Main Loop Transport
 CircularBuffer<RosCommand, 20> rx_queue;
@@ -48,6 +49,8 @@ void set_motor_velocity(int axis, float velocity) {
 // 1 kHz Hardware Timer ISR (Strict Real-Time Execution)
 // -------------------------------------------------------------------------
 void run_control_loop_isr() {
+    digitalWriteFast(ISR_PROFILER_PIN, HIGH);
+    
     float current_velocities[NUM_AXES]; 
     float current_positions[NUM_AXES];
     float commanded_velocities[NUM_AXES];
@@ -96,12 +99,17 @@ void run_control_loop_isr() {
             set_motor_velocity(i, 0.0f); // Fast stop on fault
         }
     }
+    
+    digitalWriteFast(ISR_PROFILER_PIN, LOW);
 }
 
 // -------------------------------------------------------------------------
 // Main Thread 
 // -------------------------------------------------------------------------
 void setup() {
+    pinMode(ISR_PROFILER_PIN, OUTPUT);
+    digitalWriteFast(ISR_PROFILER_PIN, LOW);
+    
     transport.init(115200);
     supervisor.init(0);
 

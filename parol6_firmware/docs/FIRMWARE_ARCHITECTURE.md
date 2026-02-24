@@ -105,20 +105,24 @@ Because the system blends an asynchronous background loop (serial parsing) with 
 2.  **`Interpolator`**: Owned by the ISR (`tick_1ms`). Setpoints (`set_target`) are injected by the `MainLoop` only during the safe periods between queue pops.
 3.  **`AlphaBetaFilter`**: Exclusively owned by the ISR. The `MainLoop` is allowed to *read* the state (for background 10 Hz telemetry) but must wrap the read in `noInterrupts()` to prevent reading a torn float if the 1ms tick interrupts the copy operation.
 
-## 4. Migration Context: ESP32 vs. Teensy 4.1
+## 4. Migration Context: Previous Firmwares vs. Current Architecture
 
-The previous iterations of the PAROL6 firmware utilized an ESP32 micro-controller. The migration to the Teensy 4.1 was driven by the strict requirements of hard real-time execution and deterministic control loops for advanced trajectory tracking (e.g., welding).
+The new `parol6_firmware` completely restructures the approach taken in the previous two iterations (`realtime_servo_control` for ESP32 and `realtime_servo_teensy`). Our primary design driver was eliminating jitter and enabling advanced trajectory filtering for welding ops.
 
-### Key Differences
+### Evolution of the Control Loop
 
-| Feature | Former ESP32 Firmware | Current Teensy 4.1 Firmware |
-| :--- | :--- | :--- |
-| **Primary Role** | Serial relay and simple step generation | Deterministic 1 kHz servo controller |
-| **Control Intelligence** | Heavy reliance on ROS/Host PC | Intelligence moved "down the stack" to MCU |
-| **Control Loop** | Soft real-time (RTOS/Task-based) | Hard real-time (Strict 1 kHz Hardware ISR) |
-| **Interpolation** | Basic (or purely host-driven) | 1 kHz linear interpolation with Feedforward |
-| **Safety** | Host-dependent or delayed | Independent, < 1ms response isolated from math |
-| **Clock Domain** | Non-uniform (`millis()` / RTOS ticks) | Unified, pure hardware-driven `system_tick_ms` |
+| Firmware | `realtime_servo_control` (Legacy ESP32) | `realtime_servo_teensy` (Legacy Teensy) | `parol6_firmware` (Current Teensy 4.1) |
+| :--- | :--- | :--- | :--- |
+| **Execution Context** | FreeRTOS Task (`vTaskDelayUntil`) | Hardware `IntervalTimer` ISR | Hardware `IntervalTimer` ISR |
+| **Control Rate** | 500 Hz | 500 Hz | **1 kHz (1000 Hz)** |
+| **Timing Jitter** | Susceptible to RTOS preemption | Very Low (< 30 µs) | **Strictly Bounded (< 15 µs)** |
+| **Signal Processing** | None / Raw positional | None / Raw positional | **AlphaBeta Observer Filter (noise rejection)** |
+| **Interpolation** | Basic / Host Dependent | Basic | **Dynamic Linear Interpolation (Feedforward)** |
+| **Data Threading** | Synchronous RTOS tasks | Polled main loop `elapsedMicros` | **Lock-Free `CircularBuffer<RosCommand>`** |
+| **Safety Engine** | Mingled with control math | Mingled with control math | **Isolated State Machine (Timeouts & Clamping)** |
+
+**Key Takeaways**:
+The ESP32 firmware suffered from context-switching overhead because the FreeRTOS control task competed with the WiFi/Bluetooth stacks internally, causing jitter. The legacy `realtime_servo_teensy` fixed the jitter by using a hardware ISR (500 Hz) but lacked intelligence (no filters, no rigorous interpolators). The current architecture operates at double the bandwidth (1 kHz) while cleanly decoupling the noisy serial traffic (`CircularBuffer`) from a highly mathematical, noise-rejecting (`AlphaBetaFilter`) real-time core.
 
 ## 5. ROS 2 Communication Strategy
 
