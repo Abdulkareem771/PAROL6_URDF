@@ -201,17 +201,65 @@ def generate_launch_description():
     # INCLUDE: MoveIt Demo (RViz + Motion Planning)
     # =========================================================================
     
-    moveit_demo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                FindPackageShare("parol6_moveit_config"),
-                "launch",
-                "demo.launch.py"
-            ])
-        ]),
-        launch_arguments={
-            "use_sim_time": "false",
-        }.items(),
+    import os
+    from ament_index_python.packages import get_package_share_directory
+    from moveit_configs_utils import MoveItConfigsBuilder
+
+    moveit_config = (
+        MoveItConfigsBuilder("parol6")
+        .robot_description(file_path=os.path.join(
+            get_package_share_directory("parol6"),
+            "urdf",
+            "PAROL6.urdf"
+        ))
+        .robot_description_semantic(file_path=os.path.join(
+            get_package_share_directory("parol6_moveit_config"),
+            "config",
+            "parol6.srdf"
+        ))
+        .trajectory_execution(file_path=os.path.join(
+            get_package_share_directory("parol6_moveit_config"),
+            "config",
+            "moveit_controllers.yaml"
+        ))
+        .planning_pipelines(pipelines=["ompl"])
+        .to_moveit_configs()
+    )
+
+    move_group_node = Node(
+        package="moveit_ros_move_group",
+        executable="move_group",
+        output="screen",
+        parameters=[moveit_config.to_dict()],
+    )
+
+    rviz_config_file = os.path.join(
+        get_package_share_directory("parol6_moveit_config"),
+        "rviz",
+        "moveit.rviz"
+    )
+
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        output="log",
+        arguments=["-d", rviz_config_file],
+        parameters=[
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.planning_pipelines,
+            moveit_config.robot_description_kinematics,
+            {'use_sim_time': False},
+        ],
+    )
+
+    static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="static_transform_publisher",
+        output="log",
+        arguments=["0.0", "0.0", "0.0", "0.0", "0.0", "0.0", "world", "base_link"],
     )
 
     # =========================================================================
@@ -222,7 +270,9 @@ def generate_launch_description():
         robot_state_pub_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
-        moveit_demo,
+        static_tf_node,
+        move_group_node,
+        rviz_node,
     ]
 
     return LaunchDescription(declared_arguments + nodes)

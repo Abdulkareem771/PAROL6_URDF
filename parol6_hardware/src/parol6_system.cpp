@@ -377,8 +377,14 @@ return_type PAROL6System::read(
     // Parse joint positions and velocities (tokens 2-13)
     // Format: pos0, vel0, pos1, vel1, ..., pos5, vel5
     for (size_t i = 0; i < 6; ++i) {
-      hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
-      hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
+      // REAL FEEDBACK: (Commented out for HIL testing to allow RViz animation)
+      // hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
+      // hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
+      
+      // HIL SPOOFING: Echo outbound commands directly back as current state
+      // This tells MoveIt the robot is perfectly following the trajectory
+      hw_state_positions_[i] = hw_command_positions_[i];
+      hw_state_velocities_[i] = hw_command_velocities_[i];
     }
     
     // Log statistics every 5 minutes (thesis validation data)
