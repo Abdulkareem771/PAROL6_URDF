@@ -5,7 +5,7 @@
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
 #include "control/Interpolator.h"
-#include "hal/PwmCaptureEncoder.h"
+#include "hal/QuadTimerEncoder.h"
 // -------------------------------------------------------------------------
 // Global Architecture Instantiation
 // -------------------------------------------------------------------------
@@ -30,19 +30,11 @@ AlphaBetaFilter observer[NUM_AXES] = {
 
 LinearInterpolator interpolator[NUM_AXES];
 
-// Hardware Abstraction (Phase 1.5: 6 physical PWM input pins)
-PwmCaptureEncoder encoder_hal[NUM_AXES] = {
-    PwmCaptureEncoder(2), PwmCaptureEncoder(3), PwmCaptureEncoder(4),
-    PwmCaptureEncoder(5), PwmCaptureEncoder(6), PwmCaptureEncoder(7)
+// Hardware Abstraction (Phase 3: Zero-interrupt QuadTimers)
+QuadTimerEncoder encoder_hal[NUM_AXES] = {
+    QuadTimerEncoder(10), QuadTimerEncoder(11), QuadTimerEncoder(12),
+    QuadTimerEncoder(14), QuadTimerEncoder(15), QuadTimerEncoder(18)
 };
-
-// Global ISR wrappers for attachInterrupt since class methods can't be passed directly
-void isr_enc0() { encoder_hal[0].handle_interrupt(); }
-void isr_enc1() { encoder_hal[1].handle_interrupt(); }
-void isr_enc2() { encoder_hal[2].handle_interrupt(); }
-void isr_enc3() { encoder_hal[3].handle_interrupt(); }
-void isr_enc4() { encoder_hal[4].handle_interrupt(); }
-void isr_enc5() { encoder_hal[5].handle_interrupt(); }
 
 IntervalTimer controlTimer;
 volatile uint32_t system_tick_ms = 0;
@@ -146,13 +138,7 @@ void setup() {
         interpolator[i].reset(0.0f);
     }
     
-    // Attach Hardware Interrupts for PWM edge capture
-    attachInterrupt(digitalPinToInterrupt(2), isr_enc0, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(3), isr_enc1, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(4), isr_enc2, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(5), isr_enc3, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(6), isr_enc4, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(7), isr_enc5, CHANGE);
+    // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
     
     // Start hardware timer at precisely 1000 microseconds (1 kHz)
     controlTimer.begin(run_control_loop_isr, 1000);

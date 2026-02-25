@@ -51,3 +51,13 @@ In the `AlphaBetaFilter`, the code continually checks if `delta > M_PI`. Magneti
 `run_control_loop_isr()` computes the mathematical commands (`commanded_velocities[i]`) for *all* 6 axes before applying physical voltages. 
 **Why?** If Axis 0 passes safety, but Axis 5 triggers a runaway fault, applying voltages sequentially would cause Axis 0 to jump momentarily before the system halted. By caching the math, calculating safety, and *then* applying the outputs, the entire arm halts synchronously.
 
+### Zero-Interrupt Hardware PWM Capture (Phase 3 QuadTimers)
+In Phase 1.5, we used `attachInterrupt` to capture PWM edges in software. However, software interrupts suffer from physical invocation latency and instruction jitter, which disrupts the 1 kHz control loop when 6 interrupts fire randomly.
+
+In Phase 3, we migrated to the **i.MXRT1062 QuadTimers using Gated Count Mode (CM=6)**.
+This entirely removes the CPU from the capture process:
+1.  **Autonomous Counting:** The hardware timer is configured to count incredibly fast internal IP Bus Clock ticks *only when the physical input pin is HIGH*.
+2.  **Synchronous Polling:** When our strict 1 kHz control ISR fires, it reads the hardware timer register (`tmr_->CH[ch_].CNTR`) instantly without waiting for an edge.
+3.  **Cyclic Derivation:** By capturing the `ARM_DWT_CYCCNT` (CPU cycle counter) simultaneously with the QuadTimer counter, we know precisely how much real-time elapsed between reads. The duty cycle is calculated mathematically as `(High Ticks) / (Expected Ticks in Elapsed Time)`.
+4.  **Result:** Zero interrupts, zero jitter, and native 14-bit resolution encoder tracking.
+

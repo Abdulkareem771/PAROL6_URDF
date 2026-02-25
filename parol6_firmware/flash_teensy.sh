@@ -10,7 +10,7 @@ docker run -it --rm \
   --device=/dev/bus/usb \
   --privileged \
   -v $(pwd):/workspace \
-  -w /workspace/parol6_firmware \
+  -w /workspace \
   parol6-ultimate:latest \
   bash -c "
     echo '==> Building firmware with PlatformIO...'
