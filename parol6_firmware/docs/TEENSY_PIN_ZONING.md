@@ -59,10 +59,22 @@ These pins are definitively assigned to QuadTimers and cannot be reused for anyt
 **Recommended Pins**:
 *   `20, 21, 24, 25, 26, 27`
 
+**Legacy Hardware Mapping Discovery:**
+Analysis of the `PAROL6 control board main software` (the open-source baseline) reveals the following physical sensor realities for the 6 joints:
+*   **Sensor Type**: They are initialized as pure `INPUT` (not `INPUT_PULLUP`), indicating active 12V/24V Inductive Proximity Sensors, not passive mechanical microswitches.
+*   **Trigger Polarity**: The hardware relies on a mix of edge triggers.
+    *   **J1**: LIMIT6 (Triggers FALLING / LOW)
+    *   **J2**: LIMIT2 (Triggers RISING / HIGH)
+    *   **J3**: LIMIT3 (Triggers RISING / HIGH)
+    *   **J4**: LIMIT4 (Triggers RISING / HIGH)
+    *   **J5**: LIMIT5 (Triggers RISING / HIGH)
+    *   **J6**: LIMIT1 (Triggers FALLING / LOW)
+
 **Safety Architecture Warning**:
-The Emergency Stop MUST NOT rely solely on the Teensy. The E-Stop must physically cut power/enable logic to the stepper drivers (Primary Safety). The connection to the Teensy in Zone 4 is to trigger the software Supervisor to halt the trajectory (Secondary Safety).
+*   **Primary vs Secondary**: The Emergency Stop MUST NOT rely solely on the Teensy. The E-Stop must physically cut power/enable logic to the stepper drivers (Primary Safety). The connection to the Teensy in Zone 4 is to trigger the software Supervisor to halt the trajectory (Secondary Safety).
+*   **EMI Coupling Rule**: **Never mix safety inputs with high-speed PWM pads**. Fast-switching STEP/PWM signals placed physically adjacent to safety/encoder inputs on the PCB routing or wire harness will inject severe electro-magnetic interference (EMI), causing false limit-switch trips or encoder corruption.
 
 ---
 
 ## Future Expansion
-Inductive sensors operate at 12V-24V. They will require optocouplers or logic-level shifters on the custom PCB before interfacing with Zone 4 pins to prevent destroying the 3.3V i.MXRT processor.
+Inductive sensors operate at 12V-24V. As observed in the legacy firmware, they are active sensors. They will require optocouplers or logic-level shifters on the custom PCB before interfacing with Zone 4 pins to prevent destroying the 3.3V i.MXRT processor.
