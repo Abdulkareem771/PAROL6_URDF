@@ -29,7 +29,7 @@ ros2 launch parol6 ignition.launch.py
 ```bash
 docker exec -it parol6_dev bash
 cd /workspace && source install/setup.bash
-ros2 launch parol6_moveit_config demo.launch.py
+ros2 launch parol6_moveit_config demo.launch.py use_sim_time:=true
 ```
 
 ---

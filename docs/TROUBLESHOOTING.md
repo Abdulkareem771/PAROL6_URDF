@@ -183,25 +183,19 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
    ros2 launch parol6 ignition.launch.py
    ```
 
-3. **Launch MoveIt second (Terminal 2):**
+3. **Launch MoveIt second and enable sim time (Terminal 2):**
    ```bash
    docker exec -it parol6_dev bash
    cd /workspace && source install/setup.bash
-   ros2 launch parol6_moveit_config demo.launch.py
+   ros2 launch parol6_moveit_config demo.launch.py use_sim_time:=true
    ```
 
-4. **Enable sim time (so RViz/MoveIt use `/clock`):**
-   ```bash
-   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /move_group use_sim_time true"
-   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /rviz2 use_sim_time true"
-   ```
-
-5. **Verify `/clock` exists:**
+4. **Verify `/clock` exists:**
    ```bash
    docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic list | grep /clock"
    ```
 
-6. **Verify controllers are active:**
+5. **Verify controllers are active:**
    ```bash
    docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 control list_controllers"
    ```
@@ -211,7 +205,7 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
    parol6_arm_controller    ...  active
    ```
 
-7. **Test execution:**  
+6. **Test execution:**  
    In RViz: Plan → Execute.  
    If still no motion, check if a trajectory is published:
    ```bash
