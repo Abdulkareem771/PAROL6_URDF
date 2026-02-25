@@ -62,3 +62,5 @@ venvs/*
 # Temporarily container's start code
 #start_container.sh
 >>>>>>> real-robot-integration
+
+legacy code open loop/*
