@@ -9,14 +9,6 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 
 def generate_launch_description():
-    use_sim_time = LaunchConfiguration("use_sim_time")
-
-    declare_use_sim_time_cmd = DeclareLaunchArgument(
-        "use_sim_time",
-        default_value="false",
-        description="Use simulation (Gazebo) clock if true",
-    )
-
     moveit_config = (
         MoveItConfigsBuilder("parol6")
         .robot_description(file_path=os.path.join(
@@ -43,7 +35,7 @@ def generate_launch_description():
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
-        parameters=[moveit_config.to_dict(), {"use_sim_time": use_sim_time}],
+        parameters=[moveit_config.to_dict()],
     )
 
     # RViz
@@ -64,7 +56,6 @@ def generate_launch_description():
             moveit_config.robot_description_semantic,
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
-            {"use_sim_time": use_sim_time},
         ],
     )
 
@@ -83,7 +74,7 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="both",
-        parameters=[moveit_config.robot_description, {"use_sim_time": use_sim_time}],
+        parameters=[moveit_config.robot_description],
     )
 
     # ros2_control using FakeSystem as hardware
@@ -96,7 +87,7 @@ def generate_launch_description():
     ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[moveit_config.robot_description, ros2_controllers_path, {"use_sim_time": use_sim_time}],
+        parameters=[moveit_config.robot_description, ros2_controllers_path],
         output="both",
     )
 
@@ -114,7 +105,6 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            declare_use_sim_time_cmd,
             move_group_node,
             rviz_node,
             static_tf_node,
