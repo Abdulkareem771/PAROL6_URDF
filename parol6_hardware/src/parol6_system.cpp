@@ -259,7 +259,7 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
 // ============================================================================
 
 return_type PAROL6System::read(
-  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+  const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
   // Vector safety check (prevent segfault on misconfiguration)
   if (hw_state_positions_.size() < 6) {
@@ -271,8 +271,8 @@ return_type PAROL6System::read(
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
     // Check if we are starved (e.g. 5 seconds without data) -> assume full HIL spoof mode
-    auto now = clock_.now();
-    if ((now - last_rx_time_).seconds() > 5.0) {
+    auto now = time;
+    if (std::abs(now.seconds() - last_rx_time_.seconds()) > 5.0) {
         goto spoof_states;
     }
     return return_type::OK;  // No data yet, not an error
@@ -365,14 +365,14 @@ return_type PAROL6System::read(
       }
       
       // Track inter-packet timing (thesis latency evidence)
-      auto now = clock_.now();
-      double dt_ms = (now - last_rx_time_).seconds() * 1000.0;
+      auto now = time;
+      double dt_ms = std::abs(now.seconds() - last_rx_time_.seconds()) * 1000.0;
       max_rx_period_ms_ = std::max(max_rx_period_ms_, dt_ms);
       last_rx_time_ = now;
       
     } else {
       first_feedback_received_ = true;
-      last_rx_time_ = clock_.now();  // Initialize timing
+      last_rx_time_ = time;  // Initialize timing
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
