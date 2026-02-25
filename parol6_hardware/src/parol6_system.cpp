@@ -270,7 +270,12 @@ return_type PAROL6System::read(
   
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
-    goto spoof_states;  // No data yet, skip to spoofing!
+    // Check if we are starved (e.g. 5 seconds without data) -> assume full HIL spoof mode
+    auto now = clock_.now();
+    if ((now - last_rx_time_).seconds() > 5.0) {
+        goto spoof_states;
+    }
+    return return_type::OK;  // No data yet, not an error
   }
   
   try {
@@ -398,8 +403,12 @@ spoof_states:
   // This tells MoveIt the robot is perfectly following the trajectory,
   // preventing "Controller is taking too long... TIMED_OUT" errors.
   for (size_t i = 0; i < 6; ++i) {
-    hw_state_positions_[i] = hw_command_positions_[i];
-    hw_state_velocities_[i] = hw_command_velocities_[i];
+    if (!std::isnan(hw_command_positions_[i])) {
+      hw_state_positions_[i] = hw_command_positions_[i];
+    }
+    if (!std::isnan(hw_command_velocities_[i])) {
+      hw_state_velocities_[i] = hw_command_velocities_[i];
+    }
   }
 
   return return_type::OK;
