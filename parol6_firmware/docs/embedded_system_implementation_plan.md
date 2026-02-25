@@ -27,11 +27,11 @@ Before implementation begins, we explicitly lock the following design decisions:
     *   *Why*: Simple, proven, and computationally cheap for a 1 kHz loop. Prevents scope creep into complex model-predictive territory.
 3.  **Velocity Estimation**: Locked to an **Alpha-Beta Observer (Filter)**.
     *   *Why*: Welding paths demand tangential smoothness, not just raw bandwidth. An alpha-beta filter is a minimal-cost 2-state observer that drastically outperforms simple IIR smoothing and negates the need for a complex (and non-deterministic) Kalman filter.
-4.  **RTOS Usage**: Locked to a **Hybrid Model**.
-    *   *Why*: An RTOS (e.g., FreeRTOS) may be used for the transport layer, logging, or diagnostics. However, the core 1 kHz servo loop **must** remain driven by a strict Hardware Timer ISR. 
+4.  **RTOS Usage**: Locked to an **Optional Background Model**.
+    *   *Why*: An RTOS (e.g., FreeRTOS) may be used for the transport layer, logging, or diagnostics. However, the RTOS is optional and never involved in the servo loop timing chain. The core 1 kHz servo loop **must** remain driven by a strict Hardware Timer ISR. 
 5.  **Transport Protocol**: Locked to **Current ASCII Protocol** (`<SEQ...>`/`<ACK...>`).
 6.  **Tooling Ecosystem**: Locked to **PlatformIO + Docker (`teensy_loader_cli`)**.
-    *   *Why*: Arduino IDE is non-reproducible. ESP-IDF Makefiles lose the Teensy core USB stack. PlatformIO executing inside the `parol6-ultimate` Docker image guarantees an identical compiler toolchain for every developer, perfectly mirroring the established ESP32 build flow via a one-click [flash_teensy.sh](file:///home/kareem/Desktop/PAROL6_URDF/parol6_firmware/flash_teensy.sh) script.
+    *   *Why*: Arduino IDE is non-reproducible. ESP-IDF Makefiles lose the Teensy core USB stack. PlatformIO executing inside the `parol6-ultimate` Docker image guarantees an identical compiler toolchain for every developer, perfectly mirroring the established ESP32 build flow via a one-click `flash_teensy.sh` script.
 
 ---
 
@@ -313,15 +313,15 @@ public:
 ## Phased Migration Plan (Optimized for Risk Reduction)
 
 **Phase 1 — Refactor Architecture (Current Priority)**
-*   Break the existing [realtime_servo_teensy.ino](file:///home/kareem/Desktop/PAROL6_URDF/PAROL6/firmware/realtime_servo_teensy/realtime_servo_teensy.ino) prototype into defined modules (Transport, Supervisor, Interpolation, Control, HAL).
+*   Break the existing `realtime_servo_teensy.ino` prototype into defined modules (Transport, Supervisor, Interpolation, Control, HAL).
 *   Maintain the existing `micros()` encoder logic temporarily.
 
-**Phase 1.5 — ESP32 Hardware PWM Injection (Accelerated) [COMPLETED]**
+**Phase 1.5 — ESP32 Hardware PWM Injection (Accelerated)**
 *   Implement `PwmCaptureEncoder.h` using Teensy `attachInterrupt()` to measure PWM pulse widths.
 *   Assign 6 physical digital input pins on the Teensy.
 *   Develop an ESP32 firmware utilizing the LEDC peripheral to generate 6 synthetic, noisy PWM signals representing robotic joint movement.
 *   Wire the 6 ESP32 PWM outputs to the 6 Teensy interrupt inputs.
-*   *Validation Results*: Oscilloscope / DWT Profiling proved the 1 kHz ISR timing remains strictly bounded (measured at an astonishing **1 µs max execution time**) even while the CPU is bombarded with 6 simultaneous external hardware interrupts. This proves the Alpha-Beta filter can handle real hardware edge-capture latency without starving the control loop.
+*   *Validation Required*: Hook an oscilloscope to `ISR_PROFILER_PIN` and prove that the 1 kHz ISR timing remains strictly bounded (< 15 µs) even while the CPU is bombarded with 6 simultaneous external hardware interrupts. This proves the Alpha-Beta filter can handle real hardware edge-capture latency without starving the control loop.
 
 **Phase 2 — Increase Loop to 1 kHz**
 *   Bump the `IntervalTimer` to 1000 Hz.
@@ -330,12 +330,17 @@ public:
 
 **Phase 3 — QuadTimer Encoder HAL**
 *   Implement the i.MXRT1062 specific `QuadTimer` capture logic.
-*   *Validation Required*: Explicitly validate the MT6816 PWM frequency mode and duty encoding scheme via oscilloscope/simulator before merging.
+*   Establish strict [Pin Zoning Architecture](TEENSY_PIN_ZONING.md) to prevent QuadTimer/FlexPWM XBAR collisions as the system scales to include E-stops, limits, and step generation.
+*   *Validation Required*: Explicitly validate the MT6816 PWM frequency mode and duty encoding scheme (including stability across temperature, as magnetic encoders drift) via oscilloscope/simulator before merging.
 *   Swap out the `micros()` HAL for the `QuadTimer` HAL.
 
-**Phase 4 — Real Hardware Tuning & Filtering**
-*   Connect the actual MKS motors.
-*   Alpha-Beta gains and control law `Kp` gains are initially tuned offline using the ESP32 simulator before real motor deployment, then refined based on physical tracking analysis.
+**Phase 4 — STEP/DIR Hardware Integration & Safety (Current)**
+*   Implement explicit hardware FlexPWM (Zone 2) for generating STEP/DIR signals for the MKS Servo42C drives, entirely decoupled from the 1 kHz sensing/control ISR.
+*   Implement a rigorous Direction-Change timing guard (~2 µs pause before resuming steps) to prevent missing pulse counts on direction flips.
+*   Integrate the legacy Limit Switch map (Zone 4) discovered from the open-loop firmware (`LIMIT1` to `LIMIT6` with explicit LOW/HIGH trigger polarities for active inductive sensors).
+*   **Homing & Calibration Layer**: Implement the rigorous 2-stage limit sweep (Fast Seek → Hit → Backoff → Slow Seek) as a distinct architectural layer that establishes the URDF zero-frame before the `ControlLaw` is permitted to engage. This layer enforces the *coupled mechanical dependencies* found in legacy `main.cpp` (e.g., J6 must be moved out of the way before J5 can safely home without a physical collision).
+*   **MotorHAL / ActuatorModel**: Design an actuation layer that explicitly encapsulates the exact non-integer gear reduction ratios (e.g., J3's `18.0952381`) to convert abstract kinematic radians (from the Interpolator) into absolute FlexPWM step counts with zero accumulated floating-point drift.
+*   Formally freeze the ASCII Serial Protocol specification (`<SEQ,pos,vel...>`) including decimal precision and field order. The Transport Layer assumes a byte-stream agnostic interface supporting UART, USB CDC, or bulk endpoints to prevent ROS ↔ MCU drift.
 
 **Phase 5 — USB Transport Evolution**
 *   Migrate the ROS 2 host to use high-speed libusb.

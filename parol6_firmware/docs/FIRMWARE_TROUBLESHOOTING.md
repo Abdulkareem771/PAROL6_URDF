@@ -128,3 +128,38 @@ Ensure your launch scripts forcefully purge all zombie `move_group`, `rviz2`, an
 echo "Cleaning up any orphaned background nodes..."
 docker exec parol6_dev pkill -9 -f "move_group|rviz2|ros2_control_node|robot_state_publisher" || true
 ```
+
+---
+
+## ⏱️ Hard Real-Time & Hardware Diagnostics
+
+With the transition to the hard real-time Teensy 4.1 architecture (Phase 4), new physical and timing failure modes exist outside of the ROS domain.
+
+### Issue 6: Control Jitter Measuring > 1 µs
+
+**Symptoms:**
+When profiling the 1 kHz `run_control_loop_isr` with an oscilloscope on the `ISR_PROFILER_PIN` or reading the DWT Cycle Counter telemetry, you notice the jitter (deviation from the strict 1000 µs interval) occasionally spikes to 15 µs or more.
+
+**Root Cause:**
+If QuadTimers are used, jitter should be `< 1 µs`. A spike indicates an architectural violation. Common culprits:
+1. **Rogue Software Interrupts**: A background library (e.g., USB Serial or a standard Arduino library) activated a higher-priority interrupt that preempted the `IntervalTimer`.
+2. **Cache Misses**: You didn't place the critical control arrays (e.g., `AlphaBetaFilter` states) in Tightly Coupled Memory (TCM), causing the Cortex-M7 D-cache to stall the CPU while fetching data from slower RAM.
+3. **ISR Printf**: Someone accidentally left a `Serial.print()` inside the control loop.
+
+**Fix:**
+Ensure all arrays used inside the ISR are decorated with `EXTMEM` or explicitly routed to `DMAMEM`/TCM depending on the platform config. audit the `setup()` function to ensure no competing `IntervalTimers` or software interrupts are active.
+
+---
+
+### Issue 7: SafetySupervisor Triggers "ISR Overrun" Fault
+
+**Symptoms:**
+The robot abruptly halts, and the telemetry stream outputs a `FAULT_ISR_OVERRUN` error code. The system refuses to resume motion.
+
+**Root Cause:**
+The `run_control_loop_isr()` execution time exceeded the 1000 µs tick window (less a safety margin). Based on our profiling, the math + safety checks should complete in `< 25 µs`. An overrun means a fatal mathematical hang or an infinite loop occurred inside `ControlLaw` or `AlphaBetaFilter`. 
+A common trigger is accidentally introduced floating-point division by zero (e.g., dividing by `delta_t` when `delta_t` evaluates to `0.0f`), which can cause the FPU to stall or throw an exception that delays execution.
+
+**Fix:**
+1. **Remove Divisions**: Audit the filter and interpolator math. Replace `A / B` with `A * (1.0f / B)` pre-computed in constructors where possible.
+2. **Check Unwrapping Logic**: Ensure the 360-degree `M_PI` encoder unwrap bounds cannot get stuck in an infinite `while()` loop if the sensor completely disconnects and sends garbage floating-point noise. Always use bounded `if()` statements for angle wrapping.

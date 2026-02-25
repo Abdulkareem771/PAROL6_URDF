@@ -9,7 +9,7 @@ The firmware is designed as a **Production-Grade, Hard Real-Time Servo Controlle
 The `parol6_firmware/src` folder is strictly modularized:
 
 *   **`transport/`**: Isolates Serial/USB ASCII parsing. Translates raw bytes into lock-free generic structs (`RosCommand`).
-*   **`safety/`**: The `SafetySupervisor`. Manages E-Stops, runaway limits, and command timeouts. Must sit *outside* the math equations.
+*   **`safety/`**: The `SafetySupervisor`. Manages E-Stops, runaway limits, and command timeouts. Must sit *outside* the math equations and strictly execute *before* physical motor outputs.
 *   **`observer/`**: The Estimator. `AlphaBetaFilter` for velocity prediction/correction on noisy encoders.
 *   **`control/`**: The strict math execution. `LinearInterpolator` and the PID loops.
 *   **`hal/`**: Hardware Abstraction Layer. Translates standard angle math (radians) into physical i.MXRT1062 register commands (`QuadTimerEncoder`).
@@ -47,9 +47,9 @@ The `Control Law` implements `velocity_command = cmd_vel_ff + (Kp * pos_error)`.
 ### Innovation & Unwrapping
 In the `AlphaBetaFilter`, the code continually checks if `delta > M_PI`. Magnetic encoders report absolute angles (e.g., $0$ to $2\pi$). When a joint spins past the zero point, the reading snaps from $6.28$ to $0.00$. The filter catches this mathematical discontinuity using the `M_PI` bounds and subtracts $2\pi$, presenting a continuous, unwrapped multi-turn angle to the control loop.
 
-### ISR Array Caching
+### ISR Array Caching & The Safety Execution Order (`sense -> estimate -> supervise -> act`)
 `run_control_loop_isr()` computes the mathematical commands (`commanded_velocities[i]`) for *all* 6 axes before applying physical voltages. 
-**Why?** If Axis 0 passes safety, but Axis 5 triggers a runaway fault, applying voltages sequentially would cause Axis 0 to jump momentarily before the system halted. By caching the math, calculating safety, and *then* applying the outputs, the entire arm halts synchronously.
+**Why?** In a safety-critical system, the architecture must strictly enforce: **sense** (encoders) → **estimate** (filter) → **supervise** (safety checks) → **act** (motor output). If Axis 0 passes safety, but Axis 5 triggers a runaway fault, applying voltages sequentially would cause Axis 0 to jump momentarily before the system halted. By caching the math, calculating safety, and *then* applying the outputs, the entire arm halts synchronously.
 
 ### Zero-Interrupt Hardware PWM Capture (Phase 3 QuadTimers)
 In Phase 1.5, we used `attachInterrupt` to capture PWM edges in software. However, software interrupts suffer from physical invocation latency and instruction jitter, which disrupts the 1 kHz control loop when 6 interrupts fire randomly.
@@ -61,3 +61,36 @@ This entirely removes the CPU from the capture process:
 3.  **Cyclic Derivation:** By capturing the `ARM_DWT_CYCCNT` (CPU cycle counter) simultaneously with the QuadTimer counter, we know precisely how much real-time elapsed between reads. The duty cycle is calculated mathematically as `(High Ticks) / (Expected Ticks in Elapsed Time)`.
 4.  **Result:** Zero interrupts, zero jitter, and native 14-bit resolution encoder tracking.
 
+## 6. Program Flow & State Machine
+
+The firmware operates as a strict state machine to prevent uncalibrated kinematics from damaging the robot.
+
+### Boot Sequence (`setup()`)
+1. **Clock Initialization**: The CPU frequency is maximized to 600 MHz.
+2. **Peripheral Config**: Hardware IPs (UART, FlexPWM for motors, QuadTimers for encoders) are configured via static register setups. No dynamic objects are created.
+3. **Hardware Sanity Check**: Tests communication with MT6816 encoders and TMC5160 stepper drivers over SPI.
+4. **State Transition**: System enters the `UNHOMED` state. The 1 kHz Control Interrupt is started, but the `ControlLaw` is explicitly gated and outputs zeros.
+
+### Homing Sequence (`HomingCalibration Layer`)
+The firmware enforces a strict order of operations based on mechanical dependencies (e.g., J6 cannot move if J5 is un-homed due to physical collision boundaries).
+
+1. **J6 Clearance**: Axis J6 executes a fast-seek to its limit switch, backs off, and slow-seeks to establish an absolute mathematical zero.
+2. **Coupled Alignment**: Once J6 is clear, J5 and J4 execute their sweeps.
+3. **Base Alignment**: J1, J2, and J3 execute their sweeps simultaneously.
+4. **State Transition**: The `Interpolator` states are synchronized to the now-known absolute encoder positions. The system transitions to `SAFE_OPERATIONAL` and begins accepting ROS commands.
+
+### Steady-State Operational Flow
+Once homed, execution splits into two radically decoupled domains.
+
+**Background / Main Loop (Asynchronous)**
+* **Role**: Parses incoming `115200` baud Serial/USB streams into `<SEQ,pos,vel>` structs.
+* **Flow**: Validated packets are pushed into the `Lock-Free RX Queue`. 
+* **Frequency**: Operates as fast as possible (best-effort), typically executing $> 1$ MHz.
+
+**Foreground / 1 kHz ISR (Strictly Deterministic)**
+* **Role**: The physical manifestation of movement. 
+* **Flow**: 
+  1. Safely pops the latest target from the `RX Queue`.
+  2. Injects the target into the `LinearInterpolator` to generate a 1ms micro-waypoint.
+  3. Executes `sense -> estimate -> supervise -> act` logic sequence perfectly every 1000 µs.
+* **Safety**: If the `RX Queue` runs empty for > 100ms (ROS crash or disconnect), the ISR traps into a `Soft E-Stop`, smoothly decelerating the interpolator to 0 velocity and triggering a fault state.
