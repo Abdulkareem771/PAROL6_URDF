@@ -53,7 +53,5 @@ wheels/*
 
 # Temporarily container's start code
 #start_container.sh
-
-test_data/kinect_snapshot_20260126_231342/*
-
+test_data/*
 rosbag2_2026_01_26-23_26_59.zip
