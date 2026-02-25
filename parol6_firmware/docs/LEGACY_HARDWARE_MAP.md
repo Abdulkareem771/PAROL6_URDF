@@ -25,6 +25,8 @@ The original firmware defines six distinct endstop inputs (`LIMIT1` through `LIM
 | **Joint 5 (Wrist 2)** | `LIMIT5` | Active **HIGH** / `RISING` edge | Inductive Sensor (Likely PNP NO) |
 | **Joint 6 (Wrist 3)** | `LIMIT1` | Active **LOW** / `FALLING` edge | Inductive Sensor (Likely NPN NO) |
 
+*⚠️ Important Academic Note on Polarity: Sensor polarity must be verified on hardware before final wiring, as inductive sensor types (NPN vs PNP) and Normally Open / Normally Closed states vary wildly across production batches of the same mechanical robot.*
+
 ---
 
 ## ⚙️ Safety & Architecture Implications for Teensy 4.1

@@ -7,10 +7,10 @@ This document serves as the frozen reference for PCB design and firmware expansi
 
 ---
 
-## 🛑 The Constraints
-1. **QuadTimer Locks Muxes**: When a pin is initialized as a QuadTimer input, the GPIO function is permanently disabled for that pad. You cannot use `digitalRead` or `attachInterrupt` on it.
-2. **FlexPWM vs. QuadTimer XBAR Conflicts**: Although independent peripherals, they share root clocks and XBAR (crossbar) pathways. Using a FlexPWM output and a QuadTimer input on the exact same pad group can saturate the routing matrix.
-3. **Interrupt Contention**: High-frequency step generation must not block the 1 kHz deterministic control loop. Step generation must use hardware PWM (FlexPWM) or DMA, not busy loops or CPU ISRs.
+## 🛑 The Constraints & Rules
+1. **QuadTimer Locks Muxes**: QuadTimer pins must be treated as permanently allocated after init. Dynamic remuxing is prohibited in real-time firmware.
+2. **FlexPWM vs. QuadTimer XBAR Conflicts**: Conflicts are pad-group specific, not global. Zoning prevents accidental pad-level XBAR contention.
+3. **Global Determinism Rule**: No Zone may introduce ISR load that interferes with the 1 kHz control loop. All high-frequency peripherals must be hardware-driven (PWM, DMA, timers).
 
 ---
 
@@ -32,7 +32,7 @@ These pins are definitively assigned to QuadTimers and cannot be reused for anyt
 ### Zone 2 — Step Generation (FlexPWM Zone)
 **Function**: 6x Motor Step Pulses
 **Peripheral**: FlexPWM
-**Requirement**: Must be routed to pins that native support FlexPWM without colliding with Zone 1 QuadTimers.
+**Requirement**: Step generation must use FlexPWM only. QuadTimer PWM mode (`analogWrite` on pins 10-15) is strictly prohibited as it will destroy encoder capture functionality.
 
 **Recommended Pins**:
 *   `2, 3, 4, 5, 6, 7, 8, 9`
@@ -74,7 +74,18 @@ Analysis of the `PAROL6 control board main software` (the open-source baseline) 
 *   **Primary vs Secondary**: The Emergency Stop MUST NOT rely solely on the Teensy. The E-Stop must physically cut power/enable logic to the stepper drivers (Primary Safety). The connection to the Teensy in Zone 4 is to trigger the software Supervisor to halt the trajectory (Secondary Safety).
 *   **EMI Coupling Rule**: **Never mix safety inputs with high-speed PWM pads**. Fast-switching STEP/PWM signals placed physically adjacent to safety/encoder inputs on the PCB routing or wire harness will inject severe electro-magnetic interference (EMI), causing false limit-switch trips or encoder corruption.
 
+### Zone 5 — Communications Domain (Reserved)
+**Function**: ROS Transport, Debugging, Expansion Buses
+**Peripheral**: USB HS, UART, CAN, SPI
+**Requirement**: Do not assign safety or real-time peripherals to these trace-sensitive communications pins.
+
+**Reserved Pins**:
+*   **USB HS**: Native D+/D- interior pads (Fixed)
+*   **UART1 (Serial1)**: `0, 1`
+*   **UART2 (Serial2)**: `7, 8`
+*   **CAN FD (Optional Future)**: `3, 4`
+
 ---
 
 ## Future Expansion
-Inductive sensors operate at 12V-24V. As observed in the legacy firmware, they are active sensors. They will require optocouplers or logic-level shifters on the custom PCB before interfacing with Zone 4 pins to prevent destroying the 3.3V i.MXRT processor.
+Inductive sensors operate at 12V-24V. As observed in the legacy firmware, they are active sensors. **Opto-isolation is strongly recommended over passive level shifting (voltage dividers) due to EMI and ground offset realities in industrial motor environments.** Direct 24V exposure will instantly destroy the 3.3V i.MXRT processor.
