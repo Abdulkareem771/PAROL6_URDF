@@ -5,7 +5,7 @@
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
 #include "hal/QuadTimerEncoder.h"
-#include "hal/FlexPWMDriver.h"
+#include "hal/FlexPWMGenerator.h"
 // -------------------------------------------------------------------------
 // Global Architecture Instantiation
 // -------------------------------------------------------------------------
@@ -37,7 +37,7 @@ QuadTimerEncoder encoder_hal[NUM_AXES] = {
 };
 
 // Phase 4: Stage 1 Dummy FlexPWM Carrier
-FlexPWMDriver dummy_stepper(2); // Zone 2 Pin
+FlexPWMGenerator dummy_stepper(2); // Zone 2 Pin
 
 IntervalTimer controlTimer;
 volatile uint32_t system_tick_ms = 0;
@@ -134,13 +134,16 @@ void setup() {
     
     transport.init(115200);
     supervisor.init(0);
+    
+    // Initialize FlexPWM BEFORE Encoders to prevent CCM clock gating conflicts
+    dummy_stepper.init_dummy_carrier(); // Phase 4 Stage 1
+
     // Hardware Configuration
     for (int i = 0; i < NUM_AXES; i++) {
         encoder_hal[i].init();
         observer[i].set_initial_position(0.0f);
         interpolator[i].reset(0.0f);
     }
-    dummy_stepper.init_dummy_carrier(); // Phase 4 Stage 1
     
     // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
     

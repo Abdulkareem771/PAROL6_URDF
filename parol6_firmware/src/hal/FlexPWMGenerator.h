@@ -17,9 +17,11 @@
  *  - ZERO execution inside the 1 kHz ISR math loop (set & forget).
  *  - Hardware timer generation (no digitalWrite/delay in loops).
  */
-class FlexPWMDriver {
+#define FLEXPWM_STAGE 1 // Stage 1: Dummy Carrier Validation
+
+class FlexPWMGenerator {
 public:
-    FlexPWMDriver(uint8_t dummy_pin) : pin_(dummy_pin) {}
+    FlexPWMGenerator(uint8_t dummy_pin) : pin_(dummy_pin) {}
 
     /**
      * Initializes the pin and starts the 50 kHz dummy waveform.
