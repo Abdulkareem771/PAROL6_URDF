@@ -64,3 +64,4 @@ venvs/*
 >>>>>>> real-robot-integration
 
 legacy code open loop/*
+logs/launchers/*
