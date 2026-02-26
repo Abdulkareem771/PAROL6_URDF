@@ -28,6 +28,7 @@ from launch.actions import ExecuteProcess, DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 from moveit_configs_utils import MoveItConfigsBuilder
 
@@ -40,6 +41,12 @@ def generate_launch_description():
         description='true = replay bag; false = use live Kinect'
     )
     use_bag = LaunchConfiguration('use_bag')
+
+    single_frame_detection_arg = DeclareLaunchArgument(
+        'single_frame_detection', default_value='true',
+        description='true = process one camera frame then stop detector subscription'
+    )
+    single_frame_detection = LaunchConfiguration('single_frame_detection')
 
     # ── MoveIt Config ──────────────────────────────────────────────────
     pkg_parol6            = get_package_share_directory('parol6')
@@ -120,6 +127,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'publish_debug_images': True,
+            'single_frame_mode': ParameterValue(single_frame_detection, value_type=bool),
             'use_sim_time': True,
         }]
     )
@@ -199,6 +207,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         use_bag_arg,
+        single_frame_detection_arg,
         # Bag
         play_bag,
         # TFs

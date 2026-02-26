@@ -142,6 +142,7 @@ class RedLineDetector(Node):
         # Performance
         self.declare_parameter('processing_rate', 10.0)
         self.declare_parameter('publish_debug_images', True)
+        self.declare_parameter('single_frame_mode', False)
         
         # ============================================================
         # GET PARAMETERS
@@ -168,6 +169,7 @@ class RedLineDetector(Node):
         self.max_lines = self.get_parameter('max_lines_per_frame').value
         
         self.publish_debug = self.get_parameter('publish_debug_images').value
+        self.single_frame_mode = self.get_parameter('single_frame_mode').value
         
         # ============================================================
         # INITIALIZE CV BRIDGE
@@ -223,11 +225,13 @@ class RedLineDetector(Node):
         
         self.frame_count = 0
         self.detection_count = 0
+        self.single_frame_processed = False
         
         self.get_logger().info('Red Line Detector initialized')
         self.get_logger().info(f'HSV Range 1: {self.hsv_lower_1} to {self.hsv_upper_1}')
         self.get_logger().info(f'HSV Range 2: {self.hsv_lower_2} to {self.hsv_upper_2}')
         self.get_logger().info(f'Min confidence: {self.min_confidence}')
+        self.get_logger().info(f'Single frame mode: {self.single_frame_mode}')
     
     # ================================================================
     # MAIN PROCESSING CALLBACK
@@ -249,6 +253,9 @@ class RedLineDetector(Node):
         Args:
             msg (sensor_msgs/Image): Input RGB image from camera
         """
+        if self.single_frame_mode and self.single_frame_processed:
+            return
+
         self.frame_count += 1
         
         try:
@@ -294,6 +301,16 @@ class RedLineDetector(Node):
             
             markers = self.create_markers(valid_lines, msg.header)
             self.markers_pub.publish(markers)
+
+        if self.single_frame_mode:
+            self.single_frame_processed = True
+            if self.image_sub is not None:
+                self.destroy_subscription(self.image_sub)
+                self.image_sub = None
+            self.get_logger().info(
+                f'Single-frame mode complete after frame {self.frame_count}; '
+                'stopped image subscription.'
+            )
     
     # ================================================================
     # DETECTION PIPELINE
