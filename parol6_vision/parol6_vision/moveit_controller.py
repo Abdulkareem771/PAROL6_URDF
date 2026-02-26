@@ -71,6 +71,9 @@ from shape_msgs.msg import SolidPrimitive
 from std_srvs.srv import Trigger
 
 import copy
+import math
+import threading
+from concurrent.futures import TimeoutError as FutureTimeoutError
 
 class MoveItController(Node):
     """
@@ -100,6 +103,16 @@ class MoveItController(Node):
 
         # Auto-execute: if True, run sequence every time a new path arrives
         self.declare_parameter('auto_execute', False)
+        self.declare_parameter('move_group_wait_timeout_sec', 30.0)
+        self.declare_parameter('execute_wait_timeout_sec', 20.0)
+
+        # Test mode: clamp incoming path into a conservative reachable workspace.
+        # Useful to validate pipeline wiring even when vision points are out of reach.
+        self.declare_parameter('enforce_reachable_test_path', False)
+        self.declare_parameter('test_workspace_min', [0.20, -0.35, 0.10])  # x,y,z
+        self.declare_parameter('test_workspace_max', [0.65, 0.35, 0.55])   # x,y,z
+        self.declare_parameter('test_min_radius_xy', 0.20)
+        self.declare_parameter('test_max_radius_xy', 0.70)
         
         self.group_name = self.get_parameter('planning_group').value
         self.base_frame = self.get_parameter('base_frame').value
@@ -108,6 +121,13 @@ class MoveItController(Node):
         self.thresholds = self.get_parameter('min_success_rates').value
         self.approach_dist = self.get_parameter('approach_distance').value
         self.auto_execute = self.get_parameter('auto_execute').value
+        self.move_group_wait_timeout = float(self.get_parameter('move_group_wait_timeout_sec').value)
+        self.execute_wait_timeout = float(self.get_parameter('execute_wait_timeout_sec').value)
+        self.enforce_reachable_test_path = self.get_parameter('enforce_reachable_test_path').value
+        self.workspace_min = self.get_parameter('test_workspace_min').value
+        self.workspace_max = self.get_parameter('test_workspace_max').value
+        self.min_radius_xy = self.get_parameter('test_min_radius_xy').value
+        self.max_radius_xy = self.get_parameter('test_max_radius_xy').value
         
         # ============================================================
         # ROS INTERFACES
@@ -150,15 +170,39 @@ class MoveItController(Node):
         
         self.latest_path = None
         self.execution_in_progress = False
+        self._exec_lock = threading.Lock()
         self.get_logger().info('MoveIt Controller initialized')
+
+    def _wait_async_result(self, future, timeout_sec=15.0):
+        """
+        Wait for an rclpy Future from worker thread without calling spin().
+        Main executor keeps spinning in main thread; this just blocks on an event.
+        """
+        done_evt = threading.Event()
+
+        def _done_cb(_):
+            done_evt.set()
+
+        future.add_done_callback(_done_cb)
+        if not done_evt.wait(timeout_sec):
+            raise FutureTimeoutError(f'Future timed out after {timeout_sec}s')
+        return future.result()
+
+    def _wait_for_action_server(self, client, server_name: str, timeout_sec: float) -> bool:
+        """Wait for action server in short polls to tolerate DDS discovery delay."""
+        deadline = self.get_clock().now().nanoseconds + int(timeout_sec * 1e9)
+        while self.get_clock().now().nanoseconds < deadline:
+            if client.wait_for_server(timeout_sec=0.5):
+                return True
+        self.get_logger().error(f"Action server '{server_name}' not available after {timeout_sec:.1f}s")
+        return False
         
     def path_callback(self, msg):
         """Buffer latest path; auto-execute if configured"""
         self.latest_path = msg
         self.get_logger().info(f'Received path with {len(msg.poses)} points')
-        if self.auto_execute and not self.execution_in_progress:
-            self.get_logger().info('auto_execute=True — starting welding sequence')
-            self.execute_welding_sequence(msg)
+        if self.auto_execute:
+            self._start_execution_async(msg, source='auto_execute')
 
     def trigger_execution(self, request, response):
         """Service callback to start execution"""
@@ -172,12 +216,31 @@ class MoveItController(Node):
             response.message = "Execution already in progress"
             return response
             
-        # Run execution (non-blocking in real app, but blocking here for simplicity)
-        success = self.execute_welding_sequence(self.latest_path)
-        
-        response.success = success
-        response.message = "Execution completed" if success else "Execution failed"
+        # Start execution in worker thread so callback doesn't block executor.
+        self._start_execution_async(self.latest_path, source='service')
+        response.success = True
+        response.message = "Execution started"
         return response
+
+    def _start_execution_async(self, path, source='unknown'):
+        with self._exec_lock:
+            if self.execution_in_progress:
+                self.get_logger().info(f'{source}: execution already in progress, skipping')
+                return
+            self.execution_in_progress = True
+        self.get_logger().info(f'{source}: starting welding sequence thread')
+        t = threading.Thread(target=self._execution_worker, args=(path,), daemon=True)
+        t.start()
+
+    def _execution_worker(self, path):
+        try:
+            ok = self.execute_welding_sequence(path)
+            self.get_logger().info(f'Execution finished: success={ok}')
+        except Exception as exc:
+            self.get_logger().error(f'Execution worker exception: {exc}')
+        finally:
+            with self._exec_lock:
+                self.execution_in_progress = False
 
     # ================================================================
     # EXECUTION SEQUENCE
@@ -187,8 +250,15 @@ class MoveItController(Node):
         """
         Full 3-Phase Welding Sequence: Approach -> Weld -> Retract
         """
-        self.execution_in_progress = True
         self.get_logger().info("STARTING WELDING SEQUENCE")
+
+        # Optional test-mode normalization: keep path inside a conservative workspace.
+        # This validates pipeline connectivity even when raw detected points are unreachable.
+        if self.enforce_reachable_test_path:
+            path = self._make_path_reachable(path)
+            if len(path.poses) == 0:
+                self.get_logger().error("Reachability normalization produced empty path")
+                return False
         
         # 1. Compute Approach Point
         start_pose = path.poses[0]
@@ -199,7 +269,6 @@ class MoveItController(Node):
         self.get_logger().info("Phase 1: Approach")
         if not self.move_to_pose(approach_pose):
             self.get_logger().error("Approach failed")
-            self.execution_in_progress = False
             return False
             
         # 3. Plan Welding Path (Cartesian Fallback)
@@ -208,20 +277,69 @@ class MoveItController(Node):
         
         if not weld_trajectory:
             self.get_logger().error("All planning attempts failed")
-            self.execution_in_progress = False
             return False
             
         # 4. Execute Weld
         self.get_logger().info("Phase 3: Executing Weld")
         if not self.execute_trajectory_action(weld_trajectory):
             self.get_logger().error("Weld execution failed")
-            self.execution_in_progress = False
             return False
             
         # 5. Retract (Optional)
         self.get_logger().info("Sequence Complete")
-        self.execution_in_progress = False
         return True
+
+    def _make_path_reachable(self, path: Path) -> Path:
+        """Clamp path positions into a conservative reachable workspace for test validation."""
+        out = Path()
+        out.header = path.header
+        changed = 0
+
+        xmin, ymin, zmin = self.workspace_min
+        xmax, ymax, zmax = self.workspace_max
+        rmin = max(0.0, float(self.min_radius_xy))
+        rmax = max(rmin + 1e-6, float(self.max_radius_xy))
+
+        for pose_stamped in path.poses:
+            p = copy.deepcopy(pose_stamped)
+            x = p.pose.position.x
+            y = p.pose.position.y
+            z = p.pose.position.z
+            orig = (x, y, z)
+
+            # Axis-aligned clamp.
+            x = max(xmin, min(xmax, x))
+            y = max(ymin, min(ymax, y))
+            z = max(zmin, min(zmax, z))
+
+            # Radial clamp in XY plane relative to base.
+            r = math.hypot(x, y)
+            if r > 1e-9:
+                if r < rmin:
+                    s = rmin / r
+                    x *= s
+                    y *= s
+                elif r > rmax:
+                    s = rmax / r
+                    x *= s
+                    y *= s
+            else:
+                x = rmin
+                y = 0.0
+
+            p.pose.position.x = x
+            p.pose.position.y = y
+            p.pose.position.z = z
+            out.poses.append(p)
+
+            if (abs(orig[0] - x) > 1e-9) or (abs(orig[1] - y) > 1e-9) or (abs(orig[2] - z) > 1e-9):
+                changed += 1
+
+        self.get_logger().info(
+            f"Reachability normalization: modified {changed}/{len(path.poses)} points "
+            f"(frame={path.header.frame_id if path.header.frame_id else 'unknown'})"
+        )
+        return out
 
     # ================================================================
     # PLANNING LOGIC
@@ -253,8 +371,11 @@ class MoveItController(Node):
             req.avoid_collisions = True
             
             future = self.cartesian_client.call_async(req)
-            rclpy.spin_until_future_complete(self, future)
-            res = future.result()
+            try:
+                res = self._wait_async_result(future, timeout_sec=20.0)
+            except FutureTimeoutError:
+                self.get_logger().warn('compute_cartesian_path timed out after 20.0s')
+                continue
             
             if res.error_code.val != MoveItErrorCodes.SUCCESS:
                 self.get_logger().warn(f"MoveIt Error: {res.error_code.val}")
@@ -279,8 +400,9 @@ class MoveItController(Node):
             f'z={pose_stamped.pose.position.z:.3f}'
         )
 
-        if not self.move_group_client.wait_for_server(timeout_sec=5.0):
-            self.get_logger().error('MoveGroup action server not available')
+        if not self._wait_for_action_server(
+            self.move_group_client, 'move_action', self.move_group_wait_timeout
+        ):
             return False
 
         # --- Build position constraint (1 cm tolerance box around target) ---
@@ -323,16 +445,30 @@ class MoveItController(Node):
         goal.planning_options.plan_only = False  # plan AND execute
 
         future = self.move_group_client.send_goal_async(goal)
-        rclpy.spin_until_future_complete(self, future)
-        handle = future.result()
+        try:
+            handle = self._wait_async_result(future, timeout_sec=20.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for MoveGroup goal response')
+            return False
+
+        if handle is None:
+            self.get_logger().error('Approach goal handle is None')
+            return False
 
         if not handle.accepted:
             self.get_logger().error('Approach goal rejected by MoveGroup')
             return False
 
         res_future = handle.get_result_async()
-        rclpy.spin_until_future_complete(self, res_future)
-        result = res_future.result()
+        try:
+            result = self._wait_async_result(res_future, timeout_sec=60.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for MoveGroup execution result')
+            return False
+
+        if result is None:
+            self.get_logger().error('Approach result is None')
+            return False
 
         ok = result.result.error_code.val == MoveItErrorCodes.SUCCESS
         if ok:
@@ -345,22 +481,36 @@ class MoveItController(Node):
 
     def execute_trajectory_action(self, trajectory):
         """Execute a computed trajectory"""
-        if not self.execute_client.wait_for_server(timeout_sec=1.0):
+        if not self._wait_for_action_server(
+            self.execute_client, 'execute_trajectory', self.execute_wait_timeout
+        ):
             return False
             
         goal = ExecuteTrajectory.Goal()
         goal.trajectory = trajectory
         
         future = self.execute_client.send_goal_async(goal)
-        rclpy.spin_until_future_complete(self, future)
-        goal_handle = future.result()
+        try:
+            goal_handle = self._wait_async_result(future, timeout_sec=20.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for ExecuteTrajectory goal response')
+            return False
+        if goal_handle is None:
+            self.get_logger().error('ExecuteTrajectory goal handle is None')
+            return False
         
         if not goal_handle.accepted:
             return False
             
         res_future = goal_handle.get_result_async()
-        rclpy.spin_until_future_complete(self, res_future)
-        result = res_future.result()
+        try:
+            result = self._wait_async_result(res_future, timeout_sec=90.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for ExecuteTrajectory result')
+            return False
+        if result is None:
+            self.get_logger().error('ExecuteTrajectory result is None')
+            return False
         
         return result.error_code.val == MoveItErrorCodes.SUCCESS
 

@@ -8,6 +8,10 @@ This page defines one launcher per operation mode so each method can run alone.
 - `scripts/launchers/launch_moveit_with_gazebo.sh`
 - `scripts/launchers/launch_moveit_fake.sh`
 - `scripts/launchers/launch_moveit_real_hw.sh`
+- `scripts/launchers/launch_vision_bag_pipeline.sh`
+- `scripts/launchers/launch_all_vision_gazebo.sh`
+- `scripts/launchers/stop_all_vision_gazebo.sh`
+- `scripts/launchers/inject_reachable_weld_path.sh`
 
 All launchers:
 - run from host side
@@ -72,6 +76,32 @@ What it starts:
 
 Prerequisite:
 - real hardware path/controller manager must be launched first (for example `start_real_robot.sh` or your real hardware launch pipeline).
+
+## Method 5: Vision Bag Pipeline Only
+
+Use when you want vision nodes + rosbag + moveit_controller, while Gazebo/MoveIt are started separately.
+
+```bash
+./scripts/launchers/launch_vision_bag_pipeline.sh
+```
+
+## Method 6: All Three Together (Gazebo + MoveIt + Vision)
+
+Use when you want one command to start all parts with logs.
+
+```bash
+./scripts/launchers/launch_all_vision_gazebo.sh
+```
+
+Stop all:
+```bash
+./scripts/launchers/stop_all_vision_gazebo.sh
+```
+
+Inject a known reachable welding path for wiring validation:
+```bash
+./scripts/launchers/inject_reachable_weld_path.sh
+```
 
 ## Recommended Startup Order Per Mode
 

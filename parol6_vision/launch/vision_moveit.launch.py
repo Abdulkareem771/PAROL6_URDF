@@ -1,19 +1,21 @@
 """
 vision_moveit.launch.py
 =======================
-Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz
+Unified launch: Vision Pipeline + MoveIt Controller (for external MoveIt/Gazebo)
 
 Combines:
   - ros2 bag play  (replays Kinect data — set use_bag:=false for live camera)
   - red_line_detector  →  /vision/weld_lines_2d
   - depth_matcher      →  /vision/weld_lines_3d
   - path_generator     →  /vision/welding_path
-  - move_group         (fake hardware — robot model + motion planning panel)
-  - ros2_control_node  (FakeSystem — no ESP32 needed)
-  - RViz with vision_debug.rviz  (all overlays + MotionPlanning panel)
+  - moveit_controller  (consumes /vision/welding_path and calls MoveIt services/actions)
+
+Expected external stack (started separately):
+  - Gazebo + controller_manager
+  - move_group + RViz (e.g. parol6_moveit_config demo.launch.py use_fake_hardware:=false)
 
 Usage:
-  # Bag replay (default):
+  # Bag replay vision pipeline (default):
   ros2 launch parol6_vision vision_moveit.launch.py
 
   # Live Kinect + vision (container must have kinect2_bridge running):
@@ -118,7 +120,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'publish_debug_images': True,
-            'use_sim_time': False,
+            'use_sim_time': True,
         }]
     )
 
@@ -133,7 +135,7 @@ def generate_launch_description():
             'max_depth': 5000.0,
             'min_depth': 100.0,
             'min_valid_points': 2,
-            'use_sim_time': False,
+            'use_sim_time': True,
         }]
     )
 
@@ -149,7 +151,7 @@ def generate_launch_description():
             'approach_angle_deg': 45.0,
             'auto_generate': True,
             'min_points_for_path': 3,
-            'use_sim_time': False,
+            'use_sim_time': True,
         }]
     )
 
@@ -165,10 +167,17 @@ def generate_launch_description():
             'end_effector_link': 'L6',
             'approach_distance': 0.05,
             'weld_velocity': 0.01,
-            # auto_execute=False → use service call to trigger:
-            #   ros2 service call /moveit_controller/execute_welding_path std_srvs/srv/Trigger {}
-            'auto_execute': False,
-            'use_sim_time': False,
+            # Auto execute is enabled for pipeline wiring validation.
+            # New /vision/welding_path messages will trigger execution directly.
+            'auto_execute': True,
+            'use_sim_time': True,
+            # Test-mode workspace clamp to validate path->MoveIt->Gazebo pipeline wiring.
+            # Set false to use raw path points.
+            'enforce_reachable_test_path': True,
+            'test_workspace_min': [0.20, -0.35, 0.10],
+            'test_workspace_max': [0.65, 0.35, 0.55],
+            'test_min_radius_xy': 0.20,
+            'test_max_radius_xy': 0.70,
         }],
     )
 
@@ -183,7 +192,7 @@ def generate_launch_description():
             ('/rgb/image_rect_color',        '/kinect2/qhd/image_color_rect'),
             ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
         ],
-        parameters=[{'use_sim_time': False}]
+        parameters=[{'use_sim_time': True}]
     )
 
 
