@@ -68,6 +68,14 @@ The firmware is designed around a strict separation of concerns, decoupling the 
 | **`ControlLaw`** | 1 kHz ISR | `cmd_vel_ff + (Kp * pos_error)` clamped to `MAX_VEL_CMD` | Float math (FPU accelerated). All math uses single-precision floats with bounded execution time; migration to fixed-point is structurally possible without architectural changes. |
 | **`ActuatorModel / MotorHAL`** | 1 kHz ISR | Applies exact mechanical gear ratios (e.g., J3 `18.095`) to convert radians to steps, dispatches pulses | Separates actuation gear dynamics from pure kinematic math. |
 
+> **Architectural Note on FlexPWM & Stepper Drivers (e.g., MKServo42C)**
+> The firmware uses the i.MXRT1062 `FlexPWM` peripheral to generate STEP signals. It is crucial to understand that we are **NOT** using "Analog-style PWM" (where duty cycle controls voltage/speed). Instead, we are using FlexPWM as a **Hardware Metronome**. 
+> - **Frequency** controls velocity.
+> - **Duty Cycle** is irrelevant (fixed to a safe 2-5µs pulse width). 
+> - **Edge Count** controls position.
+> 
+> This approach completely offloads step pulse generation from the CPU, preventing ISR jitter or contention that would occur if we attempted to bit-bang GPIO (`digitalWrite`) for 6 axes simultaneously.
+
 ---
 
 ## 2. The 1 kHz ISR Execution Pipeline
