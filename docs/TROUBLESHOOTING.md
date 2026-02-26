@@ -221,6 +221,36 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 **Root Cause (Most Common):**
 Multiple ROS instances or time desync caused TF to jump backwards. Restarting and ensuring sim time fixed it.
 
+### Host GUI Permission Fix (X11)
+
+**Symptoms:**
+- `qt.qpa.xcb: could not connect to display :0`
+- `Authorization required, but no authorization protocol specified`
+
+**Run on host terminal (not inside Docker):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+xhost +local:root
+xhost +local:docker
+docker restart parol6_dev
+./start_container.sh
+```
+
+Then relaunch:
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 ignition.launch.py"
+```
+
+### Clean Shutdown (Avoid Frozen Restart)
+
+1. In MoveIt/RViz terminal: press `Ctrl+C` and wait for full shutdown.
+2. In Gazebo terminal: press `Ctrl+C` and wait for full shutdown.
+3. Exit container shells with `exit`.
+4. Optional when done:
+```bash
+docker stop parol6_dev
+```
+
 ### Issue 5: Python Environment Conflicts
 
 **Symptoms:**
