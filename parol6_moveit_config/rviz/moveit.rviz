@@ -13,17 +13,8 @@ Panels:
         - /MotionPlanning1/Planned Path1
         - /MotionPlanning1/Planned Path1/Links1
         - /MotionPlanning1/Planned Path1/Links1/world1
-        - /Camera1
-        - /Camera1/Topic1
-        - /Image1
-        - /Image1/Status1
-        - /Image1/Topic1
-        - /Camera2
-        - /Camera2/Status1
-        - /Camera2/Visibility1
-        - /Camera2/Topic1
-      Splitter Ratio: 0.5
-    Tree Height: 366
+      Splitter Ratio: 0.6
+    Tree Height: 520
   - Class: rviz_common/Transformation
     Name: Transformation
 Visualization Manager:
@@ -207,60 +198,6 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 1
-    - Class: rviz_default_plugins/Camera
-      Enabled: true
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: Camera
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: ""
-      Value: true
-      Visibility:
-        Camera: true
-        Grid: true
-        Image: true
-        MotionPlanning: true
-        Value: true
-      Zoom Factor: 1
-    - Class: rviz_default_plugins/Image
-      Enabled: true
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image
-      Normalize Range: true
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: ""
-      Value: true
-    - Class: rviz_default_plugins/Camera
-      Enabled: true
-      Far Plane Distance: 100
-      Image Rendering: background and overlay
-      Name: Camera
-      Overlay Alpha: 0.5
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /kinect2/hd/image_color
-      Value: true
-      Visibility:
-        Camera: true
-        Grid: true
-        Image: true
-        MotionPlanning: true
-        Value: true
-      Zoom Factor: 1
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -406,22 +343,15 @@ Visualization Manager:
         Value: Orbit (rviz_default_plugins)
         Yaw: 1.5949991941452026
 Window Geometry:
-  Camera:
-    collapsed: false
   Displays:
     collapsed: false
-  Height: 2278
+  Height: 900
   Hide Left Dock: false
   Hide Right Dock: false
-  Image:
-    collapsed: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000001000000000000043700000836fc0200000008fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720100000080000000900000008900fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000011f000003440000031f00fffffffb000000100044006900730070006c0061007900730100000472000001e8000001d200fffffffb0000000a005600690065007700730100000627000001660000000000000000fb0000000c00430061006d0065007200610100000669000000580000005400fffffffb0000000a0049006d00610067006501000006d0000000580000005400fffffffb0000000c00430061006d0065007200610100000737000000580000005400fffffffb0000001c005400720061006e00730066006f0072006d006100740069006f006e010000079e000001180000011800ffffff000005030000083600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Transformation:
-    collapsed: false
-  Width: 2377
-  X: 158
-  Y: 68
+  Width: 1400
+  X: 40
+  Y: 40
