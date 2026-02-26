@@ -9,7 +9,7 @@ import numpy as np
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-train_dir = project_dir / "data" / "U-Net_data" / "U-Net_model_v2" / "train"
+train_dir = project_dir / "data" / "U-Net_data" / "U-Net_model_v1" / "train"
 
 image_files = sorted([
     p for p in train_dir.glob("*.jpg")
