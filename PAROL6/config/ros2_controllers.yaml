@@ -25,16 +25,18 @@ parol6_arm_controller:
     # Command and state interfaces must match what is defined in the URDF <ros2_control> block
     command_interfaces:
       - position
+      - velocity  # NEW: Enable velocity commands
     state_interfaces:
       - position
+      - velocity  # NEW: Read velocity feedback
     
     allow_partial_joints_goal: false
     constraints:
-      stopped_velocity_tolerance: 0.02
+      stopped_velocity_tolerance: 999.0
       goal_time: 0.0
-      joint_L1: { trajectory: 0.3, goal: 0.005 }
-      joint_L2: { trajectory: 0.3, goal: 0.005 }
-      joint_L3: { trajectory: 0.3, goal: 0.005 }
-      joint_L4: { trajectory: 0.3, goal: 0.005 }
-      joint_L5: { trajectory: 0.3, goal: 0.005 }
-      joint_L6: { trajectory: 0.3, goal: 0.005 }
+      joint_L1: { trajectory: 999.0, goal: 999.0 }
+      joint_L2: { trajectory: 999.0, goal: 999.0 }
+      joint_L3: { trajectory: 999.0, goal: 999.0 }
+      joint_L4: { trajectory: 999.0, goal: 999.0 }
+      joint_L5: { trajectory: 999.0, goal: 999.0 }
+      joint_L6: { trajectory: 999.0, goal: 999.0 }

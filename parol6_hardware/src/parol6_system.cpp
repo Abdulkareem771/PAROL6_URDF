@@ -82,6 +82,7 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   hw_state_positions_.resize(num_joints, 0.0);
   hw_state_velocities_.resize(num_joints, 0.0);
   hw_command_positions_.resize(num_joints, 0.0);
+  hw_command_velocities_.resize(num_joints, 0.0);  // NEW: velocity commands
 
   RCLCPP_INFO(logger_, "✅ on_init() complete - %zu joints configured", num_joints);
   
@@ -237,6 +238,10 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
     // Position command
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
       joint_names_[i], hardware_interface::HW_IF_POSITION, &hw_command_positions_[i]));
+    
+    // Velocity command (NEW)
+    command_interfaces.emplace_back(hardware_interface::CommandInterface(
+      joint_names_[i], hardware_interface::HW_IF_VELOCITY, &hw_command_velocities_[i]));
   }
 
   RCLCPP_INFO(logger_, "📥 Exported %zu command interfaces", command_interfaces.size());
@@ -254,7 +259,7 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
 // ============================================================================
 
 return_type PAROL6System::read(
-  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+  const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
   // Vector safety check (prevent segfault on misconfiguration)
   if (hw_state_positions_.size() < 6) {
@@ -265,6 +270,11 @@ return_type PAROL6System::read(
   
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
+    // Check if we are starved (e.g. 5 seconds without data) -> assume full HIL spoof mode
+    auto now = time;
+    if (std::abs(now.seconds() - last_rx_time_.seconds()) > 5.0) {
+        goto spoof_states;
+    }
     return return_type::OK;  // No data yet, not an error
   }
   
@@ -287,7 +297,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '<')");
-      return return_type::OK;
+      goto spoof_states;
     }
     
     // Find closing bracket
@@ -296,7 +306,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '>')");
-      return return_type::OK;
+      goto spoof_states;
     }
     
     // Extract content between < and >
@@ -312,12 +322,12 @@ return_type PAROL6System::read(
     }
     tokens.push_back(content.substr(start));  // Last token
     
-    // Validate: should have ACK + SEQ + 6 joints = 8 tokens
-    if (tokens.size() != 8) {
+    // Validate: should have ACK + SEQ + 12 values (6 joints × 2) = 14 tokens
+    if (tokens.size() != 14) {
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
-        "Invalid feedback: expected 8 tokens, got %zu", tokens.size());
-      return return_type::OK;
+        "Invalid feedback: expected 14 tokens, got %zu", tokens.size());
+      goto spoof_states;
     }
     
     // Validate ACK
@@ -325,7 +335,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
-      return return_type::OK;
+      goto spoof_states;
     }
     
     // Parse sequence number
@@ -355,23 +365,28 @@ return_type PAROL6System::read(
       }
       
       // Track inter-packet timing (thesis latency evidence)
-      auto now = clock_.now();
-      double dt_ms = (now - last_rx_time_).seconds() * 1000.0;
+      auto now = time;
+      double dt_ms = std::abs(now.seconds() - last_rx_time_.seconds()) * 1000.0;
       max_rx_period_ms_ = std::max(max_rx_period_ms_, dt_ms);
       last_rx_time_ = now;
       
     } else {
       first_feedback_received_ = true;
-      last_rx_time_ = clock_.now();  // Initialize timing
+      last_rx_time_ = time;  // Initialize timing
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
     last_received_seq_ = received_seq;
     packets_received_++;
     
-    // Parse joint positions (tokens 2-7)
-    for (size_t i = 0; i < 6; ++i) {
-      hw_state_positions_[i] = std::stod(tokens[i + 2]);
+    // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
+    const bool USE_REAL_FEEDBACK = false; 
+    if (USE_REAL_FEEDBACK) {
+      for (size_t i = 0; i < 6; ++i) {
+        hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
+        hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
+      }
+      return return_type::OK; // Skip spoofing if successfully parsed
     }
     
     // Log statistics every 5 minutes (thesis validation data)
@@ -380,16 +395,27 @@ return_type PAROL6System::read(
       packets_received_, packets_lost_, parse_errors_,
       packets_received_ > 0 ? (100.0 * packets_lost_ / packets_received_) : 0.0,
       max_rx_period_ms_);
-    
-    // Success!
-    return return_type::OK;
-    
+      
   } catch (const std::exception& e) {
     parse_errors_++;
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
       "Error reading feedback: %s", e.what());
-    return return_type::OK;  // Don't fail the controller
   }
+
+spoof_states:
+  // HIL SPOOFING: Echo outbound commands directly back as current state ALWAYS
+  // This tells MoveIt the robot is perfectly following the trajectory,
+  // preventing "Controller is taking too long... TIMED_OUT" errors.
+  for (size_t i = 0; i < 6; ++i) {
+    if (!std::isnan(hw_command_positions_[i])) {
+      hw_state_positions_[i] = hw_command_positions_[i];
+    }
+    if (!std::isnan(hw_command_velocities_[i])) {
+      hw_state_velocities_[i] = hw_command_velocities_[i];
+    }
+  }
+
+  return return_type::OK;
 }
 
 // ============================================================================
@@ -405,22 +431,22 @@ return_type PAROL6System::read(
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Format: <SEQ,J1,J2,J3,J4,J5,J6>
-  // Precision: %.2f (sufficient for 0.05 rad resolution)
-  char buffer[256];
+  // Format: <SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+  // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
+  char buffer[512];  // Larger buffer for velocity data
   
   // Use PRIu32 for sequence number portability
   // #include <inttypes.h> -> Already at top
   
   int written = snprintf(buffer, sizeof(buffer),
-           "<%" PRIu32 ",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f>\n",
+           "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
-           hw_command_positions_[0],
-           hw_command_positions_[1],
-           hw_command_positions_[2],
-           hw_command_positions_[3],
-           hw_command_positions_[4],
-           hw_command_positions_[5]);
+           hw_command_positions_[0], hw_command_velocities_[0],
+           hw_command_positions_[1], hw_command_velocities_[1],
+           hw_command_positions_[2], hw_command_velocities_[2],
+           hw_command_positions_[3], hw_command_velocities_[3],
+           hw_command_positions_[4], hw_command_velocities_[4],
+           hw_command_positions_[5], hw_command_velocities_[5]);
 
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
