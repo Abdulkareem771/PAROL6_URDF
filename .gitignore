@@ -61,6 +61,19 @@ venvs/*
 
 # Temporarily container's start code
 #start_container.sh
->>>>>>> real-robot-integration
 
+test_data/kinect_snapshot_20260126_231342/*
+rosbag2_2026_01_26-23_26_59/*
+rosbag2_2026_01_26-23_26_59.zip
+vision_work/YOLO/*
+venv_310/*
+Yolo_data2_model/*
+YOLO dependencies/
+01Yolo_model2_data/
+vision_work/color_calibrate/*
+
+test_data/kinect_snapshot_20260126_231342/*
+rosbag2_2026_01_26-23_26_59/*
+rosbag2_2026_01_26-23_26_59.zip/*
+vision_work/color images to calibrate/*
 legacy code open loop/*
