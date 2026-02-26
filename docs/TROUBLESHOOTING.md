@@ -169,6 +169,14 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 - Gazebo robot does not move
 - TF warnings like `TF_OLD_DATA` or "jump back in time"
 
+**Config Note:**
+- Gazebo simulation now uses simulation-only controller files (`*_sim.yaml`).
+- Do not tune Gazebo behavior in hardware-oriented `ros2_controllers.yaml`.
+- If you run MoveIt with Gazebo, use:
+  - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
+- Rationale:
+  - `use_fake_hardware:=true` starts a second internal `ros2_control_node` and can conflict with Gazebo's controller manager.
+
 **Fix (Correct Order):**
 
 1. **Restart the container (clean state):**
@@ -187,7 +195,7 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
    ```bash
    docker exec -it parol6_dev bash
    cd /workspace && source install/setup.bash
-   ros2 launch parol6_moveit_config demo.launch.py
+   ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false
    ```
 
 4. **Enable sim time (so RViz/MoveIt use `/clock`):**

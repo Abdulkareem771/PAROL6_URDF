@@ -1,3 +1,4 @@
+# Simulation-only controllers for MoveIt fake ros2_control
 controller_manager:
   ros__parameters:
     update_rate: 100  # Hz
@@ -17,28 +18,24 @@ parol6_arm_controller:
       - joint_L4
       - joint_L5
       - joint_L6
-    
+
     command_interfaces:
       - position
-      - velocity  # CRITICAL: Send velocity trajectory data to firmware
+
     state_interfaces:
       - position
-      - velocity
-    
+
     state_publish_rate: 50.0
     action_monitor_rate: 20.0
-    
+
     allow_partial_joints_goal: false
-    
+
     constraints:
       stopped_velocity_tolerance: 0.05
-      goal_time: 5.0  # Allow 5 extra seconds to reach goal
-
-      # Path tolerances per joint (0.0 = disabled)
-      # Motor physically lags the planned path but catches up
+      goal_time: 5.0
       joint_L1:
-        trajectory: 0.0     # Disable path tolerance checking
-        goal: 0.15           # Allow 0.15 rad (~8.6°) at final goal
+        trajectory: 0.0
+        goal: 0.15
       joint_L2:
         trajectory: 0.0
         goal: 0.15
