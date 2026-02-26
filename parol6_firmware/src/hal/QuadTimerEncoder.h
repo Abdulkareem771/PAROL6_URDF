@@ -89,7 +89,7 @@ public:
         // CPU runs at F_CPU_ACTUAL (e.g. 600MHz), IP Bus runs at F_BUS_ACTUAL (e.g. 150MHz)
         // We prescaled the QuadTimer by 8.
         uint32_t cpu_to_ip_ratio = F_CPU_ACTUAL / F_BUS_ACTUAL;
-        float expected_quadtimer_ticks = (float)(delta_cyccnt / cpu_to_ip_ratio) / 8.0f;
+        float expected_quadtimer_ticks = (float)delta_cyccnt / (float)cpu_to_ip_ratio / 8.0f;
 
         // Calculate exact Duty Cycle from the exact ticks captured in hardware.
         float duty_cycle = 0.0f;

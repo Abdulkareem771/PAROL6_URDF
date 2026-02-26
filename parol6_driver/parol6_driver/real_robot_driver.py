@@ -105,6 +105,7 @@ class RealRobotDriver(Node):
         points = traj.points
         
         # Simple Execution Loop
+        start_time = time.time()
         for point in points:
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
@@ -153,8 +154,11 @@ class RealRobotDriver(Node):
                 self.log_file.flush()
                 self.seq_counter += 1
 
-            # 3. Timing (Approximation)
-            time.sleep(0.05) 
+            # 4. Timing (Based on trajectory timestamps)
+            target_time = start_time + point.time_from_start.sec + (point.time_from_start.nanosec / 1e9)
+            sleep_time = target_time - time.time()
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
         goal_handle.succeed()
         result = FollowJointTrajectory.Result()

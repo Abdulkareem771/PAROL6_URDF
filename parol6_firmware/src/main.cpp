@@ -4,7 +4,6 @@
 #include "safety/Supervisor.h"
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
-#include "control/Interpolator.h"
 #include "hal/QuadTimerEncoder.h"
 // -------------------------------------------------------------------------
 // Global Architecture Instantiation
@@ -84,7 +83,7 @@ void run_control_loop_isr() {
         float velocity_command = cmd_vel_ff + (Kp[i] * pos_error);
         
         // E. Output Saturation (Clamping)
-        const float MAX_VEL_CMD = 15.0f;
+        const float MAX_VEL_CMD = 10.0f; // Aligned with SafetySupervisor 10.0f
         if (velocity_command > MAX_VEL_CMD) velocity_command = MAX_VEL_CMD;
         if (velocity_command < -MAX_VEL_CMD) velocity_command = -MAX_VEL_CMD;
         
@@ -155,17 +154,18 @@ void loop() {
         cmd = rx_queue.shift();
         interrupts();
 
-        supervisor.feed_watchdog(system_tick_ms);
+        uint32_t current_tick = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
+        supervisor.feed_watchdog(current_tick);
 
         // Dynamically compute the duration since the last valid ROS packet
         static uint32_t last_cmd_ts = 0;
         uint32_t delta_ms = 40; // Default fallback (25Hz)
-        if (last_cmd_ts != 0 && system_tick_ms > last_cmd_ts) {
-            delta_ms = system_tick_ms - last_cmd_ts;
+        if (last_cmd_ts != 0 && current_tick > last_cmd_ts) {
+            delta_ms = current_tick - last_cmd_ts;
             // Cap the duration to prevent massive interpolation swings if a packet drops
             if (delta_ms > 100) delta_ms = 100;
         }
-        last_cmd_ts = system_tick_ms;
+        last_cmd_ts = current_tick;
 
         for (int i = 0; i < NUM_AXES; i++) {
             interpolator[i].set_target(cmd.positions[i], cmd.velocities[i], delta_ms); 
@@ -174,8 +174,9 @@ void loop() {
 
     // 3. Provide background status telemetry (10 Hz roughly)
     static uint32_t last_print = 0;
-    if (system_tick_ms - last_print > 100) {
-        last_print = system_tick_ms;
+    uint32_t print_tick = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
+    if (print_tick - last_print > 100) {
+        last_print = print_tick;
         // Feedback data gathering requires brief interrupt lock to prevent tearing
         float pos[NUM_AXES], vel[NUM_AXES];
         noInterrupts();

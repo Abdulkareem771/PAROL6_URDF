@@ -379,11 +379,15 @@ return_type PAROL6System::read(
     last_received_seq_ = received_seq;
     packets_received_++;
     
-    // REAL FEEDBACK: (Commented out for HIL testing to allow RViz animation)
-    // for (size_t i = 0; i < 6; ++i) {
-    //   hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
-    //   hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
-    // }
+    // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
+    const bool USE_REAL_FEEDBACK = false; 
+    if (USE_REAL_FEEDBACK) {
+      for (size_t i = 0; i < 6; ++i) {
+        hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
+        hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
+      }
+      return return_type::OK; // Skip spoofing if successfully parsed
+    }
     
     // Log statistics every 5 minutes (thesis validation data)
     RCLCPP_INFO_THROTTLE(logger_, clock_, 300000,
