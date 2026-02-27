@@ -64,3 +64,5 @@ rosbag2_2026_01_26-23_26_59.zip
 
 
 venvs/*
+legacy code open loop/*
+logs/launchers/*
