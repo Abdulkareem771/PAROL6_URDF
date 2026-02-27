@@ -47,9 +47,6 @@ vision_work/rosbags/*
 wheels_linux_py310/*
 wheels/*
 
-# virtual environments
-venvs/vision_venvs/ultralytics_cpu_env/*
-venvs/*
 
 # Temporarily container's start code
 #start_container.sh
@@ -57,6 +54,14 @@ venvs/*
 test_data/kinect_snapshot_20260126_231342/*
 
 rosbag2_2026_01_26-23_26_59.zip
+
+# virtual environments
+venvs/vision_venvs/ultralytics_cpu_env/bin/*
+venvs/vision_venvs/ultralytics_cpu_env/data/*
+venvs/vision_venvs/ultralytics_cpu_env/lib64/*
+venvs/vision_venvs/ultralytics_cpu_env/lib/*
+
+parol6-ultimate-20260124.tar.gz
 
 
 venvs/*
