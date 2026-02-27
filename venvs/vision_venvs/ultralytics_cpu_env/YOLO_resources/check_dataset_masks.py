@@ -7,8 +7,8 @@ from pathlib import Path
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-Image_Path = project_dir / "data" / "U-Net_data" / "U-Net_model.v1i.png-mask-semantic" / "train" / "N_1_jpg.rf.51d3c1c9a0bd18dad0356a615ac5a7bf.jpg"
-Mask_Path = project_dir / "data" / "U-Net_data" / "U-Net_model.v1i.png-mask-semantic" / "train" / "N_1_jpg.rf.51d3c1c9a0bd18dad0356a615ac5a7bf_mask.png"
+Image_Path = project_dir / "data" / "U-Net_data" / "U-Net_model_v2" / "train" / "200_jpg.rf.ebad15ed1c423acc7c9d72343985dfd8.jpg"
+Mask_Path = project_dir / "data" / "U-Net_data" / "U-Net_model_v2" / "train" / "200_jpg.rf.ebad15ed1c423acc7c9d72343985dfd8_mask.png"
 
 img  = cv2.imread(Image_Path)
 mask = cv2.imread(Mask_Path, 0)
