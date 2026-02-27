@@ -14,8 +14,8 @@ from pathlib import Path
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-IMAGE_DIR = project_dir / "data" / "U-Net_data" / "U-Net_model_v2 (modified)" / "dataset" / "images"
-MASK_DIR = project_dir / "data" / "U-Net_data" / "U-Net_model_v2 (modified)" / "dataset" / "masks"
+IMAGE_DIR = project_dir / "data" / "U-Net_data" / "U-Net_model_v2_modified" / "dataset" / "images"
+MASK_DIR = project_dir / "data" / "U-Net_data" / "U-Net_model_v2_modified" / "dataset" / "masks"
 
 
 # Patch-Based Dataset (Memory-Safe)
