@@ -46,7 +46,9 @@ class SeamPatchDataset(Dataset):
         img_name, x, y = self.samples[idx]
 
         img_path = os.path.join(self.image_dir, img_name)
-        mask_path = os.path.join(self.mask_dir, img_name)
+        #mask_path = os.path.join(self.mask_dir, img_name)
+        base = os.path.splitext(img_name)[0]
+        mask_path = os.path.join(self.mask_dir, base + ".png")
 
         with Image.open(img_path) as img_full, Image.open(mask_path) as mask_full:
             image = img_full.convert("RGB").crop(
