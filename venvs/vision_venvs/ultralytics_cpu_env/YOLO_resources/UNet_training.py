@@ -30,13 +30,11 @@ class SeamPatchDataset(Dataset):
 
         self.to_tensor = T.ToTensor()
 
-        # Precompute patch coordinates
+        # Hardcoded dimensions (known dataset property)
+        w, h = 2160, 2160
+
         self.samples = []
         for img_name in self.images:
-            img_path = os.path.join(image_dir, img_name)
-            img = Image.open(img_path)
-            w, h = img.size
-
             for y in range(0, h - patch_size + 1, stride):
                 for x in range(0, w - patch_size + 1, stride):
                     self.samples.append((img_name, x, y))
@@ -50,18 +48,19 @@ class SeamPatchDataset(Dataset):
         img_path = os.path.join(self.image_dir, img_name)
         mask_path = os.path.join(self.mask_dir, img_name)
 
-        image = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L")
-
-        image = image.crop((x, y, x + self.patch_size, y + self.patch_size))
-        mask = mask.crop((x, y, x + self.patch_size, y + self.patch_size))
+        with Image.open(img_path) as img_full, Image.open(mask_path) as mask_full:
+            image = img_full.convert("RGB").crop(
+                (x, y, x + self.patch_size, y + self.patch_size)
+            )
+            mask = mask_full.convert("L").crop(
+                (x, y, x + self.patch_size, y + self.patch_size)
+            )
 
         image = self.to_tensor(image)
         mask = self.to_tensor(mask)
-        mask = (mask > 0.5).float()  # binarize
+        mask = (mask > 0.5).float()
 
         return image, mask
-
 
 # CPU-Friendly U-Net (Thin-Seam Safe)
 
