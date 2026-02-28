@@ -53,6 +53,14 @@ class App(tk.Tk):
         self.view_mode  = tk.StringVar(value="Bounding Boxes")
         self.target_tag = tk.StringVar(value="")
 
+        # Advanced State
+        self.tag1 = tk.StringVar(value="")
+        self.tag1_color = tk.StringVar(value="0,255,0") # Green
+        self.tag2 = tk.StringVar(value="")
+        self.tag2_color = tk.StringVar(value="255,100,0") # Orange
+        
+        self.batch_task = tk.StringVar(value="Crop Objects")
+
         # Data
         self._rgb  = None
         self._results = None
@@ -123,9 +131,28 @@ class App(tk.Tk):
         self.sidebar_canvas.bind_all("<Button-4>", lambda e: self.sidebar_canvas.yview_scroll(-1, "units"))
         self.sidebar_canvas.bind_all("<Button-5>", lambda e: self.sidebar_canvas.yview_scroll(1, "units"))
 
+        # Notebook Setup
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure('TNotebook', background=C["panel"], borderwidth=0)
+        style.configure('TNotebook.Tab', background=C["border"], foreground=C["text"], padding=[10, 5], font=("Segoe UI", 9, "bold"))
+        style.map('TNotebook.Tab', background=[('selected', C["accent"])], foreground=[('selected', '#ffffff')])
+
+        self.notebook = ttk.Notebook(sidebar)
+        self.notebook.pack(fill="both", expand=True, pady=(5, 0))
+        
+        tab_main = tk.Frame(self.notebook, bg=C["panel"])
+        tab_adv = tk.Frame(self.notebook, bg=C["panel"])
+        
+        self.notebook.add(tab_main, text="Main Tester")
+        self.notebook.add(tab_adv, text="Advanced Ops")
+
+        # =========================================================
+        # TAB 1: MAIN TESTER
+        # =========================================================
         # -> Test Image
-        self._section(sidebar, "Test Image")
-        f1 = tk.Frame(sidebar, bg=C["panel"])
+        self._section(tab_main, "Test Image")
+        f1 = tk.Frame(tab_main, bg=C["panel"])
         f1.pack(fill="x", padx=12, pady=4)
         tk.Entry(f1, textvariable=self.image_path, bg=C["border"], fg=C["text"],
                  relief="flat", font=("Helvetica", 9), insertbackground=C["text"]).pack(fill="x", ipady=3)
@@ -133,15 +160,15 @@ class App(tk.Tk):
         self._btn(f1, "📋 Paste (Ctrl+V)", self._paste_image).pack(fill="x", pady=(4, 0))
 
         # -> Inference Action
-        self._section(sidebar, "Inference")
-        self._run_btn = tk.Button(sidebar, text="▶ Run Detection", command=self._run_async,
+        self._section(tab_main, "Inference")
+        self._run_btn = tk.Button(tab_main, text="▶ Run Detection", command=self._run_async,
                                   bg=C["accent"], fg="#ffffff", font=("Segoe UI", 11, "bold"),
                                   relief="flat", pady=6, cursor="hand2")
         self._run_btn.pack(fill="x", padx=12, pady=8)
 
         # -> Controls
-        self._section(sidebar, "Filters & View")
-        f2 = tk.Frame(sidebar, bg=C["panel"])
+        self._section(tab_main, "Filters & View")
+        f2 = tk.Frame(tab_main, bg=C["panel"])
         f2.pack(fill="x", padx=12, pady=2)
         
         tk.Label(f2, text="Target Tag (leave blank for all):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w")
@@ -166,7 +193,7 @@ class App(tk.Tk):
 
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
-        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Solid Color Mask", "Cropped View"]:
+        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Solid Color Mask", "Cropped View", "Dual Tag Mask"]:
             rb = tk.Radiobutton(f2, text=mode, variable=self.view_mode, value=mode,
                                 bg=C["panel"], fg=C["text"], selectcolor=C["border"],
                                 activebackground=C["panel"], activeforeground=C["text"],
@@ -174,37 +201,74 @@ class App(tk.Tk):
             rb.pack(anchor="w", padx=6)
 
         # -> Model Path
-        self._section(sidebar, "Model Weights")
-        f3 = tk.Frame(sidebar, bg=C["panel"])
+        self._section(tab_main, "Model Weights")
+        f3 = tk.Frame(tab_main, bg=C["panel"])
         f3.pack(fill="x", padx=12, pady=4)
         tk.Entry(f3, textvariable=self.model_path, bg=C["border"], fg=C["text"],
                  relief="flat", font=("Helvetica", 9), insertbackground=C["text"]).pack(fill="x", ipady=3)
         self._btn(f3, "Browse Model...", self._browse_model).pack(fill="x", pady=(4,0))
 
-        # -> Batch Processing
-        self._section(sidebar, "Batch Cropping")
-        fb = tk.Frame(sidebar, bg=C["panel"])
-        fb.pack(fill="x", padx=12, pady=4)
+        # =========================================================
+        # TAB 2: ADVANCED OPS
+        # =========================================================
         
-        self.batch_in  = tk.StringVar()
-        self.batch_out = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "weld_results"))
-        tk.Label(fb, text="Input Folder:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
-        tk.Entry(fb, textvariable=self.batch_in, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
-        self._btn(fb, "Select Input...", lambda: self.batch_in.set(filedialog.askdirectory(title="Input Folder") or self.batch_in.get())).pack(fill="x", pady=(2,4))
+        # Current view saves
+        self._section(tab_adv, "Quick Export")
+        f_exp = tk.Frame(tab_adv, bg=C["panel"])
+        f_exp.pack(fill="x", padx=12, pady=4)
+        self._btn(f_exp, "💾 Save Raw Image", lambda: self._save_specific("raw")).pack(fill="x", pady=(0,4))
+        self._btn(f_exp, "💾 Save Mask Only (B&W)", lambda: self._save_specific("mask")).pack(fill="x")
         
-        tk.Label(fb, text="Output Folder:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
-        tk.Entry(fb, textvariable=self.batch_out, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
-        self._btn(fb, "Select Output...", lambda: self.batch_out.set(filedialog.askdirectory(title="Output Folder") or self.batch_out.get())).pack(fill="x", pady=(2,4))
+        # Dual Tag Setup
+        self._section(tab_adv, "Dual Tag Setup")
+        f_dual = tk.Frame(tab_adv, bg=C["panel"])
+        f_dual.pack(fill="x", padx=12, pady=4)
+        tk.Label(f_dual, text="Select 'Dual Tag Mask' View Mode in Main Tab to activate.", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8), wraplength=250, justify="left").pack(anchor="w", pady=(0, 6))
         
-        self._batch_btn = tk.Button(fb, text="🚀 Auto-Run Batch", command=self._run_batch_async,
+        tk.Label(f_dual, text="Tag 1 (Class Name):", bg=C["panel"], fg=C["text"], font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Entry(f_dual, textvariable=self.tag1, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 9)).pack(fill="x", ipady=3)
+        tk.Label(f_dual, text="Tag 1 Color (B,G,R):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Entry(f_dual, textvariable=self.tag1_color, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 9)).pack(fill="x", ipady=3, pady=(0,6))
+        
+        tk.Label(f_dual, text="Tag 2 (Class Name):", bg=C["panel"], fg=C["text"], font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Entry(f_dual, textvariable=self.tag2, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 9)).pack(fill="x", ipady=3)
+        tk.Label(f_dual, text="Tag 2 Color (B,G,R):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Entry(f_dual, textvariable=self.tag2_color, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 9)).pack(fill="x", ipady=3)
+        
+        self.tag1.trace_add("write", lambda *args: self._on_view_change())
+        self.tag2.trace_add("write", lambda *args: self._on_view_change())
+        self.tag1_color.trace_add("write", lambda *args: self._on_view_change())
+        self.tag2_color.trace_add("write", lambda *args: self._on_view_change())
+
+        # Batch Data Generation
+        self._section(tab_adv, "Advanced Batch Gen")
+        fb_adv = tk.Frame(tab_adv, bg=C["panel"])
+        fb_adv.pack(fill="x", padx=12, pady=4)
+        
+        self.adv_batch_in  = tk.StringVar()
+        self.adv_batch_out = tk.StringVar(value=os.path.join(os.path.expanduser("~"), "weld_batch_export"))
+        tk.Label(fb_adv, text="Input Folder:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Entry(fb_adv, textvariable=self.adv_batch_in, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
+        self._btn(fb_adv, "Select Input...", lambda: self.adv_batch_in.set(filedialog.askdirectory(title="Input") or self.adv_batch_in.get())).pack(fill="x", pady=(2,4))
+        
+        tk.Label(fb_adv, text="Output Folder:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
+        tk.Entry(fb_adv, textvariable=self.adv_batch_out, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
+        self._btn(fb_adv, "Select Output...", lambda: self.adv_batch_out.set(filedialog.askdirectory(title="Output") or self.adv_batch_out.get())).pack(fill="x", pady=(2,8))
+
+        tk.Label(fb_adv, text="Generation Task:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
+        self.batch_task_combo = ttk.Combobox(fb_adv, textvariable=self.batch_task, state="readonly", 
+                                             values=["Crop Objects (Tag 1 & 2)", "Export YOLO Annotations (.txt)", "Export Dual Color Masks", "Export Binary Masks"])
+        self.batch_task_combo.pack(fill="x", pady=(0, 8))
+
+        self._adv_batch_btn = tk.Button(fb_adv, text="🚀 Auto-Run Task", command=self._run_advanced_batch_async,
                                   bg=C["warn"], fg="#ffffff", font=("Segoe UI", 10, "bold"),
                                   relief="flat", pady=4, cursor="hand2")
-        self._batch_btn.pack(fill="x", pady=(8,0))
+        self._adv_batch_btn.pack(fill="x")
 
         # -> Space spacer
         tk.Frame(sidebar, bg=C["panel"]).pack(fill="both", expand=True)
 
-        # -> Save Result
+        # -> Save Result (Global)
         self._btn(sidebar, "💾 Save View As...", self._save_result, bg=C["green"], fg="#ffffff").pack(fill="x", padx=12, pady=12)
 
         # View Area (Right)
@@ -381,6 +445,45 @@ class App(tk.Tk):
             else:
                 self._current_view_rgb = img_copy
         
+        elif v == "Dual Tag Mask":
+            t1 = self.tag1.get().strip().lower()
+            t2 = self.tag2.get().strip().lower()
+            
+            def parse_c(color_str, def_bgr):
+                try:
+                    b, g, r = [int(x.strip()) for x in color_str.split(',')]
+                    return (b, g, r), np.array([r, g, b])
+                except:
+                    return def_bgr, np.array([def_bgr[2], def_bgr[1], def_bgr[0]])
+                    
+            c1_b, c1_r = parse_c(self.tag1_color.get(), (0, 255, 0))
+            c2_b, c2_r = parse_c(self.tag2_color.get(), (0, 100, 255))
+            
+            matched_count = 0
+            for i in range(len(boxes)):
+                conf = float(boxes.conf[i])
+                if conf < self.threshold.get(): continue
+                cls_name = names[int(boxes.cls[i])].lower()
+                
+                if t1 and t1 in cls_name:
+                    c_rgb, c_bgr = c1_r, c1_b
+                    matched_count += 1
+                elif t2 and t2 in cls_name:
+                    c_rgb, c_bgr = c2_r, c2_b
+                    matched_count += 1
+                else:
+                    continue
+                    
+                if masks is not None:
+                    mask = masks.data[i].cpu().numpy()
+                    mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
+                    img_copy[mask > 0.5] = c_rgb
+                else:
+                    x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), c_bgr, -1)
+            self._current_view_rgb = img_copy
+            indices = [0] * matched_count # Hack to update the stats text label accurately
+            
         # Stats update
         self._lbl_stats.config(text=f"Detected: {len(indices)} matches")
 
@@ -399,6 +502,36 @@ class App(tk.Tk):
             bgr = cv2.cvtColor(self._current_view_rgb, cv2.COLOR_RGB2BGR)
             cv2.imwrite(p, bgr)
             messagebox.showinfo("Saved", f"Currently viewed image saved to:\n{p}")
+
+    def _save_specific(self, mode):
+        if self._rgb is None:
+            messagebox.showinfo("Wait", "Run inference first.")
+            return
+            
+        p = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            initialfile=f"yolo_{mode}_{os.path.basename(self.image_path.get())}.png",
+            filetypes=[("PNG", "*.png"), ("JPG", "*.jpg")]
+        )
+        if not p: return
+        
+        if mode == "raw":
+            bgr = cv2.cvtColor(self._rgb, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(p, bgr)
+        elif mode == "mask":
+            mask_img = np.zeros(self._rgb.shape[:2], dtype=np.uint8)
+            if self._results and self._results[0].masks is not None:
+                masks = self._results[0].masks
+                indices = self._filter_results()
+                for i in indices:
+                    m = masks.data[i].cpu().numpy()
+                    m = cv2.resize(m, (mask_img.shape[1], mask_img.shape[0]))
+                    mask_img[m > 0.5] = 255
+            else:
+                messagebox.showwarning("Warning", "No segmentation masks found. A blank image was saved.")
+            cv2.imwrite(p, mask_img)
+            
+        messagebox.showinfo("Saved", f"{mode.capitalize()} image saved to:\n{p}")
 
     # ─── Async Logic ──────────────────────────────────────────────────────────
     def _load_model(self):
@@ -510,6 +643,139 @@ class App(tk.Tk):
             
             self.after(0, messagebox.showinfo, "Batch Complete", f"Processed {len(images)} images.\nSaved {count} cropped detections to:\n{batch_out_dir}")
             self.after(0, self._batch_btn.config, {"state": "normal", "text": "🚀 Auto-Run Batch"})
+            
+        threading.Thread(target=task, daemon=True).start()
+
+    def _run_advanced_batch_async(self):
+        in_d = self.adv_batch_in.get()
+        out_d = self.adv_batch_out.get()
+        if not in_d or not out_d or not os.path.exists(in_d):
+            messagebox.showwarning("Batch", "Select valid input and output folders first.")
+            return
+            
+        if not self.model:
+            messagebox.showwarning("Batch", "Load a model first.")
+            return
+
+        self._adv_batch_btn.config(state="disabled", text="Running Task...")
+        
+        task_type = self.batch_task.get()
+        t1 = self.tag1.get().strip().lower()
+        t2 = self.tag2.get().strip().lower()
+        thr = self.threshold.get()
+        
+        def parse_c(color_str, def_bgr):
+            try:
+                b, g, r = [int(x.strip()) for x in color_str.split(',')]
+                return (b, g, r), np.array([r, g, b])
+            except:
+                return def_bgr, np.array([def_bgr[2], def_bgr[1], def_bgr[0]])
+                
+        c1_b, c1_r = parse_c(self.tag1_color.get(), (0, 255, 0))
+        c2_b, c2_r = parse_c(self.tag2_color.get(), (0, 100, 255))
+        
+        def task():
+            images = [f for f in os.listdir(in_d) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+            if not images:
+                self.after(0, messagebox.showinfo, "Batch", "No images found in input folder.")
+                self.after(0, self._adv_batch_btn.config, {"state": "normal", "text": "🚀 Auto-Run Task"})
+                return
+
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            batch_out_dir = os.path.join(out_d, f"yolo_adv_{timestamp}")
+            os.makedirs(batch_out_dir, exist_ok=True)
+            
+            count = 0
+            for img_name in sorted(images):
+                try:
+                    p = os.path.join(in_d, img_name)
+                    bgr = cv2.imread(p)
+                    if bgr is None: continue
+                    img_h, img_w = bgr.shape[:2]
+                    
+                    results = self.model(bgr, conf=thr, verbose=False)
+                    res = results[0]
+                    boxes = res.boxes
+                    if not boxes: continue
+                    
+                    # Core task implementation
+                    if task_type == "Crop Objects (Tag 1 & 2)":
+                        for i in range(len(boxes)):
+                            cls_name = res.names[int(boxes.cls[i])].lower()
+                            if t1 and t1 in cls_name: pass
+                            elif t2 and t2 in cls_name: pass
+                            elif not t1 and not t2: pass # crop all if both blank
+                            else: continue
+                                
+                            x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                            pd = 10
+                            x1, y1 = max(0, x1-pd), max(0, y1-pd)
+                            x2, y2 = min(img_w, x2+pd), min(img_h, y2+pd)
+                            crop = bgr[y1:y2, x1:x2]
+                            
+                            count += 1
+                            out_name = f"{count:04d}_{img_name}"
+                            cv2.imwrite(os.path.join(batch_out_dir, out_name), crop)
+                            
+                    elif task_type == "Export YOLO Annotations (.txt)":
+                        base_name = os.path.splitext(img_name)[0]
+                        txt_path = os.path.join(batch_out_dir, f"{base_name}.txt")
+                        lines = []
+                        for i in range(len(boxes)):
+                            cls_name = res.names[int(boxes.cls[i])].lower()
+                            cls_id = -1
+                            if t1 and t1 in cls_name: cls_id = 0
+                            elif t2 and t2 in cls_name: cls_id = 1
+                            elif not t1 and not t2: cls_id = int(boxes.cls[i])
+                            
+                            if cls_id == -1: continue
+                            
+                            # YOLO format: class x_center y_center width height (normalized)
+                            x1, y1, x2, y2 = map(float, boxes.xyxy[i])
+                            xc = ((x1 + x2) / 2) / img_w
+                            yc = ((y1 + y2) / 2) / img_h
+                            w = (x2 - x1) / img_w
+                            h = (y2 - y1) / img_h
+                            lines.append(f"{cls_id} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
+                            
+                        if lines:
+                            with open(txt_path, "w") as f:
+                                f.write("\n".join(lines))
+                            count += 1
+                            
+                    elif task_type in ["Export Dual Color Masks", "Export Binary Masks"]:
+                        mask_img = np.zeros((img_h, img_w, 3), dtype=np.uint8)
+                        drawn = False
+                        for i in range(len(boxes)):
+                            cls_name = res.names[int(boxes.cls[i])].lower()
+                            if t1 and t1 in cls_name:
+                                c_bgr = c1_b if task_type == "Export Dual Color Masks" else (255, 255, 255)
+                            elif t2 and t2 in cls_name:
+                                c_bgr = c2_b if task_type == "Export Dual Color Masks" else (255, 255, 255)
+                            elif not t1 and not t2:
+                                c_bgr = (255, 255, 255)
+                            else:
+                                continue
+                                
+                            drawn = True
+                            if res.masks is not None:
+                                m = res.masks.data[i].cpu().numpy()
+                                m = cv2.resize(m, (img_w, img_h))
+                                mask_img[m > 0.5] = c_bgr
+                            else:
+                                x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                                cv2.rectangle(mask_img, (x1, y1), (x2, y2), c_bgr, -1)
+                        
+                        if drawn:
+                            count += 1
+                            out_name = f"{count:04d}_{img_name}"
+                            cv2.imwrite(os.path.join(batch_out_dir, out_name), mask_img)
+
+                except Exception as e:
+                    print(f"Error on {img_name}: {e}")
+            
+            self.after(0, messagebox.showinfo, "Batch Complete", f"Processed {len(images)} images.\nGenerated {count} files in:\n{batch_out_dir}")
+            self.after(0, self._adv_batch_btn.config, {"state": "normal", "text": "🚀 Auto-Run Task"})
             
         threading.Thread(target=task, daemon=True).start()
 
