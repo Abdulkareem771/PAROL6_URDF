@@ -16,6 +16,7 @@ A custom PyTorch/Ultralytics GUI for isolated testing of bounding box and segmen
 - **Target Tag Filter:** Only displays classes that match the given text string (e.g., typing "seam" hides all other detected objects).
 - **Dynamic Mask Coloring:** A text input box `Drawing Color (B,G,R)` lets users dynamically paint all bounding boxes and segmentation masks in any RGB color (e.g., `0,255,0` for Green) without re-running the model.
 - **Solid Color Mask & Batches:** Supports painting the object totally solid in bounding box or segmentation format, and allows batch-cropping objects across an entire directory.
+- **Segmentation Polygon Mode:** Synthesizes raw `masks.xyn` geometry into geometrically sharp, semi-transparent polygon overlays natively drawn with OpenCV, providing a cleaner visualization than rasterized masks.
 
 **Key Features (Advanced Ops Tab):**
 - **Dual Tag Filtering:** Track exactly 2 separate tags (`Tag 1` and `Tag 2`) simultaneously with customizable individual RGB colors. Requires switching the View Mode to `Dual Tag Mask`.
