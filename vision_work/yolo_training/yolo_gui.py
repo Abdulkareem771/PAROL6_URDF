@@ -257,7 +257,7 @@ class App(tk.Tk):
 
         tk.Label(fb_adv, text="Generation Task:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
         self.batch_task_combo = ttk.Combobox(fb_adv, textvariable=self.batch_task, state="readonly", 
-                                             values=["Crop Objects (Tag 1 & 2)", "Export YOLO Annotations (.txt)", "Export Dual Color Masks", "Export Binary Masks"])
+                                             values=["Crop Objects (Tag 1 & 2)", "Export YOLO BBox Annotations (.txt)", "Export YOLO Seg Annotations (.txt)", "Export Dual Color Masks", "Export Binary Masks"])
         self.batch_task_combo.pack(fill="x", pady=(0, 8))
 
         self._adv_batch_btn = tk.Button(fb_adv, text="🚀 Auto-Run Task", command=self._run_advanced_batch_async,
@@ -717,7 +717,7 @@ class App(tk.Tk):
                             out_name = f"{count:04d}_{img_name}"
                             cv2.imwrite(os.path.join(batch_out_dir, out_name), crop)
                             
-                    elif task_type == "Export YOLO Annotations (.txt)":
+                    elif task_type == "Export YOLO BBox Annotations (.txt)":
                         base_name = os.path.splitext(img_name)[0]
                         txt_path = os.path.join(batch_out_dir, f"{base_name}.txt")
                         lines = []
@@ -743,6 +743,30 @@ class App(tk.Tk):
                                 f.write("\n".join(lines))
                             count += 1
                             
+                    elif task_type == "Export YOLO Seg Annotations (.txt)":
+                        base_name = os.path.splitext(img_name)[0]
+                        txt_path = os.path.join(batch_out_dir, f"{base_name}.txt")
+                        lines = []
+                        if res.masks is not None and hasattr(res.masks, "xyn"):
+                            for i, polygon in enumerate(res.masks.xyn):
+                                cls_name = res.names[int(boxes.cls[i])].lower()
+                                cls_id = -1
+                                if t1 and t1 in cls_name: cls_id = 0
+                                elif t2 and t2 in cls_name: cls_id = 1
+                                elif not t1 and not t2: cls_id = int(boxes.cls[i])
+                                
+                                if cls_id == -1: continue
+                                if len(polygon) == 0: continue
+                                
+                                # YOLO segmentation format: class x1 y1 x2 y2 ... (normalized)
+                                poly_str = " ".join([f"{x:.6f} {y:.6f}" for x, y in polygon])
+                                lines.append(f"{cls_id} {poly_str}")
+                                
+                        if lines:
+                            with open(txt_path, "w") as f:
+                                f.write("\n".join(lines))
+                            count += 1
+
                     elif task_type in ["Export Dual Color Masks", "Export Binary Masks"]:
                         mask_img = np.zeros((img_h, img_w, 3), dtype=np.uint8)
                         drawn = False
