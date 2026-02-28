@@ -21,7 +21,8 @@ A custom PyTorch/Ultralytics GUI for isolated testing of bounding box and segmen
 - **Dual Tag Filtering:** Track exactly 2 separate tags (`Tag 1` and `Tag 2`) simultaneously with customizable individual RGB colors. Requires switching the View Mode to `Dual Tag Mask`.
 - **Advanced Batch Data Generation:** Allows using the loaded YOLO model to mass-generate synthetic data formats for other machine learning architectures:
     * `Crop Objects (Tag 1 & 2)`: Sequentially crops dual-classes across a folder.
-    * `Export YOLO Annotations (.txt)`: Auto-annotates an entire folder of raw images by producing standard YOLO-format normalized label text files (`class_id x_center y_center w h`).
+    * `Export YOLO BBox Annotations (.txt)`: Auto-annotates a folder producing standard YOLO bounding box labels (`class_id x_center y_center w h`).
+    * `Export YOLO Seg Annotations (.txt)`: Auto-annotates a folder producing standard YOLO segmentation polygon labels (`class_id x1 y1 x2 y2 ...`).
     * `Export Dual Color Masks`: Outputs completely solid RGB masks of your detected objects on a black background (ideal for UNet dataset generation).
     * `Export Binary Masks`: Same as above but outputs strict Black/White boolean masks.
 
