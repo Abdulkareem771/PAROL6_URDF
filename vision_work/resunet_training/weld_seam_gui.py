@@ -1,17 +1,17 @@
 """
-WeldVision GUI — Simple Colab-style output
-==========================================
-- OS native file picker (browse anywhere on the computer)
-- 3 panels: Original | Middle (interactive) | Skeleton
-- Bottom toggle: Overlay  Mask  Heat Map  Skeleton
-- Threshold slider (live update without re-running)
-- Save button exports 3-panel composite
+WeldVision GUI — V1 Sidebar Style with V5 Controls
+==================================================
+- Classic single-pane dark sidebar layout
+- Standard OS file dialog for picking an image
+- Dropdown/Radio for View Mode (Original | Overlay | Mask | Heat Map | Skeleton)
+- Live threshold slider updates mask without re-running
+- Saves the currently selected view exactly as seen on screen
 
 Run: python3 weld_seam_gui.py
 """
 import os, sys, threading, time
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 import cv2
 import numpy as np
@@ -107,297 +107,276 @@ def make_heatmap(prob, img_rgb):
     heat = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(img_rgb, 0.35, heat, 0.65, 0)
 
-def np_to_pil(arr): return Image.fromarray(arr.astype(np.uint8))
-
-# ─── GUI ──────────────────────────────────────────────────────────────────────
-VIEWS = ["Overlay", "Mask", "Heat Map", "Skeleton"]
-
-BG      = "#1c2128"
-PANEL   = "#22272e"
-BORDER  = "#444c56"
-WHITE   = "#cdd9e5"
-GREY    = "#768390"
-BLUE    = "#388bfd"
-GREEN   = "#3fb950"
-RED     = "#ff7b72"
-AMBER   = "#d29922"
+# ─── Colors ───────────────────────────────────────────────────────────────────
+C = {
+    "bg":     "#111318",
+    "panel":  "#1e2229",
+    "border": "#2d333b",
+    "accent": "#58a6ff",   # Blue
+    "green":  "#3fb950",
+    "warn":   "#d29922",
+    "err":    "#f85149",
+    "text":   "#c9d1d9",
+    "text2":  "#8b949e",
+}
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("WeldVision  ·  ResUNet Seam Detector")
-        self.geometry("1200x680")
-        self.minsize(900, 560)
-        self.configure(bg=BG)
+        self.title("WeldVision · Advanced Inference")
+        self.geometry("1100x700")
+        self.minsize(900, 600)
+        self.configure(bg=C["bg"])
 
         # State
-        self.device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model     = None
-        self._view     = tk.StringVar(value="Overlay")
-        self._thr      = tk.DoubleVar(value=0.5)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model  = None
+        self.image_path = tk.StringVar(value="")
+        self.model_path = tk.StringVar(value=self._default_model())
+        self.threshold  = tk.DoubleVar(value=0.5)
+        self.view_mode  = tk.StringVar(value="Overlay")
 
-        self._img_path = None
-        self._rgb      = None
-        self._mask     = None
-        self._prob     = None
-
-        # PIL image refs for the 3 panels
-        self._pil      = {"orig": None, "mid": None, "skel": None}
-        self._tkimg    = {}
+        # Data
+        self._rgb  = None
+        self._mask = None
+        self._prob = None
+        self._current_view_rgb = None
+        self._pil_img = None
+        self._tk_img  = None
 
         self._build()
         threading.Thread(target=self._load_model, daemon=True).start()
 
-    # ── Find default model path ───────────────────────────────────────────────
     def _default_model(self):
         here = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(here, "best_resunet_seam.pth")
 
-    # ── Build UI ──────────────────────────────────────────────────────────────
+    # ─── UI Building ──────────────────────────────────────────────────────────
     def _build(self):
-        # ── Top toolbar ───────────────────────────────────────────────────────
-        toolbar = tk.Frame(self, bg=PANEL, height=50)
-        toolbar.pack(fill="x")
-        toolbar.pack_propagate(False)
-        tk.Frame(toolbar, bg=BLUE, width=4).pack(side="left", fill="y")
-        tk.Label(toolbar, text="  🔬 WeldVision", font=("Segoe UI", 13, "bold"),
-                 bg=PANEL, fg=WHITE).pack(side="left", padx=6)
+        # Top Header
+        hdr = tk.Frame(self, bg=C["panel"], height=48)
+        hdr.pack(fill="x"); hdr.pack_propagate(False)
+        tk.Label(hdr, text=" 🔬 WeldVision", font=("Segoe UI", 14, "bold"),
+                 bg=C["panel"], fg=C["text"]).pack(side="left", padx=10)
+        self._model_status = tk.Label(hdr, text="Loading model...", font=("Segoe UI", 10),
+                                      bg=C["panel"], fg=C["warn"])
+        self._model_status.pack(side="right", padx=15)
+        tk.Label(hdr, text=f"Device: {self.device.type.upper()}", font=("Segoe UI", 10),
+                 bg=C["panel"], fg=C["green"]).pack(side="right", padx=10)
 
-        # Buttons
-        for text, cmd, color in [
-            ("📂  Open Image",  self._open,   BLUE),
-            ("▶   Run",         self._run,    GREEN),
-            ("💾  Save Result",  self._save,   "#444c56"),
-        ]:
-            b = tk.Button(toolbar, text=text, command=cmd, bg=color, fg=WHITE,
-                          relief="flat", font=("Segoe UI", 10, "bold"),
-                          padx=14, pady=6, cursor="hand2", borderwidth=0,
-                          activebackground="#ffffff22", activeforeground=WHITE)
-            b.pack(side="left", padx=5, pady=8)
+        # Main Split
+        main = tk.Frame(self, bg=C["bg"])
+        main.pack(fill="both", expand=True, padx=4, pady=4)
 
-        # Status labels (right side)
-        self._status_lbl = tk.Label(toolbar, text="Open an image to begin",
-                                    font=("Segoe UI", 9), bg=PANEL, fg=GREY)
-        self._status_lbl.pack(side="right", padx=16)
-        self._model_lbl = tk.Label(toolbar, text=f"⏳ Loading…  {self.device.type.upper()}",
-                                   font=("Segoe UI", 9), bg=PANEL, fg=AMBER)
-        self._model_lbl.pack(side="right", padx=8)
+        # Sidebar (Left)
+        sidebar = tk.Frame(main, bg=C["panel"], width=280)
+        sidebar.pack(side="left", fill="y", padx=(0, 4))
+        sidebar.pack_propagate(False)
 
-        # ── 3-Panel viewer ────────────────────────────────────────────────────
-        viewer = tk.Frame(self, bg=BG)
-        viewer.pack(fill="both", expand=True, padx=10, pady=6)
+        # -> Test Image
+        self._section(sidebar, "Test Image")
+        f1 = tk.Frame(sidebar, bg=C["panel"])
+        f1.pack(fill="x", padx=12, pady=4)
+        tk.Entry(f1, textvariable=self.image_path, bg=C["border"], fg=C["text"],
+                 relief="flat", font=("Helvetica", 9), insertbackground=C["text"]).pack(fill="x", ipady=3)
+        self._btn(f1, "📂 Browse Image...", self._browse_image).pack(fill="x", pady=(4, 0))
 
-        panel_titles = [("Original", "orig"), ("Detection View", "mid"),
-                        ("Skeleton / Centerline", "skel")]
-        self._canvases = {}
-        for title, key in panel_titles:
-            col = tk.Frame(viewer, bg=PANEL, bd=0)
-            col.pack(side="left", fill="both", expand=True, padx=4)
-            # Header
-            hdr = tk.Frame(col, bg="#2d333b", height=30)
-            hdr.pack(fill="x"); hdr.pack_propagate(False)
-            tk.Label(hdr, text=title, font=("Segoe UI", 10, "bold"),
-                     bg="#2d333b", fg=WHITE).pack(side="left", padx=10, pady=5)
-            # Canvas
-            c = tk.Canvas(col, bg=PANEL, highlightthickness=0)
-            c.pack(fill="both", expand=True)
-            c.create_text(10, 20, anchor="nw", text="—", fill=GREY,
-                          font=("Segoe UI", 10), tags="placeholder")
-            self._canvases[key] = c
-            c.bind("<Configure>", lambda e, k=key: self._redraw(k))
+        # -> Inference Action
+        self._section(sidebar, "Inference")
+        self._run_btn = tk.Button(sidebar, text="▶ Run Detection", command=self._run_async,
+                                  bg=C["accent"], fg="#ffffff", font=("Segoe UI", 11, "bold"),
+                                  relief="flat", pady=6, cursor="hand2")
+        self._run_btn.pack(fill="x", padx=12, pady=8)
 
-        # ── Bottom control bar ────────────────────────────────────────────────
-        bar = tk.Frame(self, bg=PANEL, height=52)
-        bar.pack(fill="x", side="bottom")
-        bar.pack_propagate(False)
-        tk.Frame(bar, bg=BORDER, height=1).pack(fill="x")
+        # -> Controls
+        self._section(sidebar, "Threshold & View")
+        f2 = tk.Frame(sidebar, bg=C["panel"])
+        f2.pack(fill="x", padx=12, pady=2)
+        tk.Label(f2, text="Mask Threshold:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w")
+        self._thr_lbl = tk.Label(f2, text="str(0.50)", bg=C["panel"], fg=C["accent"], font=("Segoe UI", 10, "bold"))
+        self._thr_lbl.pack(anchor="e", pady=(0, 2))
+        self._thr_lbl.config(text="0.50")
+        
+        tk.Scale(f2, from_=0.01, to=0.99, resolution=0.01, variable=self.threshold,
+                 orient="horizontal", bg=C["panel"], fg=C["text"], troughcolor=C["border"],
+                 highlightthickness=0, showvalue=False, command=self._on_thr_change).pack(fill="x")
 
-        inner = tk.Frame(bar, bg=PANEL)
-        inner.pack(side="left", padx=14, pady=8)
+        # View Radios
+        tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
+        for mode in ["Original", "Overlay", "Mask", "Heat Map", "Skeleton"]:
+            rb = tk.Radiobutton(f2, text=mode, variable=self.view_mode, value=mode,
+                                bg=C["panel"], fg=C["text"], selectcolor=C["border"],
+                                activebackground=C["panel"], activeforeground=C["text"],
+                                font=("Segoe UI", 10), command=self._on_view_change)
+            rb.pack(anchor="w", padx=6)
 
-        tk.Label(inner, text="Middle panel:", font=("Segoe UI", 9),
-                 bg=PANEL, fg=GREY).pack(side="left", padx=(0, 8))
+        # -> Model Path
+        self._section(sidebar, "Model Weights")
+        f3 = tk.Frame(sidebar, bg=C["panel"])
+        f3.pack(fill="x", padx=12, pady=4)
+        tk.Entry(f3, textvariable=self.model_path, bg=C["border"], fg=C["text"],
+                 relief="flat", font=("Helvetica", 9), insertbackground=C["text"]).pack(fill="x", ipady=3)
+        self._btn(f3, "Browse Model...", self._browse_model).pack(fill="x", pady=(4,0))
 
-        self._view_btns = {}
-        for v in VIEWS:
-            b = tk.Button(inner, text=v, command=lambda mv=v: self._set_view(mv),
-                          bg=BORDER, fg=WHITE, relief="flat", font=("Segoe UI", 9),
-                          padx=12, pady=4, cursor="hand2", borderwidth=0)
-            b.pack(side="left", padx=3)
-            self._view_btns[v] = b
-        self._set_view("Overlay")
+        # -> Space spacer
+        tk.Frame(sidebar, bg=C["panel"]).pack(fill="both", expand=True)
 
-        # Threshold slider
-        tk.Label(inner, text="  Threshold:", font=("Segoe UI", 9),
-                 bg=PANEL, fg=GREY).pack(side="left", padx=(16, 4))
-        self._thr_lbl = tk.Label(inner, text="0.50", font=("Segoe UI", 9, "bold"),
-                                  bg=PANEL, fg=BLUE)
-        self._thr_lbl.pack(side="left", padx=(0, 4))
-        tk.Scale(inner, from_=0.01, to=0.99, resolution=0.01, variable=self._thr,
-                 orient="horizontal", length=140, bg=PANEL, fg=WHITE, troughcolor=BORDER,
-                 sliderrelief="flat", activebackground=BLUE, highlightthickness=0,
-                 showvalue=False, command=self._on_thr).pack(side="left")
+        # -> Save Result
+        self._btn(sidebar, "💾 Save View As...", self._save_result, bg=C["green"], fg="#ffffff").pack(fill="x", padx=12, pady=12)
 
-        # Stats
-        self._stats_lbl = tk.Label(bar, text="", font=("Segoe UI", 9), bg=PANEL, fg=GREY)
-        self._stats_lbl.pack(side="right", padx=16)
+        # View Area (Right)
+        view_frame = tk.Frame(main, bg=C["border"])
+        view_frame.pack(side="left", fill="both", expand=True)
 
-        # Keyboard shortcuts
-        self.bind("<Return>", lambda e: self._run())
-        self.bind("o",        lambda e: self._open())
-        self.bind("s",        lambda e: self._save())
-        self.bind("t",        lambda e: self._cycle_view())
+        # Info bar above canvas
+        self._info_bar = tk.Frame(view_frame, bg=C["border"], height=30)
+        self._info_bar.pack(fill="x")
+        self._info_bar.pack_propagate(False)
+        self._lbl_title = tk.Label(self._info_bar, text="No Image", bg=C["border"], fg=C["text"], font=("Segoe UI", 10, "bold"))
+        self._lbl_title.pack(side="left", padx=10)
+        self._lbl_stats = tk.Label(self._info_bar, text="", bg=C["border"], fg=C["text2"], font=("Segoe UI", 9))
+        self._lbl_stats.pack(side="right", padx=10)
 
-    # ── Open image ────────────────────────────────────────────────────────────
-    def _open(self):
-        path = filedialog.askopenfilename(
-            title="Select a test image",
-            filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"),
-                       ("All files", "*.*")])
-        if path:
-            self._img_path = path
-            self._status(f"Loaded: {os.path.basename(path)}")
-            if self.model:
-                self._run()
+        # Canvas
+        self.canvas = tk.Canvas(view_frame, bg=C["bg"], highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+        self.canvas.bind("<Configure>", self._on_resize)
+        
+        self.bind("<Return>", lambda e: self._run_async())
 
-    # ── Model loading ─────────────────────────────────────────────────────────
-    def _load_model(self):
-        path = self._default_model()
-        if not os.path.exists(path):
-            self.after(0, lambda: self._model_lbl.config(
-                text="✘ Model not found — place best_resunet_seam.pth here", fg=RED))
+
+    def _section(self, parent, text):
+        f = tk.Frame(parent, bg=C["panel"])
+        f.pack(fill="x", padx=8, pady=(15, 2))
+        tk.Label(f, text=text.upper(), font=("Segoe UI", 9, "bold"),
+                 fg=C["text2"], bg=C["panel"]).pack(side="left")
+
+    def _btn(self, parent, text, cmd, bg=C["border"], fg=C["text"]):
+        b = tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
+                      relief="flat", font=("Segoe UI", 10), cursor="hand2", pady=4, borderwidth=0)
+        return b
+
+    # ─── Callbacks ────────────────────────────────────────────────────────────
+    def _browse_image(self):
+        p = filedialog.askopenfilename(title="Select test image",
+                                       filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.tif *.webp"), ("All", "*.*")])
+        if p:
+            self.image_path.set(p)
+            self._lbl_title.config(text=f"{os.path.basename(p)}")
+            if self.model: self._run_async()
+
+    def _browse_model(self):
+        p = filedialog.askopenfilename(title="Select model", filetypes=[("PTH", "*.pth"), ("All", "*.*")])
+        if p:
+            self.model_path.set(p)
+            threading.Thread(target=self._load_model, daemon=True).start()
+
+    def _on_thr_change(self, val):
+        self._thr_lbl.config(text=f"{float(val):.2f}")
+        val_f = float(val)
+        if self._prob is not None and self._rgb is not None:
+            # Recompute mask and view instantly
+            self._mask = (self._prob > val_f).astype(np.uint8)
+            self._on_view_change()
+
+    def _on_view_change(self):
+        if self._rgb is None: return
+        v = self.view_mode.get()
+        if v == "Original":
+            self._current_view_rgb = self._rgb
+        elif v == "Overlay":
+            self._current_view_rgb = make_overlay(self._rgb, self._mask)
+        elif v == "Mask":
+            self._current_view_rgb = make_mask(self._mask)
+        elif v == "Heat Map":
+            self._current_view_rgb = make_heatmap(self._prob, self._rgb)
+        elif v == "Skeleton":
+            self._current_view_rgb = make_skeleton(self._rgb, self._mask)
+        
+        # Stats update
+        px = int(self._mask.sum())
+        h, w = self._mask.shape
+        self._lbl_stats.config(text=f"Mode: {v}  |  Seam: {px:,} px  |  Coverage: {100*px/(h*w):.3f}%")
+
+        # Redraw
+        self._pil_img = Image.fromarray(self._current_view_rgb)
+        self._redraw()
+
+    def _save_result(self):
+        if self._current_view_rgb is None:
+            messagebox.showinfo("Wait", "Run inference first.")
             return
+        p = filedialog.asksaveasfilename(defaultextension=".png",
+                                         initialfile=f"result_{os.path.basename(self.image_path.get())}.png",
+                                         filetypes=[("PNG", "*.png"), ("JPG", "*.jpg")])
+        if p:
+            bgr = cv2.cvtColor(self._current_view_rgb, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(p, bgr)
+            messagebox.showinfo("Saved", f"Currently viewed image saved to:\n{p}")
+
+    # ─── Async Logic ──────────────────────────────────────────────────────────
+    def _load_model(self):
+        p = self.model_path.get()
+        if not os.path.exists(p):
+            self.after(0, lambda: self._model_status.config(text="Model File Missing", fg=C["err"]))
+            return
+        self.after(0, lambda: self._model_status.config(text="Loading Model...", fg=C["warn"]))
         try:
             m = ResUNet().to(self.device)
-            m.load_state_dict(torch.load(path, map_location=self.device))
+            m.load_state_dict(torch.load(p, map_location=self.device))
             m.eval()
             self.model = m
-            n = sum(p.numel() for p in m.parameters() if p.requires_grad)
-            self.after(0, lambda: self._model_lbl.config(
-                text=f"✔ Model ready · {n/1e6:.1f}M params · {self.device.type.upper()}",
-                fg=GREEN))
-        except Exception as ex:
-            self.after(0, lambda: self._model_lbl.config(text=f"✘ {ex}", fg=RED))
+            self.after(0, lambda: self._model_status.config(text="Model Ready", fg=C["green"]))
+        except Exception as e:
+            self.after(0, lambda: self._model_status.config(text=f"Error: {e}", fg=C["err"]))
 
-    # ── Inference ─────────────────────────────────────────────────────────────
-    def _run(self):
-        if not self.model:
-            messagebox.showwarning("Not ready", "Model is still loading, please wait.")
+    def _run_async(self):
+        img_path = self.image_path.get()
+        if not self.model or not img_path or not os.path.exists(img_path):
+            messagebox.showwarning("Incomplete", "Make sure a test image is selected and the model is loaded.")
             return
-        if not self._img_path or not os.path.exists(self._img_path):
-            messagebox.showwarning("No image", "Open an image first (📂 button or press O).")
+        
+        self._run_btn.config(state="disabled", text="Running...")
+        self._lbl_title.config(text=f"Processing {os.path.basename(img_path)}...")
+        
+        def task():
+            t0 = time.time()
+            try:
+                bgr = cv2.imread(img_path)
+                if bgr is None: raise ValueError("Invalid image")
+                
+                rgb, mask, prob = run_inference(bgr, self.model, self.device, self.threshold.get())
+                self._rgb, self._mask, self._prob = rgb, mask, prob
+                
+                ms = (time.time() - t0) * 1000
+                self.after(0, self._lbl_title.config, {"text": f"{os.path.basename(img_path)} ({ms:.1f}ms)"})
+                self.after(0, self._on_view_change)
+            except Exception as e:
+                self.after(0, messagebox.showerror, "Error", str(e))
+                self.after(0, self._lbl_title.config, {"text": "Error running inference"})
+            finally:
+                self.after(0, self._run_btn.config, {"state": "normal", "text": "▶ Run Detection"})
+        
+        threading.Thread(target=task, daemon=True).start()
+
+    # ─── Draw ─────────────────────────────────────────────────────────────────
+    def _redraw(self):
+        if self._pil_img is None:
             return
-        self._status("⏳ Running inference…")
-        threading.Thread(target=self._infer, daemon=True).start()
-
-    def _infer(self):
-        t0 = time.time()
-        try:
-            bgr = cv2.imread(self._img_path)
-            if bgr is None:
-                raise ValueError("Cannot read this file as an image.")
-            rgb, mask, prob = run_inference(bgr, self.model, self.device, self._thr.get())
-            self._rgb = rgb; self._mask = mask; self._prob = prob
-            ms = (time.time() - t0) * 1000
-            self.after(0, self._display, ms)
-        except Exception as ex:
-            self.after(0, self._status, f"✘ Error: {ex}")
-
-    def _display(self, ms):
-        rgb = self._rgb; mask = self._mask; prob = self._prob
-        h, w = mask.shape
-        px   = int(mask.sum())
-
-        self._pil["orig"] = np_to_pil(rgb)
-        self._pil["mid"]  = np_to_pil(self._build_mid(rgb, mask, prob))
-        self._pil["skel"] = np_to_pil(make_skeleton(rgb, mask))
-
-        for k in ("orig", "mid", "skel"):
-            self._redraw(k)
-
-        try:
-            from skimage.morphology import skeletonize
-            length = int(skeletonize(mask).sum())
-        except Exception:
-            length = px
-
-        self._stats_lbl.config(
-            text=f"  {os.path.basename(self._img_path)}   |"
-                 f"  Seam: {px:,} px  "
-                 f"  Coverage: {100*px/(h*w):.3f}%  "
-                 f"  Length: ~{length:,} px  "
-                 f"  Time: {ms:.0f} ms   Threshold: {self._thr.get():.2f}  ")
-        self._status(f"✔ Done — {px:,} seam pixels detected in {ms:.0f} ms")
-
-    # ── View controls ─────────────────────────────────────────────────────────
-    def _build_mid(self, rgb, mask, prob):
-        v = self._view.get()
-        if   v == "Overlay":  return make_overlay(rgb, mask)
-        elif v == "Mask":     return make_mask(mask)
-        elif v == "Heat Map": return make_heatmap(prob, rgb)
-        elif v == "Skeleton": return make_skeleton(rgb, mask)
-        return make_overlay(rgb, mask)
-
-    def _set_view(self, mode):
-        self._view.set(mode)
-        for v, b in self._view_btns.items():
-            b.config(bg=BLUE if v == mode else BORDER,
-                     fg=WHITE)
-        if self._rgb is not None:
-            self._pil["mid"] = np_to_pil(
-                self._build_mid(self._rgb, self._mask, self._prob))
-            self._redraw("mid")
-
-    def _cycle_view(self):
-        i = VIEWS.index(self._view.get())
-        self._set_view(VIEWS[(i + 1) % len(VIEWS)])
-
-    def _on_thr(self, val):
-        self._thr_lbl.config(text=f"{float(val):.2f}")
-        if self._prob is not None:
-            # Recompute mask from probability without re-running the model
-            self._mask = (self._prob > float(val)).astype(np.uint8)
-            self._pil["mid"]  = np_to_pil(self._build_mid(self._rgb, self._mask, self._prob))
-            self._pil["skel"] = np_to_pil(make_skeleton(self._rgb, self._mask))
-            self._redraw("mid")
-            self._redraw("skel")
-
-    # ── Image rendering ───────────────────────────────────────────────────────
-    def _redraw(self, key):
-        pil = self._pil.get(key)
-        if pil is None:
+        cw = self.canvas.winfo_width()
+        ch = self.canvas.winfo_height()
+        if cw < 10 or ch < 10:
             return
-        c  = self._canvases[key]
-        cw = c.winfo_width()  or 380
-        ch = c.winfo_height() or 400
-        ratio  = min(cw / pil.width, ch / pil.height)
-        nw, nh = int(pil.width * ratio), int(pil.height * ratio)
-        resized = pil.resize((nw, nh), Image.LANCZOS)
-        ref = ImageTk.PhotoImage(resized)
-        self._tkimg[key] = ref          # keep alive
-        c.delete("all")
-        c.create_image(cw // 2, ch // 2, anchor="center", image=ref)
+        ratio = min(cw / self._pil_img.width, ch / self._pil_img.height)
+        nw, nh = int(self._pil_img.width * ratio), int(self._pil_img.height * ratio)
+        if nw > 0 and nh > 0:
+            resized = self._pil_img.resize((nw, nh), Image.LANCZOS)
+            self._tk_img = ImageTk.PhotoImage(resized)
+            self.canvas.delete("all")
+            self.canvas.create_image(cw // 2, ch // 2, anchor="center", image=self._tk_img)
 
-    # ── Save ──────────────────────────────────────────────────────────────────
-    def _save(self):
-        if self._rgb is None:
-            messagebox.showinfo("Nothing to save", "Run inference on an image first.")
-            return
-        path = filedialog.asksaveasfilename(
-            defaultextension=".png",
-            initialfile=f"seam_{os.path.splitext(os.path.basename(self._img_path))[0]}.png",
-            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg")])
-        if not path:
-            return
-        ov = make_overlay(self._rgb, self._mask)
-        sk = make_skeleton(self._rgb, self._mask)
-        composite = np.concatenate([self._rgb, ov, sk], axis=1)
-        cv2.imwrite(path, cv2.cvtColor(composite, cv2.COLOR_RGB2BGR))
-        messagebox.showinfo("Saved", f"3-panel composite saved to:\n{path}")
-
-    # ── Status bar ────────────────────────────────────────────────────────────
-    def _status(self, msg):
-        self._status_lbl.config(text=msg)
+    def _on_resize(self, event):
+        self._redraw()
 
 
 if __name__ == "__main__":
