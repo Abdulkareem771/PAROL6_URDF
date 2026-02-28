@@ -193,7 +193,7 @@ class App(tk.Tk):
 
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
-        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Solid Color Mask", "Cropped View", "Dual Tag Mask"]:
+        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Solid Color Mask", "Segmentation Polygon", "Cropped View", "Dual Tag Mask"]:
             rb = tk.Radiobutton(f2, text=mode, variable=self.view_mode, value=mode,
                                 bg=C["panel"], fg=C["text"], selectcolor=C["border"],
                                 activebackground=C["panel"], activeforeground=C["text"],
@@ -430,6 +430,35 @@ class App(tk.Tk):
                 for i in indices:
                     x1, y1, x2, y2 = map(int, boxes.xyxy[i])
                     cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), -1)
+            self._current_view_rgb = img_copy
+        elif v == "Segmentation Polygon":
+            img_h, img_w = img_copy.shape[:2]
+            if masks is not None and hasattr(masks, "xyn"):
+                # Draw true geometric polygons instead of rasterized pixel masks
+                for i in indices:
+                    polygon_norm = masks.xyn[i]
+                    if len(polygon_norm) == 0: continue
+                    # Denormalize to pixel coordinates
+                    pts = (polygon_norm * np.array([img_w, img_h])).astype(np.int32)
+                    pts = pts.reshape((-1, 1, 2))
+                    
+                    # Draw a semi-transparent fill and a solid 2px outline
+                    overlay = img_copy.copy()
+                    cv2.fillPoly(overlay, [pts], color_rgb.tolist())
+                    cv2.addWeighted(overlay, 0.4, img_copy, 0.6, 0, img_copy) # 40% opacity fill
+                    cv2.polylines(img_copy, [pts], isClosed=True, color=color_rgb.tolist(), thickness=2)
+                    
+                    # Add standard bounding box labels for clarity
+                    x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                    conf = float(boxes.conf[i])
+                    cls = int(boxes.cls[i])
+                    label = f"{names[cls]} {conf:.2f}"
+                    cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            else:
+                # Fallback to standard bounding boxes if the model doesn't have polygons
+                for i in indices:
+                    x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
             self._current_view_rgb = img_copy
         elif v == "Cropped View":
             if len(indices) > 0:
