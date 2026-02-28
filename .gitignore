@@ -64,7 +64,7 @@ venvs/vision_venvs/ultralytics_cpu_env/lib/*
 parol6-ultimate-20260124.tar.gz
 
 
-venvs/*
+#venvs/*
 legacy code open loop/*
 logs/launchers/*
 

@@ -1,0 +1,108 @@
+import cv2
+import numpy as np
+import os
+import glob
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+current_dir = Path(__file__)
+project_dir = current_dir.parent.parent
+
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image.jpg"
+
+IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
+
+def segment_blocks(image_path):
+    # 1. Read the image
+    img = cv2.imread(image_path)
+    if img is None:
+        print(f"Could not read image: {image_path}")
+        return None, None
+
+    # Convert BGR to RGB for correct display in Matplotlib
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # 2. Convert BGR (OpenCV default) to HSV
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    # 3. Define color ranges in HSV
+    # Note: HSV ranges in OpenCV are H: 0-180, S: 0-255, V: 0-255
+    
+    # Green range
+    lower_green = np.array([35, 50, 50])
+    upper_green = np.array([85, 255, 255])
+    
+    # Red range (Red wraps around 0 and 180, so we combine two ranges)
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
+
+    # 4. Create Masks (G and R matrices)
+    # G matrix: 255 for green pixels, 0 otherwise
+    G = cv2.inRange(hsv, lower_green, upper_green)
+
+    # R matrix: combine both ends of the red spectrum
+    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    R = cv2.bitwise_or(mask_red1, mask_red2)
+
+    # Optional: Clean up noise with morphological operations
+    kernel = np.ones((5, 5), np.uint8)
+    G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
+    R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
+
+
+    # 5. GUI Display Section
+    plt.figure(figsize=(15, 5))
+
+    # Subplot 1: Original Image
+    plt.subplot(1, 3, 1)
+    plt.title("Original Image")
+    plt.imshow(img_rgb)
+    plt.axis('off')
+
+    # Subplot 2: G Matrix (Green Mask)
+    plt.subplot(1, 3, 2)
+    plt.title("G Matrix (Green Object)")
+    plt.imshow(G, cmap='gray')
+    plt.axis('off')
+
+    # Subplot 3: R Matrix (Red Object)
+    plt.subplot(1, 3, 3)
+    plt.title("R Matrix (Red Object)")
+    plt.imshow(R, cmap='gray')
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    return G, R
+
+def process_folder(folder_path, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Supported extensions
+    extensions = ['*.jpg', '*.jpeg', '*.png']
+    image_files = []
+    for ext in extensions:
+        image_files.extend(glob.glob(os.path.join(folder_path, ext)))
+
+    for img_path in image_files:
+        filename = os.path.basename(img_path).split('.')[0]
+        G, R = segment_blocks(img_path)
+
+        if G is not None:
+            # Save the masks as images (or keep as matrices for further ops)
+            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_G.png"), G)
+            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_R.png"), R)
+            print(f"Processed: {filename}")
+
+
+# --- Execution ---
+# Replace 'image.jpg' with your file or use the folder function
+
+g_matrix, r_matrix = segment_blocks(SINGLE_IMAGE)
+
+#process_folder('input_folder_path', 'output_folder_path')
