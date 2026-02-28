@@ -90,10 +90,38 @@ class App(tk.Tk):
         main = tk.Frame(self, bg=C["bg"])
         main.pack(fill="both", expand=True, padx=4, pady=4)
 
-        # Sidebar (Left)
-        sidebar = tk.Frame(main, bg=C["panel"], width=280)
-        sidebar.pack(side="left", fill="y", padx=(0, 4))
-        sidebar.pack_propagate(False)
+        # Sidebar (Left) scrollable container
+        sidebar_container = tk.Frame(main, bg=C["panel"], width=300)
+        sidebar_container.pack(side="left", fill="y", padx=(0, 4))
+        sidebar_container.pack_propagate(False)
+
+        self.sidebar_canvas = tk.Canvas(sidebar_container, bg=C["panel"], highlightthickness=0)
+        scrollbar = tk.Scrollbar(sidebar_container, orient="vertical", command=self.sidebar_canvas.yview)
+        
+        sidebar = tk.Frame(self.sidebar_canvas, bg=C["panel"])
+        
+        sidebar.bind(
+            "<Configure>",
+            lambda e: self.sidebar_canvas.configure(
+                scrollregion=self.sidebar_canvas.bbox("all")
+            )
+        )
+
+        self.sidebar_canvas.create_window((0, 0), window=sidebar, anchor="nw", width=285)
+        self.sidebar_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        self.sidebar_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Mousewheel scrolling bindings (Windows, Mac, and Linux)
+        def _on_mousewheel(event):
+            try:
+                if event.delta:
+                    self.sidebar_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            except: pass
+        self.sidebar_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.sidebar_canvas.bind_all("<Button-4>", lambda e: self.sidebar_canvas.yview_scroll(-1, "units"))
+        self.sidebar_canvas.bind_all("<Button-5>", lambda e: self.sidebar_canvas.yview_scroll(1, "units"))
 
         # -> Test Image
         self._section(sidebar, "Test Image")
@@ -138,7 +166,7 @@ class App(tk.Tk):
 
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
-        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Cropped View"]:
+        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Solid Color Mask", "Cropped View"]:
             rb = tk.Radiobutton(f2, text=mode, variable=self.view_mode, value=mode,
                                 bg=C["panel"], fg=C["text"], selectcolor=C["border"],
                                 activebackground=C["panel"], activeforeground=C["text"],
@@ -327,6 +355,17 @@ class App(tk.Tk):
                 x1, y1, x2, y2 = map(int, boxes.xyxy[i])
                 cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
                 
+            self._current_view_rgb = img_copy
+        elif v == "Solid Color Mask":
+            if masks is not None:
+                for i in indices:
+                    mask = masks.data[i].cpu().numpy()
+                    mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
+                    img_copy[mask > 0.5] = color_rgb
+            else:
+                for i in indices:
+                    x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), -1)
             self._current_view_rgb = img_copy
         elif v == "Cropped View":
             if len(indices) > 0:
