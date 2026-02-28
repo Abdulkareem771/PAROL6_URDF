@@ -269,21 +269,34 @@ class App(tk.Tk):
 
     def _paste_image(self):
         try:
-            img = ImageGrab.grabclipboard()
-            if img is None:
-                messagebox.showinfo("Clipboard", "No image found in clipboard.")
-                return
-            
-            # Save to temporary file
+            import subprocess
             os.makedirs("/tmp/weldvision", exist_ok=True)
             tmp_path = "/tmp/weldvision/pasted_image.png"
-            img.save(tmp_path)
+            
+            # Use xclip directly to pull image/png from the X11 clipboard
+            proc = subprocess.run(
+                ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
+                capture_output=True
+            )
+            
+            if proc.returncode != 0 or not proc.stdout:
+                messagebox.showinfo("Clipboard", "No image found in clipboard.")
+                return
+                
+            with open(tmp_path, "wb") as f:
+                f.write(proc.stdout)
+            
+            # Verify and update
+            Image.open(tmp_path).verify()
             
             self.image_path.set(tmp_path)
             self._lbl_title.config(text="Pasted Image")
             if self.model: self._run_async()
+            
+        except FileNotFoundError:
+            messagebox.showerror("Dependency Missing", "xclip is not installed.")
         except Exception as e:
-            messagebox.showerror("Paste Error", f"Could not paste image: {e}")
+            messagebox.showerror("Paste Error", f"Clipboard content is not a valid image.\n\n{e}")
 
     def _browse_model(self):
         p = filedialog.askopenfilename(title="Select model", filetypes=[("PTH", "*.pth"), ("All", "*.*")])

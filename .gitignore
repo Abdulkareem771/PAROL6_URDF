@@ -77,4 +77,4 @@ logs/launchers/*
 
 # Training output images / artifacts that are regenerated each run
 vision_work/resunet_training/test_results/
-vision_work/resunet_training/tests/*
+vision_work/resunet_training/Tests/
