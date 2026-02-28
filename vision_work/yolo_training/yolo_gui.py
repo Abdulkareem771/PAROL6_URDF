@@ -130,6 +130,12 @@ class App(tk.Tk):
                  orient="horizontal", bg=C["panel"], fg=C["text"], troughcolor=C["border"],
                  highlightthickness=0, showvalue=False, command=self._on_thr_change).pack(fill="x")
 
+        tk.Label(f2, text="Drawing Color (B,G,R):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(6,0))
+        self.draw_color = tk.StringVar(value="255,50,50") # Default BGR red-ish
+        tk.Entry(f2, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
+                 relief="flat", font=("Helvetica", 10)).pack(fill="x", ipady=3, pady=(0, 6))
+        self.draw_color.trace_add("write", lambda *args: self._on_view_change())
+
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
         for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Cropped View"]:
@@ -283,6 +289,16 @@ class App(tk.Tk):
         boxes = self._results[0].boxes
         masks = self._results[0].masks
         
+        # Parse selected BGR color
+        try:
+            c_str = self.draw_color.get().strip()
+            b, g, r = [int(x.strip()) for x in c_str.split(',')]
+            color_bgr = (b, g, r)               # For OpenCV shapes
+            color_rgb = np.array([r, g, b])     # For numpy mask operations (since self._rgb is RGB)
+        except:
+            color_bgr = (255, 50, 50)
+            color_rgb = np.array([255, 50, 50])
+        
         img_copy = self._rgb.copy()
         
         if v == "Original":
@@ -293,7 +309,7 @@ class App(tk.Tk):
                 conf = float(boxes.conf[i])
                 cls = int(boxes.cls[i])
                 label = f"{names[cls]} {conf:.2f}"
-                cv2.rectangle(img_copy, (x1, y1), (x2, y2), (255, 50, 50), 2)
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
                 cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             self._current_view_rgb = img_copy
         elif v == "Mask Overlay":
@@ -302,14 +318,14 @@ class App(tk.Tk):
                 for i in indices:
                     mask = masks.data[i].cpu().numpy()
                     mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
-                    img_copy[mask > 0.5] = img_copy[mask > 0.5] * 0.5 + np.array([255, 50, 50]) * 0.5
+                    img_copy[mask > 0.5] = img_copy[mask > 0.5] * 0.5 + color_rgb * 0.5
             else:
                 # fallback if not a segmentation model
                 self._current_view_rgb = img_copy # Just fallback
                 
             for i in indices:
                 x1, y1, x2, y2 = map(int, boxes.xyxy[i])
-                cv2.rectangle(img_copy, (x1, y1), (x2, y2), (255, 50, 50), 2)
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
                 
             self._current_view_rgb = img_copy
         elif v == "Cropped View":
