@@ -6,74 +6,91 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-# --- ResUNet Definition ---
-class ResidualBlock(nn.Module):
+# ── Residual Block ───────────────────────────────────────────────────────────
+class ResBlock(nn.Module):
     def __init__(self, in_c, out_c, stride=1):
         super().__init__()
-        self.bn1 = nn.BatchNorm2d(in_c)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv1 = nn.Conv2d(in_c, out_c, 3, stride, 1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_c)
-        self.conv2 = nn.Conv2d(out_c, out_c, 3, 1, 1, bias=False)
-        
-        self.shortcut = nn.Sequential()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_c, out_c, 3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_c),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_c, out_c, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_c),
+        )
+        self.skip = nn.Sequential()
         if stride != 1 or in_c != out_c:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_c, out_c, 1, stride, bias=False),
-                nn.BatchNorm2d(out_c)
+            self.skip = nn.Sequential(
+                nn.Conv2d(in_c, out_c, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_c),
             )
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        res = self.shortcut(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.conv1(x)
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        return x + res
+        return self.relu(self.conv(x) + self.skip(x))
 
+
+# ── Encoder (Down-sampling) ──────────────────────────────────────────────────
+class EncoderBlock(nn.Module):
+    def __init__(self, in_c, out_c):
+        super().__init__()
+        self.res  = ResBlock(in_c, out_c)
+        self.pool = nn.MaxPool2d(2)
+
+    def forward(self, x):
+        skip = self.res(x)
+        x    = self.pool(skip)
+        return skip, x
+
+
+# ── Bridge ───────────────────────────────────────────────────────────────────
+class Bridge(nn.Module):
+    def __init__(self, in_c, out_c):
+        super().__init__()
+        self.res = ResBlock(in_c, out_c)
+
+    def forward(self, x):
+        return self.res(x)
+
+
+# ── Decoder (Up-sampling) ────────────────────────────────────────────────────
+class DecoderBlock(nn.Module):
+    def __init__(self, in_c, out_c):
+        super().__init__()
+        self.up  = nn.ConvTranspose2d(in_c, out_c, kernel_size=2, stride=2)
+        self.res = ResBlock(out_c * 2, out_c)
+
+    def forward(self, x, skip):
+        x = self.up(x)
+        x = torch.cat([x, skip], dim=1)
+        return self.res(x)
+
+
+# ── Full ResUNet ─────────────────────────────────────────────────────────────
 class ResUNet(nn.Module):
     def __init__(self, in_c=3, out_c=1):
         super().__init__()
-        self.conv_init = nn.Sequential(
-            nn.Conv2d(in_c, 64, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, 3, 1, 1, bias=False)
-        )
-        self.shortcut_init = nn.Sequential(
-            nn.Conv2d(in_c, 64, 1, 1, bias=False),
-            nn.BatchNorm2d(64)
-        )
-        self.res1 = ResidualBlock(64, 128, stride=2)
-        self.res2 = ResidualBlock(128, 256, stride=2)
-        self.res3 = ResidualBlock(256, 512, stride=2)
-        self.up3 = nn.ConvTranspose2d(512, 256, 2, 2)
-        self.dec3 = ResidualBlock(512, 256) 
-        self.up2 = nn.ConvTranspose2d(256, 128, 2, 2)
-        self.dec2 = ResidualBlock(256, 128)
-        self.up1 = nn.ConvTranspose2d(128, 64, 2, 2)
-        self.dec1 = ResidualBlock(128, 64)
-        self.final_conv = nn.Conv2d(64, out_c, 1)
-        
+        self.e1     = EncoderBlock(in_c,   64)
+        self.e2     = EncoderBlock(64,    128)
+        self.e3     = EncoderBlock(128,   256)
+        self.e4     = EncoderBlock(256,   512)
+        self.bridge = Bridge(512, 1024)
+        self.d4     = DecoderBlock(1024,  512)
+        self.d3     = DecoderBlock(512,   256)
+        self.d2     = DecoderBlock(256,   128)
+        self.d1     = DecoderBlock(128,    64)
+        self.head   = nn.Conv2d(64, out_c, kernel_size=1)
+
     def forward(self, x):
-        res_init = self.shortcut_init(x)
-        c1 = self.conv_init(x) + res_init
-        c2 = self.res1(c1)
-        c3 = self.res2(c2)
-        c4 = self.res3(c3)
-        u3 = self.up3(c4)
-        u3 = torch.cat([u3, c3], dim=1)
-        d3 = self.dec3(u3)
-        u2 = self.up2(d3)
-        u2 = torch.cat([u2, c2], dim=1)
-        d2 = self.dec2(u2)
-        u1 = self.up1(d2)
-        u1 = torch.cat([u1, c1], dim=1)
-        d1 = self.dec1(u1)
-        out = self.final_conv(d1)
-        return out
+        s1, x = self.e1(x)
+        s2, x = self.e2(x)
+        s3, x = self.e3(x)
+        s4, x = self.e4(x)
+        x = self.bridge(x)
+        x = self.d4(x, s4)
+        x = self.d3(x, s3)
+        x = self.d2(x, s2)
+        x = self.d1(x, s1)
+        return self.head(x)
 
 def test_image(image_path, model_path):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -138,29 +155,41 @@ def test_image(image_path, model_path):
         cv2.imwrite(f"test_results/skeleton_{base_name}", skeleton_overlay)
         print(f"Saved skeleton centerline to test_results/skeleton_{base_name}")
 
-    # Display plots
-    plt.figure(figsize=(15, 5))
-    plt.subplot(1, 3, 1)
-    plt.imshow(img_rgb)
-    plt.title("Original ROI")
-    
-    plt.subplot(1, 3, 2)
-    plt.imshow(mask_resized, cmap='gray')
-    plt.title("Predicted Seam Mask")
-    
-    plt.subplot(1, 3, 3)
+    # Save composite results plot
+    os.makedirs("test_results", exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(image_path))[0]
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    axes[0].imshow(img_rgb)
+    axes[0].set_title("Original Image")
+    axes[0].axis("off")
+
+    axes[1].imshow(mask_resized, cmap='gray')
+    axes[1].set_title("Predicted Seam Mask")
+    axes[1].axis("off")
+
     if skeleton_overlay is not None:
-        plt.imshow(cv2.cvtColor(skeleton_overlay, cv2.COLOR_BGR2RGB))
-        plt.title("Skeleton Centerline (Green)")
+        axes[2].imshow(cv2.cvtColor(skeleton_overlay, cv2.COLOR_BGR2RGB))
+        axes[2].set_title("Skeleton Centerline (Green)")
     else:
-        plt.imshow(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
-        plt.title("Seam Overlay (Red)")
-    plt.show()
+        axes[2].imshow(cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB))
+        axes[2].set_title("Seam Overlay (Red)")
+    axes[2].axis("off")
+
+    plt.tight_layout()
+    results_path = f"test_results/{base_name}_results.png"
+    plt.savefig(results_path, dpi=150, bbox_inches="tight")
+    print(f"Saved combined results to {results_path}")
+
+    try:
+        plt.show()
+    except Exception:
+        pass  # No display available (headless mode) — results already saved to file
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test ResUNet Weld Seam Pipeline")
     parser.add_argument("--image", required=True, help="Path to test ROI image (cropped workpiece)")
     parser.add_argument("--model", default="best_resunet_seam.pth", help="Path to best_resunet_seam.pth weights")
     args = parser.parse_args()
-    
+
     test_image(args.image, args.model)
