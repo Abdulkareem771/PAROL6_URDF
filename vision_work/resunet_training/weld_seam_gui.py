@@ -146,9 +146,12 @@ def _btn(p,text,cmd,bg=None,fg=None,font=None,pad=(10,5),**kw):
     b.bind("<Leave>",lambda e:b.config(bg=bg))
     return b
 
-def _lbl(p,text,font=None,fg=None,bg=None,**kw):
-    return tk.Label(p,text=text,font=font or F["body"],
-                    fg=fg or C["txt"],bg=bg or C["bg"],**kw)
+def _lbl(p, text=None, font=None, fg=None, bg=None, **kw):
+    opts = dict(font=font or F["body"], fg=fg or C["txt"], bg=bg or C["bg"])
+    if text is not None:
+        opts["text"] = text
+    opts.update(kw)
+    return tk.Label(p, **opts)
 
 def _section_hdr(parent, text):
     f=tk.Frame(parent,bg=C["panel"]); f.pack(fill="x",padx=10,pady=(10,2))
