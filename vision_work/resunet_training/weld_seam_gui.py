@@ -12,7 +12,7 @@ Run: python3 weld_seam_gui.py
 import os, sys, threading, time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageGrab
 import cv2
 import numpy as np
 
@@ -180,6 +180,7 @@ class App(tk.Tk):
         tk.Entry(f1, textvariable=self.image_path, bg=C["border"], fg=C["text"],
                  relief="flat", font=("Helvetica", 9), insertbackground=C["text"]).pack(fill="x", ipady=3)
         self._btn(f1, "📂 Browse Image...", self._browse_image).pack(fill="x", pady=(4, 0))
+        self._btn(f1, "📋 Paste (Ctrl+V)", self._paste_image).pack(fill="x", pady=(4, 0))
 
         # -> Inference Action
         self._section(sidebar, "Inference")
@@ -243,6 +244,7 @@ class App(tk.Tk):
         self.canvas.bind("<Configure>", self._on_resize)
         
         self.bind("<Return>", lambda e: self._run_async())
+        self.bind("<Control-v>", lambda e: self._paste_image())
 
 
     def _section(self, parent, text):
@@ -264,6 +266,24 @@ class App(tk.Tk):
             self.image_path.set(p)
             self._lbl_title.config(text=f"{os.path.basename(p)}")
             if self.model: self._run_async()
+
+    def _paste_image(self):
+        try:
+            img = ImageGrab.grabclipboard()
+            if img is None:
+                messagebox.showinfo("Clipboard", "No image found in clipboard.")
+                return
+            
+            # Save to temporary file
+            os.makedirs("/tmp/weldvision", exist_ok=True)
+            tmp_path = "/tmp/weldvision/pasted_image.png"
+            img.save(tmp_path)
+            
+            self.image_path.set(tmp_path)
+            self._lbl_title.config(text="Pasted Image")
+            if self.model: self._run_async()
+        except Exception as e:
+            messagebox.showerror("Paste Error", f"Could not paste image: {e}")
 
     def _browse_model(self):
         p = filedialog.askopenfilename(title="Select model", filetypes=[("PTH", "*.pth"), ("All", "*.*")])
