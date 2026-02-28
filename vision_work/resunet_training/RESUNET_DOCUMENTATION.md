@@ -53,6 +53,8 @@ We have provided a fully interactive **WeldVision GUI** (`weld_seam_gui.py`) tha
 
 ### GUI Features
 - **Browse Image**: Opens a standard OS file dialog to select any image from your computer.
+- **Paste (Ctrl+V)**: Paste an image directly from your clipboard to run inference instantly. 
+  *(Note: Uses `xclip` under the hood to perfectly support the Linux X11 clipboard environment)*.
 - **Threshold Slider**: Drag the slider (0.01 - 0.99) to instantly see the mask tighten or expand live on the image, without re-running the model.
 - **View Modes**: Instantly toggle the main canvas between:
   - **Original**: The raw input image.
