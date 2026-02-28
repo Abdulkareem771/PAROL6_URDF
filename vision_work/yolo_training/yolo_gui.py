@@ -1,111 +1,28 @@
 """
-WeldVision GUI — V1 Sidebar Style with V5 Controls
-==================================================
+WeldVision GUI — YOLO Object Detection Tester
+=============================================
 - Classic single-pane dark sidebar layout
 - Standard OS file dialog for picking an image
-- Dropdown/Radio for View Mode (Original | Overlay | Mask | Heat Map | Skeleton)
-- Live threshold slider updates mask without re-running
-- Saves the currently selected view exactly as seen on screen
+- Paste from clipboard (Ctrl+V)
+- Filter by target class tag
+- Dropdown/Radio for View Mode (Original | Bounding Boxes | Mask Overlay | Cropped View)
+- Live confidence threshold slider updates view without re-running
+- Automated Batch Processing saving sequentially cropped results
 
-Run: python3 weld_seam_gui.py
+Run: python3 yolo_gui.py
 """
-import os, sys, threading, time
+import os, sys, threading, time, shutil, subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageTk, ImageGrab
+from PIL import Image, ImageTk, ImageDraw
 import cv2
 import numpy as np
 
 try:
-    import torch
-    import torch.nn as nn
+    from ultralytics import YOLO
 except ImportError:
-    print("Install PyTorch: pip install torch --index-url https://download.pytorch.org/whl/cpu")
+    print("Install ultralytics: pip install ultralytics")
     sys.exit(1)
-
-# ─── ResUNet (exact match to training weights) ────────────────────────────────
-class ResBlock(nn.Module):
-    def __init__(self, in_c, out_c, stride=1):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_c, out_c, 3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(out_c), nn.ReLU(inplace=True),
-            nn.Conv2d(out_c, out_c, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_c))
-        self.skip = nn.Sequential() if (stride == 1 and in_c == out_c) else nn.Sequential(
-            nn.Conv2d(in_c, out_c, 1, stride=stride, bias=False), nn.BatchNorm2d(out_c))
-        self.relu = nn.ReLU(inplace=True)
-    def forward(self, x): return self.relu(self.conv(x) + self.skip(x))
-
-class EncoderBlock(nn.Module):
-    def __init__(self, in_c, out_c):
-        super().__init__(); self.res = ResBlock(in_c, out_c); self.pool = nn.MaxPool2d(2)
-    def forward(self, x): s = self.res(x); return s, self.pool(s)
-
-class Bridge(nn.Module):
-    def __init__(self, in_c, out_c): super().__init__(); self.res = ResBlock(in_c, out_c)
-    def forward(self, x): return self.res(x)
-
-class DecoderBlock(nn.Module):
-    def __init__(self, in_c, out_c):
-        super().__init__()
-        self.up = nn.ConvTranspose2d(in_c, out_c, 2, 2); self.res = ResBlock(out_c * 2, out_c)
-    def forward(self, x, skip): return self.res(torch.cat([self.up(x), skip], 1))
-
-class ResUNet(nn.Module):
-    def __init__(self, in_c=3, out_c=1):
-        super().__init__()
-        self.e1 = EncoderBlock(in_c, 64);   self.e2 = EncoderBlock(64, 128)
-        self.e3 = EncoderBlock(128, 256);   self.e4 = EncoderBlock(256, 512)
-        self.bridge = Bridge(512, 1024)
-        self.d4 = DecoderBlock(1024, 512);  self.d3 = DecoderBlock(512, 256)
-        self.d2 = DecoderBlock(256, 128);   self.d1 = DecoderBlock(128, 64)
-        self.head = nn.Conv2d(64, out_c, 1)
-    def forward(self, x):
-        s1,x=self.e1(x); s2,x=self.e2(x); s3,x=self.e3(x); s4,x=self.e4(x)
-        x=self.bridge(x); x=self.d4(x,s4); x=self.d3(x,s3); x=self.d2(x,s2); x=self.d1(x,s1)
-        return self.head(x)
-
-# ─── Image processing helpers ─────────────────────────────────────────────────
-MEAN = np.array([0.485, 0.456, 0.406])
-STD  = np.array([0.229, 0.224, 0.225])
-
-def run_inference(img_bgr, model, device, threshold):
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    h, w = img_bgr.shape[:2]
-    resized = cv2.resize(img_rgb, (512, 512))
-    normed = (resized / 255.0 - MEAN) / STD
-    tensor = torch.tensor(normed).float().permute(2, 0, 1).unsqueeze(0).to(device)
-    model.eval()
-    with torch.no_grad():
-        prob = torch.sigmoid(model(tensor)).squeeze().cpu().numpy()
-    mask = (prob > threshold).astype(np.uint8)
-    mask = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
-    prob_full = cv2.resize(prob, (w, h))
-    return img_rgb, mask, prob_full
-
-def make_overlay(img_rgb, mask):
-    overlay = img_rgb.copy()
-    overlay[mask == 1] = [255, 50, 50]   # same as Colab
-    return overlay
-
-def make_skeleton(img_rgb, mask):
-    try:
-        from skimage.morphology import skeletonize
-        skeleton = skeletonize(mask)
-        skel_vis = img_rgb.copy()
-        skel_vis[skeleton] = [0, 255, 0]  # same as Colab
-        return skel_vis
-    except ImportError:
-        return make_overlay(img_rgb, mask)
-
-def make_mask(mask):
-    return np.stack([mask * 255] * 3, axis=2).astype(np.uint8)
-
-def make_heatmap(prob, img_rgb):
-    heat = cv2.applyColorMap((prob * 255).astype(np.uint8), cv2.COLORMAP_INFERNO)
-    heat = cv2.cvtColor(heat, cv2.COLOR_BGR2RGB)
-    return cv2.addWeighted(img_rgb, 0.35, heat, 0.65, 0)
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
 C = {
@@ -123,23 +40,22 @@ C = {
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("WeldVision · Advanced Inference")
-        self.geometry("1100x700")
+        self.title("WeldVision · YOLO Detector")
+        self.geometry("1100x800")
         self.minsize(900, 600)
         self.configure(bg=C["bg"])
 
         # State
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model  = None
         self.image_path = tk.StringVar(value="")
         self.model_path = tk.StringVar(value=self._default_model())
         self.threshold  = tk.DoubleVar(value=0.5)
-        self.view_mode  = tk.StringVar(value="Overlay")
+        self.view_mode  = tk.StringVar(value="Bounding Boxes")
+        self.target_tag = tk.StringVar(value="")
 
         # Data
         self._rgb  = None
-        self._mask = None
-        self._prob = None
+        self._results = None
         self._current_view_rgb = None
         self._pil_img = None
         self._tk_img  = None
@@ -148,21 +64,27 @@ class App(tk.Tk):
         threading.Thread(target=self._load_model, daemon=True).start()
 
     def _default_model(self):
+        # Look for a default best.pt in the current dir
         here = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(here, "best_resunet_seam.pth")
+        path = os.path.join(here, "best.pt")
+        # if not found, check parent dir YOLO_resources
+        if not os.path.exists(path):
+            parent = os.path.dirname(os.path.dirname(here))
+            alt_path = os.path.join(parent, "YOLO_resources", "best.pt")
+            if os.path.exists(alt_path):
+                return alt_path
+        return path
 
     # ─── UI Building ──────────────────────────────────────────────────────────
     def _build(self):
         # Top Header
         hdr = tk.Frame(self, bg=C["panel"], height=48)
         hdr.pack(fill="x"); hdr.pack_propagate(False)
-        tk.Label(hdr, text=" 🔬 WeldVision", font=("Segoe UI", 14, "bold"),
+        tk.Label(hdr, text=" 🔍 WeldVision YOLO", font=("Segoe UI", 14, "bold"),
                  bg=C["panel"], fg=C["text"]).pack(side="left", padx=10)
         self._model_status = tk.Label(hdr, text="Loading model...", font=("Segoe UI", 10),
                                       bg=C["panel"], fg=C["warn"])
         self._model_status.pack(side="right", padx=15)
-        tk.Label(hdr, text=f"Device: {self.device.type.upper()}", font=("Segoe UI", 10),
-                 bg=C["panel"], fg=C["green"]).pack(side="right", padx=10)
 
         # Main Split
         main = tk.Frame(self, bg=C["bg"])
@@ -190,10 +112,16 @@ class App(tk.Tk):
         self._run_btn.pack(fill="x", padx=12, pady=8)
 
         # -> Controls
-        self._section(sidebar, "Threshold & View")
+        self._section(sidebar, "Filters & View")
         f2 = tk.Frame(sidebar, bg=C["panel"])
         f2.pack(fill="x", padx=12, pady=2)
-        tk.Label(f2, text="Mask Threshold:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w")
+        
+        tk.Label(f2, text="Target Tag (leave blank for all):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Entry(f2, textvariable=self.target_tag, bg=C["border"], fg=C["text"],
+                 relief="flat", font=("Helvetica", 10), insertbackground=C["text"]).pack(fill="x", ipady=3, pady=(0, 6))
+        self.target_tag.trace_add("write", lambda *args: self._on_view_change())
+
+        tk.Label(f2, text="Confidence Threshold:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w")
         self._thr_lbl = tk.Label(f2, text="str(0.50)", bg=C["panel"], fg=C["accent"], font=("Segoe UI", 10, "bold"))
         self._thr_lbl.pack(anchor="e", pady=(0, 2))
         self._thr_lbl.config(text="0.50")
@@ -204,7 +132,7 @@ class App(tk.Tk):
 
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
-        for mode in ["Original", "Overlay", "Mask", "Heat Map", "Skeleton"]:
+        for mode in ["Original", "Bounding Boxes", "Mask Overlay", "Cropped View"]:
             rb = tk.Radiobutton(f2, text=mode, variable=self.view_mode, value=mode,
                                 bg=C["panel"], fg=C["text"], selectcolor=C["border"],
                                 activebackground=C["panel"], activeforeground=C["text"],
@@ -233,15 +161,6 @@ class App(tk.Tk):
         tk.Label(fb, text="Output Folder:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
         tk.Entry(fb, textvariable=self.batch_out, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
         self._btn(fb, "Select Output...", lambda: self.batch_out.set(filedialog.askdirectory(title="Output Folder") or self.batch_out.get())).pack(fill="x", pady=(2,4))
-
-        tk.Label(fb, text="Output Type:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w", pady=(4,0))
-        self.batch_type = ttk.Combobox(fb, values=["1-px Skeleton", "Whole Mask Area"], state="readonly")
-        self.batch_type.set("1-px Skeleton")
-        self.batch_type.pack(fill="x", pady=(2,4))
-
-        tk.Label(fb, text="Seam Color (B,G,R):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w")
-        self.batch_color = tk.StringVar(value="0,255,0")
-        tk.Entry(fb, textvariable=self.batch_color, bg=C["border"], fg=C["text"], relief="flat", font=("Helvetica", 8)).pack(fill="x")
         
         self._batch_btn = tk.Button(fb, text="🚀 Auto-Run Batch", command=self._run_batch_async,
                                   bg=C["warn"], fg="#ffffff", font=("Segoe UI", 10, "bold"),
@@ -298,11 +217,9 @@ class App(tk.Tk):
 
     def _paste_image(self):
         try:
-            import subprocess
             os.makedirs("/tmp/weldvision", exist_ok=True)
             tmp_path = "/tmp/weldvision/pasted_image.png"
             
-            # Use xclip directly to pull image/png from the X11 clipboard
             proc = subprocess.run(
                 ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
                 capture_output=True
@@ -315,7 +232,6 @@ class App(tk.Tk):
             with open(tmp_path, "wb") as f:
                 f.write(proc.stdout)
             
-            # Verify and update
             Image.open(tmp_path).verify()
             
             self.image_path.set(tmp_path)
@@ -328,66 +244,106 @@ class App(tk.Tk):
             messagebox.showerror("Paste Error", f"Clipboard content is not a valid image.\n\n{e}")
 
     def _browse_model(self):
-        p = filedialog.askopenfilename(title="Select model", filetypes=[("PTH", "*.pth"), ("All", "*.*")])
+        p = filedialog.askopenfilename(title="Select YOLO model", filetypes=[("PT", "*.pt"), ("All", "*.*")])
         if p:
             self.model_path.set(p)
             threading.Thread(target=self._load_model, daemon=True).start()
 
     def _on_thr_change(self, val):
         self._thr_lbl.config(text=f"{float(val):.2f}")
-        val_f = float(val)
-        if self._prob is not None and self._rgb is not None:
-            # Recompute mask and view instantly
-            self._mask = (self._prob > val_f).astype(np.uint8)
-            self._on_view_change()
+        # View change filters by threshold dynamically
+        self._on_view_change()
+
+    def _filter_results(self):
+        if not self._results: return []
+        boxes = self._results[0].boxes
+        if not boxes: return []
+        
+        thr = self.threshold.get()
+        target = self.target_tag.get().strip().lower()
+        names = self._results[0].names
+        
+        filtered = []
+        for i in range(len(boxes)):
+            conf = float(boxes.conf[i])
+            if conf < thr:
+                continue
+            cls_name = names[int(boxes.cls[i])].lower()
+            if target and target not in cls_name:
+                continue
+            filtered.append(i)
+        return filtered
 
     def _on_view_change(self):
-        if self._rgb is None: return
+        if self._rgb is None or not self._results: return
         v = self.view_mode.get()
+        
+        indices = self._filter_results()
+        names = self._results[0].names
+        boxes = self._results[0].boxes
+        masks = self._results[0].masks
+        
+        img_copy = self._rgb.copy()
+        
         if v == "Original":
-            self._current_view_rgb = self._rgb
-        elif v == "Overlay":
-            self._current_view_rgb = make_overlay(self._rgb, self._mask)
-        elif v == "Mask":
-            self._current_view_rgb = make_mask(self._mask)
-        elif v == "Heat Map":
-            self._current_view_rgb = make_heatmap(self._prob, self._rgb)
-        elif v == "Skeleton":
-            self._current_view_rgb = make_skeleton(self._rgb, self._mask)
+            self._current_view_rgb = img_copy
+        elif v == "Bounding Boxes":
+            for i in indices:
+                x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                conf = float(boxes.conf[i])
+                cls = int(boxes.cls[i])
+                label = f"{names[cls]} {conf:.2f}"
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), (255, 50, 50), 2)
+                cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            self._current_view_rgb = img_copy
+        elif v == "Mask Overlay":
+            if masks is not None:
+                # YOLO segmentation mask
+                for i in indices:
+                    mask = masks.data[i].cpu().numpy()
+                    mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
+                    img_copy[mask > 0.5] = img_copy[mask > 0.5] * 0.5 + np.array([255, 50, 50]) * 0.5
+            else:
+                # fallback if not a segmentation model
+                self._current_view_rgb = img_copy # Just fallback
+                
+            for i in indices:
+                x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), (255, 50, 50), 2)
+                
+            self._current_view_rgb = img_copy
+        elif v == "Cropped View":
+            if len(indices) > 0:
+                # Crop to the first match
+                i = indices[0]
+                x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                # Provide a bit of padding
+                p = 10
+                h, w = img_copy.shape[:2]
+                x1, y1 = max(0, x1-p), max(0, y1-p)
+                x2, y2 = min(w, x2+p), min(h, y2+p)
+                self._current_view_rgb = self._rgb[y1:y2, x1:x2]
+            else:
+                self._current_view_rgb = img_copy
         
         # Stats update
-        px = int(self._mask.sum())
-        h, w = self._mask.shape
-        self._lbl_stats.config(text=f"Mode: {v}  |  Seam: {px:,} px  |  Coverage: {100*px/(h*w):.3f}%")
+        self._lbl_stats.config(text=f"Detected: {len(indices)} matches")
 
         # Redraw
         self._pil_img = Image.fromarray(self._current_view_rgb)
         self._redraw()
 
     def _save_result(self):
-        if self._rgb is None:
+        if self._current_view_rgb is None:
             messagebox.showinfo("Wait", "Run inference first.")
             return
         p = filedialog.asksaveasfilename(defaultextension=".png",
-                                         initialfile=f"result_{os.path.basename(self.image_path.get())}.png",
+                                         initialfile=f"yolo_{os.path.basename(self.image_path.get())}.png",
                                          filetypes=[("PNG", "*.png"), ("JPG", "*.jpg")])
         if p:
-            import matplotlib
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-            
-            ov = make_overlay(self._rgb, self._mask)
-            sk = make_skeleton(self._rgb, self._mask)
-            
-            fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-            axes[0].imshow(self._rgb); axes[0].set_title("Original"); axes[0].axis("off")
-            axes[1].imshow(ov);        axes[1].set_title("Seam Mask Overlay"); axes[1].axis("off")
-            axes[2].imshow(sk);        axes[2].set_title("Centerline (Green)"); axes[2].axis("off")
-            plt.tight_layout()
-            plt.savefig(p, dpi=150)
-            plt.close(fig)
-            messagebox.showinfo("Saved", f"3-panel Colab-style view saved to:\n{p}")
-
+            bgr = cv2.cvtColor(self._current_view_rgb, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(p, bgr)
+            messagebox.showinfo("Saved", f"Currently viewed image saved to:\n{p}")
 
     # ─── Async Logic ──────────────────────────────────────────────────────────
     def _load_model(self):
@@ -395,13 +351,10 @@ class App(tk.Tk):
         if not os.path.exists(p):
             self.after(0, lambda: self._model_status.config(text="Model File Missing", fg=C["err"]))
             return
-        self.after(0, lambda: self._model_status.config(text="Loading Model...", fg=C["warn"]))
+        self.after(0, lambda: self._model_status.config(text="Loading YOLO...", fg=C["warn"]))
         try:
-            m = ResUNet().to(self.device)
-            m.load_state_dict(torch.load(p, map_location=self.device))
-            m.eval()
-            self.model = m
-            self.after(0, lambda: self._model_status.config(text="Model Ready", fg=C["green"]))
+            self.model = YOLO(p)
+            self.after(0, lambda: self._model_status.config(text="YOLO Ready", fg=C["green"]))
         except Exception as e:
             self.after(0, lambda: self._model_status.config(text=f"Error: {e}", fg=C["err"]))
 
@@ -420,8 +373,14 @@ class App(tk.Tk):
                 bgr = cv2.imread(img_path)
                 if bgr is None: raise ValueError("Invalid image")
                 
-                rgb, mask, prob = run_inference(bgr, self.model, self.device, self.threshold.get())
-                self._rgb, self._mask, self._prob = rgb, mask, prob
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                
+                # Run YOLO (low conf here, we filter manually later so the slider works live)
+                # Setting conf=0.01 to get all proposals, enabling dynamic filtering by the slider
+                results = self.model(bgr, conf=0.01, verbose=False)
+                
+                self._rgb = rgb
+                self._results = results
                 
                 ms = (time.time() - t0) * 1000
                 self.after(0, self._lbl_title.config, {"text": f"{os.path.basename(img_path)} ({ms:.1f}ms)"})
@@ -444,18 +403,8 @@ class App(tk.Tk):
         if not self.model:
             messagebox.showwarning("Batch", "Load a model first.")
             return
-            
-        try:
-            # Parse color string like "0,255,0"
-            color_str = self.batch_color.get().strip()
-            r, g, b = [int(x.strip()) for x in color_str.split(',')]
-            color = np.array([r, g, b], dtype=np.uint8)
-        except:
-            messagebox.showerror("Color Error", "Color must be in format 'R,G,B' (e.g., 0,255,0)")
-            return
 
         self._batch_btn.config(state="disabled", text="Running Batch...")
-        out_type = self.batch_type.get()
         
         def task():
             images = [f for f in os.listdir(in_d) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
@@ -465,45 +414,46 @@ class App(tk.Tk):
                 return
 
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            batch_out_dir = os.path.join(out_d, f"resunet_results_{timestamp}")
+            batch_out_dir = os.path.join(out_d, f"yolo_results_{timestamp}")
             os.makedirs(batch_out_dir, exist_ok=True)
             
+            target = self.target_tag.get().strip().lower()
             thr = self.threshold.get()
-            count = 0
             
+            count = 0
             for img_name in sorted(images):
                 try:
                     p = os.path.join(in_d, img_name)
                     bgr = cv2.imread(p)
                     if bgr is None: continue
                     
-                    rgb, mask, _ = run_inference(bgr, self.model, self.device, thr)
+                    results = self.model(bgr, conf=thr, verbose=False)
+                    res = results[0]
+                    boxes = res.boxes
+                    if not boxes: continue
                     
-                    # Generate the user's requested output
-                    img_copy = rgb.copy()
-                    
-                    if out_type == "1-px Skeleton":
-                        from skimage.morphology import skeletonize
-                        skel = skeletonize(mask)
-                        # Paint the skeleton the requested color
-                        img_copy[skel] = color
-                    else:
-                        # Whole mask
-                        # semi-transparent overlay
-                        overlay = img_copy.copy()
-                        overlay[mask] = color
-                        img_copy = cv2.addWeighted(overlay, 0.5, img_copy, 0.5, 0)
+                    # Filter and crop
+                    for i in range(len(boxes)):
+                        cls_name = res.names[int(boxes.cls[i])].lower()
+                        if target and target not in cls_name:
+                            continue
+                            
+                        x1, y1, x2, y2 = map(int, boxes.xyxy[i])
+                        pd = 10 # padding
+                        h, w = bgr.shape[:2]
+                        x1, y1 = max(0, x1-pd), max(0, y1-pd)
+                        x2, y2 = min(w, x2+pd), min(h, y2+pd)
                         
-                    # Save it sequentially
-                    count += 1
-                    out_name = f"{count:04d}_{img_name}"
-                    out_bgr = cv2.cvtColor(img_copy, cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(os.path.join(batch_out_dir, out_name), out_bgr)
+                        crop = bgr[y1:y2, x1:x2]
+                        # Save it sequentially
+                        count += 1
+                        out_name = f"{count:04d}_{img_name}"
+                        cv2.imwrite(os.path.join(batch_out_dir, out_name), crop)
                         
                 except Exception as e:
                     print(f"Error on {img_name}: {e}")
             
-            self.after(0, messagebox.showinfo, "Batch Complete", f"Processed {len(images)} images.\nSaved to:\n{batch_out_dir}")
+            self.after(0, messagebox.showinfo, "Batch Complete", f"Processed {len(images)} images.\nSaved {count} cropped detections to:\n{batch_out_dir}")
             self.after(0, self._batch_btn.config, {"state": "normal", "text": "🚀 Auto-Run Batch"})
             
         threading.Thread(target=task, daemon=True).start()
