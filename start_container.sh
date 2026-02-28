@@ -61,6 +61,7 @@ else
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
+    -v /home/kareem:/host_home:ro \
     -v /dev:/dev \
     -w /workspace \
     --shm-size=512m \
