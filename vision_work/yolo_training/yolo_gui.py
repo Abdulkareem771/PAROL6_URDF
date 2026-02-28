@@ -425,7 +425,7 @@ class App(tk.Tk):
                 for i in indices:
                     mask = masks.data[i].cpu().numpy()
                     mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
-                    img_copy[mask > 0.5] = color_rgb
+                    img_copy[mask > 0.5] = color_rgb.astype(np.uint8)
             else:
                 for i in indices:
                     x1, y1, x2, y2 = map(int, boxes.xyxy[i])
@@ -446,6 +446,7 @@ class App(tk.Tk):
                     overlay = img_copy.copy()
                     cv2.fillPoly(overlay, [pts], color_rgb.tolist())
                     cv2.addWeighted(overlay, 0.4, img_copy, 0.6, 0, img_copy) # 40% opacity fill
+                    img_copy = img_copy.astype(np.uint8)
                     cv2.polylines(img_copy, [pts], isClosed=True, color=color_rgb.tolist(), thickness=2)
                     
                     # Add standard bounding box labels for clarity
