@@ -12,10 +12,18 @@ The universal entry point for the toolkit.
 ## 2. YOLO Tester (`vision_work/yolo_training/yolo_gui.py`)
 A custom PyTorch/Ultralytics GUI for isolated testing of bounding box and segmentation models on individual images or large batches.
 
-**Key Features:**
+**Key Features (Main Tester Tab):**
 - **Target Tag Filter:** Only displays classes that match the given text string (e.g., typing "seam" hides all other detected objects).
 - **Dynamic Mask Coloring:** A text input box `Drawing Color (B,G,R)` lets users dynamically paint all bounding boxes and segmentation masks in any RGB color (e.g., `0,255,0` for Green) without re-running the model.
-- **Batch Cropping:** Takes an entire directory of mixed images and exports *only* the matching detected objects into a time-stamped `yolo_results_...` folder. The outputs are cleanly sequentially numbered `0001_original_name.jpg`.
+- **Solid Color Mask & Batches:** Supports painting the object totally solid in bounding box or segmentation format, and allows batch-cropping objects across an entire directory.
+
+**Key Features (Advanced Ops Tab):**
+- **Dual Tag Filtering:** Track exactly 2 separate tags (`Tag 1` and `Tag 2`) simultaneously with customizable individual RGB colors. Requires switching the View Mode to `Dual Tag Mask`.
+- **Advanced Batch Data Generation:** Allows using the loaded YOLO model to mass-generate synthetic data formats for other machine learning architectures:
+    * `Crop Objects (Tag 1 & 2)`: Sequentially crops dual-classes across a folder.
+    * `Export YOLO Annotations (.txt)`: Auto-annotates an entire folder of raw images by producing standard YOLO-format normalized label text files (`class_id x_center y_center w h`).
+    * `Export Dual Color Masks`: Outputs completely solid RGB masks of your detected objects on a black background (ideal for UNet dataset generation).
+    * `Export Binary Masks`: Same as above but outputs strict Black/White boolean masks.
 
 ## 3. ResUNet Tester (`vision_work/resunet_training/weld_seam_gui.py`)
 A dedicated custom GUI for the ResUNet weld-seam segmentation pipeline.
