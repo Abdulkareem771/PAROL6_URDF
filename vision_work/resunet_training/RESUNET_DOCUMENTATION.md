@@ -35,26 +35,30 @@ Because `ResUNet` requires GPU memory, training must happen on Google Colab (usi
 
 ---
 
-## 3. Local Testing Guide
+## 3. Local GUI Testing Guide
 
-Once you download the `best_resunet_seam.pth` file from Colab, place it in this directory (`YOLO_resources/`). 
+Once you download the `best_resunet_seam.pth` file from Colab, place it in this directory (`vision_work/resunet_training/`).
 
-We've provided a simple testing tool that handles preprocessing, inference, and skeletonization (extracting the 1-pixel centerline for the robot).
+We have provided a fully interactive **WeldVision GUI** (`weld_seam_gui.py`) that handles inference, visualization, and centerline extraction. It makes tuning the threshold for the robotic path planner incredibly easy.
 
 ### Usage:
-1. Activate your python environment:
+1. Ensure you have the required dependencies:
    ```bash
-   source /home/kareem/Desktop/PAROL6_URDF/venvs/vision_venvs/ultralytics_cpu_env/bin/activate
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu scikit-image matplotlib opencv-python Pillow
    ```
-2. Run the tester on an image. The script accepts a single image (ideally cropped from YOLO Stage 1).
+2. Launch the tester GUI:
    ```bash
-   python weld_seam_tester.py --image test_images/sample1.jpg --model best_resunet_seam.pth
+   python3 weld_seam_gui.py
    ```
 
-### Output
-The script generates a 3-panel visualization showing:
-1. The **Original Image**
-2. The **Predicted Binary Mask** (thick white line)
-3. The **Skeleton Centerline Overlay** (thin green line, which mimics the robot's required path vector)
+### GUI Features
+- **Browse Image**: Opens a standard OS file dialog to select any image from your computer.
+- **Threshold Slider**: Drag the slider (0.01 - 0.99) to instantly see the mask tighten or expand live on the image, without re-running the model.
+- **View Modes**: Instantly toggle the main canvas between:
+  - **Original**: The raw input image.
+  - **Overlay**: Translates the mask into a thick red seam ([255, 50, 50]) over the image.
+  - **Mask**: The raw black-and-white binary heatmap.
+  - **Heat Map**: A colour-graded probability map.
+  - **Skeleton**: A 1-pixel green line ([0, 255, 0]) representing the actual vector the robot will follow.
+- **Save Result**: Instantly export the current visual view to a `.png` file.
 
-It also automatically saves the overlays to a `test_results/` folder so you can review them after.
