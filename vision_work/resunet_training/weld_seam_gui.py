@@ -303,16 +303,29 @@ class App(tk.Tk):
         self._redraw()
 
     def _save_result(self):
-        if self._current_view_rgb is None:
+        if self._rgb is None:
             messagebox.showinfo("Wait", "Run inference first.")
             return
         p = filedialog.asksaveasfilename(defaultextension=".png",
                                          initialfile=f"result_{os.path.basename(self.image_path.get())}.png",
                                          filetypes=[("PNG", "*.png"), ("JPG", "*.jpg")])
         if p:
-            bgr = cv2.cvtColor(self._current_view_rgb, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(p, bgr)
-            messagebox.showinfo("Saved", f"Currently viewed image saved to:\n{p}")
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            
+            ov = make_overlay(self._rgb, self._mask)
+            sk = make_skeleton(self._rgb, self._mask)
+            
+            fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+            axes[0].imshow(self._rgb); axes[0].set_title("Original"); axes[0].axis("off")
+            axes[1].imshow(ov);        axes[1].set_title("Seam Mask Overlay"); axes[1].axis("off")
+            axes[2].imshow(sk);        axes[2].set_title("Centerline (Green)"); axes[2].axis("off")
+            plt.tight_layout()
+            plt.savefig(p, dpi=150)
+            plt.close(fig)
+            messagebox.showinfo("Saved", f"3-panel Colab-style view saved to:\n{p}")
+
 
     # ─── Async Logic ──────────────────────────────────────────────────────────
     def _load_model(self):
