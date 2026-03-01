@@ -101,8 +101,14 @@ def process_folder(folder_path, output_folder):
 
 
 # --- Execution ---
+#process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
 g_matrix, r_matrix = segment_blocks(SINGLE_IMAGE)
 
-#process_folder('input_folder_path', 'output_folder_path')
+Gm = (g_matrix / 255).astype(np.float32)
+Rm = (r_matrix / 255).astype(np.float32)
+
+print(Gm[1,1])
+print(type(Gm))
+
