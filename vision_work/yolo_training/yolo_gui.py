@@ -188,8 +188,14 @@ class App(tk.Tk):
         tk.Label(f2, text="Color (B,G,R) or Object IDs (0: 255,0,0; 1: 0,255,0):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w", pady=(6,0))
         self.draw_color = tk.StringVar(value="255,50,50") # Default BGR red-ish
         tk.Entry(f2, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
-                 relief="flat", font=("Helvetica", 10)).pack(fill="x", ipady=3, pady=(0, 6))
+                 relief="flat", font=("Helvetica", 10)).pack(fill="x", ipady=3, pady=(0, 2))
         self.draw_color.trace_add("write", lambda *args: self._on_view_change())
+
+        self.auto_color = tk.BooleanVar(value=False)
+        tk.Checkbutton(f2, text="Auto Multi-Color (ID 0=Green, 1=Red...)", variable=self.auto_color, 
+                       bg=C["panel"], fg=C["text"], selectcolor=C["border"], 
+                       activebackground=C["panel"], activeforeground=C["text"],
+                       command=self._on_view_change).pack(anchor="w", pady=(0, 6))
 
         # View Radios
         tk.Label(f2, text="View Mode:", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(8, 2))
@@ -388,7 +394,25 @@ class App(tk.Tk):
         default_bgr = (255, 50, 50)
         default_rgb = np.array([255, 50, 50])
 
-        if ':' in c_str:
+        if hasattr(self, 'auto_color') and self.auto_color.get():
+            # Predefined distinct colors in BGR format
+            palette_bgr = [
+                (0, 255, 0),      # 0: Green
+                (0, 0, 255),      # 1: Red
+                (255, 0, 0),      # 2: Blue
+                (0, 255, 255),    # 3: Yellow
+                (255, 0, 255),    # 4: Magenta
+                (255, 255, 0),    # 5: Cyan
+                (0, 165, 255),    # 6: Orange
+                (128, 0, 128),    # 7: Purple
+                (128, 128, 128),  # 8: Gray
+            ]
+            for i in range(100): # Provide enough colors for up to 100 objects
+                b, g, r = palette_bgr[i % len(palette_bgr)]
+                color_map_bgr[i] = (b, g, r)
+                color_map_rgb[i] = np.array([r, g, b])
+                
+        elif ':' in c_str:
             # Dictionary style mapping: "0: 255,0,0; 1: 0,255,0"
             parts = [p.strip() for p in c_str.split(';') if p.strip()]
             for part in parts:
