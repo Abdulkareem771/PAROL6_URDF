@@ -60,68 +60,31 @@ def segment_blocks(image_path):
     G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
     R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
 
-    # 5. Compute Bounding Boxes and draw on a copy of img_rgb
-    img_annotated = img_rgb.copy()
-
-    # Green bounding box
-    r_G, c_G = np.where(G == 255)
-    if len(r_G) > 0:
-        y_min_G, y_max_G = int(r_G.min()), int(r_G.max())
-        x_min_G, x_max_G = int(c_G.min()), int(c_G.max())
-        y_min_G = y_min_G - 20
-        y_max_G = y_max_G + 20
-        x_min_G = x_min_G - 20
-        x_max_G = x_max_G + 20
-        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 0, 255), 2)
-    else:
-        x_min_G = x_max_G = y_min_G = y_max_G = 0
-
-    # Red bounding box
-    r_R, c_R = np.where(R == 255)
-    if len(r_R) > 0:
-        y_min_R, y_max_R = int(r_R.min()), int(r_R.max())
-        x_min_R, x_max_R = int(c_R.min()), int(c_R.max())
-        y_min_R = y_min_R - 20
-        y_max_R = y_max_R + 20
-        x_min_R = x_min_R - 20
-        x_max_R = x_max_R + 20
-        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (0, 0, 255), 2)
-    else:
-        x_min_R = x_max_R = y_min_R = y_max_R = 0
-
-    # 6. GUI Display Section
-    plt.figure(figsize=(20, 5))
+    # 5. GUI Display Section
+    plt.figure(figsize=(15, 5))
 
     # Subplot 1: Original Image
-    plt.subplot(1, 4, 1)
+    plt.subplot(1, 3, 1)
     plt.title("Original Image")
     plt.imshow(img_rgb)
     plt.axis('off')
 
     # Subplot 2: G Matrix (Green Mask)
-    plt.subplot(1, 4, 2)
+    plt.subplot(1, 3, 2)
     plt.title("G Matrix (Green Object)")
     plt.imshow(G, cmap='gray')
     plt.axis('off')
 
     # Subplot 3: R Matrix (Red Object)
-    plt.subplot(1, 4, 3)
+    plt.subplot(1, 3, 3)
     plt.title("R Matrix (Red Object)")
     plt.imshow(R, cmap='gray')
-    plt.axis('off')
-
-    # Subplot 4: Annotated Image with Bounding Boxes
-    plt.subplot(1, 4, 4)
-    plt.title("Bounding Boxes")
-    plt.imshow(img_annotated)
     plt.axis('off')
 
     plt.tight_layout()
     plt.show()
 
-    bbox_G = (x_min_G, y_min_G, x_max_G, y_max_G)
-    bbox_R = (x_min_R, y_min_R, x_max_R, y_max_R)
-    return G, R, img_annotated, bbox_G, bbox_R
+    return G, R, img_rgb
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -148,18 +111,49 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, r_matrix, img_annotated, bbox_G, bbox_R = segment_blocks(SINGLE_IMAGE)
+g_matrix, r_matrix, img_rgb = segment_blocks(SINGLE_IMAGE)
 
-x_min_G, y_min_G, x_max_G, y_max_G = bbox_G
-x_min_R, y_min_R, x_max_R, y_max_R = bbox_R
+Gm = (g_matrix / 255).astype(np.float32)
+r_G, c_G = np.where(Gm == 1)
+x_G = c_G
+y_G = r_G
 
-# Width and height of Green object:
+# Bounding box of Green object:
+y_min_G, y_max_G = y_G.min(), y_G.max()
+x_min_G, x_max_G = x_G.min(), x_G.max()
+
+# width and hight of Green object:
 w_G = x_max_G - x_min_G
 h_G = y_max_G - y_min_G
 
-# Width and height of Red object:
+# Create a Rectangle on Green object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+
+
+Rm = (r_matrix / 255).astype(np.float32)
+r_R, c_R = np.where(Rm == 1)
+x_R = c_R
+y_R = r_R
+
+# Bounding box of Red object:
+y_min_R, y_max_R = y_R.min(), y_R.max()
+x_min_R, x_max_R = x_R.min(), x_R.max()
+
+# width and hight of Red object:
 w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
+
+# Create a Rectangle on Red object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+
+
+
+# cv2.imshow expects BGR, so convert back from RGB before displaying
+#img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+#cv2.imshow('Image with Bounding Boxes', img_bgr)
+#cv2.waitKey(0) # Wait indefinitely until a key is pressed
+#cv2.destroyAllWindows() # Close all windows
+
 
 print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
 print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
