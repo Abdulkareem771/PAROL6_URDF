@@ -10,7 +10,7 @@ x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
-EXPAND_PX     = 40  # pixels to expand the polygon outward from each corner
+EXPAND_PX     = 20  # pixels to expand the polygon outward from each corner
 
 
 current_dir = Path(__file__)
@@ -131,64 +131,19 @@ def segment_blocks(image_path):
         for (cx, cy) in exp_R:
             cv2.circle(img_annotated, (cx, cy), 5, (255, 0, 0), -1) # red corner dots
 
-    # 7. Compute true geometric intersection of the two expanded polygons
-    #    using the Sutherland-Hodgman polygon clipping algorithm
-    def _intersect_edge(p1, p2, cp1, cp2):
-        """Return the intersection point of line p1-p2 with edge cp1-cp2."""
-        dc = cp1 - cp2
-        dp = p1 - p2
-        n1 = cp1[0] * cp2[1] - cp1[1] * cp2[0]
-        n2 = p1[0]  * p2[1]  - p1[1]  * p2[0]
-        denom = dc[0] * dp[1] - dc[1] * dp[0]
-        if abs(denom) < 1e-10:
-            return None
-        return np.array([(n1 * dp[0] - n2 * dc[0]) / denom,
-                         (n1 * dp[1] - n2 * dc[1]) / denom], dtype=np.float32)
+    # 7. Compute Intersection of the two bounding boxes
+    inter_x_min = max(x_min_G, x_min_R)
+    inter_y_min = max(y_min_G, y_min_R)
+    inter_x_max = min(x_max_G, x_max_R)
+    inter_y_max = min(y_max_G, y_max_R)
 
-    def _inside(p, cp1, cp2):
-        """True if point p is on the left (inside) of edge cp1→cp2."""
-        return (cp2[0] - cp1[0]) * (p[1] - cp1[1]) >= (cp2[1] - cp1[1]) * (p[0] - cp1[0])
-
-    def sutherland_hodgman(subject, clip):
-        """Clip 'subject' polygon by 'clip' polygon (both as float32 Nx2 arrays)."""
-        output = list(subject.astype(np.float32))
-        if not output:
-            return []
-        cp1 = clip[-1]
-        for cp2 in clip:
-            if not output:
-                break
-            input_list = output
-            output = []
-            s = input_list[-1]
-            for e in input_list:
-                if _inside(e, cp1, cp2):
-                    if not _inside(s, cp1, cp2):
-                        pt = _intersect_edge(s, e, cp1, cp2)
-                        if pt is not None:
-                            output.append(pt)
-                    output.append(e)
-                elif _inside(s, cp1, cp2):
-                    pt = _intersect_edge(s, e, cp1, cp2)
-                    if pt is not None:
-                        output.append(pt)
-                s = e
-            cp1 = cp2
-        return output
-
-    # Only attempt if both expanded polygons exist
-    if corners_G is not None and corners_R is not None:
-        inter_poly = sutherland_hodgman(exp_G.astype(np.float32),
-                                        exp_R.astype(np.float32))
-        if len(inter_poly) >= 3:
-            inter_pts = np.round(np.array(inter_poly)).astype(np.int32).reshape(-1, 1, 2)
-            cv2.polylines(img_annotated, [inter_pts], isClosed=True, color=(255, 255, 0), thickness=2)
-            bbox_I = cv2.boundingRect(inter_pts)   # (x, y, w, h) for reference
-        else:
-            bbox_I = None
-            print("No intersection between the two polygons.")
+    if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
+        # Boxes overlap — draw intersection region in yellow
+        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
     else:
         bbox_I = None
+        print("No intersection between the two bounding boxes.")
 
     # 7. GUI Display Section
     plt.figure(figsize=(20, 5))
