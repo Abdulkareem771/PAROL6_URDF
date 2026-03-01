@@ -16,7 +16,7 @@ x_min_R, x_max_R = 0, 0
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a2.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -68,11 +68,11 @@ def segment_blocks(image_path):
     if len(r_G) > 0:
         y_min_G, y_max_G = int(r_G.min()), int(r_G.max())
         x_min_G, x_max_G = int(c_G.min()), int(c_G.max())
-        y_min_G = y_min_G - 5
-        y_max_G = y_max_G + 5
-        x_min_G = x_min_G - 5
-        x_max_G = x_max_G + 5
-        #cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 0, 255), 2)
+        y_min_G = y_min_G - 2
+        y_max_G = y_max_G + 2
+        x_min_G = x_min_G - 2
+        x_max_G = x_max_G + 2
+        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 0, 255), 2)
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
 
@@ -81,11 +81,11 @@ def segment_blocks(image_path):
     if len(r_R) > 0:
         y_min_R, y_max_R = int(r_R.min()), int(r_R.max())
         x_min_R, x_max_R = int(c_R.min()), int(c_R.max())
-        y_min_R = y_min_R - 5
-        y_max_R = y_max_R + 5
-        x_min_R = x_min_R - 5
-        x_max_R = x_max_R + 5
-        #cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (0, 0, 255), 2)
+        y_min_R = y_min_R - 2
+        y_max_R = y_max_R + 2
+        x_min_R = x_min_R - 2
+        x_max_R = x_max_R + 2
+        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (0, 0, 255), 2)
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
