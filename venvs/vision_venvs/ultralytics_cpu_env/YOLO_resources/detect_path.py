@@ -115,6 +115,14 @@ y_G = r_G
 y_min_G, y_max_G = y_G.min(), y_G.max()
 x_min_G, x_max_G = x_G.min(), x_G.max()
 
+# width and hight of Green object:
+w_G = x_max_G - x_min_G
+h_G = y_max_G - y_min_G
+
+
+
+
+
 Rm = (r_matrix / 255).astype(np.float32)
 r_R, c_R = np.where(Rm == 1)
 x_R = c_R
@@ -124,7 +132,16 @@ y_R = r_R
 y_min_R, y_max_R = y_R.min(), y_R.max()
 x_min_R, x_max_R = x_R.min(), x_R.max()
 
+# width and hight of Red object:
+w_R = x_max_R - x_min_R
+h_R = y_max_R - y_min_R
+
 print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
 print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+
+print(f"Green Object width: {w_G}")
+print(f"Green Object height: {h_G}")
+print(f"Red Object width: {w_R}")
+print(f"Red Object height: {h_R}")
 
 
