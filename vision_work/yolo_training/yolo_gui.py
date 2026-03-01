@@ -187,8 +187,14 @@ class App(tk.Tk):
 
         tk.Label(f2, text="Color (B,G,R) or Object IDs (0: 255,0,0; 1: 0,255,0):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w", pady=(6,0))
         self.draw_color = tk.StringVar(value="255,50,50") # Default BGR red-ish
-        tk.Entry(f2, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
-                 relief="flat", font=("Helvetica", 10)).pack(fill="x", ipady=3, pady=(0, 2))
+        
+        color_row = tk.Frame(f2, bg=C["panel"])
+        color_row.pack(fill="x", pady=(0, 2))
+        tk.Entry(color_row, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
+                 relief="flat", font=("Helvetica", 10), insertbackground=C["text"]).pack(side="left", fill="x", expand=True, ipady=3)
+        tk.Button(color_row, text="🎨", command=self._pick_color,
+                  bg=C["accent"], fg="#1e1e2e", relief="flat", font=("Segoe UI", 11),
+                  cursor="hand2", padx=4).pack(side="left", padx=(4, 0))
         self.draw_color.trace_add("write", lambda *args: self._on_view_change())
 
         self.auto_color = tk.BooleanVar(value=False)
@@ -346,6 +352,25 @@ class App(tk.Tk):
             messagebox.showerror("Dependency Missing", "xclip is not installed.")
         except Exception as e:
             messagebox.showerror("Paste Error", f"Clipboard content is not a valid image.\n\n{e}")
+
+    def _pick_color(self):
+        """Open the OS native color picker and convert the chosen RGB to BGR."""
+        from tkinter import colorchooser
+        # Try to read current color to pre-fill the picker
+        try:
+            parts = [int(x.strip()) for x in self.draw_color.get().split(',')]
+            if len(parts) == 3:
+                b, g, r = parts
+                init_color = f"#{r:02x}{g:02x}{b:02x}"
+            else:
+                init_color = "#3232ff"
+        except Exception:
+            init_color = "#3232ff"
+
+        result = colorchooser.askcolor(color=init_color, title="Pick Drawing Color")
+        if result and result[0]:
+            r, g, b = [int(x) for x in result[0]]
+            self.draw_color.set(f"{b},{g},{r}") # Store as BGR
 
     def _browse_model(self):
         p = filedialog.askopenfilename(title="Select YOLO model", filetypes=[("PT", "*.pt"), ("All", "*.*")])
