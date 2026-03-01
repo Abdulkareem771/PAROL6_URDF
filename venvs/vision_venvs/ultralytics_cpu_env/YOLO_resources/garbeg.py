@@ -68,7 +68,11 @@ def segment_blocks(image_path):
     if len(r_G) > 0:
         y_min_G, y_max_G = int(r_G.min()), int(r_G.max())
         x_min_G, x_max_G = int(c_G.min()), int(c_G.max())
-        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+        y_min_G = y_min_G - 20
+        y_max_G = y_max_G + 20
+        x_min_G = x_min_G - 20
+        x_max_G = x_max_G + 20
+        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 0, 255), 2)
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
 
@@ -77,7 +81,11 @@ def segment_blocks(image_path):
     if len(r_R) > 0:
         y_min_R, y_max_R = int(r_R.min()), int(r_R.max())
         x_min_R, x_max_R = int(c_R.min()), int(c_R.max())
-        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+        y_min_R = y_min_R - 20
+        y_max_R = y_max_R + 20
+        x_min_R = x_min_R - 20
+        x_max_R = x_max_R + 20
+        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (0, 0, 255), 2)
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
