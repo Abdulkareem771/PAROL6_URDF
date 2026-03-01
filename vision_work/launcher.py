@@ -49,6 +49,7 @@ class Launcher(tk.Tk):
         # Buttons
         self._btn("🔍  Detect Objects (YOLO)", self._launch_yolo, C["accent"]).pack(fill="x", padx=40, pady=10, ipady=8)
         self._btn("〰️  Segment Seam (ResUNet)", self._launch_resunet, C["green"]).pack(fill="x", padx=40, pady=10, ipady=8)
+        self._btn("🖍️  Manual Path Annotator", self._launch_annotator, "#a371f7").pack(fill="x", padx=40, pady=10, ipady=8)
 
     def _btn(self, text, cmd, bg_color):
         return tk.Button(self, text=text, command=cmd, bg=bg_color, fg="#ffffff",
@@ -71,6 +72,9 @@ class Launcher(tk.Tk):
 
     def _launch_resunet(self):
         self._launch("resunet_training/weld_seam_gui.py")
+
+    def _launch_annotator(self):
+        self._launch("tools/manual_annotator.py")
 
 if __name__ == "__main__":
     Launcher().mainloop()
