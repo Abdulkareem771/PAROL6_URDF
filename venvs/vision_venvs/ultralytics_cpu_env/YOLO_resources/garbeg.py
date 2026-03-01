@@ -10,7 +10,7 @@ x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
-EXPAND_PX     = 10  # pixels to expand the polygon outward from each corner
+EXPAND_PX     = 0  # pixels to expand the polygon outward from each corner
 
 
 current_dir = Path(__file__)
@@ -92,6 +92,7 @@ def segment_blocks(image_path):
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
+
 
     # 6. Find exact corner coordinates using contour approximation
     def find_corners(mask, epsilon_factor = EPSILON_FACTOR):
