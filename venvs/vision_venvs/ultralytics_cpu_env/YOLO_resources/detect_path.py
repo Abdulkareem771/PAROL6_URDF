@@ -9,14 +9,13 @@ y_min_G, y_max_G = 0, 0
 x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
-
-
+EPSILON_FACTOR=0.05
 
 
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -68,11 +67,12 @@ def segment_blocks(image_path):
     if len(r_G) > 0:
         y_min_G, y_max_G = int(r_G.min()), int(r_G.max())
         x_min_G, x_max_G = int(c_G.min()), int(c_G.max())
+        print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
         y_min_G = y_min_G - 2
         y_max_G = y_max_G + 2
         x_min_G = x_min_G - 2
         x_max_G = x_max_G + 2
-        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 0, 255), 2)
+        # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
 
@@ -81,15 +81,45 @@ def segment_blocks(image_path):
     if len(r_R) > 0:
         y_min_R, y_max_R = int(r_R.min()), int(r_R.max())
         x_min_R, x_max_R = int(c_R.min()), int(c_R.max())
+        print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
         y_min_R = y_min_R - 2
         y_max_R = y_max_R + 2
         x_min_R = x_min_R - 2
         x_max_R = x_max_R + 2
-        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (0, 0, 255), 2)
+        cv2.rectangle is replaced below using polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
-    # 6. Compute Intersection of the two bounding boxes
+    # 6. Find exact corner coordinates using contour approximation
+    def find_corners(mask, epsilon_factor = EPSILON_FACTOR):
+        """Return corner points of the largest contour in 'mask' as an (N,2) array of (x,y)."""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+        # Use the largest contour (main object)
+        largest = max(contours, key=cv2.contourArea)
+        epsilon = epsilon_factor * cv2.arcLength(largest, True)
+        approx = cv2.approxPolyDP(largest, epsilon, True)
+        # approx shape: (N, 1, 2) → reshape to (N, 2)
+        return approx.reshape(-1, 2)
+
+    corners_G = find_corners(G)
+    corners_R = find_corners(R)
+
+    # Draw polygon outline and corner dots on img_annotated
+    if corners_G is not None:
+        pts_G = corners_G.reshape(-1, 1, 2)                          # shape (N, 1, 2) required by polylines
+        cv2.polylines(img_annotated, [pts_G], isClosed=True, color=(0, 255, 0), thickness=2)
+        for (cx, cy) in corners_G:
+            cv2.circle(img_annotated, (cx, cy), 5, (0, 255, 0), -1) # green corner dots
+
+    if corners_R is not None:
+        pts_R = corners_R.reshape(-1, 1, 2)
+        cv2.polylines(img_annotated, [pts_R], isClosed=True, color=(255, 0, 0), thickness=2)
+        for (cx, cy) in corners_R:
+            cv2.circle(img_annotated, (cx, cy), 5, (255, 0, 0), -1) # red corner dots
+
+    # 7. Compute Intersection of the two bounding boxes
     inter_x_min = max(x_min_G, x_min_R)
     inter_y_min = max(y_min_G, y_min_R)
     inter_x_max = min(x_max_G, x_max_R)
@@ -97,7 +127,7 @@ def segment_blocks(image_path):
 
     if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
         # Boxes overlap — draw intersection region in yellow
-        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        #cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
         bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
     else:
         bbox_I = None
@@ -135,7 +165,7 @@ def segment_blocks(image_path):
 
     bbox_G = (x_min_G, y_min_G, x_max_G, y_max_G)
     bbox_R = (x_min_R, y_min_R, x_max_R, y_max_R)
-    return G, R, img_annotated, bbox_G, bbox_R, bbox_I
+    return G, R, img_annotated, bbox_G, bbox_R, bbox_I, corners_G, corners_R
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -162,7 +192,7 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I = segment_blocks(SINGLE_IMAGE)
+g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I, corners_G, corners_R = segment_blocks(SINGLE_IMAGE)
 
 x_min_G, y_min_G, x_max_G, y_max_G = bbox_G
 x_min_R, y_min_R, x_max_R, y_max_R = bbox_R
@@ -190,5 +220,16 @@ if bbox_I is not None:
     print(f"Intersection width: {w_I}, height: {h_I}")
 else:
     print("\nNo intersection between the two bounding boxes.")
+
+# Exact corner coordinates
+if corners_G is not None:
+    print(f"\nGreen Object corners ({len(corners_G)} points):")
+    for i, (cx, cy) in enumerate(corners_G):
+        print(f"  Corner {i}: ({cx}, {cy})")
+
+if corners_R is not None:
+    print(f"\nRed Object corners ({len(corners_R)} points):")
+    for i, (cx, cy) in enumerate(corners_R):
+        print(f"  Corner {i}: ({cx}, {cy})")
 
 
