@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QImage, QPixmap, QColor, QFont, QKeySequence, QShortcut, QIcon, QPainter
 )
 from PySide6.QtCore import Qt, QRectF, Signal, Slot
+import subprocess
 
 # Global Dark Theme
 C = {
@@ -214,18 +215,31 @@ class BaseVisionApp(QMainWindow):
         p, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if p:
             self._load_from_path(p)
-
-    def _handle_paste(self):
-        clipboard = QApplication.clipboard()
-        mime_data = clipboard.mimeData()
-        
-        if mime_data.hasImage():
-            qimg = clipboard.image()
-            self._load_from_qimage(qimg)
+        # We use xclip for robust Linux/Docker clipboard handling since QImage memory mapping
+        # can struggle with random alpha channels and X11 forwarding padding.
+        tmp_path = "/tmp/clipboard_img.png"
+        try:
+            # Check if xclip is installed
+            subprocess.run(["xclip", "-version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Extract image from clipboard
+            res = subprocess.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], 
+                                 capture_output=True)
+            if res.returncode != 0 or not res.stdout:
+                QMessageBox.warning(self, "Paste", "No image found in clipboard.")
+                return
+                
+            with open(tmp_path, "wb") as f:
+                f.write(res.stdout)
+                
+            self._load_from_path(tmp_path)
             if hasattr(self, 'path_entry'):
                 self.path_entry.setText("<Clipboard Image>")
-        else:
-            QMessageBox.warning(self, "Paste Error", "No valid image found in clipboard.")
+                
+        except FileNotFoundError:
+            QMessageBox.critical(self, "Dependency Missing", "xclip is not installed. Please install it first.")
+        except Exception as e:
+            QMessageBox.critical(self, "Paste Error", f"Failed to read clipboard:\n{e}")
 
     def _load_from_path(self, path):
         bgr = cv2.imread(path)
@@ -237,14 +251,6 @@ class BaseVisionApp(QMainWindow):
         
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         self._set_rgb_image(rgb)
-
-    def _load_from_qimage(self, qimg: QImage):
-        qimg = qimg.convertToFormat(QImage.Format_RGB888)
-        width, height = qimg.width(), qimg.height()
-        ptr = qimg.constBits()
-        # Create a view into the memory, then copy to own it
-        arr = np.array(memoryview(ptr)).reshape(height, width, 3).copy()
-        self._set_rgb_image(arr)
 
     def _set_rgb_image(self, rgb_array: np.ndarray):
         """Internal setter that triggers the base logic and emits signal."""
