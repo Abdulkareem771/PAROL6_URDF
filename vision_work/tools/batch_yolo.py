@@ -62,16 +62,17 @@ class BatchWorker(QThread):
     done = Signal(int, float)         # (saved_count, elapsed_s)
 
     def __init__(self, model, image_paths, out_dir, mode, target_ids,
-                 conf, mask_color, save_all_ids):
+                 conf, mask_color, save_all_ids, target_tags):
         super().__init__()
         self.model = model
         self.image_paths = image_paths
         self.out_dir = out_dir
         self.mode = mode
-        self.target_ids = target_ids
+        self.target_ids = target_ids       # Set of det-index integers (or empty = all)
         self.conf = conf
-        self.mask_color = mask_color  # (R, G, B)
+        self.mask_color = mask_color       # (R, G, B)
         self.save_all_ids = save_all_ids
+        self.target_tags = target_tags     # Set of class name strings, lowercase (or empty = all)
 
     def run(self):
         t0 = time.perf_counter()
@@ -108,8 +109,10 @@ class BatchWorker(QThread):
                 cls_name = names.get(cls_id, f"cls{cls_id}")
                 conf_val = float(box.conf[0])
 
-                # Filter by target IDs unless save_all_ids
-                if not self.save_all_ids and det_i not in self.target_ids:
+                # Filter: skip if neither ID nor tag matches
+                id_ok  = self.save_all_ids or det_i in self.target_ids
+                tag_ok = (not self.target_tags) or (cls_name.lower() in self.target_tags)
+                if not (id_ok and tag_ok):
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -227,16 +230,35 @@ class BatchYolo(BaseVisionApp):
         self.sidebar_layout.addWidget(self._out_lbl)
         self._add_button("💾  Select Output Folder", self._select_out)
 
-        # Target IDs
-        self._add_section_header("Target Object IDs")
-        info = QLabel("Enter IDs to export (0,1,2) or leave empty for all.")
+        # Target IDs and Tags
+        self._add_section_header("Filter: Detection IDs & Class Tags")
+        from PySide6.QtWidgets import QLineEdit
+        info = QLabel(
+            "ID filter: detection index (0,1,2...)\n"
+            "Tag filter: class name (seam, weld...)\n"
+            "Leave both empty to export all detections."
+        )
         info.setStyleSheet(f"color: {C['text2']}; font-size: 10px;")
         info.setWordWrap(True)
         self.sidebar_layout.addWidget(info)
-        from PySide6.QtWidgets import QLineEdit
+
+        id_row = QHBoxLayout()
+        id_lbl = QLabel("IDs:")
+        id_lbl.setStyleSheet(f"color: {C['text2']}; font-size: 11px; min-width: 28px;")
         self._ids_edit = QLineEdit()
-        self._ids_edit.setPlaceholderText("e.g. 0,1  (empty = all IDs)")
-        self.sidebar_layout.addWidget(self._ids_edit)
+        self._ids_edit.setPlaceholderText("e.g. 0,1  (empty = all)")
+        id_row.addWidget(id_lbl)
+        id_row.addWidget(self._ids_edit)
+        self.sidebar_layout.addLayout(id_row)
+
+        tag_row = QHBoxLayout()
+        tag_lbl = QLabel("Tags:")
+        tag_lbl.setStyleSheet(f"color: {C['text2']}; font-size: 11px; min-width: 28px;")
+        self._tags_edit = QLineEdit()
+        self._tags_edit.setPlaceholderText("e.g. seam,weld  (empty = all)")
+        tag_row.addWidget(tag_lbl)
+        tag_row.addWidget(self._tags_edit)
+        self.sidebar_layout.addLayout(tag_row)
 
         # Export mode
         self._add_section_header("Export Mode")
@@ -334,16 +356,20 @@ class BatchYolo(BaseVisionApp):
             QMessageBox.warning(self, "No output", "Select an output folder first."); return
 
         # Parse target IDs
-        raw = self._ids_edit.text().strip()
-        if raw:
+        raw_ids = self._ids_edit.text().strip()
+        if raw_ids:
             try:
-                target_ids = {int(x.strip()) for x in raw.split(',')}
+                target_ids = {int(x.strip()) for x in raw_ids.split(',') if x.strip()}
             except ValueError:
                 QMessageBox.critical(self, "Bad IDs", "Enter comma-separated integers, e.g. 0,1"); return
             save_all = False
         else:
             target_ids = set()
             save_all = True
+
+        # Parse target tags
+        raw_tags = self._tags_edit.text().strip()
+        target_tags = {t.strip().lower() for t in raw_tags.split(',') if t.strip()} if raw_tags else set()
 
         mode = self._mode_combo.currentText()
         self._progress.setValue(0)
@@ -359,6 +385,7 @@ class BatchYolo(BaseVisionApp):
             conf=self._conf,
             mask_color=self._mask_color,
             save_all_ids=save_all,
+            target_tags=target_tags,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.log.connect(lambda m: self._status_lbl.setText(m))
