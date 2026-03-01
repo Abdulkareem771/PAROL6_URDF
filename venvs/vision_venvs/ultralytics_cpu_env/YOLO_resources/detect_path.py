@@ -10,13 +10,13 @@ x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
-EXPAND_PX     = 20  # pixels to expand the polygon outward from each corner
+EXPAND_PX     = 10  # pixels to expand the polygon outward from each corner
 
 
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -73,6 +73,7 @@ def segment_blocks(image_path):
         y_max_G = y_max_G + EXPAND_PX
         x_min_G = x_min_G - EXPAND_PX
         x_max_G = x_max_G + EXPAND_PX
+        #cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
@@ -87,6 +88,7 @@ def segment_blocks(image_path):
         y_max_R = y_max_R + EXPAND_PX
         x_min_R = x_min_R - EXPAND_PX
         x_max_R = x_max_R + EXPAND_PX
+        #cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
@@ -120,16 +122,16 @@ def segment_blocks(image_path):
     if corners_G is not None:
         exp_G = expand_corners(corners_G, EXPAND_PX)
         pts_G = exp_G.reshape(-1, 1, 2)                              # shape (N, 1, 2) required by polylines
-        cv2.polylines(img_annotated, [pts_G], isClosed=True, color=(0, 255, 0), thickness=2)
-        for (cx, cy) in exp_G:
-            cv2.circle(img_annotated, (cx, cy), 5, (0, 255, 0), -1) # green corner dots
+        #cv2.polylines(img_annotated, [pts_G], isClosed=True, color=(0, 255, 0), thickness=2)
+        #for (cx, cy) in exp_G:
+        #   cv2.circle(img_annotated, (cx, cy), 5, (0, 255, 0), -1) # green corner dots
 
     if corners_R is not None:
         exp_R = expand_corners(corners_R, EXPAND_PX)
         pts_R = exp_R.reshape(-1, 1, 2)
-        cv2.polylines(img_annotated, [pts_R], isClosed=True, color=(255, 0, 0), thickness=2)
-        for (cx, cy) in exp_R:
-            cv2.circle(img_annotated, (cx, cy), 5, (255, 0, 0), -1) # red corner dots
+        #cv2.polylines(img_annotated, [pts_R], isClosed=True, color=(255, 0, 0), thickness=2)
+        #for (cx, cy) in exp_R:
+        #    cv2.circle(img_annotated, (cx, cy), 5, (255, 0, 0), -1) # red corner dots
 
     # 7. Compute Intersection of the two bounding boxes
     inter_x_min = max(x_min_G, x_min_R)
