@@ -107,8 +107,24 @@ def process_folder(folder_path, output_folder):
 g_matrix, r_matrix = segment_blocks(SINGLE_IMAGE)
 
 Gm = (g_matrix / 255).astype(np.float32)
-Rm = (r_matrix / 255).astype(np.float32)
+r_G, c_G = np.where(Gm == 1)
+x_G = c_G
+y_G = r_G
 
-print(Gm[1,1])
-print(type(Gm))
+# Bounding box of Green object:
+y_min_G, y_max_G = y_G.min(), y_G.max()
+x_min_G, x_max_G = x_G.min(), x_G.max()
+
+Rm = (r_matrix / 255).astype(np.float32)
+r_R, c_R = np.where(Rm == 1)
+x_R = c_R
+y_R = r_R
+
+# Bounding box of Red object:
+y_min_R, y_max_R = y_R.min(), y_R.max()
+x_min_R, x_max_R = x_R.min(), x_R.max()
+
+print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
+print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+
 
