@@ -185,7 +185,7 @@ class App(tk.Tk):
                  orient="horizontal", bg=C["panel"], fg=C["text"], troughcolor=C["border"],
                  highlightthickness=0, showvalue=False, command=self._on_thr_change).pack(fill="x")
 
-        tk.Label(f2, text="Drawing Color (B,G,R):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 9)).pack(anchor="w", pady=(6,0))
+        tk.Label(f2, text="Color (B,G,R) or Object IDs (0: 255,0,0; 1: 0,255,0):", bg=C["panel"], fg=C["text2"], font=("Segoe UI", 8)).pack(anchor="w", pady=(6,0))
         self.draw_color = tk.StringVar(value="255,50,50") # Default BGR red-ish
         tk.Entry(f2, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
                  relief="flat", font=("Helvetica", 10)).pack(fill="x", ipady=3, pady=(0, 6))
@@ -381,15 +381,39 @@ class App(tk.Tk):
         boxes = self._results[0].boxes
         masks = self._results[0].masks
         
-        # Parse selected BGR color
-        try:
-            c_str = self.draw_color.get().strip()
-            b, g, r = [int(x.strip()) for x in c_str.split(',')]
-            color_bgr = (b, g, r)               # For OpenCV shapes
-            color_rgb = np.array([r, g, b])     # For numpy mask operations (since self._rgb is RGB)
-        except:
-            color_bgr = (255, 50, 50)
-            color_rgb = np.array([255, 50, 50])
+        # Parse drawing color (Global or ID-specific mapping)
+        c_str = self.draw_color.get().strip()
+        color_map_bgr = {}
+        color_map_rgb = {}
+        default_bgr = (255, 50, 50)
+        default_rgb = np.array([255, 50, 50])
+
+        if ':' in c_str:
+            # Dictionary style mapping: "0: 255,0,0; 1: 0,255,0"
+            parts = [p.strip() for p in c_str.split(';') if p.strip()]
+            for part in parts:
+                try:
+                    if ':' in part:
+                        obj_id_str, rgb_str = part.split(':')
+                        obj_id = int(obj_id_str.strip())
+                        b, g, r = [int(x.strip()) for x in rgb_str.split(',')]
+                        color_map_bgr[obj_id] = (b, g, r)
+                        color_map_rgb[obj_id] = np.array([r, g, b])
+                except: pass
+        else:
+            # Global fallback color
+            try:
+                if c_str:
+                    b, g, r = [int(x.strip()) for x in c_str.split(',')]
+                    default_bgr = (b, g, r)
+                    default_rgb = np.array([r, g, b])
+            except: pass
+        
+        def get_color_rgb(idx):
+            return color_map_rgb.get(idx, default_rgb)
+
+        def get_color_bgr(idx):
+            return color_map_bgr.get(idx, default_bgr)
         
         img_copy = self._rgb.copy()
         
@@ -400,8 +424,8 @@ class App(tk.Tk):
                 x1, y1, x2, y2 = map(int, boxes.xyxy[i])
                 conf = float(boxes.conf[i])
                 cls = int(boxes.cls[i])
-                label = f"{names[cls]} {conf:.2f}"
-                cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
+                label = f"[ID: {i}] {names[cls]} {conf:.2f}"
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), get_color_rgb(i).tolist(), 2)
                 cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             self._current_view_rgb = img_copy
         elif v == "Mask Overlay":
@@ -410,14 +434,19 @@ class App(tk.Tk):
                 for i in indices:
                     mask = masks.data[i].cpu().numpy()
                     mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
-                    img_copy[mask > 0.5] = img_copy[mask > 0.5] * 0.5 + color_rgb * 0.5
+                    c_rgb = get_color_rgb(i)
+                    img_copy[mask > 0.5] = img_copy[mask > 0.5] * 0.5 + c_rgb * 0.5
             else:
                 # fallback if not a segmentation model
                 self._current_view_rgb = img_copy # Just fallback
                 
             for i in indices:
                 x1, y1, x2, y2 = map(int, boxes.xyxy[i])
-                cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
+                conf = float(boxes.conf[i])
+                cls = int(boxes.cls[i])
+                label = f"[ID: {i}] {names[cls]} {conf:.2f}"
+                cv2.rectangle(img_copy, (x1, y1), (x2, y2), get_color_rgb(i).tolist(), 2)
+                cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
             self._current_view_rgb = img_copy
         elif v == "Solid Color Mask":
@@ -425,11 +454,11 @@ class App(tk.Tk):
                 for i in indices:
                     mask = masks.data[i].cpu().numpy()
                     mask = cv2.resize(mask, (img_copy.shape[1], img_copy.shape[0]))
-                    img_copy[mask > 0.5] = color_rgb.astype(np.uint8)
+                    img_copy[mask > 0.5] = get_color_rgb(i).astype(np.uint8)
             else:
                 for i in indices:
                     x1, y1, x2, y2 = map(int, boxes.xyxy[i])
-                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), -1)
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), get_color_rgb(i).tolist(), -1)
             self._current_view_rgb = img_copy
         elif v == "Segmentation Polygon":
             img_h, img_w = img_copy.shape[:2]
@@ -442,24 +471,30 @@ class App(tk.Tk):
                     pts = (polygon_norm * np.array([img_w, img_h])).astype(np.int32)
                     pts = pts.reshape((-1, 1, 2))
                     
+                    c_rgb_list = get_color_rgb(i).tolist()
                     # Draw a semi-transparent fill and a solid 2px outline
                     overlay = img_copy.copy()
-                    cv2.fillPoly(overlay, [pts], color_rgb.tolist())
+                    cv2.fillPoly(overlay, [pts], c_rgb_list)
                     cv2.addWeighted(overlay, 0.4, img_copy, 0.6, 0, img_copy) # 40% opacity fill
                     img_copy = img_copy.astype(np.uint8)
-                    cv2.polylines(img_copy, [pts], isClosed=True, color=color_rgb.tolist(), thickness=2)
+                    cv2.polylines(img_copy, [pts], isClosed=True, color=c_rgb_list, thickness=2)
                     
                     # Add standard bounding box labels for clarity
                     x1, y1, x2, y2 = map(int, boxes.xyxy[i])
                     conf = float(boxes.conf[i])
                     cls = int(boxes.cls[i])
-                    label = f"{names[cls]} {conf:.2f}"
+                    label = f"[ID: {i}] {names[cls]} {conf:.2f}"
                     cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             else:
                 # Fallback to standard bounding boxes if the model doesn't have polygons
                 for i in indices:
                     x1, y1, x2, y2 = map(int, boxes.xyxy[i])
-                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), color_rgb.tolist(), 2)
+                    conf = float(boxes.conf[i])
+                    cls = int(boxes.cls[i])
+                    label = f"[ID: {i}] {names[cls]} {conf:.2f}"
+                    c_rgb_list = get_color_rgb(i).tolist()
+                    cv2.rectangle(img_copy, (x1, y1), (x2, y2), c_rgb_list, 2)
+                    cv2.putText(img_copy, label, (x1, max(y1-5, 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             self._current_view_rgb = img_copy
         elif v == "Cropped View":
             if len(indices) > 0:
