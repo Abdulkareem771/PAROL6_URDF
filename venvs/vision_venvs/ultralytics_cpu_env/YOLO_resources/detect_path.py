@@ -89,7 +89,21 @@ def segment_blocks(image_path):
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
-    # 6. GUI Display Section
+    # 6. Compute Intersection of the two bounding boxes
+    inter_x_min = max(x_min_G, x_min_R)
+    inter_y_min = max(y_min_G, y_min_R)
+    inter_x_max = min(x_max_G, x_max_R)
+    inter_y_max = min(y_max_G, y_max_R)
+
+    if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
+        # Boxes overlap — draw intersection region in yellow
+        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
+    else:
+        bbox_I = None
+        print("No intersection between the two bounding boxes.")
+
+    # 7. GUI Display Section
     plt.figure(figsize=(20, 5))
 
     # Subplot 1: Original Image
@@ -121,7 +135,7 @@ def segment_blocks(image_path):
 
     bbox_G = (x_min_G, y_min_G, x_max_G, y_max_G)
     bbox_R = (x_min_R, y_min_R, x_max_R, y_max_R)
-    return G, R, img_annotated, bbox_G, bbox_R
+    return G, R, img_annotated, bbox_G, bbox_R, bbox_I
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -148,7 +162,7 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, r_matrix, img_annotated, bbox_G, bbox_R = segment_blocks(SINGLE_IMAGE)
+g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I = segment_blocks(SINGLE_IMAGE)
 
 x_min_G, y_min_G, x_max_G, y_max_G = bbox_G
 x_min_R, y_min_R, x_max_R, y_max_R = bbox_R
@@ -162,11 +176,19 @@ w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
 
 print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
-print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+print(f"Green Object width: {w_G}, height: {h_G}")
 
-print(f"Green Object width: {w_G}")
-print(f"Green Object height: {h_G}")
-print(f"Red Object width: {w_R}")
-print(f"Red Object height: {h_R}")
+print(f"Red Object Bounding Box:   ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+print(f"Red Object width: {w_R}, height: {h_R}")
+
+# Intersection region
+if bbox_I is not None:
+    x_min_I, y_min_I, x_max_I, y_max_I = bbox_I
+    w_I = x_max_I - x_min_I
+    h_I = y_max_I - y_min_I
+    print(f"\nIntersection Region:       ({x_min_I}, {y_min_I}) to ({x_max_I}, {y_max_I})")
+    print(f"Intersection width: {w_I}, height: {h_I}")
+else:
+    print("\nNo intersection between the two bounding boxes.")
 
 
