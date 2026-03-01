@@ -26,7 +26,7 @@ class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("WeldVision Launcher")
-        self.geometry("400x560")
+        self.geometry("400x680")
         self.resizable(False, False)
         self.configure(bg=C["bg"])
         
@@ -58,11 +58,14 @@ class Launcher(tk.Tk):
         tk.Label(separator, text="NEXT-GEN TOOLS", font=("Segoe UI", 8, "bold"),
                  fg=C["text2"], bg=C["bg"]).pack()
 
-        self._btn("🔮  Pipeline Prototyper", self._launch_prototyper, "#e3b341").pack(fill="x", padx=40, pady=5, ipady=7)
-        self._btn("🐠  Script Sandbox", self._launch_script_sandbox, "#f38ba8").pack(fill="x", padx=40, pady=5, ipady=7)
-        self._btn("🎨  Mask Painter", self._launch_mask_painter, "#cba6f7").pack(fill="x", padx=40, pady=5, ipady=7)
-        self._btn("🔍  YOLO Inspector", self._launch_yolo_inspector, "#89dceb").pack(fill="x", padx=40, pady=5, ipady=7)
-        self._btn("〰️  Seam Inspector", self._launch_seam_inspector, "#a6e3a1").pack(fill="x", padx=40, pady=5, ipady=7)
+        self._btn("🔮  Pipeline Prototyper", self._launch_prototyper, "#e3b341").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("🐠  Script Sandbox", self._launch_script_sandbox, "#f38ba8").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("🎨  Mask Painter", self._launch_mask_painter, "#cba6f7").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("🔍  YOLO Inspector", self._launch_yolo_inspector, "#89dceb").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("〰️  Seam Inspector", self._launch_seam_inspector, "#a6e3a1").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("🧪  Mask Pipeline Tester", self._launch_mask_pipeline, "#fab387").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("🎬  Pipeline Studio", self._launch_pipeline_studio, "#94e2d5").pack(fill="x", padx=40, pady=4, ipady=6)
+        self._btn("✏️  Annotation Studio", self._launch_annotation_studio, "#eba0ac").pack(fill="x", padx=40, pady=4, ipady=6)
 
     def _btn(self, text, cmd, bg_color):
         return tk.Button(self, text=text, command=cmd, bg=bg_color, fg="#ffffff",
@@ -103,6 +106,15 @@ class Launcher(tk.Tk):
 
     def _launch_seam_inspector(self):
         self._launch("tools/seam_inspector.py")
+
+    def _launch_mask_pipeline(self):
+        self._launch("tools/mask_pipeline_tester.py")
+
+    def _launch_pipeline_studio(self):
+        self._launch("tools/pipeline_studio.py")
+
+    def _launch_annotation_studio(self):
+        self._launch("tools/annotation_studio.py")
 
 if __name__ == "__main__":
     Launcher().mainloop()

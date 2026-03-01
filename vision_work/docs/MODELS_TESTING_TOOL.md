@@ -1,13 +1,31 @@
 # Models Testing Tool
-**WeldVision GUI Tester Architecture**
+**WeldVision GUI Tester Architecture — v2**
 
-This tool provides a unified, cross-OS, GUI-based environment for testing and isolating computer vision models. It operates within a Dockerized ROS2 runtime (via `parol6_dev`) but utilizes X11 forwarding to render its UI back to the host machine.
+A unified R&D testing environment for vision models operating inside the `parol6_dev` Docker container via X11 forwarding.
+
+## Tool Suite Overview
+
+| Tool | File | Type |
+|---|---|---|
+| YOLO Tester (legacy) | `yolo_training/yolo_gui.py` | Tkinter — frozen |
+| ResUNet Tester (legacy) | `resunet_training/weld_seam_gui.py` | Tkinter — frozen |
+| Manual Annotator (legacy) | `tools/manual_annotator.py` | Tkinter — frozen |
+| **Pipeline Prototyper** | `tools/pipeline_prototyper.py` | PySide6 |
+| **Script Sandbox** | `tools/script_sandbox.py` | PySide6 |
+| **Mask Painter** | `tools/mask_painter.py` | PySide6 |
+| **YOLO Inspector** | `tools/yolo_inspector.py` | PySide6 |
+| **Seam Inspector** | `tools/seam_inspector.py` | PySide6 |
+| **Mask Pipeline Tester** | `tools/mask_pipeline_tester.py` | PySide6 |
+| **Pipeline Studio** | `tools/pipeline_studio.py` | PySide6 |
+| **Annotation Studio** | `tools/annotation_studio.py` | PySide6 |
+
+All PySide6 tools share `BaseVisionApp` from `vision_work/core/qt_base_gui.py`.
 
 ## 1. Universal Launcher (`vision_work/launcher.py`)
 The universal entry point for the toolkit.
-- Provides a simple Tkinter window to launch either the **YOLO Detector** or the **ResUNet Segmenter**.
-- Built to be expandable; new models or testing tools can easily be attached here.
-- Invokes the chosen sub-scripts using `subprocess.run()`.
+- Displays two sections: legacy Tkinter tools and the new PySide6 Next-Gen tools.
+- Invokes each tool as an independent subprocess, so tools never interfere with each other.
+
 
 ## 2. YOLO Tester (`vision_work/yolo_training/yolo_gui.py`)
 A custom PyTorch/Ultralytics GUI for isolated testing of bounding box and segmentation models on individual images or large batches.
