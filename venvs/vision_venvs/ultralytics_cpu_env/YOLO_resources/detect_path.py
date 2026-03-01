@@ -73,7 +73,7 @@ def segment_blocks(image_path):
         y_max_G = y_max_G + EXPAND_PX
         x_min_G = x_min_G - EXPAND_PX
         x_max_G = x_max_G + EXPAND_PX
-        #cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
@@ -88,7 +88,7 @@ def segment_blocks(image_path):
         y_max_R = y_max_R + EXPAND_PX
         x_min_R = x_min_R - EXPAND_PX
         x_max_R = x_max_R + EXPAND_PX
-        #cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
