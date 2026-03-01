@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSpinBox, QSlider, QFrame, QFileDialog, QMessageBox, QPushButton
 )
-from PySide6.QtGui import QColor, QPen, QImage, QPixmap
+from PySide6.QtGui import QColor, QPen, QImage, QPixmap, QCursor, QPainter
 from PySide6.QtCore import Qt, QPointF
 
 # Add the parent directory to sys.path so we can import vision_core
@@ -35,6 +35,7 @@ class ManualAnnotator(BaseVisionApp):
         
         # Connect base signal so we know when a new image is loaded via Browse/Paste
         self.image_loaded.connect(self._on_new_image)
+        self.spin_size.valueChanged.connect(self._update_cursor)
         
         # Override View mouse events for drawing
         self.view.viewport().installEventFilter(self)
@@ -69,6 +70,25 @@ class ManualAnnotator(BaseVisionApp):
         # Create a blank transparent mask array (RGBA) matching the image size for the UI
         self._mask_array = np.zeros((h, w, 4), dtype=np.uint8)
         self._update_mask_visual()
+        self._update_cursor()
+
+    def _update_cursor(self, *_):
+        """Creates a dynamic hollow circle cursor matching the brush size."""
+        size = self.spin_size.value()
+        # Ensure the pixmap is large enough to hold the circle and its border
+        px_size = max(size + 4, 16) 
+        pix = QPixmap(px_size, px_size)
+        pix.fill(Qt.transparent)
+        
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor(255, 0, 0, 180), 1))
+        # Draw circle perfectly centered
+        center = px_size / 2
+        painter.drawEllipse(QPointF(center, center), size/2, size/2)
+        painter.end()
+        
+        self.view.viewport().setCursor(QCursor(pix, int(center), int(center)))
 
     def _update_mask_visual(self):
         """Converts the internal numpy mask to a QPixmap and overlays it."""
@@ -119,9 +139,11 @@ class ManualAnnotator(BaseVisionApp):
         
         # Extract just the RGB or BW data from our RGBA drawing array
         if mode == "red":
-            # Just take the RGB channels. It will be black background with a red line.
-            out_img = self._mask_array[:, :, :3]
-            out_img = cv2.cvtColor(out_img, cv2.COLOR_RGB2BGR) # Convert to BGR for saving
+            # Blend the red lines onto the original image exactly as viewed on screen
+            base_img = self._rgb.copy()
+            red_pixels = self._mask_array[:, :, 3] > 0 # Where Alpha > 0
+            base_img[red_pixels] = [255, 0, 0] # Color them solid Red
+            out_img = cv2.cvtColor(base_img, cv2.COLOR_RGB2BGR)
             cv2.imwrite(p, out_img)
             
         elif mode == "bw":
