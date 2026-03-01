@@ -127,7 +127,7 @@ w_G = x_max_G - x_min_G
 h_G = y_max_G - y_min_G
 
 # Create a Rectangle on Green object (x, y, width, height)
-cv2.rectangle(img_rgb, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+#cv2.rectangle(img_rgb, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
 
 
 Rm = (r_matrix / 255).astype(np.float32)
@@ -144,15 +144,15 @@ w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
 
 # Create a Rectangle on Red object (x, y, width, height)
-cv2.rectangle(img_rgb, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+#cv2.rectangle(img_rgb, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
 
 
 
 # cv2.imshow expects BGR, so convert back from RGB before displaying
-img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-cv2.imshow('Image with Bounding Boxes', img_bgr)
-cv2.waitKey(0) # Wait indefinitely until a key is pressed
-cv2.destroyAllWindows() # Close all windows
+#img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+#cv2.imshow('Image with Bounding Boxes', img_bgr)
+#cv2.waitKey(0) # Wait indefinitely until a key is pressed
+#cv2.destroyAllWindows() # Close all windows
 
 
 print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
