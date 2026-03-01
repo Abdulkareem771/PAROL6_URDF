@@ -44,3 +44,24 @@ Both tools share the same core structural design to ensure the user experience i
 - **V1 Single-Pane GUI:** A wide dark sidebar on the left and a single large viewing canvas on the right.
 - **Clipboard Access:** Both tools bypass standard Tkinter limitations by invoking `xclip` directly, allowing users in Linux/X11 containerized environments to seamlessly use `Ctrl+V` to paste images directly from their Host OS clipboard into the tool.
 - **Live Sliders:** Confidence threshold sliders trigger instant canvas redraws without forcing the underlying heavy ML models to re-evaluate the image data.
+
+## 4. Pipeline Prototyper (`vision_work/tools/pipeline_prototyper.py`)
+A modern PySide6 tool built on `BaseVisionApp` for testing complete vision pipelines end-to-end without writing boilerplate ROS 2 C++ nodes.
+
+### 4-Slot Architecture
+Each stage is independently toggleable. Slots you don't need are simply left empty.
+
+| Slot | Widget | Description |
+|---|---|---|
+| **Input** | File Browser / Text Box | Load a local image folder **or** type a live ROS 2 topic (e.g. `/kinect2/image_raw`) to subscribe to a live camera stream |
+| **ML Inference** | `.pt` File Picker | Load any Ultralytics YOLO or ResUNet model. Inference is triggered automatically when an image is loaded or a ROS frame arrives |
+| **Script Injector** | `.py` File Picker | Dynamically load any Python script as a black-box processing node. Zero modifications needed. Auto-detects `segment_blocks()` and `process_image()` function signatures |
+| **ROS Output** | Text Box + Button | Type a ROS 2 topic name and click "Publish" to stream the final processed canvas directly to the robot network |
+
+### Real-time Profiling
+A live FPS and latency counter in the sidebar measures the combined Slot 2+3 execution time, giving exact data for whether the pipeline can run on the target hardware (Jetson / Mini PC) in real-time.
+
+### Design Notes
+- **Zero teammate changes required:** Uses `importlib.util` dynamic loading — teammates never need to add ROS boilerpate or UI code to their scripts.
+- **Graceful ROS degradation:** If `rclpy` is not sourced, all 4 slots still work in pure offline image mode.
+- **Launched from:** The main `launcher.py` hub via the 🔮 Pipeline Prototyper button.

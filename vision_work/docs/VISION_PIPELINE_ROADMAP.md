@@ -25,40 +25,33 @@ The project has entered an advanced R&D phase requiring the capability to rapidl
 
 ---
 
-## 2. Recommended Tooling Additions
+## 2. Tooling Status
 
-To support this extensive R&D phase, the testing environment needs to evolve from a "Viewer" into an "Interactive Pipeline Prototyping Engine." 
-
-### Required Features:
-1. **Manual Drawing / 'Paint' Mode:** 
-   * Ability to load a raw image and manually draw/paint red lines or colored masks natively on the canvas. 
-   * Essential for Approach A (testing Image Processing limits without AI) and Approach C (human-in-the-loop).
-2. **Multi-Model Pipeline Chaining (The "Pass-to-UNet" Button):**
-   * Currently, YOLO and ResUNet are tested in absolute isolation. We need a way to take a YOLO generated crop and instantly pipe it into a loaded ResUNet model on the exact same screen to test the "Hierarchical Pipeline" (Approach B).
-3. **Interactive "Clickable" Detections:**
-   * If YOLO detects 3 seams, the GUI should pause. The user clicks the correct one on the canvas, and *only that specific crop* gets passed to the next stage or saved.
-4. **Automated Data Augmentation Exporter:**
-   * Automatically generate rotated/brightened/flipped versions of the YOLO bounding boxes during the Advanced Batch Auto-Annotation to instantly 5x the dataset size.
-5. **Bounding Box / Polygon Nudging:**
-   * The ability to drag the corners of a YOLO prediction *before* saving it to disk as an annotation. This turns YOLO into an AI-Assisted annotation tool for building future datasets.
+| Feature | Status | Tool |
+|---|---|---|
+| Manual Drawing / Paint Mode | ✅ Implemented | `tools/manual_annotator.py` |
+| Multi-Model Pipeline Chaining | ✅ Implemented | `tools/pipeline_prototyper.py` |
+| Two-Way Live ROS Topic Streaming | ✅ Implemented | `tools/pipeline_prototyper.py` |
+| External Script Injection (black-box node) | ✅ Implemented | `tools/pipeline_prototyper.py` |
+| Live FPS / Latency Profiling | ✅ Implemented | `tools/pipeline_prototyper.py` |
+| Interactive Clickable Detections | 🔲 Planned | Future add-on to prototyper |
+| BB / Polygon Nudging | 🔲 Planned | Future annotation tool |
+| Automated Data Augmentation Exporter | 🔲 Planned | YOLO Advanced Tab add-on |
 
 ---
 
-## 3. Architectural Decision: Monolithic Tool vs. Launcher Modularity
+## 3. Architectural Decision: Modular Launcher Pattern ✅
 
 **The Question:** *Should we add all these features into a single, massive "God Tool", or keep the YOLO/ResUNet/etc. tools separate and simply add more buttons to `launcher.py`?*
 
-**The Recommendation: The Modular Launcher Pattern (Keep them separate!)**
+**Decision: Modular Launcher Pattern — Implemented.**
 
-Your instincts are exactly right. Building "one tool to do everything" (Monolithic) is a bad idea for R&D. 
-1. **Code Bloat:** A single Python file trying to manage PyTorch, Ultralytics YOLO, ResUNet architectures, OpenCV painting, and Tkinter UI state simultaneously will become a massive, unmaintainable nightmare (3000+ lines of code).
-2. **Dependency Clashes:** In the future, you might want to test a model that requires completely different Python versions or conflicting library versions (e.g., TensorFlow vs PyTorch). 
-3. **The Unix Philosophy:** "Do one thing and do it well." 
+We leave `yolo_gui.py` strictly as the "YOLO Expert" and `weld_seam_gui.py` as the "ResUNet Expert". Each R&D need gets its own lean, specialized tool registered in the Universal Launcher.
 
-**How we proceed:**
-We will leave `yolo_gui.py` strictly as the "YOLO Expert" and `weld_seam_gui.py` as the "ResUNet Expert". 
-Instead, we will build **New, Specialized Mini-Tools** and attach them as new buttons to the `launcher.py`. 
+**Current tools in the suite (`launcher.py`):**
+- 🔍 `yolo_training/yolo_gui.py` — YOLO object detection tester
+- 〰️ `resunet_training/weld_seam_gui.py` — ResUNet seam segmenter
+- 🖍️ `tools/manual_annotator.py` — Human-in-the-loop red line painter
+- 🔮 `tools/pipeline_prototyper.py` — 4-slot linear pipeline testing harness with two-way ROS 2 integration
 
-For example, we will build a dedicated `pipeline_prototyper.py` that imports the weights of *both* models, but features a UI specifically designed for chaining them together and drawing on them. Or a dedicated `manual_annotator.py` designed purely for Approach C. 
-
-The Universal Launcher becomes the "Desktop Environment" for your R&D suite.
+All tools share a common `BaseVisionApp` PySide6 base class in `core/qt_base_gui.py`.
