@@ -108,6 +108,12 @@ class YoloInspector(BaseVisionApp):
         self._chk_auto.toggled.connect(lambda _: self._render())
         self.sidebar_layout.addWidget(self._chk_auto)
 
+        self._chk_hide_labels = QCheckBox("Hide Labels / ID Text")
+        self._chk_hide_labels.setStyleSheet(f"color: {C['text']};")
+        self._chk_hide_labels.setChecked(False)
+        self._chk_hide_labels.toggled.connect(lambda _: self._render())
+        self.sidebar_layout.addWidget(self._chk_hide_labels)
+
         # Per-ID Color assignment
         self._add_section_header("Per-ID Color Picker")
         self._id_list = QListWidget()
@@ -206,6 +212,8 @@ class YoloInspector(BaseVisionApp):
                 return AUTO_PALETTE_BGR[i % len(AUTO_PALETTE_BGR)]
             return (50, 50, 220)
 
+        hide_labels = self._chk_hide_labels.isChecked()
+
         for i, box in enumerate(boxes):
             bgr = get_bgr(i)
             rgb = (bgr[2], bgr[1], bgr[0])
@@ -216,13 +224,15 @@ class YoloInspector(BaseVisionApp):
 
             if mode == "Bounding Boxes":
                 cv2.rectangle(img, (x1, y1), (x2, y2), rgb, 2)
-                cv2.putText(img, label, (x1, max(y1 - 6, 12)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                if not hide_labels:
+                    cv2.putText(img, label, (x1, max(y1 - 6, 12)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
             elif mode == "Solid Mask":
                 cv2.rectangle(img, (x1, y1), (x2, y2), rgb, -1)
-                cv2.putText(img, label, (x1, max(y1 - 6, 12)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                if not hide_labels:
+                    cv2.putText(img, label, (x1, max(y1 - 6, 12)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
             elif mode in ("Segmentation Mask", "Polygon") and masks:
                 raw = masks.data[i].cpu().numpy()
@@ -233,16 +243,18 @@ class YoloInspector(BaseVisionApp):
                     overlay = img.copy()
                     overlay[msk] = np.array(rgb, dtype=np.uint8)
                     img = cv2.addWeighted(img, 0.45, overlay, 0.55, 0)
-                    cv2.putText(img, label, (x1, max(y1 - 6, 12)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    if not hide_labels:
+                        cv2.putText(img, label, (x1, max(y1 - 6, 12)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
                 elif mode == "Polygon":
                     contours, _ = cv2.findContours(
                         msk.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                     )
                     cv2.drawContours(img, contours, -1, rgb, 2)
-                    cv2.putText(img, label, (x1, max(y1 - 6, 12)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    if not hide_labels:
+                        cv2.putText(img, label, (x1, max(y1 - 6, 12)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         self._display_rgb(img)
 

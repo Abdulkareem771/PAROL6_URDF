@@ -192,8 +192,8 @@ class App(tk.Tk):
         color_row.pack(fill="x", pady=(0, 2))
         tk.Entry(color_row, textvariable=self.draw_color, bg=C["border"], fg=C["text"],
                  relief="flat", font=("Helvetica", 10), insertbackground=C["text"]).pack(side="left", fill="x", expand=True, ipady=3)
-        tk.Button(color_row, text="🎨", command=self._pick_color,
-                  bg=C["accent"], fg="#1e1e2e", relief="flat", font=("Segoe UI", 11),
+        tk.Button(color_row, text="Pick", command=lambda: self._pick_color(),
+                  bg=C["accent"], fg="#1e1e2e", relief="flat", font=("Segoe UI", 9),
                   cursor="hand2", padx=4).pack(side="left", padx=(4, 0))
         self.draw_color.trace_add("write", lambda *args: self._on_view_change())
 

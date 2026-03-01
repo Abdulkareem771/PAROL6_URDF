@@ -211,7 +211,8 @@ class MaskPipelineTester(BaseVisionApp):
             img_lbl = QLabel()
             img_lbl.setAlignment(Qt.AlignCenter)
             img_lbl.setScaledContents(False)
-            img_lbl.setSizePolicy(img_lbl.sizePolicy().Expanding, img_lbl.sizePolicy().Expanding)
+            from PySide6.QtWidgets import QSizePolicy
+            img_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             img_lbl.setMinimumSize(200, 150)
             fl.addWidget(img_lbl)
             self._panels[idx] = img_lbl
