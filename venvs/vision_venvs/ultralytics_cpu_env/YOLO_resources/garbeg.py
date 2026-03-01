@@ -1,8 +1,16 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 import os
+import glob
 from pathlib import Path
+import matplotlib.pyplot as plt
+
+y_min_G, y_max_G = 0, 0
+x_min_G, x_max_G = 0, 0
+y_min_R, y_max_R = 0, 0
+x_min_R, x_max_R = 0, 0
+
+
 
 
 current_dir = Path(__file__)
@@ -12,35 +20,45 @@ SINGLE_IMAGE = project_dir / "data" / "some_images" / "image.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
+def segment_blocks(image_path):
+    # 1. Read the image
+    img = cv2.imread(image_path)
+    if img is None:
+        print(f"Could not read image: {image_path}")
+        return None, None
 
-def segment_and_display(image_path):
-    # 1. Load the image
-    img_bgr = cv2.imread(image_path)
-    if img_bgr is None:
-        print(f"Error: Could not read image at {image_path}")
-        return
-    
     # Convert BGR to RGB for correct display in Matplotlib
-    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 2. Convert to HSV for robust segmentation
-    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    # 2. Convert BGR (OpenCV default) to HSV
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    # 3. Define Color Thresholds
-    # Green
+    # 3. Define color ranges in HSV
+    # Note: HSV ranges in OpenCV are H: 0-180, S: 0-255, V: 0-255
+    
+    # Green range
     lower_green = np.array([35, 50, 50])
-    upper_green = np.array([90, 255, 255])
+    upper_green = np.array([85, 255, 255])
     
-    # Red (Red wraps around 0 and 180 in HSV)
-    lower_red1, upper_red1 = np.array([0, 70, 50]), np.array([10, 255, 255])
-    lower_red2, upper_red2 = np.array([170, 70, 50]), np.array([180, 255, 255])
+    # Red range (Red wraps around 0 and 180, so we combine two ranges)
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
 
-    # 4. Generate G and R Matrices
+    # 4. Create Masks (G and R matrices)
+    # G matrix: 255 for green pixels, 0 otherwise
     G = cv2.inRange(hsv, lower_green, upper_green)
-    
+
+    # R matrix: combine both ends of the red spectrum
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     R = cv2.bitwise_or(mask_red1, mask_red2)
+
+    # Optional: Clean up noise with morphological operations
+    kernel = np.ones((5, 5), np.uint8)
+    G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
+    R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
 
     # 5. GUI Display Section
     plt.figure(figsize=(15, 5))
@@ -66,8 +84,83 @@ def segment_and_display(image_path):
     plt.tight_layout()
     plt.show()
 
-    return G, R
+    return G, R, img_rgb
 
-# Run the function
-# Replace 'image.jpg' with your actual file path
-g_matrix, r_matrix = segment_and_display(SINGLE_IMAGE)
+def process_folder(folder_path, output_folder):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Supported extensions
+    extensions = ['*.jpg', '*.jpeg', '*.png']
+    image_files = []
+    for ext in extensions:
+        image_files.extend(glob.glob(os.path.join(folder_path, ext)))
+
+    for img_path in image_files:
+        filename = os.path.basename(img_path).split('.')[0]
+        G, R = segment_blocks(img_path)
+
+        if G is not None:
+            # Save the masks as images (or keep as matrices for further ops)
+            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_G.png"), G)
+            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_R.png"), R)
+            print(f"Processed: {filename}")
+
+
+# --- Execution ---
+#process_folder('input_folder_path', 'output_folder_path')
+# Replace 'image.jpg' with your file or use the folder function
+
+g_matrix, r_matrix, img_rgb = segment_blocks(SINGLE_IMAGE)
+
+Gm = (g_matrix / 255).astype(np.float32)
+r_G, c_G = np.where(Gm == 1)
+x_G = c_G
+y_G = r_G
+
+# Bounding box of Green object:
+y_min_G, y_max_G = y_G.min(), y_G.max()
+x_min_G, x_max_G = x_G.min(), x_G.max()
+
+# width and hight of Green object:
+w_G = x_max_G - x_min_G
+h_G = y_max_G - y_min_G
+
+# Create a Rectangle on Green object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+
+
+Rm = (r_matrix / 255).astype(np.float32)
+r_R, c_R = np.where(Rm == 1)
+x_R = c_R
+y_R = r_R
+
+# Bounding box of Red object:
+y_min_R, y_max_R = y_R.min(), y_R.max()
+x_min_R, x_max_R = x_R.min(), x_R.max()
+
+# width and hight of Red object:
+w_R = x_max_R - x_min_R
+h_R = y_max_R - y_min_R
+
+# Create a Rectangle on Red object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+
+
+
+# cv2.imshow expects BGR, so convert back from RGB before displaying
+#img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+#cv2.imshow('Image with Bounding Boxes', img_bgr)
+#cv2.waitKey(0) # Wait indefinitely until a key is pressed
+#cv2.destroyAllWindows() # Close all windows
+
+
+print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
+print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+
+print(f"Green Object width: {w_G}")
+print(f"Green Object height: {h_G}")
+print(f"Red Object width: {w_R}")
+print(f"Red Object height: {h_R}")
+
+
