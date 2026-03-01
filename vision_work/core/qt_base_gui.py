@@ -215,6 +215,7 @@ class BaseVisionApp(QMainWindow):
         p, _ = QFileDialog.getOpenFileName(self, "Open Image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if p:
             self._load_from_path(p)
+    def _handle_paste(self):
         # We use xclip for robust Linux/Docker clipboard handling since QImage memory mapping
         # can struggle with random alpha channels and X11 forwarding padding.
         tmp_path = "/tmp/clipboard_img.png"
