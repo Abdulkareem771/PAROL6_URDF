@@ -5,6 +5,14 @@ import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+y_min_G, y_max_G = 0, 0
+x_min_G, x_max_G = 0, 0
+y_min_R, y_max_R = 0, 0
+x_min_R, x_max_R = 0, 0
+
+
+
+
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
@@ -51,7 +59,6 @@ def segment_blocks(image_path):
     kernel = np.ones((5, 5), np.uint8)
     G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
     R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
-
 
     # 5. GUI Display Section
     plt.figure(figsize=(15, 5))
@@ -119,8 +126,8 @@ x_min_G, x_max_G = x_G.min(), x_G.max()
 w_G = x_max_G - x_min_G
 h_G = y_max_G - y_min_G
 
-
-
+# Create a Rectangle on Green object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_G, y_min_G), (x_max_G, y_max_G), (255, 0, 0), 2)
 
 
 Rm = (r_matrix / 255).astype(np.float32)
@@ -135,6 +142,16 @@ x_min_R, x_max_R = x_R.min(), x_R.max()
 # width and hight of Red object:
 w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
+
+# Create a Rectangle on Red object (x, y, width, height)
+#cv2.rectangle(img_rgb, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+
+
+
+#cv2.imshow('Image with Rectangle', img_rgb)
+#cv2.waitKey(0) # Wait indefinitely until a key is pressed
+#cv2.destroyAllWindows() # Close all windows
+
 
 print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
 print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
