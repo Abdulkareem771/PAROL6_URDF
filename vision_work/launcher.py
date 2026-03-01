@@ -26,7 +26,7 @@ class Launcher(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("WeldVision Launcher")
-        self.geometry("400x320")
+        self.geometry("400x380")
         self.resizable(False, False)
         self.configure(bg=C["bg"])
         
@@ -50,6 +50,7 @@ class Launcher(tk.Tk):
         self._btn("🔍  Detect Objects (YOLO)", self._launch_yolo, C["accent"]).pack(fill="x", padx=40, pady=10, ipady=8)
         self._btn("〰️  Segment Seam (ResUNet)", self._launch_resunet, C["green"]).pack(fill="x", padx=40, pady=10, ipady=8)
         self._btn("🖍️  Manual Path Annotator", self._launch_annotator, "#a371f7").pack(fill="x", padx=40, pady=10, ipady=8)
+        self._btn("🔮  Pipeline Prototyper", self._launch_prototyper, "#e3b341").pack(fill="x", padx=40, pady=10, ipady=8)
 
     def _btn(self, text, cmd, bg_color):
         return tk.Button(self, text=text, command=cmd, bg=bg_color, fg="#ffffff",
@@ -75,6 +76,9 @@ class Launcher(tk.Tk):
 
     def _launch_annotator(self):
         self._launch("tools/manual_annotator.py")
+
+    def _launch_prototyper(self):
+        self._launch("tools/pipeline_prototyper.py")
 
 if __name__ == "__main__":
     Launcher().mainloop()
