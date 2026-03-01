@@ -16,7 +16,7 @@ x_min_R, x_max_R = 0, 0
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a2.png"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
