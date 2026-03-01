@@ -86,7 +86,7 @@ def segment_blocks(image_path):
         y_max_R = y_max_R + 2
         x_min_R = x_min_R - 2
         x_max_R = x_max_R + 2
-        cv2.rectangle is replaced below using polylines after corners are detected
+        # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
