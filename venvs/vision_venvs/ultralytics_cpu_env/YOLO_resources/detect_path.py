@@ -9,7 +9,8 @@ y_min_G, y_max_G = 0, 0
 x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
-EPSILON_FACTOR=0.05
+EPSILON_FACTOR = 0.05
+EXPAND_PX     = 20  # pixels to expand the polygon outward from each corner
 
 
 current_dir = Path(__file__)
@@ -68,10 +69,10 @@ def segment_blocks(image_path):
         y_min_G, y_max_G = int(r_G.min()), int(r_G.max())
         x_min_G, x_max_G = int(c_G.min()), int(c_G.max())
         print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
-        y_min_G = y_min_G - 2
-        y_max_G = y_max_G + 2
-        x_min_G = x_min_G - 2
-        x_max_G = x_max_G + 2
+        y_min_G = y_min_G - EXPAND_PX
+        y_max_G = y_max_G + EXPAND_PX
+        x_min_G = x_min_G - EXPAND_PX
+        x_max_G = x_max_G + EXPAND_PX
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
@@ -82,10 +83,10 @@ def segment_blocks(image_path):
         y_min_R, y_max_R = int(r_R.min()), int(r_R.max())
         x_min_R, x_max_R = int(c_R.min()), int(c_R.max())
         print(f"Red Object Bounding Box: ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
-        y_min_R = y_min_R - 2
-        y_max_R = y_max_R + 2
-        x_min_R = x_min_R - 2
-        x_max_R = x_max_R + 2
+        y_min_R = y_min_R - EXPAND_PX
+        y_max_R = y_max_R + EXPAND_PX
+        x_min_R = x_min_R - EXPAND_PX
+        x_max_R = x_max_R + EXPAND_PX
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
@@ -106,17 +107,28 @@ def segment_blocks(image_path):
     corners_G = find_corners(G)
     corners_R = find_corners(R)
 
-    # Draw polygon outline and corner dots on img_annotated
+    def expand_corners(corners, px):
+        """Push each corner outward from the polygon centroid by 'px' pixels."""
+        centroid = corners.mean(axis=0)
+        direction = corners.astype(np.float32) - centroid
+        norms = np.linalg.norm(direction, axis=1, keepdims=True)
+        norms[norms == 0] = 1  # avoid division by zero
+        expanded = corners.astype(np.float32) + (direction / norms) * px
+        return np.round(expanded).astype(np.int32)
+
+    # Draw expanded polygon outline and corner dots on img_annotated
     if corners_G is not None:
-        pts_G = corners_G.reshape(-1, 1, 2)                          # shape (N, 1, 2) required by polylines
+        exp_G = expand_corners(corners_G, EXPAND_PX)
+        pts_G = exp_G.reshape(-1, 1, 2)                              # shape (N, 1, 2) required by polylines
         cv2.polylines(img_annotated, [pts_G], isClosed=True, color=(0, 255, 0), thickness=2)
-        for (cx, cy) in corners_G:
+        for (cx, cy) in exp_G:
             cv2.circle(img_annotated, (cx, cy), 5, (0, 255, 0), -1) # green corner dots
 
     if corners_R is not None:
-        pts_R = corners_R.reshape(-1, 1, 2)
+        exp_R = expand_corners(corners_R, EXPAND_PX)
+        pts_R = exp_R.reshape(-1, 1, 2)
         cv2.polylines(img_annotated, [pts_R], isClosed=True, color=(255, 0, 0), thickness=2)
-        for (cx, cy) in corners_R:
+        for (cx, cy) in exp_R:
             cv2.circle(img_annotated, (cx, cy), 5, (255, 0, 0), -1) # red corner dots
 
     # 7. Compute Intersection of the two bounding boxes
@@ -127,7 +139,7 @@ def segment_blocks(image_path):
 
     if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
         # Boxes overlap — draw intersection region in yellow
-        #cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
         bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
     else:
         bbox_I = None
