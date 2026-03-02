@@ -4,9 +4,11 @@
 #include <CircularBuffer.h>
 
 // Select physical transport based on GUI config.h setting.
-// TRANSPORT_MODE: 0 = UART (Serial), 1 = USB CDC HS (SerialUSB)
-#if defined(TRANSPORT_MODE) && TRANSPORT_MODE == 1
-#  define SERIAL_DEV SerialUSB
+// TRANSPORT_MODE: 0 = UART (Serial1 pins 0/1), 1 = USB CDC HS (Native Serial), 2 = Ethernet (UDP)
+#if defined(TRANSPORT_MODE) && TRANSPORT_MODE == 0
+#  define SERIAL_DEV Serial1  // Hardware UART
+#elif defined(TRANSPORT_MODE) && TRANSPORT_MODE == 1
+#  define SERIAL_DEV Serial   // Teensy's Native USB is 'Serial'
 #else
 #  define SERIAL_DEV Serial
 #endif
