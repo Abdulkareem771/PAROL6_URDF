@@ -247,11 +247,13 @@ class MainWindow(QMainWindow):
         self.setStatusBar(sb)
 
         self._sb_conn  = QLabel("🔴 Disconnected")
+        self._sb_transport = QLabel("")
+        self._sb_transport.setStyleSheet("color:#89dceb; font-weight:bold;")
         self._sb_rate  = QLabel("0 pkt/s")
         self._sb_state = QLabel("State: —")
         self._sb_cfg   = QLabel("")
 
-        for w in (self._sb_conn, QLabel("|"), self._sb_rate,
+        for w in (self._sb_conn, QLabel("|"), self._sb_transport, QLabel("|"), self._sb_rate,
                   QLabel("|"), self._sb_state, QLabel("|"), self._sb_cfg):
             sb.addPermanentWidget(w)
 
@@ -424,6 +426,18 @@ class MainWindow(QMainWindow):
     def _on_serial_connected(self, ok: bool) -> None:
         self._sb_conn.setText("🟢 Connected" if ok else "🔴 Disconnected")
         self._sb_conn.setStyleSheet("color:#a6e3a1;" if ok else "color:#f38ba8;")
+        if ok:
+            trans = self._cfg.comms.transport
+            if trans == "USB_CDC_HS":
+                self._sb_transport.setText("HS USB (480 Mbps)")
+            elif trans == "UART_115200":
+                self._sb_transport.setText("UART (115200 baud)")
+            elif trans == "ETHERNET":
+                self._sb_transport.setText("Ethernet (100 Mbps)")
+            else:
+                self._sb_transport.setText(trans)
+        else:
+            self._sb_transport.setText("")
 
     def _on_packet_rate(self, rate: float) -> None:
         self._sb_rate.setText(f"{rate:.1f} pkt/s")
