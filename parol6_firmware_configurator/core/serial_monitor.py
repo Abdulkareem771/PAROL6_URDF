@@ -5,6 +5,7 @@ Emits Qt signals for received lines and parsed telemetry packets.
 from __future__ import annotations
 import re
 import time
+import socket
 from PyQt6.QtCore import QThread, pyqtSignal
 
 try:
@@ -45,26 +46,48 @@ class SerialWorker(QThread):
         self._ser: "serial.Serial | None" = None  # type: ignore[name-defined]
 
     def run(self) -> None:
-        if not SERIAL_AVAILABLE:
-            self.error_msg.emit("pyserial not installed — run: pip install pyserial")
-            return
-
-        try:
-            self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
-            self.connected.emit(True)
-        except Exception as e:
-            self.error_msg.emit(f"Cannot open {self._port}: {e}")
-            return
-
         self._running = True
         pkt_count = 0
         rate_t0   = time.monotonic()
 
+        self._is_udp = self._port.startswith("udp://")
+        if self._is_udp:
+            try:
+                parts = self._port.replace("udp://", "").split(":")
+                self._udp_ip = parts[0]
+                self._udp_port = int(parts[1])
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self._sock.bind(("", self._udp_port))
+                self._sock.settimeout(0.5)
+                self.connected.emit(True)
+            except Exception as e:
+                self.error_msg.emit(f"Cannot bind UDP port {self._udp_port}: {e}")
+                return
+        else:
+            if not SERIAL_AVAILABLE:
+                self.error_msg.emit("pyserial not installed — run: pip install pyserial")
+                return
+            try:
+                self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
+                self.connected.emit(True)
+            except Exception as e:
+                self.error_msg.emit(f"Cannot open {self._port}: {e}")
+                return
+
         while self._running:
             try:
-                line = self._ser.readline().decode("utf-8", errors="replace").strip()
+                if self._is_udp:
+                    try:
+                        data, addr = self._sock.recvfrom(1024)
+                        line = data.decode("utf-8", errors="replace").strip()
+                        # Update target IP to whoever sent us data (for robustness)
+                        self._udp_ip = addr[0]
+                    except socket.timeout:
+                        line = ""
+                else:
+                    line = self._ser.readline().decode("utf-8", errors="replace").strip()
             except Exception as e:
-                self.error_msg.emit(f"Serial read error: {e}")
+                self.error_msg.emit(f"Read error: {e}")
                 break
 
             if not line:
@@ -102,13 +125,23 @@ class SerialWorker(QThread):
                 pkt_count = 0
                 rate_t0 = now
 
-        if self._ser and self._ser.is_open:
-            self._ser.close()
+        if getattr(self, "_is_udp", False):
+            if getattr(self, "_sock", None):
+                self._sock.close()
+        else:
+            if self._ser and self._ser.is_open:
+                self._ser.close()
         self.connected.emit(False)
 
     def send(self, text: str) -> None:
-        if self._ser and self._ser.is_open:
-            self._ser.write((text + "\n").encode())
+        payload = (text + "\n").encode()
+        if getattr(self, "_is_udp", False) and getattr(self, "_sock", None):
+            try:
+                self._sock.sendto(payload, (self._udp_ip, self._udp_port))
+            except Exception as e:
+                self.error_msg.emit(f"UDP send error: {e}")
+        elif self._ser and self._ser.is_open:
+            self._ser.write(payload)
 
     def stop(self) -> None:
         self._running = False

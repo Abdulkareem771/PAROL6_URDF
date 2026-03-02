@@ -390,24 +390,30 @@ class MainWindow(QMainWindow):
             self._serial_tab.disconnect()
             return
 
-        # Port: toolbar text field first, fall back to comms tab
-        port = self._sb_port.text().strip()
-        if not port:
-            self._read_gui_into_cfg()
-            port = self._cfg.comms.serial_port or self._comms_tab.serial_port
-        try:
-            baud = int(self._sb_baud.text().strip())
-        except ValueError:
-            baud = 115200
+        self._read_gui_into_cfg()
+        trans = self._cfg.comms.transport
 
-        if not port or "(no ports" in port:
-            QMessageBox.warning(
-                self, "No Port",
-                "No serial port selected.\n\nClick 🔄 to refresh the port list,\n"
-                "or select a port from the dropdown in the status bar."
-            )
-            self._sb_connect_btn.setChecked(False)
-            return
+        if trans == "ETHERNET":
+            port = f"udp://{self._cfg.comms.ethernet_ip}:{self._cfg.comms.ethernet_port}"
+            baud = 0
+        else:
+            # Port: toolbar text field first, fall back to comms tab
+            port = self._sb_port.text().strip()
+            if not port:
+                port = self._cfg.comms.serial_port or self._comms_tab.serial_port
+            try:
+                baud = int(self._sb_baud.text().strip())
+            except ValueError:
+                baud = 115200
+
+            if not port or "(no ports" in port:
+                QMessageBox.warning(
+                    self, "No Port",
+                    "No serial port selected.\n\nClick 🔄 to refresh the port list,\n"
+                    "or select a port from the dropdown in the status bar."
+                )
+                self._sb_connect_btn.setChecked(False)
+                return
 
         self._serial_worker = SerialWorker(port, baud)
         self._serial_worker.raw_line.connect(self._on_raw_line)
