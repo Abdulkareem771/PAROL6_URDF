@@ -9,9 +9,11 @@ from ultralytics import YOLO
 
 # ==================== CONFIGURATION ====================
 
-# Path to project directory
-project_dir = Path(__file__).parent
+# Path to current directory
+current_dir = Path(__file__)
 
+# Path to project directory
+project_dir = current_dir.parent.parent
 
 # Path to an official model
 MODEL_PATH_OFFICIAL = project_dir / "yolo26n-seg.pt"
