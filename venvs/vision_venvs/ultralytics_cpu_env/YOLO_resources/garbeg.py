@@ -78,20 +78,6 @@ def segment_blocks(image_path):
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
     
-    p1_G = (x_min_G, y_min_G)
-    p2_G = (x_min_G, y_max_G)
-    p3_G = (x_max_G, y_min_G)
-    p4_G = (x_max_G, y_max_G)
-    
-    # Draw the four corners of the green object
-    cv2.circle(img_annotated, p1_G, 5, (0, 255, 0), -1)
-    cv2.circle(img_annotated, p2_G, 5, (0, 255, 0), -1)
-    cv2.circle(img_annotated, p3_G, 5, (0, 255, 0), -1)
-    cv2.circle(img_annotated, p4_G, 5, (0, 255, 0), -1)
-
-    # Draw line from p1_G to p2_G
-    #cv2.line(img_annotated, p1_G, p2_G, (0, 0, 255), 2)
-
     # Red bounding box
     r_R, c_R = np.where(R == 255)
     if len(r_R) > 0:
@@ -108,20 +94,6 @@ def segment_blocks(image_path):
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
     
-    p1_R = (x_min_R, y_min_R)
-    p2_R = (x_min_R, y_max_R)
-    p3_R = (x_max_R, y_min_R)
-    p4_R = (x_max_R, y_max_R)
-    
-    # Draw the four corners of the red object
-    cv2.circle(img_annotated, p1_R, 5, (255, 0, 0), -1)
-    cv2.circle(img_annotated, p2_R, 5, (255, 0, 0), -1)
-    cv2.circle(img_annotated, p3_R, 5, (255, 0, 0), -1)
-    cv2.circle(img_annotated, p4_R, 5, (255, 0, 0), -1)
-    
-    # Draw line from p1_R to p2_R
-    #cv2.line(img_annotated, p1_R, p2_R, (0, 0, 255), 2)
-    
     # 6. Find exact corner coordinates using contour approximation
     def find_corners(mask, epsilon_factor = EPSILON_FACTOR):
         """Return corner points of the largest contour in 'mask' as an (N,2) array of (x,y)."""
@@ -135,8 +107,28 @@ def segment_blocks(image_path):
         # approx shape: (N, 1, 2) → reshape to (N, 2)
         return approx.reshape(-1, 2)
 
+    def find_contours(mask):
+        """Return the outermost (external) contour of the largest object in 'mask'.
+        Uses CHAIN_APPROX_NONE to keep every boundary pixel.
+        Returns the contour as an array of shape (N, 1, 2), or None if not found."""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        # Pick the largest contour (the main object)
+        return max(contours, key=cv2.contourArea)
+
     corners_G = find_corners(G)
     corners_R = find_corners(R)
+
+    # Find and draw the full external contours
+    contour_G = find_contours(G)
+    contour_R = find_contours(R)
+
+    if contour_G is not None:
+        cv2.drawContours(img_annotated, [contour_G], -1, (0, 255, 0), 2)   # green outline
+
+    if contour_R is not None:
+        cv2.drawContours(img_annotated, [contour_R], -1, (255, 0, 0), 2)   # red outline
 
     def expand_corners(corners, px):
         """Push each corner outward from the polygon centroid by 'px' pixels."""
