@@ -27,9 +27,6 @@ IMAGE_FOLDER = project_dir / "data" / "raw_images_ROI_model"    # replace with y
 # Path to single image
 SINGLE_IMAGE_PATH = project_dir / "data" / "YOLO_Segmentation_data" / "test" / "26.jpg"
 
-# Padding around bounding boxes (in pixels) - useful to include some context
-PADDING = 20  # Set to 0 for no padding
-
 
 # Load a model
 model = YOLO(MODEL_PATH_OFFICIAL)  # load an official model
@@ -43,3 +40,6 @@ for result in results:
     xy = result.masks.xy  # mask in polygon format
     xyn = result.masks.xyn  # normalized
     masks = result.masks.data  # mask in matrix format (num_objects x H x W)
+    print(f"masks={masks}")
+
+
