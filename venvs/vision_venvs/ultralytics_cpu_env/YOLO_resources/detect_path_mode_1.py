@@ -9,6 +9,13 @@ from ultralytics import YOLO
 
 # ==================== CONFIGURATION ====================
 
+# Path to project directory
+project_dir = Path(__file__).parent
+
+
+# Path to an official model
+MODEL_PATH_OFFICIAL = project_dir / "yolo26n-seg.pt"
+
 # Path to your trained YOLO model
 MODEL_PATH = project_dir / "yolo_training" / "experiment_12" / "weights" / "best.pt"   # replace with your path
 
@@ -23,8 +30,8 @@ PADDING = 20  # Set to 0 for no padding
 
 
 # Load a model
-model = YOLO("yolo26n-seg.pt")  # load an official model
-model = YOLO("path/to/best.pt")  # load a custom model
+model = YOLO(MODEL_PATH_OFFICIAL)  # load an official model
+model = YOLO(MODEL_PATH)  # load a custom model
 
 # Predict with the model
 results = model("https://ultralytics.com/images/bus.jpg")  # predict on an image
