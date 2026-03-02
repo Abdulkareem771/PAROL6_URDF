@@ -70,7 +70,7 @@ logs/launchers/*
 
 # ML model weights (large binary files — store on Colab or a model registry instead)
 *.pth
-*.pt
+#*.pt
 *.onnx
 *.h5
 *.weights
