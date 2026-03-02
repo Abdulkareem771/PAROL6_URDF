@@ -9,7 +9,7 @@ import json
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget,
     QStatusBar, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QFileDialog, QMessageBox, QInputDialog, QToolBar
+    QFileDialog, QMessageBox, QInputDialog, QToolBar, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QIcon, QFont
@@ -198,20 +198,61 @@ class MainWindow(QMainWindow):
         sb = QStatusBar()
         self.setStatusBar(sb)
 
-        self._sb_conn   = QLabel("🔴 Disconnected")
-        self._sb_rate   = QLabel("0 pkt/s")
-        self._sb_state  = QLabel("State: —")
-        self._sb_cfg    = QLabel("")
+        self._sb_conn  = QLabel("🔴 Disconnected")
+        self._sb_rate  = QLabel("0 pkt/s")
+        self._sb_state = QLabel("State: —")
+        self._sb_cfg   = QLabel("")
 
         for w in (self._sb_conn, QLabel("|"), self._sb_rate,
                   QLabel("|"), self._sb_state, QLabel("|"), self._sb_cfg):
             sb.addPermanentWidget(w)
 
-        # Connect button in status bar
-        self._sb_connect_btn = QPushButton("Connect Serial")
+        # ── Serial connection controls (always visible) ───────────────
+        self._sb_port = QComboBox()
+        self._sb_port.setEditable(True)
+        self._sb_port.setMinimumWidth(160)
+        self._sb_port.setMaximumHeight(22)
+        self._sb_port.setPlaceholderText("Select port…")
+        self._sb_port.setToolTip("Serial port — click 🔄 to refresh list")
+
+        self._sb_baud = QComboBox()
+        self._sb_baud.addItems(["115200", "921600", "9600"])
+        self._sb_baud.setMaximumHeight(22)
+        self._sb_baud.setFixedWidth(80)
+
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setMaximumHeight(22)
+        refresh_btn.setFixedWidth(28)
+        refresh_btn.setToolTip("Refresh port list")
+        refresh_btn.clicked.connect(self._refresh_sb_ports)
+
+        self._sb_connect_btn = QPushButton("⚡ Connect")
         self._sb_connect_btn.setMaximumHeight(22)
+        self._sb_connect_btn.setStyleSheet(
+            "QPushButton { background:#313244; border:1px solid #45475a; border-radius:4px; padding:2px 10px; }"
+            "QPushButton:checked { background:#a6e3a1; color:#1e1e2e; font-weight:bold; }"
+        )
+        self._sb_connect_btn.setCheckable(True)
         self._sb_connect_btn.clicked.connect(self._toggle_serial)
-        sb.addWidget(self._sb_connect_btn)
+
+        for w in (QLabel(" Port:"), self._sb_port, refresh_btn,
+                  QLabel("Baud:"), self._sb_baud, self._sb_connect_btn):
+            sb.addWidget(w)
+
+        # Populate port list immediately
+        self._refresh_sb_ports()
+
+    def _refresh_sb_ports(self) -> None:
+        current = self._sb_port.currentText()
+        self._sb_port.clear()
+        ports = list_serial_ports()
+        if ports:
+            self._sb_port.addItems(ports)
+            # Restore previous selection if still available
+            if current in ports:
+                self._sb_port.setCurrentText(current)
+        else:
+            self._sb_port.addItem("(no ports found)")
 
     # ------------------------------------------------------------------
     # Signal Wiring
@@ -313,16 +354,28 @@ class MainWindow(QMainWindow):
         if self._serial_worker:
             self._serial_worker.stop()
             self._serial_worker = None
-            self._sb_connect_btn.setText("Connect Serial")
+            self._sb_connect_btn.setText("⚡ Connect")
+            self._sb_connect_btn.setChecked(False)
             self._serial_tab.disconnect()
             return
 
-        self._read_gui_into_cfg()
-        port = self._cfg.comms.serial_port or self._comms_tab.serial_port
-        baud = self._cfg.comms.baud_rate or self._comms_tab.baud_rate
+        # Port: status bar dropdown takes priority; fall back to comms tab
+        port = self._sb_port.currentText().strip()
+        if not port or port == "(no ports found)":
+            self._read_gui_into_cfg()
+            port = self._cfg.comms.serial_port or self._comms_tab.serial_port
+        try:
+            baud = int(self._sb_baud.currentText())
+        except ValueError:
+            baud = 115200
 
-        if not port:
-            QMessageBox.warning(self, "No Port", "Select a serial port in the Comms tab first.")
+        if not port or "(no ports" in port:
+            QMessageBox.warning(
+                self, "No Port",
+                "No serial port selected.\n\nClick 🔄 to refresh the port list,\n"
+                "or select a port from the dropdown in the status bar."
+            )
+            self._sb_connect_btn.setChecked(False)
             return
 
         self._serial_worker = SerialWorker(port, baud)
@@ -331,12 +384,9 @@ class MainWindow(QMainWindow):
         self._serial_worker.connected.connect(self._on_serial_connected)
         self._serial_worker.packet_rate.connect(self._on_packet_rate)
         self._serial_worker.error_msg.connect(lambda m: self._serial_tab._append(m, "#f38ba8"))
-
-        # Also pipe to serial tab
         self._serial_worker.raw_line.connect(self._serial_tab._on_line)
         self._serial_worker.start()
-        self._serial_tab.connect_to.__func__  # just ensure serial_tab has the worker
-        self._sb_connect_btn.setText("Disconnect")
+        self._sb_connect_btn.setText("⏹ Disconnect")
 
     def _serial_send(self, text: str) -> None:
         if self._serial_worker:

@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QGroupBox, QSpinBox, QDoubleSpinBox, QFrame
 )
 from PyQt6.QtCore import pyqtSignal
-from ..core.config_model import FeatureFlags
+from core.config_model import FeatureFlags
 
 
 class FeatureRow(QWidget):

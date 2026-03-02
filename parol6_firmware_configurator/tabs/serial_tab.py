@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QDateTime
 from PyQt6.QtGui import QColor, QTextCharFormat, QTextCursor, QFont
-from ..core.serial_monitor import SerialWorker, list_serial_ports
+from core.serial_monitor import SerialWorker, list_serial_ports
 
 
 class SerialTab(QWidget):

@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QSlider, QSpinBox, QLineEdit, QFormLayout
 )
 from PyQt6.QtCore import pyqtSignal, Qt
-from ..core.config_model import CommsConfig
+from core.config_model import CommsConfig
 
 
 class CommsTab(QWidget):
@@ -129,7 +129,7 @@ class CommsTab(QWidget):
         self.eth_box.setVisible(t == "ETHERNET")
 
     def _refresh_ports(self) -> None:
-        from ..core.serial_monitor import list_serial_ports
+        from core.serial_monitor import list_serial_ports
         self.port_combo.clear()
         self.port_combo.addItem("")
         for p in list_serial_ports():

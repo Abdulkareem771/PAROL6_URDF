@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 
-from ..core.flash_manager import FlashWorker, BuildWorker
+from core.flash_manager import FlashWorker, BuildWorker
 
 
 class FlashTab(QWidget):

@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox, QSpinBox, QAbstractItemView
 )
 from PyQt6.QtCore import pyqtSignal, Qt
-from ..core.config_model import JointConfig, LimitSwitchConfig
+from core.config_model import JointConfig, LimitSwitchConfig
 
 # Columns order
 COLS = [
