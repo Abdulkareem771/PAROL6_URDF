@@ -3,6 +3,14 @@
 #include <Arduino.h>
 #include <CircularBuffer.h>
 
+// Select physical transport based on GUI config.h setting.
+// TRANSPORT_MODE: 0 = UART (Serial), 1 = USB CDC HS (SerialUSB)
+#if defined(TRANSPORT_MODE) && TRANSPORT_MODE == 1
+#  define SERIAL_DEV SerialUSB
+#else
+#  define SERIAL_DEV Serial
+#endif
+
 struct RosCommand {
     uint32_t seq;
     float positions[6];
@@ -13,13 +21,14 @@ struct RosCommand {
 class SerialTransport {
 public:
     void init(uint32_t baud) {
-        Serial.begin(baud);
+        SERIAL_DEV.begin(baud);
     }
+
 
     // Called in main loop (Non-blocking)
     void process_incoming(CircularBuffer<RosCommand, 20>& cmd_queue) {
-        while (Serial.available()) {
-            char c = Serial.read();
+        while (SERIAL_DEV.available()) {
+            char c = SERIAL_DEV.read();
             if (c == '\n' || c == '\r') {
                 if (rx_pos_ > 0) {
                     rx_buf_[rx_pos_] = '\0';
@@ -37,17 +46,17 @@ public:
 
     void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6]) {
         // Format: <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
-        Serial.print("<ACK,");
-        Serial.print(seq);
+        SERIAL_DEV.print("<ACK,");
+        SERIAL_DEV.print(seq);
         for (int i = 0; i < 6; i++) {
-            Serial.print(",");
-            Serial.print(current_pos[i], 4);
+            SERIAL_DEV.print(",");
+            SERIAL_DEV.print(current_pos[i], 4);
         }
         for (int i = 0; i < 6; i++) {
-            Serial.print(",");
-            Serial.print(current_vel[i], 4);
+            SERIAL_DEV.print(",");
+            SERIAL_DEV.print(current_vel[i], 4);
         }
-        Serial.println(">");
+        SERIAL_DEV.println(">");
     }
 
 private:

@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QStatusBar, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
     QFileDialog, QMessageBox, QInputDialog, QToolBar, QLineEdit
 )
-from PyQt6.QtCore import Qt, QTimer, QSettings
+from PyQt6.QtCore import Qt, QTimer, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
 
 # ── Core ──────────────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ from tabs.serial_tab import SerialTab
 from tabs.plot_tab import PlotTab
 from tabs.flash_tab import FlashTab
 from tabs.fault_log_tab import FaultLogTab
+from tabs.launch_tab import LaunchTab
 
 # ---------------------------------------------------------------------------
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -70,7 +71,7 @@ QPushButton {
 QPushButton:hover   { background: #45475a; border-color: #cba6f7; }
 QPushButton:pressed { background: #585b70; }
 QPushButton:disabled{ color: #585b70; border-color: #313244; }
-QPushButton:checked { background: #cba6f7; color: #1e1e2e; font-weight: bold; }
+QPushButton:checked { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }
 QGroupBox {
     border: 1px solid #45475a;
     border-radius: 8px;
@@ -223,6 +224,7 @@ class MainWindow(QMainWindow):
         self._plot_tab  = PlotTab()
         self._flash_tab = FlashTab()
         self._fault_tab = FaultLogTab()
+        self._launch_tab= LaunchTab()
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._proto_tab,  "🔬 Protocol")
@@ -233,6 +235,7 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._serial_tab, "💬 Serial")
         self._tabs.addTab(self._plot_tab,   "📈 Oscilloscope")
         self._tabs.addTab(self._flash_tab,  "⚡ Flash")
+        self._tabs.addTab(self._launch_tab, "🚀 ROS2 Launch")
         self._tabs.addTab(self._fault_tab,  "⚠️ Faults")
 
         self.setCentralWidget(self._tabs)

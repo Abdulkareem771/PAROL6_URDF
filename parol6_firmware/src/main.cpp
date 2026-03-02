@@ -1,5 +1,16 @@
 #include <Arduino.h>
 
+// GUI-generated configuration — edit via the Firmware Configurator, not here.
+#if __has_include("../generated/config.h")
+#  include "../generated/config.h"
+#else
+// Defaults when no config.h has been generated yet
+#  define TRANSPORT_MODE          1   // 1=USB_CDC
+#  define CONTROL_LOOP_PERIOD_US  1000
+#  define FEEDBACK_RATE_HZ        10
+#  define VELOCITY_DEADBAND_RAD_S 0.02f
+#endif
+
 #include "transport/SerialTransport.h"
 #include "safety/Supervisor.h"
 #include "observer/AlphaBetaFilter.h"
@@ -62,14 +73,16 @@ void run_control_loop_isr() {
     float current_velocities[NUM_AXES]; 
     float current_positions[NUM_AXES];
     float commanded_velocities[NUM_AXES];
-    
-    // Strict Control Law: Per-joint Kp Proportional Gains
-    // Validated from realtime_servo_teensy/config.h (J1/J2 geared = 5.0, J3-6 direct = 2.0)
-    const float Kp[NUM_AXES]               = { 5.0f,  5.0f,  2.0f, 2.0f, 2.0f, 2.0f };
-    // Per-joint velocity limits (rad/s) validated from reference firmware
-    const float MAX_VEL_CMD[NUM_AXES]      = { 3.0f,  3.0f,  6.0f, 6.0f, 6.0f, 6.0f };
-    // Velocity deadband: suppress micro-stepping jitter near zero velocity
-    const float VELOCITY_DEADBAND = 0.02f;
+
+#ifdef KP_GAINS
+    // Use GUI-configured per-joint gains and limits
+    static const float* Kp         = KP_GAINS;
+    static const float* MAX_VEL_CMD = MAX_VEL_RAD_S;
+#else
+    // Fallback defaults if no config.h
+    const float Kp[NUM_AXES]          = { 5.0f,  5.0f,  2.0f, 2.0f, 2.0f, 2.0f };
+    const float MAX_VEL_CMD[NUM_AXES] = { 3.0f,  3.0f,  6.0f, 6.0f, 6.0f, 6.0f };
+#endif
 
     // 1. Compute Math for All Axes First
     for (int i = 0; i < NUM_AXES; i++) {
@@ -83,11 +96,11 @@ void run_control_loop_isr() {
         current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
         
-        // C. Get 1ms Interpolated Setpoint
+        // C. Get Interpolated Setpoint
         float cmd_pos, cmd_vel_ff;
         interpolator[i].tick_1ms(cmd_pos, cmd_vel_ff);
         
-        // D. Strict Control Law (P + FF)
+        // D. Control Law (P + FF)
         float pos_error = cmd_pos - actual_pos;
         float velocity_command = cmd_vel_ff + (Kp[i] * pos_error);
         
@@ -95,10 +108,9 @@ void run_control_loop_isr() {
         if (velocity_command >  MAX_VEL_CMD[i]) velocity_command =  MAX_VEL_CMD[i];
         if (velocity_command < -MAX_VEL_CMD[i]) velocity_command = -MAX_VEL_CMD[i];
 
-        // F. Velocity deadband: suppress noise-driven micro-stepping near standstill
-        if (fabsf(velocity_command) < VELOCITY_DEADBAND) velocity_command = 0.0f;
+        // F. Velocity deadband (configured in GUI or default)
+        if (fabsf(velocity_command) < VELOCITY_DEADBAND_RAD_S) velocity_command = 0.0f;
         
-        // Cache safe command
         commanded_velocities[i] = velocity_command;
     }
     
@@ -154,8 +166,8 @@ void setup() {
     
     // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
     
-    // Start hardware timer at precisely 1000 microseconds (1 kHz)
-    controlTimer.begin(run_control_loop_isr, 1000);
+    // Control loop rate from GUI config (default 1000µs = 1kHz)
+    controlTimer.begin(run_control_loop_isr, CONTROL_LOOP_PERIOD_US);
 }
 
 void loop() {
@@ -187,10 +199,11 @@ void loop() {
         }
     }
 
-    // 3. Provide background status telemetry (10 Hz roughly)
+    // 3. Provide background status telemetry at FEEDBACK_RATE_HZ
+    static const uint32_t FEEDBACK_INTERVAL_MS = 1000 / FEEDBACK_RATE_HZ;
     static uint32_t last_print = 0;
     uint32_t print_tick = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
-    if (print_tick - last_print > 100) {
+    if (print_tick - last_print > FEEDBACK_INTERVAL_MS) {
         last_print = print_tick;
         // Feedback data gathering requires brief interrupt lock to prevent tearing
         float pos[NUM_AXES], vel[NUM_AXES];
