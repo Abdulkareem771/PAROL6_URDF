@@ -9,7 +9,7 @@ import json
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget,
     QStatusBar, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QFileDialog, QMessageBox, QInputDialog, QToolBar, QComboBox
+    QFileDialog, QMessageBox, QInputDialog, QToolBar, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QIcon, QFont
@@ -165,30 +165,32 @@ class MainWindow(QMainWindow):
         rename_btn.clicked.connect(self._rename_config)
         tb.addWidget(rename_btn)
 
-        # ── Row 2: serial connection (own toolbar so dropdown has room) ─
+        # ── Row 2: serial connection ────────────────────────────────
         tb2 = self.addToolBar("Serial")
         tb2.setMovable(False)
 
         tb2.addWidget(QLabel(" 🔌 Port: "))
 
-        self._sb_port = QComboBox()
-        self._sb_port.setEditable(True)
+        # Plain text field — always works in X11/Docker, user types directly
+        self._sb_port = QLineEdit()
         self._sb_port.setMinimumWidth(200)
-        self._sb_port.setToolTip("Select serial port (click 🔄 to refresh)")
+        self._sb_port.setPlaceholderText("/dev/ttyACM0")
+        self._sb_port.setToolTip("Type the serial port path (e.g. /dev/ttyACM0)")
         tb2.addWidget(self._sb_port)
 
-        refresh_btn = QPushButton("🔄")
-        refresh_btn.setFixedWidth(32)
-        refresh_btn.setToolTip("Refresh available serial ports")
-        refresh_btn.clicked.connect(self._refresh_sb_ports)
-        tb2.addWidget(refresh_btn)
+        # Scan button: detects available ports and lets user pick via simple dialog
+        scan_btn = QPushButton("🔍 Scan")
+        scan_btn.setFixedWidth(64)
+        scan_btn.setToolTip("Scan for available serial ports and select one")
+        scan_btn.clicked.connect(self._scan_ports)
+        tb2.addWidget(scan_btn)
 
         tb2.addSeparator()
         tb2.addWidget(QLabel(" Baud: "))
 
-        self._sb_baud = QComboBox()
-        self._sb_baud.addItems(["115200", "921600", "9600"])
-        self._sb_baud.setFixedWidth(90)
+        self._sb_baud = QLineEdit("115200")
+        self._sb_baud.setFixedWidth(80)
+        self._sb_baud.setToolTip("Baud rate (115200, 921600, 9600…)")
         tb2.addWidget(self._sb_baud)
 
         tb2.addSeparator()
@@ -206,8 +208,10 @@ class MainWindow(QMainWindow):
         sp2.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         tb2.addWidget(sp2)
 
-        # Populate immediately
-        self._refresh_sb_ports()
+        # Pre-fill with the first detected port if available
+        ports = list_serial_ports()
+        if ports:
+            self._sb_port.setText(ports[0])
 
     def _build_tabs(self) -> None:
         self._proto_tab = TestingProtocolTab(CONFIGS_DIR)
@@ -248,17 +252,29 @@ class MainWindow(QMainWindow):
                   QLabel("|"), self._sb_state, QLabel("|"), self._sb_cfg):
             sb.addPermanentWidget(w)
 
-    def _refresh_sb_ports(self) -> None:
-        """Refresh the port dropdown in toolbar row 2."""
-        current = self._sb_port.currentText()
-        self._sb_port.clear()
+    def _scan_ports(self) -> None:
+        """Detect available serial ports and let user choose via a simple dialog."""
         ports = list_serial_ports()
-        if ports:
-            self._sb_port.addItems(ports)
-            if current in ports:
-                self._sb_port.setCurrentText(current)
-        else:
-            self._sb_port.addItem("(no ports found)")
+        if not ports:
+            QMessageBox.information(
+                self, "No Ports Found",
+                "No serial ports detected.\n\n"
+                "Check:\n"
+                "  • Teensy is plugged in\n"
+                "  • Container has device access (-v /dev:/dev)\n"
+                "  • Run: ls /dev/ttyACM* /dev/ttyUSB*\n\n"
+                "You can still type the port manually in the Port field."
+            )
+            return
+        port, ok = QInputDialog.getItem(
+            self, "Select Port", "Available serial ports:", ports, 0, False
+        )
+        if ok and port:
+            self._sb_port.setText(port)
+
+    def _refresh_sb_ports(self) -> None:
+        """Legacy no-op kept so any stale references don't crash."""
+        pass
 
     # ------------------------------------------------------------------
     # Signal Wiring
@@ -365,13 +381,13 @@ class MainWindow(QMainWindow):
             self._serial_tab.disconnect()
             return
 
-        # Port: status bar dropdown takes priority; fall back to comms tab
-        port = self._sb_port.currentText().strip()
-        if not port or port == "(no ports found)":
+        # Port: toolbar text field first, fall back to comms tab
+        port = self._sb_port.text().strip()
+        if not port:
             self._read_gui_into_cfg()
             port = self._cfg.comms.serial_port or self._comms_tab.serial_port
         try:
-            baud = int(self._sb_baud.currentText())
+            baud = int(self._sb_baud.text().strip())
         except ValueError:
             baud = 115200
 

@@ -79,11 +79,19 @@ class SerialWorker(QThread):
                 seq_str, data_str = m.group(1), m.group(2)
                 nums = [float(x) for x in data_str.split(",") if x]
                 if len(nums) >= 12:
+                    # Backward-compatible packet formats:
+                    #   12 fields: pos[0..5] + vel[0..5]
+                    #   13 fields: pos + vel + isr_us
+                    #   18 fields: pos + vel + pwm[0..5]
+                    #   19 fields: pos + vel + pwm[0..5] + isr_us
+                    has_pwm = len(nums) >= 18
+                    isr_idx = 18 if has_pwm else 12
                     pkt = {
-                        "seq": int(seq_str),
-                        "pos": nums[0:6],
-                        "vel": nums[6:12],
-                        "isr_us": nums[12] if len(nums) > 12 else None,
+                        "seq":    int(seq_str),
+                        "pos":    nums[0:6],
+                        "vel":    nums[6:12],
+                        "pwm":    nums[12:18] if has_pwm else [0.0] * 6,
+                        "isr_us": nums[isr_idx] if len(nums) > isr_idx else None,
                     }
                     self.telemetry.emit(pkt)
 
