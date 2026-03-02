@@ -127,10 +127,13 @@ One row per joint. Pre-populated with authoritative values from the legacy STM32
 
 ### ⚡ Flash — Build & Flash
 
-1. Set **Firmware dir** to `parol6_firmware/` (pre-filled).
-2. Click **⚙️ Generate config.h** to preview the header.
-3. Click **🔨 Build Only** to check for compile errors without connecting Teensy.
-4. Connect Teensy via USB, then click **⚡ Generate & Flash**.
+| Button | What it does |
+|:--|:--|
+| **⚙️ Generate config.h** | Writes `generated/config.h` from GUI settings (preview shown below) |
+| **🔨 Build Only** | `pio run` — compile check without flashing |
+| **⚡ Generate & Flash** | Generate config.h → `pio run --upload` |
+| **⚡ Flash Only** | `pio run --upload` **without** regenerating config.h — use for diagnostic sketches or when config is already correct |
+| **✖ Abort** | Kill the running build/flash process |
 
 The build log highlights errors in red and success in green.
 
@@ -147,10 +150,25 @@ The build log highlights errors in red and success in green.
 
 ### 📈 Oscilloscope — Live Telemetry
 
-- Requires `<ACK,seq,p0,p1,...,p5,v0,...,v5[,isr_us]>` packets from firmware.
-- Show/hide individual channels with checkboxes at the top.
-- **Window**: scroll back up to 60 s of data.
-- **ISR panel**: red dashed line at 25 µs budget — stay below it.
+Four real-time panels updated at 20 Hz:
+
+| Panel | Channels | Notes |
+|:--|:--|:--|
+| **Joint Positions (rad)** | J1–J6 | Encoder-derived angle = closed-loop feedback |
+| **Joint Velocities (rad/s)** | J1–J6 | AlphaBeta-filtered rate |
+| **PWM Output (%)** | J1–J6 | Motor command effort — tick `J1 pwm` checkbox |
+| **ISR Time (µs)** | — | Red dashed line = 25 µs budget |
+
+Enable/disable any channel with the checkboxes in the toolbar row above the plots.
+
+**ACK packet formats supported (firmware side):**
+
+```
+12 fields: <ACK,seq, p0..p5, v0..v5>
+13 fields: <ACK,seq, p0..p5, v0..v5, isr_us>
+18 fields: <ACK,seq, p0..p5, v0..v5, pwm0..pwm5>        ← enables PWM panel
+19 fields: <ACK,seq, p0..p5, v0..v5, pwm0..pwm5, isr_us>
+```
 
 ---
 
@@ -179,16 +197,16 @@ Config files are plain JSON — you can diff them with `git diff` to track what 
 
 ## Connecting to the Teensy
 
-The **status bar** at the bottom of every tab shows:
+The **second toolbar row** (below File/Save buttons) contains the serial picker:
 
 ```
-Port: [ /dev/ttyACM0 ▼ ] [🔄]  Baud: [ 115200 ▼ ]  [ ⚡ Connect ]
+┌─ Toolbar 1: New | Open | Save | Save As | [Profile name] ──────────────────────┐
+├─ Toolbar 2: 🔌 Port: [/dev/ttyACM1      ] [� Scan]  Baud: [115200]  [⚡ Connect]─┤
 ```
 
-1. Plug in the Teensy via USB.
-2. Click **🔄** to refresh the port list (or it auto-fills on startup).
-3. Select `/dev/ttyACM0` (or `/dev/ttyUSB0` for UART adapter).
-4. Click **⚡ Connect** — the indicator turns **🟢 Connected**.
+1. Plug in Teensy via USB → Port field auto-fills with the first detected port.
+2. If port is wrong, click **🔍 Scan** to pick from a list, or just **type** the path directly (e.g. `/dev/ttyACM1`).
+3. Click **⚡ Connect** — status bar turns **🟢 Connected**.
 
 ---
 
@@ -234,12 +252,61 @@ The GUI already generates the correct header format. Firmware integration is the
 
 ---
 
+## QuadTimer Diagnostic Sketch
+
+Before connecting the real robot, verify QuadTimer PWM capture hardware works using the standalone diagnostic sketch.
+
+**How `QuadTimerEncoder` works:** It uses Teensy 4.1 hardware QuadTimers in "Gated Count Mode" to measure PWM duty cycle (not A+B quadrature). It counts IP Bus clock pulses ONLY while the encoder pin is HIGH, then divides by expected total pulses → duty ∈ [0, 1] → angle ∈ [0, 2π rad].
+
+**Encoder pin map** — ESP32 must connect to exactly these pins:
+
+| Joint | Teensy Pin | QuadTimer |
+|:--|:--|:--|
+| J1 | **Pin 10** | TMR1 CH0 |
+| J2 | **Pin 11** | TMR1 CH2 |
+| J3 | **Pin 12** | TMR1 CH1 |
+| J4 | **Pin 14** | TMR3 CH2 |
+| J5 | **Pin 15** | TMR3 CH3 |
+| J6 | **Pin 18** | TMR3 CH1 |
+
+> Any other pin: `init()` silently returns, counter stays at zero.
+
+**Recommended ESP32 PWM:** 1000 Hz, 10–90% duty cycle (matches AS5048A encoder spec).
+
+**Flash the diagnostic:**
+
+```bash
+# Option A: script
+cd parol6_firmware/diagnostic/quadtimer_diagnostic
+./flash_diagnostic.sh
+
+# Option B: GUI Flash tab
+# Firmware dir → .../diagnostic/quadtimer_diagnostic/
+# Click ⚡ Flash Only
+```
+
+**Monitor output:**
+```bash
+# Inside docker container:
+python3 -m serial.tools.miniterm /dev/ttyACM1 115200
+```
+
+Expected output with ESP32 PWM ~50% on pin 10:
+```
+[ 1.0s]  J1=0.5001(3.14rad)  J2=0.0000  ...
+         *** J1 PASS  duty=0.5001  angle=3.142 rad ***
+```
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
 |:--|:--|
 | `ImportError: attempted relative import` | Run from `parol6_firmware_configurator/` dir: `python3 main.py` |
-| `(no ports found)` in dropdown | Teensy not plugged in, or missing USB permissions. Try `sudo usermod -aG dialout $USER` |
+| Port field shows `ttyS31` only | Inside Docker, Teensy USB not mapped. Check `ls /dev/ttyACM*` in container. |
+| Port dropdown doesn't open | Known X11/Docker issue — fixed: port is now a text field. Type path directly. |
 | `pio not found` | Install PlatformIO: `pip install platformio` |
 | Black window / no display | X11 not forwarded to Docker. Add `-e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix` |
+| QuadTimer reads all zeros | Wrong Teensy pin, wrong ENCODER_MODE, or PWM freq too low/high. Run diagnostic sketch. |
 | ISR bar always red | Control loop rate too high for your tasks. Drop to 500 Hz in Comms tab. |

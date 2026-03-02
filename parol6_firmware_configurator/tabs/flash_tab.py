@@ -71,19 +71,27 @@ class FlashTab(QWidget):
 
         build_btn = QPushButton("🔨  Build Only")
         build_btn.setToolTip("Compile without flashing. Useful for catching errors before connecting Teensy.")
-        build_btn.clicked.connect(self._run_build)
+        build_btn.clicked.connect(self._run_build_only)
 
         self.flash_btn = QPushButton("⚡  Generate & Flash")
         self.flash_btn.setStyleSheet("background:#cba6f7; color:#1e1e2e; font-weight:bold; padding:6px 18px;")
         self.flash_btn.setToolTip("Generates config.h then runs pio run --upload.")
         self.flash_btn.clicked.connect(self._run_flash)
 
+        self.flash_only_btn = QPushButton("⚡  Flash Only")
+        self.flash_only_btn.setStyleSheet("background:#89dceb; color:#1e1e2e; font-weight:bold; padding:6px 14px;")
+        self.flash_only_btn.setToolTip(
+            "Runs pio run --upload WITHOUT generating config.h.\n"
+            "Use this for the diagnostic sketch or when config.h is already correct."
+        )
+        self.flash_only_btn.clicked.connect(self._run_flash_only)
+
         self.abort_btn = QPushButton("✖ Abort")
         self.abort_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e;")
         self.abort_btn.setEnabled(False)
         self.abort_btn.clicked.connect(self._abort)
 
-        for btn in (gen_btn, build_btn, self.flash_btn, self.abort_btn):
+        for btn in (gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
             btn_row.addWidget(btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
@@ -128,12 +136,22 @@ class FlashTab(QWidget):
             self.fw_path.setText(d)
 
     def _run_flash(self) -> None:
+        """Generate config.h then flash."""
         self.generate_requested.emit()   # main window writes config.h first
+        self._start_flash()
+
+    def _run_flash_only(self) -> None:
+        """Flash without generating config.h — for diagnostic/pre-built projects."""
+        self.append_log("[FLASH] Skipping config.h generation (Flash Only mode)")
+        self._start_flash()
+
+    def _start_flash(self) -> None:
         fw_dir = self.fw_path.text().strip()
         if not fw_dir:
             self.append_log("[FLASH] ⚠️  No firmware directory set.")
             return
         self.flash_btn.setEnabled(False)
+        self.flash_only_btn.setEnabled(False)
         self.abort_btn.setEnabled(True)
         self._flash_worker = FlashWorker(fw_dir, self.env_combo.currentText())
         self._flash_worker.output_line.connect(self.append_log)
@@ -141,16 +159,16 @@ class FlashTab(QWidget):
         self._flash_worker.finished_err.connect(self._on_done_err)
         self._flash_worker.start()
 
-    def _run_build(self) -> None:
-        self.generate_requested.emit()
+    def _run_build_only(self) -> None:
+        """Build without generating config.h or flashing."""
         fw_dir = self.fw_path.text().strip()
         if not fw_dir:
             self.append_log("[BUILD] ⚠️  No firmware directory set.")
             return
         self._build_worker = BuildWorker(fw_dir, self.env_combo.currentText())
         self._build_worker.output_line.connect(self.append_log)
-        self._build_worker.finished_ok.connect(lambda: None)
-        self._build_worker.finished_err.connect(lambda _: None)
+        self._build_worker.finished_ok.connect(lambda: self.append_log("[BUILD] ✅ Success"))
+        self._build_worker.finished_err.connect(lambda rc: self.append_log(f"[BUILD] ❌ Failed (rc={rc})"))
         self._build_worker.start()
 
     def _abort(self) -> None:
@@ -162,8 +180,10 @@ class FlashTab(QWidget):
 
     def _on_done_ok(self) -> None:
         self.flash_btn.setEnabled(True)
+        self.flash_only_btn.setEnabled(True)
         self.abort_btn.setEnabled(False)
 
     def _on_done_err(self, _rc: int) -> None:
         self.flash_btn.setEnabled(True)
+        self.flash_only_btn.setEnabled(True)
         self.abort_btn.setEnabled(False)

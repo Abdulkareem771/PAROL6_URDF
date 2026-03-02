@@ -54,15 +54,15 @@ public:
         tmr_->CH[ch_].SCTRL = 0;
         tmr_->CH[ch_].CSCTRL = 0;
 
-        // QuadTimer "Gated Count Mode":
-        // This is the magic. The timer automatically counts the Primary Count Source (IP Bus clock)
-        // ONLY when the Secondary Count Source (the physical pin) is HIGH.
-        // It acts as a flawless hardware pulse-width integrator.
-        // 
-        // CM(6)   = Gated count mode
-        // PCS(11) = IP Bus Clock / 8 (Prescaler 8 ensures a 1ms window won't overflow the 16-bit register)
-        // SCS(ch) = Matches our physical input pin mappings
-        tmr_->CH[ch_].CTRL = TMR_CTRL_CM(6) | TMR_CTRL_PCS(8 + 3) | TMR_CTRL_SCS(ch_) | TMR_CTRL_LENGTH;
+        // CM(3) = Gated Count Mode: counts IP Bus/8 clock ONLY while secondary
+        // input (external encoder/PWM pin = SCS) is HIGH.
+        //
+        // NO TMR_CTRL_LENGTH — with COMP1=0 (default), LENGTH causes the counter
+        // to reload at 0 immediately, keeping it permanently stuck at 0.
+        // Without LENGTH the 16-bit counter free-runs 0→0xFFFF→wrap, which the
+        // delta measurement handles correctly via 16-bit unsigned subtraction.
+        tmr_->CH[ch_].COMP1 = 0xFFFF;
+        tmr_->CH[ch_].CTRL  = TMR_CTRL_CM(3) | TMR_CTRL_PCS(8 + 3) | TMR_CTRL_SCS(ch_);
 
         // Prime the state history
         last_cntr_ = tmr_->CH[ch_].CNTR;
