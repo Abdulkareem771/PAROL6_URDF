@@ -211,6 +211,14 @@ class PathGenerator(Node):
         
         self.path_pub.publish(path_msg)
         self.get_logger().info(f'Generated path with {len(poses)} waypoints')
+        # DEBUG: log first 5 waypoint positions to diagnose IK failures
+        for i, p in enumerate(poses[:5]):
+            pos = p.pose.position
+            ori = p.pose.orientation
+            self.get_logger().info(
+                f'  WP[{i}]: x={pos.x:.3f} y={pos.y:.3f} z={pos.z:.3f} '
+                f'q=({ori.x:.3f},{ori.y:.3f},{ori.z:.3f},{ori.w:.3f})'
+            )
         
         # 6. Visualize
         self.publish_visualization(poses, msg.header)
@@ -293,14 +301,16 @@ class PathGenerator(Node):
         
     def compute_orientation(self, tangent, pitch_deg):
         """
-        Generates orientation quaternion.
-        HARDCODED FOR PAROL6 REACHABILITY TEST:
-        Forces the end effector Z-axis to point forward (+X) towards the wall.
-        The previous dynamic orientation caused Inverse Kinematics (IK) failures
-        because it asked the robot to bend its wrist in impossible ways.
+        Generates orientation quaternion for PAROL6.
+        Uses a downward-facing EE orientation that matches the robot's natural
+        home pose (confirmed via FK: x=0.7071, z=-0.7071, w=0).
+        This is the correct orientation for welding on a horizontal surface.
+        Previously used y=0.7071, w=0.7071 (pointing +X forward) which caused
+        IK fraction=0.02 because the robot cannot reach that pose configuration.
         """
-        # Quaternion for pitch = 90 degrees (rotates Z UP to point +X FORWARD)
-        return Quaternion(x=0.0, y=0.7071068, z=0.0, w=0.7071068)
+        # EE pointing straight down (-Z in base_link)
+        # Confirmed by FK at joints=[0,0,0,0,0,0]: x=0.7071, y≈0, z=-0.7071, w≈0
+        return Quaternion(x=0.7071068, y=0.0, z=-0.7071068, w=0.0)
         
     def rotation_matrix_to_quaternion(self, R):
         """Manual implementation of rotation matrix to quat"""

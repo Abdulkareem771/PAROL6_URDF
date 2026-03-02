@@ -62,7 +62,8 @@ from rclpy.action import ActionClient
 from nav_msgs.msg import Path
 from moveit_msgs.msg import (
     MoveItErrorCodes, RobotTrajectory,
-    Constraints, PositionConstraint, OrientationConstraint, BoundingVolume
+    Constraints, PositionConstraint, OrientationConstraint, BoundingVolume,
+    JointConstraint
 )
 from moveit_msgs.srv import GetCartesianPath
 from moveit_msgs.action import MoveGroup, ExecuteTrajectory
@@ -91,7 +92,7 @@ class MoveItController(Node):
         
         self.declare_parameter('planning_group', 'parol6_arm')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('end_effector_link', 'link_6')
+        self.declare_parameter('end_effector_link', 'L6')
         
         # Fallback Strategy Config
         self.declare_parameter('cartesian_step_sizes', [0.002, 0.005, 0.010])
@@ -260,15 +261,10 @@ class MoveItController(Node):
                 self.get_logger().error("Reachability normalization produced empty path")
                 return False
         
-        # 1. Compute Approach Point
-        start_pose = path.poses[0]
-        approach_pose = copy.deepcopy(start_pose)
-        approach_pose.pose.position.z += self.approach_dist
-        
-        # 2. Execute Approach (Joint Move)
-        self.get_logger().info("Phase 1: Approach")
-        if not self.move_to_pose(approach_pose):
-            self.get_logger().error("Approach failed")
+        # 1. Move to home state (joint-space goal, always kinematically valid)
+        self.get_logger().info("Phase 1: Move to Home (joint-space approach)")
+        if not self.move_to_home():
+            self.get_logger().error("Move to home failed — aborting")
             return False
             
         # 3. Plan Welding Path (Cartesian Fallback)
@@ -364,7 +360,9 @@ class MoveItController(Node):
 
             req = GetCartesianPath.Request()
             req.header = path.header
+            req.header.stamp = self.get_clock().now().to_msg()  # Use live clock for state lookup
             req.group_name = self.group_name
+            req.link_name = self.ee_link  # CRITICAL: tell MoveIt which link to plan for
             req.waypoints = waypoints
             req.max_step = step
             req.jump_threshold = 0.0 # Disable jump check for now
@@ -383,11 +381,119 @@ class MoveItController(Node):
                 
             if res.fraction >= threshold:
                 self.get_logger().info(f"Success! Planned fraction: {res.fraction:.2f}")
-                return res.solution
+                trajectory = res.solution
+                self._ensure_trajectory_timing(trajectory)
+                return trajectory
             else:
                 self.get_logger().warn(f"Fraction too low: {res.fraction:.2f} < {threshold}")
                 
         return None
+
+    def _ensure_trajectory_timing(self, trajectory):
+        """
+        Ensure all JointTrajectory points have proper time_from_start.
+
+        compute_cartesian_path may return a trajectory where all time_from_start
+        values are zero, causing Gazebo's JointTrajectoryController to silently
+        hang (never completing the action result). This adds linear timing at
+        0.5 seconds per waypoint when zero times are detected.
+        """
+        from builtin_interfaces.msg import Duration as RosDuration
+
+        points = trajectory.joint_trajectory.points
+        if not points:
+            return
+
+        # Check if timing is already set (last point > 0)
+        last = points[-1].time_from_start
+        if last.sec > 0 or last.nanosec > 0:
+            self.get_logger().info(
+                f"Trajectory already timed: {len(points)} pts, "
+                f"total={last.sec + last.nanosec*1e-9:.2f}s"
+            )
+            return
+
+        # Add linear timing: 0.5s per waypoint
+        dt = 0.5
+        for i, pt in enumerate(points):
+            total_sec = (i + 1) * dt
+            pt.time_from_start = RosDuration(
+                sec=int(total_sec),
+                nanosec=int((total_sec % 1) * 1_000_000_000)
+            )
+        total_time = len(points) * dt
+        self.get_logger().info(
+            f"Added linear timing to {len(points)} trajectory points "
+            f"(total={total_time:.1f}s, {dt}s/pt)"
+        )
+
+    def move_to_home(self):
+        """
+        Move arm to home joint state (all joints = 0) using JointConstraints.
+        This is always kinematically valid and is used as the approach phase
+        in the connection-validation test.
+        """
+        if not self._wait_for_action_server(
+            self.move_group_client, 'move_action', self.move_group_wait_timeout
+        ):
+            return False
+
+        joint_names = ['joint_L1', 'joint_L2', 'joint_L3',
+                       'joint_L4', 'joint_L5', 'joint_L6']
+        home_positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        joint_constraints = []
+        for name, pos in zip(joint_names, home_positions):
+            jc = JointConstraint()
+            jc.joint_name = name
+            jc.position = pos
+            jc.tolerance_above = 0.05
+            jc.tolerance_below = 0.05
+            jc.weight = 1.0
+            joint_constraints.append(jc)
+
+        goal_constraints = Constraints()
+        goal_constraints.joint_constraints = joint_constraints
+
+        goal = MoveGroup.Goal()
+        goal.request.group_name = self.group_name
+        goal.request.num_planning_attempts = 5
+        goal.request.allowed_planning_time = 10.0
+        goal.request.max_velocity_scaling_factor = 0.3
+        goal.request.max_acceleration_scaling_factor = 0.3
+        goal.request.goal_constraints = [goal_constraints]
+        goal.planning_options.plan_only = False
+
+        future = self.move_group_client.send_goal_async(goal)
+        try:
+            handle = self._wait_async_result(future, timeout_sec=20.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for MoveGroup home goal response')
+            return False
+
+        if handle is None or not handle.accepted:
+            self.get_logger().error('Home goal rejected or None')
+            return False
+
+        res_future = handle.get_result_async()
+        try:
+            result = self._wait_async_result(res_future, timeout_sec=60.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for MoveGroup home result')
+            return False
+
+        if result is None:
+            self.get_logger().error('Home result is None')
+            return False
+
+        ok = result.result.error_code.val == MoveItErrorCodes.SUCCESS
+        if ok:
+            self.get_logger().info('Move to home succeeded')
+        else:
+            self.get_logger().error(
+                f'Move to home failed — MoveIt error code: {result.result.error_code.val}'
+            )
+        return ok
 
     def move_to_pose(self, pose_stamped):
         """
@@ -405,10 +511,10 @@ class MoveItController(Node):
         ):
             return False
 
-        # --- Build position constraint (1 cm tolerance box around target) ---
+        # --- Build position constraint (2 cm tolerance box around target) ---
         prim = SolidPrimitive()
         prim.type = SolidPrimitive.BOX
-        prim.dimensions = [0.01, 0.01, 0.01]
+        prim.dimensions = [0.02, 0.02, 0.02]  # slightly relaxed for IK sampling
 
         bv = BoundingVolume()
         bv.primitives = [prim]
@@ -420,19 +526,13 @@ class MoveItController(Node):
         pos_con.constraint_region = bv
         pos_con.weight = 1.0
 
-        # --- Build orientation constraint (±0.1 rad tolerance) ---
-        ori_con = OrientationConstraint()
-        ori_con.header = pose_stamped.header
-        ori_con.link_name = self.ee_link
-        ori_con.orientation = pose_stamped.pose.orientation
-        ori_con.absolute_x_axis_tolerance = 0.1
-        ori_con.absolute_y_axis_tolerance = 0.1
-        ori_con.absolute_z_axis_tolerance = 0.1
-        ori_con.weight = 1.0
-
+        # NOTE: No orientation constraint on the approach move.
+        # Forcing a specific orientation alongside a position constraint drastically
+        # shrinks the IK sample space and causes OMPL to fail with
+        # "Unable to sample valid states for goal tree".
+        # For the approach phase we only need the EE to reach the position.
         goal_constraints = Constraints()
         goal_constraints.position_constraints = [pos_con]
-        goal_constraints.orientation_constraints = [ori_con]
 
         # --- Build MoveGroup Goal ---
         goal = MoveGroup.Goal()
@@ -443,6 +543,7 @@ class MoveItController(Node):
         goal.request.max_acceleration_scaling_factor = 0.3
         goal.request.goal_constraints = [goal_constraints]
         goal.planning_options.plan_only = False  # plan AND execute
+
 
         future = self.move_group_client.send_goal_async(goal)
         try:
