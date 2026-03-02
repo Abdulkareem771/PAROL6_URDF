@@ -41,6 +41,10 @@ AlphaBetaFilter observer[NUM_AXES] = {
 
 LinearInterpolator interpolator[NUM_AXES];
 
+// Telemetry Export for Main Loop
+volatile float telemetry_pos[NUM_AXES];
+volatile float telemetry_vel[NUM_AXES];
+
 // Hardware Abstraction (Phase 3: Zero-interrupt QuadTimers)
 QuadTimerEncoder encoder_hal[NUM_AXES] = {
     QuadTimerEncoder(10), QuadTimerEncoder(11), QuadTimerEncoder(12),
@@ -101,6 +105,10 @@ void run_control_loop_isr() {
 #endif
         current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
+        
+        // Export to telemetry buffer (safe because floats on 32-bit ARM are atomic)
+        telemetry_pos[i] = actual_pos;
+        telemetry_vel[i] = actual_vel;
         
         // C. Get Interpolated Setpoint
         float cmd_pos, cmd_vel_ff;
@@ -181,6 +189,8 @@ void setup() {
         float initial_pos = encoder_hal[i].read_angle();
         observer[i].set_initial_position(initial_pos);
         interpolator[i].reset(initial_pos);
+        telemetry_pos[i] = initial_pos;
+        telemetry_vel[i] = 0.0f;
     }
     
     // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
@@ -233,8 +243,8 @@ void loop() {
         float pos[NUM_AXES], vel[NUM_AXES];
         noInterrupts();
         for (int i=0; i<NUM_AXES; i++) {
-            pos[i] = observer[i].get_position();
-            vel[i] = observer[i].get_velocity();
+            pos[i] = telemetry_pos[i];
+            vel[i] = telemetry_vel[i];
         }
         interrupts();
         
