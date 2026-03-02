@@ -125,10 +125,10 @@ def segment_blocks(image_path):
     contour_R = find_contours(R)
 
     if contour_G is not None:
-        cv2.drawContours(img_annotated, [contour_G], -1, (0, 255, 0), 2)   # green outline
+        cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # green outline
 
     if contour_R is not None:
-        cv2.drawContours(img_annotated, [contour_R], -1, (255, 0, 0), 2)   # red outline
+        cv2.drawContours(img_annotated, [contour_R], -1, (0, 0, 255), 2)   # red outline
 
     def expand_corners(corners, px):
         """Push each corner outward from the polygon centroid by 'px' pixels."""
