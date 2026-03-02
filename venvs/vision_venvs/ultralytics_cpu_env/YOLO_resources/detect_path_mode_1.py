@@ -16,7 +16,7 @@ current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
 # Path to an official model
-MODEL_PATH_OFFICIAL = project_dir / "yolo26n-seg.pt"
+MODEL_PATH_OFFICIAL = project_dir / "yolov8n-seg.pt"
 
 # Path to your trained YOLO model
 MODEL_PATH = project_dir / "yolo_training" / "experiment_12" / "weights" / "best.pt"   # replace with your path
@@ -36,7 +36,7 @@ model = YOLO(MODEL_PATH_OFFICIAL)  # load an official model
 model = YOLO(MODEL_PATH)  # load a custom model
 
 # Predict with the model
-results = model("https://ultralytics.com/images/bus.jpg")  # predict on an image
+results = model(SINGLE_IMAGE_PATH)  # predict on an image
 
 # Access the results
 for result in results:
