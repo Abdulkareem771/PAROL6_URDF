@@ -7,6 +7,20 @@ import matplotlib.pyplot as plt
 from ultralytics import YOLO
 
 
+# ==================== CONFIGURATION ====================
+
+# Path to your trained YOLO model
+MODEL_PATH = project_dir / "yolo_training" / "experiment_12" / "weights" / "best.pt"   # replace with your path
+
+# Path to the folder containing images
+IMAGE_FOLDER = project_dir / "data" / "raw_images_ROI_model"    # replace with your folder path
+
+# Path to single image
+SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "20260219_224015.jpg"
+
+# Padding around bounding boxes (in pixels) - useful to include some context
+PADDING = 20  # Set to 0 for no padding
+
 
 # Load a model
 model = YOLO("yolo26n-seg.pt")  # load an official model
