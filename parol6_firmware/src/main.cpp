@@ -89,10 +89,16 @@ void run_control_loop_isr() {
         // A. Read Hardware Abstraction Layer
         float raw_pos = encoder_hal[i].read_angle();
         
+#if defined(FEATURE_ALPHABETA_FILTER) && FEATURE_ALPHABETA_FILTER == 1
         // B. Update Observer
         observer[i].update(raw_pos);
         float actual_pos = observer[i].get_position();
         float actual_vel = observer[i].get_velocity();
+#else
+        // Passthrough if observer disabled (noisy!)
+        float actual_pos = raw_pos;
+        float actual_vel = 0.0f; // Can't reliably derive velocity without a filter
+#endif
         current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
         
@@ -102,7 +108,10 @@ void run_control_loop_isr() {
         
         // D. Control Law (P + FF)
         float pos_error = cmd_pos - actual_pos;
-        float velocity_command = cmd_vel_ff + (Kp[i] * pos_error);
+        float velocity_command = (Kp[i] * pos_error);
+#if defined(FEATURE_VEL_FEEDFORWARD) && FEATURE_VEL_FEEDFORWARD == 1
+        velocity_command += cmd_vel_ff;
+#endif
         
         // E. Per-joint output saturation
         if (velocity_command >  MAX_VEL_CMD[i]) velocity_command =  MAX_VEL_CMD[i];
@@ -116,6 +125,7 @@ void run_control_loop_isr() {
     
     // 2. Safety check uses observer velocities and unified monotonic tick
     system_tick_ms++;
+#if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1    
     supervisor.update(system_tick_ms, current_velocities);
 
     // 3. Motor Hal Output safely governed by Supervisor
@@ -126,6 +136,12 @@ void run_control_loop_isr() {
             set_motor_velocity(i, 0.0f); // Fast stop on fault
         }
     }
+#else
+    // Supervisor disabled - raw passthrough
+    for(int i = 0; i < NUM_AXES; i++) {
+        set_motor_velocity(i, commanded_velocities[i]);
+    }
+#endif
     
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
     
@@ -160,8 +176,11 @@ void setup() {
     // Hardware Configuration
     for (int i = 0; i < NUM_AXES; i++) {
         encoder_hal[i].init();
-        observer[i].set_initial_position(0.0f);
-        interpolator[i].reset(0.0f);
+        delay(5); // Give encoder time to stabilize
+        
+        float initial_pos = encoder_hal[i].read_angle();
+        observer[i].set_initial_position(initial_pos);
+        interpolator[i].reset(initial_pos);
     }
     
     // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
@@ -182,7 +201,12 @@ void loop() {
         interrupts();
 
         uint32_t current_tick = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
+#if defined(FEATURE_VALIDATE_COMMANDS) && FEATURE_VALIDATE_COMMANDS == 1        
+        // Optionally validate command sequence here if feature added later
+#endif
+#if defined(FEATURE_WATCHDOG) && FEATURE_WATCHDOG == 1        
         supervisor.feed_watchdog(current_tick);
+#endif
 
         // Dynamically compute the duration since the last valid ROS packet
         static uint32_t last_cmd_ts = 0;

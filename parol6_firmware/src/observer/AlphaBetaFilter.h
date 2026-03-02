@@ -18,6 +18,20 @@ public:
 
     // Called at control frequency with raw, potentially wrapped sensor data
     void update(float raw_encoder_angle_rad) {
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+        float glitch_delta = raw_encoder_angle_rad - last_raw_angle_;
+        // Unwrap temporary test delta to [-PI, +PI]
+        if (glitch_delta > M_PI)  glitch_delta -= 2.0f * M_PI;
+        if (glitch_delta < -M_PI) glitch_delta += 2.0f * M_PI;
+
+        // Reject impossible velocities (0.3 rad/tick @ 1ms = 300 rad/s)
+        if (fabsf(glitch_delta) > 0.3f) {
+            // Glitch! Do prediction step only, skip measurement
+            estimated_pos_ += estimated_vel_ * dt_;
+            return;
+        }
+#endif
+
         // 1. Unwrap absolute boundary crossing (e.g. 0 -> 2PI)
         float delta = raw_encoder_angle_rad - last_raw_angle_;
         if (delta > M_PI)  turn_offset_ -= 2.0f * M_PI;
