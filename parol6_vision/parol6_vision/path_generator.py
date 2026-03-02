@@ -211,14 +211,6 @@ class PathGenerator(Node):
         
         self.path_pub.publish(path_msg)
         self.get_logger().info(f'Generated path with {len(poses)} waypoints')
-        # DEBUG: log first 5 waypoint positions to diagnose IK failures
-        for i, p in enumerate(poses[:5]):
-            pos = p.pose.position
-            ori = p.pose.orientation
-            self.get_logger().info(
-                f'  WP[{i}]: x={pos.x:.3f} y={pos.y:.3f} z={pos.z:.3f} '
-                f'q=({ori.x:.3f},{ori.y:.3f},{ori.z:.3f},{ori.w:.3f})'
-            )
         
         # 6. Visualize
         self.publish_visualization(poses, msg.header)
