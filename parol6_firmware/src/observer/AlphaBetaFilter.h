@@ -26,10 +26,15 @@ public:
 
         // Reject impossible velocities (0.3 rad/tick @ 1ms = 300 rad/s)
         if (fabsf(glitch_delta) > 0.3f) {
-            // Glitch! Do prediction step only, skip measurement
-            estimated_pos_ += estimated_vel_ * dt_;
-            return;
+            glitch_consecutive_++;
+            if (glitch_consecutive_ < 10) {
+                // Glitch! Do prediction step only, skip measurement
+                estimated_pos_ += estimated_vel_ * dt_;
+                return;
+            }
+            // If >= 10, it's a permanent shift (like bootup). Accept it and fall through!
         }
+        glitch_consecutive_ = 0;
 #endif
 
         // 1. Unwrap absolute boundary crossing (e.g. 0 -> 2PI)
@@ -61,4 +66,7 @@ private:
     float turn_offset_ = 0.0f;
     float alpha_, beta_, dt_;
     float beta_dt_inv_;
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+    int glitch_consecutive_ = 0;
+#endif
 };
