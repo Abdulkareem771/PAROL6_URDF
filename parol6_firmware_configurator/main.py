@@ -365,8 +365,12 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def _generate_config(self) -> None:
         self._read_gui_into_cfg()
+        fw_dir = self._flash_tab.fw_path.text().strip()
+        if not fw_dir:
+            fw_dir = FW_DIR
+        out_path = os.path.join(fw_dir, "generated", "config.h")
         try:
-            content = generate_config_h(self._cfg, GEN_CONFIG_H)
+            content = generate_config_h(self._cfg, out_path)
             self._flash_tab.set_preview(content)
             self._sb_cfg.setText(f"config.h generated ✓ ({len(content.splitlines())} lines)")
         except Exception as e:
