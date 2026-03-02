@@ -17,7 +17,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a6.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
