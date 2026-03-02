@@ -108,7 +108,7 @@ def segment_blocks(image_path):
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 255, 0), 3)    # yellow = intersection region
 
 
-    # 7. GUI Display Section
+    # 6. GUI Display Section
     plt.figure(figsize=(20, 5))
 
     # Subplot 1: Original Image
