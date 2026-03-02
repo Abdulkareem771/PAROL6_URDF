@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <math.h>
 
+#ifndef COMMAND_TIMEOUT_MS
+#define COMMAND_TIMEOUT_MS 200 // Default fallback: 5 missed 25Hz packets
+#endif
+
 class SafetySupervisor {
 public:
     enum State { INIT, NOMINAL, SOFT_ESTOP, FAULT };
@@ -47,7 +51,6 @@ public:
 private:
     State current_state_;
     uint32_t last_cmd_time_ms_;
-    const uint32_t COMMAND_TIMEOUT_MS = 200; // 5 missed 25Hz packets
     // Per-joint velocity limits validated from realtime_servo_teensy/config.h
     // {J1, J2, J3, J4, J5, J6} in rad/s
     const float MAX_SAFE_VELOCITY_PER_JOINT[6] = {3.0f, 3.0f, 6.0f, 6.0f, 6.0f, 6.0f};

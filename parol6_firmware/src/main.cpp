@@ -21,7 +21,9 @@
 // Global Architecture Instantiation
 // -------------------------------------------------------------------------
 
-static const int NUM_AXES = 6;
+#ifndef NUM_AXES
+#define NUM_AXES 6
+#endif
 #define ISR_PROFILER_PIN 13 // Standard LED Pin on Teensy for oscilloscope hookup
 
 // RTOS/Main Loop Transport
