@@ -135,38 +135,79 @@ class MainWindow(QMainWindow):
     # UI Construction
     # ------------------------------------------------------------------
     def _build_toolbar(self) -> None:
+        from PyQt6.QtWidgets import QSizePolicy
+
+        # ── Row 1: file operations + profile name ──────────────────────
         tb = self.addToolBar("Main")
         tb.setMovable(False)
 
-        new_btn = QPushButton("New")
-        new_btn.clicked.connect(self._new_config)
-        open_btn = QPushButton("Open…")
-        open_btn.clicked.connect(self._open_config)
-        save_btn = QPushButton("Save")
-        save_btn.clicked.connect(self._save_config)
+        new_btn    = QPushButton("New")
+        open_btn   = QPushButton("Open…")
+        save_btn   = QPushButton("Save")
         saveas_btn = QPushButton("Save As…")
+        new_btn.clicked.connect(self._new_config)
+        open_btn.clicked.connect(self._open_config)
+        save_btn.clicked.connect(self._save_config)
         saveas_btn.clicked.connect(self._save_config_as)
-
         for b in (new_btn, open_btn, save_btn, saveas_btn):
             tb.addWidget(b)
 
         tb.addSeparator()
-
         self._profile_name = QLabel("  Profile: default")
         self._profile_name.setStyleSheet("color:#cba6f7; font-weight:bold;")
         tb.addWidget(self._profile_name)
 
-        # Spacer
-        sp = QWidget()
-        sp.setSizePolicy(sp.sizePolicy().horizontalPolicy(),
-                         sp.sizePolicy().verticalPolicy())
-        from PyQt6.QtWidgets import QSizePolicy
-        sp.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        tb.addWidget(sp)
+        sp1 = QWidget()
+        sp1.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        tb.addWidget(sp1)
 
         rename_btn = QPushButton("Rename…")
         rename_btn.clicked.connect(self._rename_config)
         tb.addWidget(rename_btn)
+
+        # ── Row 2: serial connection (own toolbar so dropdown has room) ─
+        tb2 = self.addToolBar("Serial")
+        tb2.setMovable(False)
+
+        tb2.addWidget(QLabel(" 🔌 Port: "))
+
+        self._sb_port = QComboBox()
+        self._sb_port.setEditable(True)
+        self._sb_port.setMinimumWidth(200)
+        self._sb_port.setToolTip("Select serial port (click 🔄 to refresh)")
+        tb2.addWidget(self._sb_port)
+
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setFixedWidth(32)
+        refresh_btn.setToolTip("Refresh available serial ports")
+        refresh_btn.clicked.connect(self._refresh_sb_ports)
+        tb2.addWidget(refresh_btn)
+
+        tb2.addSeparator()
+        tb2.addWidget(QLabel(" Baud: "))
+
+        self._sb_baud = QComboBox()
+        self._sb_baud.addItems(["115200", "921600", "9600"])
+        self._sb_baud.setFixedWidth(90)
+        tb2.addWidget(self._sb_baud)
+
+        tb2.addSeparator()
+
+        self._sb_connect_btn = QPushButton("⚡ Connect")
+        self._sb_connect_btn.setCheckable(True)
+        self._sb_connect_btn.setStyleSheet(
+            "QPushButton { padding: 4px 16px; }"
+            "QPushButton:checked { background:#a6e3a1; color:#1e1e2e; font-weight:bold; }"
+        )
+        self._sb_connect_btn.clicked.connect(self._toggle_serial)
+        tb2.addWidget(self._sb_connect_btn)
+
+        sp2 = QWidget()
+        sp2.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        tb2.addWidget(sp2)
+
+        # Populate immediately
+        self._refresh_sb_ports()
 
     def _build_tabs(self) -> None:
         self._proto_tab = TestingProtocolTab(CONFIGS_DIR)
@@ -207,48 +248,13 @@ class MainWindow(QMainWindow):
                   QLabel("|"), self._sb_state, QLabel("|"), self._sb_cfg):
             sb.addPermanentWidget(w)
 
-        # ── Serial connection controls (always visible) ───────────────
-        self._sb_port = QComboBox()
-        self._sb_port.setEditable(True)
-        self._sb_port.setMinimumWidth(160)
-        self._sb_port.setMaximumHeight(22)
-        self._sb_port.setPlaceholderText("Select port…")
-        self._sb_port.setToolTip("Serial port — click 🔄 to refresh list")
-
-        self._sb_baud = QComboBox()
-        self._sb_baud.addItems(["115200", "921600", "9600"])
-        self._sb_baud.setMaximumHeight(22)
-        self._sb_baud.setFixedWidth(80)
-
-        refresh_btn = QPushButton("🔄")
-        refresh_btn.setMaximumHeight(22)
-        refresh_btn.setFixedWidth(28)
-        refresh_btn.setToolTip("Refresh port list")
-        refresh_btn.clicked.connect(self._refresh_sb_ports)
-
-        self._sb_connect_btn = QPushButton("⚡ Connect")
-        self._sb_connect_btn.setMaximumHeight(22)
-        self._sb_connect_btn.setStyleSheet(
-            "QPushButton { background:#313244; border:1px solid #45475a; border-radius:4px; padding:2px 10px; }"
-            "QPushButton:checked { background:#a6e3a1; color:#1e1e2e; font-weight:bold; }"
-        )
-        self._sb_connect_btn.setCheckable(True)
-        self._sb_connect_btn.clicked.connect(self._toggle_serial)
-
-        for w in (QLabel(" Port:"), self._sb_port, refresh_btn,
-                  QLabel("Baud:"), self._sb_baud, self._sb_connect_btn):
-            sb.addWidget(w)
-
-        # Populate port list immediately
-        self._refresh_sb_ports()
-
     def _refresh_sb_ports(self) -> None:
+        """Refresh the port dropdown in toolbar row 2."""
         current = self._sb_port.currentText()
         self._sb_port.clear()
         ports = list_serial_ports()
         if ports:
             self._sb_port.addItems(ports)
-            # Restore previous selection if still available
             if current in ports:
                 self._sb_port.setCurrentText(current)
         else:

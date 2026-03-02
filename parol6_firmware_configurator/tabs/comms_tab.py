@@ -93,12 +93,30 @@ class CommsTab(QWidget):
         root.addWidget(timing_box)
 
         # ── Serial Port (GUI only, not flashed) ───────────────────────
-        port_box = QGroupBox("Serial Port (GUI monitoring — not flashed)")
-        port_lay = QHBoxLayout(port_box)
+        port_box = QGroupBox("Serial Port  (GUI monitoring — not flashed)")
+        port_outer = QVBoxLayout(port_box)
+
+        # Docker / permissions hint
+        hint = QLabel(
+            "⚠️  If no port appears: in Docker add  "
+            "<b>--device /dev/ttyACM0:/dev/ttyACM0</b>  to your run command.  "
+            "You can also <b>type any path manually</b> in the Port box below."
+        )
+        hint.setWordWrap(True)
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setStyleSheet("color:#f9e2af; font-size:11px;")
+        port_outer.addWidget(hint)
+
+        port_lay = QHBoxLayout()
         port_lay.addWidget(QLabel("Port:"))
         self.port_combo = QComboBox()
         self.port_combo.setEditable(True)
-        self.port_combo.setMinimumWidth(180)
+        self.port_combo.setMinimumWidth(220)
+        self.port_combo.lineEdit().setPlaceholderText("/dev/ttyACM0 or type manually…")
+        self.port_combo.setToolTip(
+            "Select a detected port, or type the path directly.\n"
+            "Common Teensy ports: /dev/ttyACM0, /dev/ttyUSB0"
+        )
         port_lay.addWidget(self.port_combo)
 
         port_lay.addWidget(QLabel("Baud:"))
@@ -111,6 +129,7 @@ class CommsTab(QWidget):
         refresh_btn.clicked.connect(self._refresh_ports)
         port_lay.addWidget(refresh_btn)
         port_lay.addStretch()
+        port_outer.addLayout(port_lay)
         root.addWidget(port_box)
 
         root.addStretch()
@@ -130,10 +149,21 @@ class CommsTab(QWidget):
 
     def _refresh_ports(self) -> None:
         from core.serial_monitor import list_serial_ports
+        current = self.port_combo.currentText()
         self.port_combo.clear()
-        self.port_combo.addItem("")
-        for p in list_serial_ports():
+        detected = list_serial_ports()
+        # Always include common Teensy/Arduino port names as selectable hints
+        common = ["/dev/ttyACM0", "/dev/ttyACM1",
+                  "/dev/ttyUSB0", "/dev/ttyUSB1",
+                  "COM3", "COM4", "COM5"]
+        all_ports = list(dict.fromkeys(detected + [p for p in common if p not in detected]))
+        for p in all_ports:
             self.port_combo.addItem(p)
+        # Restore what was typed / selected before
+        if current:
+            self.port_combo.setCurrentText(current)
+        elif detected:
+            self.port_combo.setCurrentText(detected[0])
 
     def load(self, c: CommsConfig) -> None:
         self.transport.setCurrentText(c.transport)
