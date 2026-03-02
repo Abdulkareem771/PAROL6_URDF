@@ -63,8 +63,13 @@ void run_control_loop_isr() {
     float current_positions[NUM_AXES];
     float commanded_velocities[NUM_AXES];
     
-    // Strict Control Law: Kp Proportional Gains
-    const float Kp[NUM_AXES] = { 20.0f, 20.0f, 20.0f, 20.0f, 20.0f, 20.0f };
+    // Strict Control Law: Per-joint Kp Proportional Gains
+    // Validated from realtime_servo_teensy/config.h (J1/J2 geared = 5.0, J3-6 direct = 2.0)
+    const float Kp[NUM_AXES]               = { 5.0f,  5.0f,  2.0f, 2.0f, 2.0f, 2.0f };
+    // Per-joint velocity limits (rad/s) validated from reference firmware
+    const float MAX_VEL_CMD[NUM_AXES]      = { 3.0f,  3.0f,  6.0f, 6.0f, 6.0f, 6.0f };
+    // Velocity deadband: suppress micro-stepping jitter near zero velocity
+    const float VELOCITY_DEADBAND = 0.02f;
 
     // 1. Compute Math for All Axes First
     for (int i = 0; i < NUM_AXES; i++) {
@@ -86,10 +91,12 @@ void run_control_loop_isr() {
         float pos_error = cmd_pos - actual_pos;
         float velocity_command = cmd_vel_ff + (Kp[i] * pos_error);
         
-        // E. Output Saturation (Clamping)
-        const float MAX_VEL_CMD = 10.0f; // Aligned with SafetySupervisor 10.0f
-        if (velocity_command > MAX_VEL_CMD) velocity_command = MAX_VEL_CMD;
-        if (velocity_command < -MAX_VEL_CMD) velocity_command = -MAX_VEL_CMD;
+        // E. Per-joint output saturation
+        if (velocity_command >  MAX_VEL_CMD[i]) velocity_command =  MAX_VEL_CMD[i];
+        if (velocity_command < -MAX_VEL_CMD[i]) velocity_command = -MAX_VEL_CMD[i];
+
+        // F. Velocity deadband: suppress noise-driven micro-stepping near standstill
+        if (fabsf(velocity_command) < VELOCITY_DEADBAND) velocity_command = 0.0f;
         
         // Cache safe command
         commanded_velocities[i] = velocity_command;
