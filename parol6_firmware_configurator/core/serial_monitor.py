@@ -37,6 +37,7 @@ class SerialWorker(QThread):
     error_msg   = pyqtSignal(str)            # connection / IO errors
     connected   = pyqtSignal(bool)           # True=connected False=disconnected
     packet_rate = pyqtSignal(float)          # packets per second (approx)
+    data_rate   = pyqtSignal(float)          # bytes per second (approx)
 
     def __init__(self, port: str, baud: int = 115200, parent=None):
         super().__init__(parent)
@@ -48,6 +49,7 @@ class SerialWorker(QThread):
     def run(self) -> None:
         self._running = True
         pkt_count = 0
+        byte_count = 0
         rate_t0   = time.monotonic()
 
         self._is_udp = self._port.startswith("udp://")
@@ -79,13 +81,16 @@ class SerialWorker(QThread):
                 if self._is_udp:
                     try:
                         data, addr = self._sock.recvfrom(1024)
+                        byte_count += len(data)
                         line = data.decode("utf-8", errors="replace").strip()
                         # Update target IP to whoever sent us data (for robustness)
                         self._udp_ip = addr[0]
                     except socket.timeout:
                         line = ""
                 else:
-                    line = self._ser.readline().decode("utf-8", errors="replace").strip()
+                    raw_bytes = self._ser.readline()
+                    byte_count += len(raw_bytes)
+                    line = raw_bytes.decode("utf-8", errors="replace").strip()
             except Exception as e:
                 self.error_msg.emit(f"Read error: {e}")
                 break
@@ -121,8 +126,11 @@ class SerialWorker(QThread):
             # Approximate packet rate every second
             now = time.monotonic()
             if now - rate_t0 >= 1.0:
-                self.packet_rate.emit(pkt_count / (now - rate_t0))
+                dt = now - rate_t0
+                self.packet_rate.emit(pkt_count / dt)
+                self.data_rate.emit(byte_count / dt)
                 pkt_count = 0
+                byte_count = 0
                 rate_t0 = now
 
         if getattr(self, "_is_udp", False):

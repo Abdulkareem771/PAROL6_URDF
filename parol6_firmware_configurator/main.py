@@ -250,11 +250,13 @@ class MainWindow(QMainWindow):
         self._sb_transport = QLabel("")
         self._sb_transport.setStyleSheet("color:#89dceb; font-weight:bold;")
         self._sb_rate  = QLabel("0 pkt/s")
+        self._sb_data_rate = QLabel("0 B/s")
         self._sb_state = QLabel("State: —")
         self._sb_cfg   = QLabel("")
 
-        for w in (self._sb_conn, QLabel("|"), self._sb_transport, QLabel("|"), self._sb_rate,
-                  QLabel("|"), self._sb_state, QLabel("|"), self._sb_cfg):
+        for w in (self._sb_conn, QLabel("|"), self._sb_transport, QLabel("|"), 
+                  self._sb_rate, QLabel("("), self._sb_data_rate, QLabel(") |"), 
+                  self._sb_state, QLabel("|"), self._sb_cfg):
             sb.addPermanentWidget(w)
 
     def _scan_ports(self) -> None:
@@ -420,6 +422,7 @@ class MainWindow(QMainWindow):
         self._serial_worker.telemetry.connect(self._on_telemetry)
         self._serial_worker.connected.connect(self._on_serial_connected)
         self._serial_worker.packet_rate.connect(self._on_packet_rate)
+        self._serial_worker.data_rate.connect(self._on_data_rate)
         self._serial_worker.error_msg.connect(lambda m: self._serial_tab._append(m, "#f38ba8"))
         self._serial_worker.raw_line.connect(self._serial_tab._on_line)
         self._serial_worker.start()
@@ -447,6 +450,14 @@ class MainWindow(QMainWindow):
 
     def _on_packet_rate(self, rate: float) -> None:
         self._sb_rate.setText(f"{rate:.1f} pkt/s")
+
+    def _on_data_rate(self, bps: float) -> None:
+        if bps >= 1048576:
+            self._sb_data_rate.setText(f"{bps/1048576.0:.2f} MB/s")
+        elif bps >= 1024:
+            self._sb_data_rate.setText(f"{bps/1024.0:.1f} KB/s")
+        else:
+            self._sb_data_rate.setText(f"{bps:.0f} B/s")
 
     def _on_raw_line(self, line: str) -> None:
         # Route fault lines to fault log
