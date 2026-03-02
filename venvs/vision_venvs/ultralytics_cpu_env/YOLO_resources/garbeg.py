@@ -11,13 +11,13 @@ y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
 EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
-CEXPAND_PX    = 15  # pixels to dilate each contour mask outward
+CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
 
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -107,7 +107,8 @@ def segment_blocks(image_path):
         approx = cv2.approxPolyDP(largest, epsilon, True)
         # approx shape: (N, 1, 2) → reshape to (N, 2)
         return approx.reshape(-1, 2)
-
+    
+    
     def find_contours(mask):
         """Return the outermost (external) contour of the largest object in 'mask'.
         Uses CHAIN_APPROX_NONE to keep every boundary pixel.
@@ -125,11 +126,11 @@ def segment_blocks(image_path):
     contour_G = find_contours(G)
     contour_R = find_contours(R)
 
-    if contour_G is not None:
-        cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
+    #if contour_G is not None:
+        #cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
 
-    if contour_R is not None:
-        cv2.drawContours(img_annotated, [contour_R], -1, (0, 0, 255), 2)   # blue outline (red object)
+    #if contour_R is not None:
+        #cv2.drawContours(img_annotated, [contour_R], -1, (0, 0, 255), 2)   # blue outline (red object)
 
     # Expand contours outward by CEXPAND_PX using morphological dilation
     dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
@@ -139,11 +140,11 @@ def segment_blocks(image_path):
     contour_G_exp = find_contours(G_exp)
     contour_R_exp = find_contours(R_exp)
 
-    if contour_G_exp is not None:
-        cv2.drawContours(img_annotated, [contour_G_exp], -1, (0, 255, 0), 2)  # green = expanded green contour
+    #if contour_G_exp is not None:
+        #cv2.drawContours(img_annotated, [contour_G_exp], -1, (0, 255, 0), 2)  # green = expanded green contour
 
-    if contour_R_exp is not None:
-        cv2.drawContours(img_annotated, [contour_R_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
+    #if contour_R_exp is not None:
+        #cv2.drawContours(img_annotated, [contour_R_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
 
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, R_exp)
