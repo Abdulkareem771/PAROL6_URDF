@@ -17,7 +17,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a6.png"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a4.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -41,25 +41,36 @@ def segment_blocks(image_path):
     lower_green = np.array([35, 50, 50])
     upper_green = np.array([85, 255, 255])
     
+    # Blue range
+    lower_blue = np.array([100, 50, 50])
+    upper_blue = np.array([140, 255, 255])
+
+    """
     # Red range (Red wraps around 0 and 180, so we combine two ranges)
     lower_red1 = np.array([0, 70, 50])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([170, 70, 50])
     upper_red2 = np.array([180, 255, 255])
+    """
 
     # 4. Create Masks (G and R matrices)
     # G matrix: 255 for green pixels, 0 otherwise
     G = cv2.inRange(hsv, lower_green, upper_green)
 
+    # B matrix: 255 for blue pixels, 0 otherwise
+    B = cv2.inRange(hsv, lower_blue, upper_blue)
+
+    """
     # R matrix: combine both ends of the red spectrum
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     R = cv2.bitwise_or(mask_red1, mask_red2)
-
+    """
+    
     # Optional: Clean up noise with morphological operations
     kernel = np.ones((5, 5), np.uint8)
     G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
-    R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
+    B = cv2.morphologyEx(B, cv2.MORPH_OPEN, kernel)
 
     # 5. Compute Bounding Boxes and draw on a copy of img_rgb
     img_annotated = img_rgb.copy()
@@ -78,30 +89,30 @@ def segment_blocks(image_path):
 
     # Find the full external contours from the original masks
     contour_G = find_contours(G)
-    contour_R = find_contours(R)
+    contour_B = find_contours(B)
 
     #if contour_G is not None:
         #cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
 
-    #if contour_R is not None:
-        #cv2.drawContours(img_annotated, [contour_R], -1, (0, 0, 255), 2)   # blue outline (red object)
+    #if contour_B is not None:
+        #cv2.drawContours(img_annotated, [contour_B], -1, (0, 0, 255), 2)   # blue outline (red object)
 
     # Expand contours outward by CEXPAND_PX using morphological dilation
     dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
     G_exp = cv2.dilate(G, dil_kernel)
-    R_exp = cv2.dilate(R, dil_kernel)
+    B_exp = cv2.dilate(B, dil_kernel)
 
     contour_G_exp = find_contours(G_exp)
-    contour_R_exp = find_contours(R_exp)
+    contour_B_exp = find_contours(B_exp)
 
     #if contour_G_exp is not None:
         #cv2.drawContours(img_annotated, [contour_G_exp], -1, (0, 255, 0), 2)  # green = expanded green contour
 
-    #if contour_R_exp is not None:
-        #cv2.drawContours(img_annotated, [contour_R_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
+    #if contour_B_exp is not None:
+        #cv2.drawContours(img_annotated, [contour_B_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
 
     # Intersection of the two expanded contour regions
-    intersection_mask = cv2.bitwise_and(G_exp, R_exp)
+    intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
 
     if contour_I is not None:
@@ -125,8 +136,8 @@ def segment_blocks(image_path):
 
     # Subplot 3: R Matrix (Red Object)
     plt.subplot(1, 4, 3)
-    plt.title("R Matrix (Red Object)")
-    plt.imshow(R, cmap='gray')
+    plt.title("B Matrix (Blue Object)")
+    plt.imshow(B, cmap='gray')
     plt.axis('off')
 
     # Subplot 4: Annotated Image with Bounding Boxes
@@ -138,7 +149,7 @@ def segment_blocks(image_path):
     plt.tight_layout()
     plt.show()
 
-    return G, R, img_annotated
+    return G, B, img_annotated
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -152,12 +163,12 @@ def process_folder(folder_path, output_folder):
 
     for img_path in image_files:
         filename = os.path.basename(img_path).split('.')[0]
-        G, R = segment_blocks(img_path)
+        G, B = segment_blocks(img_path)
 
         if G is not None:
             # Save the masks as images (or keep as matrices for further ops)
             cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_G.png"), G)
-            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_R.png"), R)
+            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_B.png"), B)
             print(f"Processed: {filename}")
 
 
@@ -165,7 +176,7 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, r_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
+g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
 
 
