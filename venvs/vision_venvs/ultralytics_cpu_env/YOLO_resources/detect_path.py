@@ -165,7 +165,7 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I, corners_G, corners_R = segment_blocks(SINGLE_IMAGE)
+g_matrix, r_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
 
 
