@@ -59,9 +59,9 @@ class LaunchTab(QWidget):
         super().__init__(parent)
         self._worker: LaunchWorker | None = None
         
-        # Resolve the path to run_robot.sh which is 2 levels up from tabs/
+        # Resolve the scripts/launchers directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        self._run_robot_path = os.path.abspath(os.path.join(base_dir, "..", "..", "run_robot.sh"))
+        self._launchers_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "scripts", "launchers"))
         
         self._build_ui()
 
@@ -74,8 +74,8 @@ class LaunchTab(QWidget):
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
         
-        if not os.path.exists(self._run_robot_path):
-            err = QLabel(f"⚠️ run_robot.sh not found at:\n{self._run_robot_path}")
+        if not os.path.exists(self._launchers_dir):
+            err = QLabel(f"⚠️ Launchers directory not found at:\n{self._launchers_dir}")
             err.setStyleSheet("color:#f38ba8; font-weight:bold;")
             root.addWidget(err)
             root.addStretch()
@@ -86,11 +86,10 @@ class LaunchTab(QWidget):
         cl = QHBoxLayout(ctrls)
         
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems([
-            "real (Real Hardware - ESP32+Motors)",
-            "fake (Visualization Only - RViz)",
-            "sim (Ignition Gazebo + Physics)"
-        ])
+        self.mode_combo.addItem("Method 1: Gazebo Only (Simulation World)", "launch_gazebo_only.sh")
+        self.mode_combo.addItem("Method 2: MoveIt With Gazebo (External)", "launch_moveit_with_gazebo.sh")
+        self.mode_combo.addItem("Method 3: MoveIt Fake (Standalone RViz)", "launch_moveit_fake.sh")
+        self.mode_combo.addItem("Method 4: MoveIt Real Hardware", "launch_moveit_real_hw.sh")
         self.mode_combo.setMinimumWidth(300)
         cl.addWidget(QLabel("Target:"))
         cl.addWidget(self.mode_combo)
@@ -127,9 +126,14 @@ class LaunchTab(QWidget):
 
         # Start new process
         self.log_out.clear()
-        mode_str = self.mode_combo.currentText().split(" ")[0]  # Extracts "real", "fake", or "sim"
+        script_name = self.mode_combo.currentData()
+        script_path = os.path.join(self._launchers_dir, script_name)
         
-        self._worker = LaunchWorker(self._run_robot_path, [mode_str])
+        if not os.path.exists(script_path):
+            self.log_out.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
+            return
+            
+        self._worker = LaunchWorker(script_path, [])
         self._worker.output_line.connect(self.log_out.append)
         self._worker.finished_ok.connect(self._on_finished)
         self._worker.finished_err.connect(self._on_finished)
