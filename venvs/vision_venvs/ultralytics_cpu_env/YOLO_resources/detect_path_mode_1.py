@@ -19,7 +19,7 @@ project_dir = current_dir.parent.parent
 MODEL_PATH_OFFICIAL = project_dir / "yolov8n-seg.pt"
 
 # Path to your trained YOLO model
-MODEL_PATH = project_dir / "yolo_training" / "experiment_12" / "weights" / "best.pt"   # replace with your path
+MODEL_PATH = project_dir / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"   # replace with your path
 
 # Path to the folder containing images
 IMAGE_FOLDER = project_dir / "data" / "raw_images_ROI_model"    # replace with your folder path
