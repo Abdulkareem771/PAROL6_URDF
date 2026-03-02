@@ -96,11 +96,21 @@ static void pwm_init(void) {
 // ── Simulation task: update angles and PWM duty every 10ms ──────────────
 static void sim_task(void *arg) {
     const float DT_S = 0.010f;  // 10 ms update tick
+    static float dirs[6] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
     while (1) {
         for (int i = 0; i < 6; i++) {
-            sim_angle_deg[i] += SWEEP_RATE[i] * DT_S;
-            if (sim_angle_deg[i] >= 360.0f) sim_angle_deg[i] -= 360.0f;
+            sim_angle_deg[i] += SWEEP_RATE[i] * DT_S * dirs[i];
+            
+            // Ping-pong between 20° and 340° instead of infinite spin
+            if (sim_angle_deg[i] >= 340.0f) {
+                sim_angle_deg[i] = 340.0f;
+                dirs[i] = -1.0f;
+            } else if (sim_angle_deg[i] <= 20.0f) {
+                sim_angle_deg[i] = 20.0f;
+                dirs[i] = 1.0f;
+            }
+
             uint32_t duty = angle_to_duty(sim_angle_deg[i]);
             ledc_set_duty(LEDC_HIGH_SPEED_MODE, CHANNELS[i], duty);
             ledc_update_duty(LEDC_HIGH_SPEED_MODE, CHANNELS[i]);

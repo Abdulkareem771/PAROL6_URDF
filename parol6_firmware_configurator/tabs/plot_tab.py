@@ -85,7 +85,7 @@ class PlotTab(QWidget):
         for i in range(N_JOINTS):
             c = JOINT_COLORS[i]
             vc = QCheckBox(f"J{i+1} vel")
-            vc.setChecked(False)
+            vc.setChecked(True)
             vc.setStyleSheet(f"color:{c}; font-style:italic;")
             self._vel_checks.append(vc)
             tb.addWidget(vc)
@@ -107,10 +107,15 @@ class PlotTab(QWidget):
         self._pw_pwm = pg.PlotWidget(title="PWM Output (%)")
         self._pw_isr = pg.PlotWidget(title="ISR Time (µs)")
 
+        self._pw_vel.setXLink(self._pw_pos)
+        self._pw_pwm.setXLink(self._pw_pos)
+        self._pw_isr.setXLink(self._pw_pos)
+
         for pw in (self._pw_pos, self._pw_vel, self._pw_pwm, self._pw_isr):
             pw.showGrid(x=True, y=True, alpha=0.3)
             pw.setLabel("bottom", "Time (s)")
             pw.addLegend(offset=(10, 10))
+
 
         # PWM: y-axis 0–100 %
         self._pw_pwm.setYRange(0, 100, padding=0.05)

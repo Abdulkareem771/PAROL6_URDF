@@ -101,6 +101,12 @@ class JogTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._target_vel = [0.0] * N_JOINTS
+        self._target_pos = [0.0] * N_JOINTS
+        self._last_pos   = [0.0] * N_JOINTS
+        self._seq = 0
+        self._jog_timer = QTimer(self)
+        self._jog_timer.timeout.connect(self._step_and_send)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -159,9 +165,12 @@ class JogTab(QWidget):
 
     def ingest_telemetry(self, pkt: dict) -> None:
         """Update encoder displays and ISR bar from a parsed ACK packet."""
+        pos = pkt.get("pos", [])
         for i, jw in enumerate(self._jog_widgets):
-            if i < len(pkt.get("pos", [])):
-                jw.update_encoder(pkt["pos"][i])
+            if i < len(pos):
+                jw.update_encoder(pos[i])
+                self._last_pos[i] = pos[i]
+                
         isr = pkt.get("isr_us")
         if isr is not None:
             v = int(isr)
@@ -171,12 +180,42 @@ class JogTab(QWidget):
             self.isr_label.setText(f"{v} µs")
 
     def _on_jog(self, idx: int, vel: float) -> None:
-        # Send a velocity-only jog command: <JOG,idx,vel>
-        self.send_command.emit(f"<JOG,{idx},{vel:.4f}>")
+        self._target_vel[idx] = vel
+        is_moving = any(v != 0.0 for v in self._target_vel)
+        
+        if is_moving and not self._jog_timer.isActive():
+            # Snapshot current positions to start interpolating from
+            for i in range(N_JOINTS):
+                self._target_pos[i] = self._last_pos[i]
+            self._jog_timer.start(40)  # 25 Hz stream
+        elif not is_moving and self._jog_timer.isActive():
+            # Stop timer but send one final zero-velocity halt frame
+            for i in range(N_JOINTS):
+                self._target_pos[i] = self._last_pos[i]
+            self._step_and_send()
+            self._jog_timer.stop()
+
+    def _step_and_send(self) -> None:
+        dt = 0.04  # 40ms timer -> 0.04s
+        for i in range(N_JOINTS):
+            if self._target_vel[i] == 0.0:
+                # Snap to current true position when not jogging this axis
+                self._target_pos[i] = self._last_pos[i]
+            else:
+                self._target_pos[i] += self._target_vel[i] * dt
+
+        p_str = ",".join(f"{p:.4f}" for p in self._target_pos)
+        v_str = ",".join(f"{v:.4f}" for v in self._target_vel)
+        cmd = f"<{self._seq},{p_str},{v_str}>"
+        
+        self.send_command.emit(cmd)
+        self._seq += 1
 
     def _stop_all(self) -> None:
         for i in range(N_JOINTS):
-            self.send_command.emit(f"<JOG,{i},0.0>")
+            self._target_vel[i] = 0.0
+        self._step_and_send()
+        self._jog_timer.stop()
 
     def _free_drive(self) -> None:
         self._stop_all()
