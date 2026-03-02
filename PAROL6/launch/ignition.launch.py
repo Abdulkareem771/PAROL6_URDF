@@ -63,6 +63,12 @@ def generate_launch_description():
             '-name', 'parol6',
             '-topic', 'robot_description',
             '-z', '0.0',
+            '-J', 'joint_L1', '0.0',
+            '-J', 'joint_L2', '-1.57',
+            '-J', 'joint_L3', '0.0',
+            '-J', 'joint_L4', '0.0',
+            '-J', 'joint_L5', '0.0',
+            '-J', 'joint_L6', '0.0',
         ],
         output='screen'
     )

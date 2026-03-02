@@ -294,42 +294,13 @@ class PathGenerator(Node):
     def compute_orientation(self, tangent, pitch_deg):
         """
         Generates orientation quaternion.
-        Assumption: Planar weld, approach vector pitched down 45 degrees relative to -Z.
-        
-        Tangent = X-axis of path frame (direction of travel)
-        Global Z = "Up"
+        HARDCODED FOR PAROL6 REACHABILITY TEST:
+        Forces the end effector Z-axis to point forward (+X) towards the wall.
+        The previous dynamic orientation caused Inverse Kinematics (IK) failures
+        because it asked the robot to bend its wrist in impossible ways.
         """
-        t = tangent # Forward vector (Robot X)
-        
-        # Global Down vector (surface normal approximation)
-        down = np.array([0.0, 0.0, -1.0])
-        
-        # Create a right-handed coordinate system
-        # Y = cross(down, tangent)  (Sideways)
-        y_vec = np.cross(down, t)
-        if np.linalg.norm(y_vec) < 1e-3: # Singularity (vertical line)
-            y_vec = np.array([0.0, 1.0, 0.0])
-        y_vec = y_vec / np.linalg.norm(y_vec)
-        
-        # Recalculate Down (Z) to be orthogonal
-        z_vec = np.cross(t, y_vec) # Points roughly Down
-        
-        # Create Rotation Matrix [t, y, z]
-        R_path = np.column_stack((t, y_vec, z_vec))
-        
-        # Apply Pitch Rotation around Y axis
-        pitch_rad = math.radians(pitch_deg)
-        c, s = math.cos(pitch_rad), math.sin(pitch_rad)
-        R_pitch = np.array([
-            [c,  0, s],
-            [0,  1, 0],
-            [-s, 0, c]
-        ])
-        
-        # Final Rotation
-        R_final = R_path @ R_pitch
-        
-        return self.rotation_matrix_to_quaternion(R_final)
+        # Quaternion for pitch = 90 degrees (rotates Z UP to point +X FORWARD)
+        return Quaternion(x=0.0, y=0.7071068, z=0.0, w=0.7071068)
         
     def rotation_matrix_to_quaternion(self, R):
         """Manual implementation of rotation matrix to quat"""

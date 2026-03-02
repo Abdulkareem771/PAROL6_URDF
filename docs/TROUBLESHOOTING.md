@@ -158,6 +158,107 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 
 ## ⚙️ Build & Environment Issues
 
+---
+
+## 🎯 Gazebo + MoveIt Execution Issues
+
+### Issue: Plan Works, But Execute Doesn't Move in Gazebo
+
+**Symptoms:**
+- Planning succeeds in RViz (trajectory shown)
+- Gazebo robot does not move
+- TF warnings like `TF_OLD_DATA` or "jump back in time"
+
+**Config Note:**
+- Gazebo simulation now uses simulation-only controller files (`*_sim.yaml`).
+- Do not tune Gazebo behavior in hardware-oriented `ros2_controllers.yaml`.
+- If you run MoveIt with Gazebo, use:
+  - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
+- Rationale:
+  - `use_fake_hardware:=true` starts a second internal `ros2_control_node` and can conflict with Gazebo's controller manager.
+
+**Fix (Correct Order):**
+
+1. **Restart the container (clean state):**
+   ```bash
+   docker restart parol6_dev
+   ```
+
+2. **Launch Gazebo first (Terminal 1):**
+   ```bash
+   docker exec -it parol6_dev bash
+   cd /workspace && source install/setup.bash
+   ros2 launch parol6 ignition.launch.py
+   ```
+
+3. **Launch MoveIt second (Terminal 2):**
+   ```bash
+   docker exec -it parol6_dev bash
+   cd /workspace && source install/setup.bash
+   ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false
+   ```
+
+4. **Enable sim time (so RViz/MoveIt use `/clock`):**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /move_group use_sim_time true"
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /rviz2 use_sim_time true"
+   ```
+
+5. **Verify `/clock` exists:**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic list | grep /clock"
+   ```
+
+6. **Verify controllers are active:**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 control list_controllers"
+   ```
+   Expected:
+   ```
+   joint_state_broadcaster  ...  active
+   parol6_arm_controller    ...  active
+   ```
+
+7. **Test execution:**  
+   In RViz: Plan → Execute.  
+   If still no motion, check if a trajectory is published:
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic echo /parol6_arm_controller/joint_trajectory --once"
+   ```
+
+**Root Cause (Most Common):**
+Multiple ROS instances or time desync caused TF to jump backwards. Restarting and ensuring sim time fixed it.
+
+### Host GUI Permission Fix (X11)
+
+**Symptoms:**
+- `qt.qpa.xcb: could not connect to display :0`
+- `Authorization required, but no authorization protocol specified`
+
+**Run on host terminal (not inside Docker):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+xhost +local:root
+xhost +local:docker
+docker restart parol6_dev
+./start_container.sh
+```
+
+Then relaunch:
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 ignition.launch.py"
+```
+
+### Clean Shutdown (Avoid Frozen Restart)
+
+1. In MoveIt/RViz terminal: press `Ctrl+C` and wait for full shutdown.
+2. In Gazebo terminal: press `Ctrl+C` and wait for full shutdown.
+3. Exit container shells with `exit`.
+4. Optional when done:
+```bash
+docker stop parol6_dev
+```
+
 ### Issue 5: Python Environment Conflicts
 
 **Symptoms:**
