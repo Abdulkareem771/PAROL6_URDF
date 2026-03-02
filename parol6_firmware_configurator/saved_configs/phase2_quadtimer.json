@@ -1,6 +1,6 @@
 {
   "name": "phase2_quadtimer",
-  "description": "Phase 2: QuadTimer encoder, control OFF",
+  "description": "Phase 2: QuadTimer encoder, control OFF.",
   "phase": 2,
   "joints": [
     {

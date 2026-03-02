@@ -1,6 +1,6 @@
 {
   "name": "phase5_closed_loop_j1",
-  "description": "Phase 5: Closed-loop J1 only, no filter",
+  "description": "Phase 5: J1 closed-loop, no filter.",
   "phase": 5,
   "joints": [
     {

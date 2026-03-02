@@ -1,6 +1,6 @@
 {
   "name": "phase10_full_stack",
-  "description": "Phase 10: Full stack, 100Hz ROS, USB_CDC_HS",
+  "description": "Phase 10: Full stack, 100Hz ROS, USB_CDC_HS.",
   "phase": 10,
   "joints": [
     {

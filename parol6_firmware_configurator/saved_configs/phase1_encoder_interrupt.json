@@ -1,6 +1,6 @@
 {
   "name": "phase1_encoder_interrupt",
-  "description": "Phase 1: SW interrupt encoder, control OFF",
+  "description": "Phase 1: SW interrupt encoder, control OFF.",
   "phase": 1,
   "joints": [
     {

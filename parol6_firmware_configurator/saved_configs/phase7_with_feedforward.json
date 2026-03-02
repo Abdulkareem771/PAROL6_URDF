@@ -1,6 +1,6 @@
 {
   "name": "phase7_with_feedforward",
-  "description": "Phase 7: J1 + filter + feedforward",
+  "description": "Phase 7: J1 + filter + feedforward.",
   "phase": 7,
   "joints": [
     {

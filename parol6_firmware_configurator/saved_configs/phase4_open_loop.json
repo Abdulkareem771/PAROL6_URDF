@@ -1,6 +1,6 @@
 {
   "name": "phase4_open_loop",
-  "description": "Phase 4: Open-loop motor rotation",
+  "description": "Phase 4: Open-loop rotation, no feedback.",
   "phase": 4,
   "joints": [
     {

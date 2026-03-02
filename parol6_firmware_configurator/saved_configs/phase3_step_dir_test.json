@@ -1,6 +1,6 @@
 {
   "name": "phase3_step_dir_test",
-  "description": "Phase 3: Fixed 1kHz STEP output, no control",
+  "description": "Phase 3: Fixed 1kHz STEP, no control.",
   "phase": 3,
   "joints": [
     {

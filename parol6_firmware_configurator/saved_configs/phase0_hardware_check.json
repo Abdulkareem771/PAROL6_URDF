@@ -1,6 +1,6 @@
 {
   "name": "phase0_hardware_check",
-  "description": "Phase 0: Encoder test, no motor power",
+  "description": "Phase 0: No motor power. Encoder test mode.",
   "phase": 0,
   "joints": [
     {

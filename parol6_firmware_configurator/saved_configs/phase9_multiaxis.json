@@ -1,6 +1,6 @@
 {
   "name": "phase9_multiaxis",
-  "description": "Phase 9: All joints, full features",
+  "description": "Phase 9: All joints, full features.",
   "phase": 9,
   "joints": [
     {

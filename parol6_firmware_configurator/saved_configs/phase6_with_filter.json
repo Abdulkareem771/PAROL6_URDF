@@ -1,6 +1,6 @@
 {
   "name": "phase6_with_filter",
-  "description": "Phase 6: J1 + AlphaBeta filter",
+  "description": "Phase 6: J1 + AlphaBeta filter.",
   "phase": 6,
   "joints": [
     {
