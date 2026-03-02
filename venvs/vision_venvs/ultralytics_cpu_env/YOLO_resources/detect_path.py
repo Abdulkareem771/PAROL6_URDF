@@ -10,13 +10,14 @@ x_min_G, x_max_G = 0, 0
 y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
-EXPAND_PX     = 10  # pixels to expand the polygon outward from each corner
+EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
+CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
 
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a6.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -73,11 +74,11 @@ def segment_blocks(image_path):
         y_max_G = y_max_G + EXPAND_PX
         x_min_G = x_min_G - EXPAND_PX
         x_max_G = x_max_G + EXPAND_PX
-        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+        #cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
-
+    
     # Red bounding box
     r_R, c_R = np.where(R == 255)
     if len(r_R) > 0:
@@ -88,11 +89,12 @@ def segment_blocks(image_path):
         y_max_R = y_max_R + EXPAND_PX
         x_min_R = x_min_R - EXPAND_PX
         x_max_R = x_max_R + EXPAND_PX
-        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+        #cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
+    
     # 6. Find exact corner coordinates using contour approximation
     def find_corners(mask, epsilon_factor = EPSILON_FACTOR):
         """Return corner points of the largest contour in 'mask' as an (N,2) array of (x,y)."""
@@ -105,9 +107,51 @@ def segment_blocks(image_path):
         approx = cv2.approxPolyDP(largest, epsilon, True)
         # approx shape: (N, 1, 2) → reshape to (N, 2)
         return approx.reshape(-1, 2)
+    
+    
+    def find_contours(mask):
+        """Return the outermost (external) contour of the largest object in 'mask'.
+        Uses CHAIN_APPROX_NONE to keep every boundary pixel.
+        Returns the contour as an array of shape (N, 1, 2), or None if not found."""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        # Pick the largest contour (the main object)
+        return max(contours, key=cv2.contourArea)
 
     corners_G = find_corners(G)
     corners_R = find_corners(R)
+
+    # Find the full external contours from the original masks
+    contour_G = find_contours(G)
+    contour_R = find_contours(R)
+
+    #if contour_G is not None:
+        #cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
+
+    #if contour_R is not None:
+        #cv2.drawContours(img_annotated, [contour_R], -1, (0, 0, 255), 2)   # blue outline (red object)
+
+    # Expand contours outward by CEXPAND_PX using morphological dilation
+    dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
+    G_exp = cv2.dilate(G, dil_kernel)
+    R_exp = cv2.dilate(R, dil_kernel)
+
+    contour_G_exp = find_contours(G_exp)
+    contour_R_exp = find_contours(R_exp)
+
+    #if contour_G_exp is not None:
+        #cv2.drawContours(img_annotated, [contour_G_exp], -1, (0, 255, 0), 2)  # green = expanded green contour
+
+    #if contour_R_exp is not None:
+        #cv2.drawContours(img_annotated, [contour_R_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
+
+    # Intersection of the two expanded contour regions
+    intersection_mask = cv2.bitwise_and(G_exp, R_exp)
+    contour_I = find_contours(intersection_mask)
+
+    if contour_I is not None:
+        cv2.drawContours(img_annotated, [contour_I], -1, (255, 255, 0), 3)    # yellow = intersection region
 
     def expand_corners(corners, px):
         """Push each corner outward from the polygon centroid by 'px' pixels."""
@@ -141,7 +185,7 @@ def segment_blocks(image_path):
 
     if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
         # Boxes overlap — draw intersection region in yellow
-        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        #cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
         bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
     else:
         bbox_I = None
@@ -211,6 +255,28 @@ g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I, corners_G, corners_R 
 x_min_G, y_min_G, x_max_G, y_max_G = bbox_G
 x_min_R, y_min_R, x_max_R, y_max_R = bbox_R
 
+
+TL_G = (x_min_G, y_min_G)
+TR_G = (x_max_G, y_min_G)
+BL_G = (x_min_G, y_max_G)
+BR_G = (x_max_G, y_max_G)
+
+#print(f"TL_G: {TL_G}, TR_G: {TR_G}, BL_G: {BL_G}, BR_G: {BR_G}")
+
+TL_R = (x_min_R, y_min_R)
+TR_R = (x_max_R, y_min_R)
+BL_R = (x_min_R, y_max_R)
+BR_R = (x_max_R, y_max_R)   
+
+#print(f"TL_R: {TL_R}, TR_R: {TR_R}, BL_R: {BL_R}, BR_R: {BR_R}")
+
+i = np.where(g_matrix[y_min_G, :] == 255)[0]
+
+print(f"i: {i}")
+print(f"i[0]: {i[0]}")
+
+
+
 # Width and height of Green object:
 w_G = x_max_G - x_min_G
 h_G = y_max_G - y_min_G
@@ -219,12 +285,13 @@ h_G = y_max_G - y_min_G
 w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
 
-print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
-print(f"Green Object width: {w_G}, height: {h_G}")
+#print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
+#print(f"Green Object width: {w_G}, height: {h_G}")
 
-print(f"Red Object Bounding Box:   ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
-print(f"Red Object width: {w_R}, height: {h_R}")
+#print(f"Red Object Bounding Box:   ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+#print(f"Red Object width: {w_R}, height: {h_R}")
 
+"""
 # Intersection region
 if bbox_I is not None:
     x_min_I, y_min_I, x_max_I, y_max_I = bbox_I
@@ -245,5 +312,8 @@ if corners_R is not None:
     print(f"\nRed Object corners ({len(corners_R)} points):")
     for i, (cx, cy) in enumerate(corners_R):
         print(f"  Corner {i}: ({cx}, {cy})")
+
+"""
+    
 
 
