@@ -168,7 +168,7 @@
     "safety_supervisor": true,
     "anti_glitch_filter": true,
     "velocity_deadband": true,
-    "encoder_test_mode": true,
+    "encoder_test_mode": false,
     "fixed_step_freq_hz": 0,
     "velocity_deadband_rad_s": 0.02
   },
