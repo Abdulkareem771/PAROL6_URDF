@@ -27,12 +27,20 @@ class LaunchWorker(QThread):
         cmd = [self._script_path] + self._args
         self.output_line.emit(f"[LAUNCH] $ {' '.join(cmd)}")
         try:
+            env = os.environ.copy()
+            # Ensure standard binary paths are present just in case the GUI was launched strangely
+            if "PATH" in env:
+                env["PATH"] += os.pathsep + "/usr/local/bin:/usr/bin:/bin"
+            else:
+                env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+
             self._proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                env=env,
             )
             for line in self._proc.stdout:
                 self.output_line.emit(line.rstrip())
