@@ -116,7 +116,7 @@ def segment_blocks(image_path):
     contour_I = find_contours(intersection_mask)
 
     if contour_I is not None:
-        cv2.drawContours(img_annotated, [contour_I], -1, (255, 255, 0), 3)    # yellow = intersection region
+        cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region
 
 
     # 6. GUI Display Section
