@@ -25,7 +25,7 @@ MODEL_PATH = project_dir / "yolo_training" / "experiment_12" / "weights" / "best
 IMAGE_FOLDER = project_dir / "data" / "raw_images_ROI_model"    # replace with your folder path
 
 # Path to single image
-SINGLE_IMAGE_PATH = project_dir / "data" / "Images_to_test" / "20260219_224015.jpg"
+SINGLE_IMAGE_PATH = project_dir / "data" / "YOLO_Segmentation_data" / "test" / "26.jpg"
 
 # Padding around bounding boxes (in pixels) - useful to include some context
 PADDING = 20  # Set to 0 for no padding
