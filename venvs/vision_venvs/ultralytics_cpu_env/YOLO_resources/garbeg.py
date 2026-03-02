@@ -73,10 +73,24 @@ def segment_blocks(image_path):
         y_max_G = y_max_G + EXPAND_PX
         x_min_G = x_min_G - EXPAND_PX
         x_max_G = x_max_G + EXPAND_PX
-        cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
+        #cv2.rectangle(img_annotated, (x_min_G, y_min_G), (x_max_G, y_max_G), (0, 255, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_G = x_max_G = y_min_G = y_max_G = 0
+    
+    p1_G = (x_min_G, y_min_G)
+    p2_G = (x_min_G, y_max_G)
+    p3_G = (x_max_G, y_min_G)
+    p4_G = (x_max_G, y_max_G)
+    
+    # Draw the four corners of the green object
+    cv2.circle(img_annotated, p1_G, 5, (0, 255, 0), -1)
+    cv2.circle(img_annotated, p2_G, 5, (0, 255, 0), -1)
+    cv2.circle(img_annotated, p3_G, 5, (0, 255, 0), -1)
+    cv2.circle(img_annotated, p4_G, 5, (0, 255, 0), -1)
+
+    # Draw line from p1_G to p2_G
+    #cv2.line(img_annotated, p1_G, p2_G, (0, 0, 255), 2)
 
     # Red bounding box
     r_R, c_R = np.where(R == 255)
@@ -88,12 +102,26 @@ def segment_blocks(image_path):
         y_max_R = y_max_R + EXPAND_PX
         x_min_R = x_min_R - EXPAND_PX
         x_max_R = x_max_R + EXPAND_PX
-        cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
+        #cv2.rectangle(img_annotated, (x_min_R, y_min_R), (x_max_R, y_max_R), (255, 0, 0), 2)
         # cv2.rectangle replaced below with cv2.polylines after corners are detected
     else:
         x_min_R = x_max_R = y_min_R = y_max_R = 0
 
-
+    
+    p1_R = (x_min_R, y_min_R)
+    p2_R = (x_min_R, y_max_R)
+    p3_R = (x_max_R, y_min_R)
+    p4_R = (x_max_R, y_max_R)
+    
+    # Draw the four corners of the red object
+    cv2.circle(img_annotated, p1_R, 5, (255, 0, 0), -1)
+    cv2.circle(img_annotated, p2_R, 5, (255, 0, 0), -1)
+    cv2.circle(img_annotated, p3_R, 5, (255, 0, 0), -1)
+    cv2.circle(img_annotated, p4_R, 5, (255, 0, 0), -1)
+    
+    # Draw line from p1_R to p2_R
+    #cv2.line(img_annotated, p1_R, p2_R, (0, 0, 255), 2)
+    
     # 6. Find exact corner coordinates using contour approximation
     def find_corners(mask, epsilon_factor = EPSILON_FACTOR):
         """Return corner points of the largest contour in 'mask' as an (N,2) array of (x,y)."""
@@ -142,7 +170,7 @@ def segment_blocks(image_path):
 
     if inter_x_min < inter_x_max and inter_y_min < inter_y_max:
         # Boxes overlap — draw intersection region in yellow
-        cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
+        #cv2.rectangle(img_annotated, (inter_x_min, inter_y_min), (inter_x_max, inter_y_max), (255, 255, 0), 2)
         bbox_I = (inter_x_min, inter_y_min, inter_x_max, inter_y_max)
     else:
         bbox_I = None
@@ -212,6 +240,28 @@ g_matrix, r_matrix, img_annotated, bbox_G, bbox_R, bbox_I, corners_G, corners_R 
 x_min_G, y_min_G, x_max_G, y_max_G = bbox_G
 x_min_R, y_min_R, x_max_R, y_max_R = bbox_R
 
+
+TL_G = (x_min_G, y_min_G)
+TR_G = (x_max_G, y_min_G)
+BL_G = (x_min_G, y_max_G)
+BR_G = (x_max_G, y_max_G)
+
+#print(f"TL_G: {TL_G}, TR_G: {TR_G}, BL_G: {BL_G}, BR_G: {BR_G}")
+
+TL_R = (x_min_R, y_min_R)
+TR_R = (x_max_R, y_min_R)
+BL_R = (x_min_R, y_max_R)
+BR_R = (x_max_R, y_max_R)   
+
+#print(f"TL_R: {TL_R}, TR_R: {TR_R}, BL_R: {BL_R}, BR_R: {BR_R}")
+
+i = np.where(g_matrix[y_min_G, :] == 255)[0]
+
+print(f"i: {i}")
+print(f"i[0]: {i[0]}")
+
+
+
 # Width and height of Green object:
 w_G = x_max_G - x_min_G
 h_G = y_max_G - y_min_G
@@ -220,12 +270,13 @@ h_G = y_max_G - y_min_G
 w_R = x_max_R - x_min_R
 h_R = y_max_R - y_min_R
 
-print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
-print(f"Green Object width: {w_G}, height: {h_G}")
+#print(f"Green Object Bounding Box: ({x_min_G}, {y_min_G}) to ({x_max_G}, {y_max_G})")
+#print(f"Green Object width: {w_G}, height: {h_G}")
 
-print(f"Red Object Bounding Box:   ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
-print(f"Red Object width: {w_R}, height: {h_R}")
+#print(f"Red Object Bounding Box:   ({x_min_R}, {y_min_R}) to ({x_max_R}, {y_max_R})")
+#print(f"Red Object width: {w_R}, height: {h_R}")
 
+"""
 # Intersection region
 if bbox_I is not None:
     x_min_I, y_min_I, x_max_I, y_max_I = bbox_I
@@ -246,5 +297,8 @@ if corners_R is not None:
     print(f"\nRed Object corners ({len(corners_R)} points):")
     for i, (cx, cy) in enumerate(corners_R):
         print(f"  Corner {i}: ({cx}, {cy})")
+
+"""
+    
 
 
