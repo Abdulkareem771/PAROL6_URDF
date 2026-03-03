@@ -121,8 +121,10 @@ public:
      */
     static ActuatorModel create_joint(int axis) {
 #ifdef NUM_AXES
-        // config.h present — use GUI-configured per-joint values
-        return ActuatorModel(GEAR_RATIOS[axis], MICROSTEPS[axis], MOTOR_DIR_SIGN[axis]);
+        // config.h present — DIR_INVERT[] is the single source of truth (GUI-configured).
+        // MOTOR_DIR_SIGN[] was a separate hardcoded table that conflicted on J3.
+        int dir_sign = DIR_INVERT[axis] ? -1 : 1;
+        return ActuatorModel(GEAR_RATIOS[axis], MICROSTEPS[axis], dir_sign);
 #else
         // Fallback when no config.h generated yet
         static const float fallback_gear[6] = { 6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f };

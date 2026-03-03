@@ -33,13 +33,15 @@ SerialTransport transport;
 SafetySupervisor supervisor;
 
 // 1 kHz ISR Mathematical Core
+// Observer initialized in setup() with per-joint gains from config.h (AB_ALPHA / AB_BETA).
+// Placeholder construction here uses dt=0.001 only; gains are overridden in setup().
 AlphaBetaFilter observer[NUM_AXES] = {
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f),
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f),
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f),
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f),
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f),
-    AlphaBetaFilter(0.85f, 0.05f, 0.001f)
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f),
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f),
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f),
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f),
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f),
+    AlphaBetaFilter(0.1f, 0.005f, 0.001f)
 };
 
 LinearInterpolator interpolator[NUM_AXES];
@@ -241,10 +243,20 @@ void setup() {
         encoder_hal[i].init();
         delay(5); // Give encoder time to stabilize
         
-        float initial_pos = encoder_hal[i].read_angle();
-        observer[i].set_initial_position(initial_pos);
-        interpolator[i].reset(initial_pos);
-        telemetry_pos[i] = initial_pos;
+        float initial_motor_pos = encoder_hal[i].read_angle();
+        observer[i].set_initial_position(initial_motor_pos);
+        // Seed interpolator and telemetry in JOINT space, not motor space.
+        // The control law computes error as (cmd_pos - joint_pos) where joint_pos = motor_pos / gear.
+        // If interpolator is seeded with motor_pos, the first ISR tick produces a massive position
+        // error = motor_pos * (1 - 1/gear_ratio), causing a violent startup jerk.
+#ifdef NUM_AXES
+        float initial_joint_pos = initial_motor_pos / GEAR_RATIOS[i];
+#else
+        const float fallback_g[6] = {6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f};
+        float initial_joint_pos = initial_motor_pos / fallback_g[i];
+#endif
+        interpolator[i].reset(initial_joint_pos);
+        telemetry_pos[i] = initial_joint_pos;
         telemetry_vel[i] = 0.0f;
     }
     
