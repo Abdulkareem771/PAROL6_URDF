@@ -73,6 +73,7 @@ private:
   LibSerial::SerialPort serial_;
   std::string serial_port_;
   int baud_rate_;
+  bool serial_ok_ = false;  // true only when serial port opened successfully
   uint32_t seq_counter_ = 0;  // TX sequence counter
   
   // Feedback tracking (RX)

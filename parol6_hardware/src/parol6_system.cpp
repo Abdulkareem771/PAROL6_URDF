@@ -126,7 +126,8 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
 CallbackReturn PAROL6System::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port...");
+  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port %s...", serial_port_.c_str());
+  serial_ok_ = false;  // Assume no hardware until proven otherwise
 
   try {
     serial_.Open(serial_port_);
@@ -142,7 +143,7 @@ CallbackReturn PAROL6System::on_configure(
       case 115200: baud = BaudRate::BAUD_115200; break;
       default:
         RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
-        serial_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
+        baud = LibSerial::BaudRate::BAUD_115200;
     }
     serial_.SetBaudRate(baud);
     serial_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
@@ -153,19 +154,26 @@ CallbackReturn PAROL6System::on_configure(
     // Non-blocking with timeout protection
     // VTIME is in deciseconds (1 = 100 ms)
     serial_.SetVTime(1);   // 100 ms timeout
-    serial_.SetVMin(0);    // No minimum characters required
+    serial_.SetVMin(0);    // Non-blocking
 
     if (!serial_.IsOpen()) {
-      RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
-      return CallbackReturn::ERROR;
+      RCLCPP_WARN(logger_, "⚠️ Serial port %s not open after Open() — running in SPOOF mode",
+                  serial_port_.c_str());
+    } else {
+      serial_ok_ = true;
+      RCLCPP_INFO(logger_, "✅ Serial opened: %s @ %d baud (100 ms timeout)",
+                  serial_port_.c_str(), baud_rate_);
     }
 
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (100ms timeout, non-blocking)", 
-                serial_port_.c_str(), baud_rate_);
-
   } catch (const std::exception &e) {
-    RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
-    return CallbackReturn::ERROR;
+    // Serial unavailable — NOT fatal. Fall through to spoof mode.
+    // Controller_manager and all spawners still come up correctly.
+    RCLCPP_WARN(logger_,
+      "⚠️ Serial port '%s' unavailable (%s) — running in SPOOF mode (echoes commands as state)."
+      " Connect Teensy and restart to enable real hardware.",
+      serial_port_.c_str(), e.what());
+    serial_ok_ = false;
+    // Return SUCCESS intentionally — do NOT crash the controller_manager
   }
 
   return CallbackReturn::SUCCESS;
@@ -291,6 +299,11 @@ return_type PAROL6System::read(
     return return_type::ERROR;
   }
   
+  // If serial port never opened (no Teensy connected), run in pure spoof mode
+  if (!serial_ok_) {
+    goto spoof_states;
+  }
+
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
     // Check if we are starved (e.g. 5 seconds without data) -> assume full HIL spoof mode
