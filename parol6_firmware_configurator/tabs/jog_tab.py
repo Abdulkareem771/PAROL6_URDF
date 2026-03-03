@@ -37,11 +37,17 @@ class JointJogWidget(QFrame):
         name_lbl.setStyleSheet("font-weight:bold; color:#cba6f7; min-width:30px;")
         lay.addWidget(name_lbl)
 
-        # Encoder position readout
+        # Encoder position readout — radians
         self.enc_val = QLabel("enc: —")
         self.enc_val.setFont(QFont("Monospace", 10))
         self.enc_val.setStyleSheet("color:#a6e3a1; min-width:130px;")
         lay.addWidget(self.enc_val)
+
+        # Degree readout
+        self.enc_deg = QLabel("—°")
+        self.enc_deg.setFont(QFont("Monospace", 10))
+        self.enc_deg.setStyleSheet("color:#89dceb; min-width:70px;")
+        lay.addWidget(self.enc_deg)
 
         # Velocity slider set
         step_lbl = QLabel("vel:")
@@ -91,7 +97,9 @@ class JointJogWidget(QFrame):
             self.jog_velocity.emit(self._idx, 0.0)
 
     def update_encoder(self, angle_rad: float) -> None:
+        import math
         self.enc_val.setText(f"enc: {angle_rad:+8.4f} rad")
+        self.enc_deg.setText(f"{math.degrees(angle_rad):+7.2f}°")
 
 
 class JogTab(QWidget):
