@@ -17,6 +17,7 @@
 #include "control/Interpolator.h"
 #include "hal/QuadTimerEncoder.h"
 #include "hal/FlexPWMGenerator.h"
+#include "hal/ActuatorModel.h"
 // -------------------------------------------------------------------------
 // Global Architecture Instantiation
 // -------------------------------------------------------------------------
@@ -53,8 +54,28 @@ QuadTimerEncoder encoder_hal[NUM_AXES] = {
     QuadTimerEncoder(14), QuadTimerEncoder(15), QuadTimerEncoder(18)
 };
 
-// Phase 4: Stage 1 Dummy FlexPWM Carrier
-FlexPWMGenerator dummy_stepper(2); // Zone 2 Pin
+// Phase 4 Stage 2: Per-axis stepper drivers (STEP + DIR)
+// STEP pins: Zone 2 FlexPWM-capable [2, 6, 7, 8, 4, 5]
+// DIR  pins: Zone 3 pure GPIO        [30,31,32,33,34,35]
+FlexPWMGenerator stepper[NUM_AXES] = {
+    FlexPWMGenerator(STEP_PINS[0], DIR_PINS[0]),  // J1: step=2,  dir=30
+    FlexPWMGenerator(STEP_PINS[1], DIR_PINS[1]),  // J2: step=6,  dir=31
+    FlexPWMGenerator(STEP_PINS[2], DIR_PINS[2]),  // J3: step=7,  dir=32
+    FlexPWMGenerator(STEP_PINS[3], DIR_PINS[3]),  // J4: step=8,  dir=33
+    FlexPWMGenerator(STEP_PINS[4], DIR_PINS[4]),  // J5: step=4,  dir=34
+    FlexPWMGenerator(STEP_PINS[5], DIR_PINS[5]),  // J6: step=5,  dir=35
+};
+
+// Phase 4 Stage 2: Kinematic models — converts rad/s -> step_freq + DIR
+// Gear ratios and direction signs sourced from STM32 legacy motor_init.cpp
+ActuatorModel actuator[NUM_AXES] = {
+    ActuatorModel::create_joint(0),  // J1
+    ActuatorModel::create_joint(1),  // J2
+    ActuatorModel::create_joint(2),  // J3
+    ActuatorModel::create_joint(3),  // J4
+    ActuatorModel::create_joint(4),  // J5
+    ActuatorModel::create_joint(5),  // J6
+};
 
 IntervalTimer controlTimer;
 volatile uint32_t system_tick_ms = 0;
@@ -63,10 +84,25 @@ volatile uint32_t system_tick_ms = 0;
 volatile uint32_t max_isr_time_us = 0;
 volatile uint32_t last_isr_time_us = 0;
 
-// Fake Motor Output HAL for Phase 1 compilation
-void set_motor_velocity(int axis, float velocity) {
-    // Write physical PWM to motor driver
-    // motor_hal[axis].set_pwm(val);
+// Motor Output HAL — converts ControlLaw velocity (rad/s) into STEP frequency + DIR
+void set_motor_velocity(int axis, float velocity_rad_s) {
+#ifdef JOINT_ENABLED
+    // Honour per-joint enable flag from GUI config.h
+    if (!JOINT_ENABLED[axis]) {
+        stepper[axis].stop();
+        return;
+    }
+#endif
+    float freq_hz;
+    bool  forward;
+    actuator[axis].compute(velocity_rad_s, freq_hz, forward);
+    // DIR must be set BEFORE frequency on every call (Servo42C setup time ≥200 ns)
+    stepper[axis].set_direction(forward);
+    if (actuator[axis].should_stop(freq_hz)) {
+        stepper[axis].stop();
+    } else {
+        stepper[axis].set_frequency(freq_hz);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -180,8 +216,11 @@ void setup() {
     transport.init(115200);
     supervisor.init(0);
     
-    // Initialize FlexPWM BEFORE Encoders to prevent CCM clock gating conflicts
-    dummy_stepper.init_dummy_carrier(); // Phase 4 Stage 1
+    // Initialize FlexPWM stepper drivers BEFORE encoders to prevent CCM clock gating conflicts
+    for (int i = 0; i < NUM_AXES; i++) {
+        stepper[i].init();    // Configures STEP pin FlexPWM + DIR pin GPIO
+        delay(2);             // Allow FlexPWM peripheral to settle before QuadTimer init
+    }
 
     // Hardware Configuration
     for (int i = 0; i < NUM_AXES; i++) {
