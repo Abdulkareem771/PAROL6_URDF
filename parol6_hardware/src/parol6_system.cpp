@@ -345,7 +345,9 @@ return_type PAROL6System::read(
     }
     tokens.push_back(content.substr(start));  // Last token
     
-    // Validate: should have ACK + SEQ + 12 values (6 joints × 2) = 14 tokens
+    // Validate: should have ACK + SEQ + 6 positions + 6 velocities = 14 tokens
+    // Firmware format: <ACK, SEQ, p1, p2, p3, p4, p5, p6, v1, v2, v3, v4, v5, v6>
+    // tokens[0]=ACK(str), [1]=SEQ, [2..7]=positions, [8..13]=velocities
     if (tokens.size() != 14) {
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
@@ -412,11 +414,13 @@ return_type PAROL6System::read(
       const double joint_upper[6] = { 3.14159,  1.0,    1.3,  3.14159,  3.14159,  3.14159};
 
       // Parse and sign-correct all 6 joints
+      // Firmware sends grouped: <ACK, SEQ, p0,p1,p2,p3,p4,p5, v0,v1,v2,v3,v4,v5>
+      // tokens indices:          [0]   [1]  [2][3][4][5][6][7] [8][9][10][11][12][13]
       double candidate_pos[6], candidate_vel[6];
       bool all_valid = true;
       for (size_t i = 0; i < 6; ++i) {
-        candidate_pos[i] = std::stod(tokens[2 + i * 2]) * dir_signs_[i];
-        candidate_vel[i] = std::stod(tokens[3 + i * 2]) * dir_signs_[i];
+        candidate_pos[i] = std::stod(tokens[2 + i]) * dir_signs_[i];  // tokens[2..7]
+        candidate_vel[i] = std::stod(tokens[8 + i]) * dir_signs_[i];  // tokens[8..13]
         // Reject packets where ANY joint is outside its URDF limits + 10% tolerance
         double range = joint_upper[i] - joint_lower[i];
         if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||

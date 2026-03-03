@@ -5,7 +5,7 @@
   "joints": [
     {
       "name": "J1",
-      "enabled": true,
+      "enabled": false,
       "step_pin": 2,
       "dir_pin": 30,
       "encoder_pin": 10,
@@ -13,6 +13,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": true,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 3.0,
       "max_current_ma": 2000,
       "homing_speed_steps_s": 500,
@@ -39,6 +40,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": false,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 3.0,
       "max_current_ma": 2000,
       "homing_speed_steps_s": 500,
@@ -50,8 +52,8 @@
       "limit": {
         "enabled": true,
         "pin": 21,
-        "switch_type": "INDUCTIVE_NPN",
-        "polarity": "RISING",
+        "switch_type": "MECHANICAL",
+        "polarity": "FALLING",
         "pull": "INPUT_PULLUP"
       }
     },
@@ -65,6 +67,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": true,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 6.0,
       "max_current_ma": 1900,
       "homing_speed_steps_s": 500,
@@ -76,14 +79,14 @@
       "limit": {
         "enabled": true,
         "pin": 22,
-        "switch_type": "INDUCTIVE_NPN",
-        "polarity": "RISING",
+        "switch_type": "MECHANICAL",
+        "polarity": "FALLING",
         "pull": "INPUT_PULLUP"
       }
     },
     {
       "name": "J4",
-      "enabled": true,
+      "enabled": false,
       "step_pin": 8,
       "dir_pin": 33,
       "encoder_pin": 14,
@@ -91,6 +94,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": false,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 6.0,
       "max_current_ma": 1700,
       "homing_speed_steps_s": 500,
@@ -102,14 +106,14 @@
       "limit": {
         "enabled": true,
         "pin": 23,
-        "switch_type": "MECHANICAL",
-        "polarity": "RISING",
+        "switch_type": "INDUCTIVE_NPN",
+        "polarity": "FALLING",
         "pull": "INPUT_PULLUP"
       }
     },
     {
       "name": "J5",
-      "enabled": true,
+      "enabled": false,
       "step_pin": 4,
       "dir_pin": 34,
       "encoder_pin": 15,
@@ -117,6 +121,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": false,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 6.0,
       "max_current_ma": 1700,
       "homing_speed_steps_s": 500,
@@ -128,14 +133,14 @@
       "limit": {
         "enabled": true,
         "pin": 24,
-        "switch_type": "INDUCTIVE_NPN",
-        "polarity": "RISING",
+        "switch_type": "MECHANICAL",
+        "polarity": "FALLING",
         "pull": "INPUT_PULLUP"
       }
     },
     {
       "name": "J6",
-      "enabled": true,
+      "enabled": false,
       "step_pin": 5,
       "dir_pin": 35,
       "encoder_pin": 18,
@@ -143,6 +148,7 @@
       "microsteps": 32,
       "steps_per_rev": 200,
       "dir_invert": true,
+      "ros_dir_invert": false,
       "max_vel_rad_s": 6.0,
       "max_current_ma": 965,
       "homing_speed_steps_s": 500,
@@ -152,9 +158,9 @@
       "alpha": 0.1,
       "beta": 0.005,
       "limit": {
-        "enabled": true,
+        "enabled": false,
         "pin": 25,
-        "switch_type": "INDUCTIVE_NPN",
+        "switch_type": "NONE",
         "polarity": "FALLING",
         "pull": "INPUT_PULLUP"
       }
@@ -162,7 +168,7 @@
   ],
   "features": {
     "encoder_mode": "QUADTIMER",
-    "alphabeta_filter": true,
+    "alphabeta_filter": false,
     "velocity_feedforward": true,
     "watchdog": true,
     "safety_supervisor": true,
@@ -174,8 +180,8 @@
   },
   "comms": {
     "transport": "UART_115200",
-    "ros_command_rate_hz": 25,
-    "feedback_rate_hz": 10,
+    "ros_command_rate_hz": 100,
+    "feedback_rate_hz": 100,
     "control_loop_rate_hz": 1000,
     "command_timeout_ms": 200,
     "serial_port": "/dev/ttyS31",
