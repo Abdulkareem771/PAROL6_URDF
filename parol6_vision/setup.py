@@ -36,5 +36,7 @@ setup(
             'hsv_inspector = parol6_vision.hsv_inspector_node:main',
         ],
     },
+
+
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
 )

@@ -59,6 +59,7 @@ from parol6_msgs.msg import WeldLine, WeldLineArray, WeldLine3D, WeldLine3DArray
 from geometry_msgs.msg import Point, PointStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import Header, ColorRGBA
+from std_srvs.srv import Trigger
 from cv_bridge import CvBridge
 import tf2_ros
 import tf2_geometry_msgs
@@ -106,6 +107,11 @@ class DepthMatcher(Node):
         self.declare_parameter('sync_time_tolerance', 0.5) # seconds
         self.declare_parameter('sync_queue_size', 10)
         
+        # Capture mode: service-triggered single-frame depth matching.
+        # When True, the sync subscribers are NOT created at startup;
+        # call /depth_matcher/capture to fire one depth-matching cycle.
+        self.declare_parameter('capture_mode', False)
+        
         # Get values
         self.target_frame = self.get_parameter('target_frame').value
         self.outlier_thresh = self.get_parameter('outlier_std_threshold').value
@@ -113,6 +119,7 @@ class DepthMatcher(Node):
         self.max_depth = self.get_parameter('max_depth').value
         self.min_depth = self.get_parameter('min_depth').value
         self.min_quality = self.get_parameter('min_depth_quality').value
+        self.capture_mode = self.get_parameter('capture_mode').value
         
         # ============================================================
         # TF LISTENER
@@ -138,35 +145,110 @@ class DepthMatcher(Node):
         )
         
         # ============================================================
-        # SYNCHRONIZED SUBSCRIBERS
+        # SYNCHRONIZED SUBSCRIBERS  (streaming mode only)
         # ============================================================
         
-        self.lines_sub = message_filters.Subscriber(
-            self, WeldLineArray, '/vision/weld_lines_2d'
-        )
-        self.depth_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_depth_rect'
-        )
-        self.info_sub = message_filters.Subscriber(
-            self, CameraInfo, '/kinect2/qhd/camera_info'
-        )
-        
-        # Use ApproximateTimeSynchronizer
-        # Kinect RGB and Depth timestamps may differ slightly (~1-30ms)
-        queue_size = self.get_parameter('sync_queue_size').value
-        tolerance = self.get_parameter('sync_time_tolerance').value
-        
-        self.sync = message_filters.ApproximateTimeSynchronizer(
-            [self.lines_sub, self.depth_sub, self.info_sub],
-            queue_size=queue_size,
-            slop=tolerance
-        )
-        
-        self.sync.registerCallback(self.synchronized_callback)
-        
         self.bridge = CvBridge()
-        self.get_logger().info('Depth Matcher initialized with ApproximateTimeSynchronizer')
         
+        if not self.capture_mode:
+            self.lines_sub = message_filters.Subscriber(
+                self, WeldLineArray, '/vision/weld_lines_2d'
+            )
+            self.depth_sub = message_filters.Subscriber(
+                self, Image, '/kinect2/qhd/image_depth_rect'
+            )
+            self.info_sub = message_filters.Subscriber(
+                self, CameraInfo, '/kinect2/qhd/camera_info'
+            )
+            
+            queue_size = self.get_parameter('sync_queue_size').value
+            tolerance = self.get_parameter('sync_time_tolerance').value
+            
+            self.sync = message_filters.ApproximateTimeSynchronizer(
+                [self.lines_sub, self.depth_sub, self.info_sub],
+                queue_size=queue_size,
+                slop=tolerance
+            )
+            self.sync.registerCallback(self.synchronized_callback)
+            self.get_logger().info('Depth Matcher initialized with ApproximateTimeSynchronizer')
+        else:
+            # --------------------------------------------------------
+            # CAPTURE MODE — service-triggered, one-shot per call
+            # --------------------------------------------------------
+            self._capture_subs = []   # holds temporary subscribers
+            self._capture_srv = self.create_service(
+                Trigger,
+                '/depth_matcher/capture',
+                self._capture_service_callback
+            )
+            self.get_logger().info(
+                'Depth Matcher — capture mode ACTIVE. '
+                'Call /depth_matcher/capture to run one depth-matching cycle.'
+            )
+        
+    # ================================================================
+    # CAPTURE SERVICE CALLBACK
+    # ================================================================
+
+    def _capture_service_callback(self, request, response):
+        """
+        Service handler for /depth_matcher/capture (capture mode only).
+
+        Waits for the latest available WeldLineArray, depth image, and
+        camera_info (each as separate one-shot subscriptions), then calls
+        synchronized_callback manually with those messages.
+        """
+        import time
+        self.get_logger().info('Depth capture service called — collecting latest messages...')
+
+        latest = {'lines': None, 'depth': None, 'info': None}
+
+        def _cb_lines(msg):
+            latest['lines'] = msg
+
+        def _cb_depth(msg):
+            latest['depth'] = msg
+
+        def _cb_info(msg):
+            latest['info'] = msg
+
+        # Create temporary subscribers
+        sub_lines = self.create_subscription(WeldLineArray, '/vision/weld_lines_2d', _cb_lines, 1)
+        sub_depth = self.create_subscription(Image, '/kinect2/qhd/image_depth_rect', _cb_depth, 1)
+        sub_info = self.create_subscription(CameraInfo, '/kinect2/qhd/camera_info', _cb_info, 1)
+        self._capture_subs = [sub_lines, sub_depth, sub_info]
+
+        timeout = 5.0
+        t0 = time.time()
+        while (time.time() - t0) < timeout:
+            rclpy.spin_once(self, timeout_sec=0.05)
+            if all(v is not None for v in latest.values()):
+                break
+
+        # Destroy temporary subscribers
+        for sub in self._capture_subs:
+            self.destroy_subscription(sub)
+        self._capture_subs = []
+
+        if not all(v is not None for v in latest.values()):
+            missing = [k for k, v in latest.items() if v is None]
+            response.success = False
+            response.message = f'Timeout: missing messages: {missing}'
+            self.get_logger().warn(response.message)
+            return response
+
+        # Run through the existing synchronized pipeline
+        try:
+            self.synchronized_callback(latest['lines'], latest['depth'], latest['info'])
+            response.success = True
+            response.message = 'Depth matching complete. Check /vision/weld_lines_3d.'
+        except Exception as e:
+            response.success = False
+            response.message = f'Error during depth matching: {e}'
+            self.get_logger().error(response.message)
+
+        return response
+
     # ================================================================
     # MAIN CALLBACK
     # ================================================================

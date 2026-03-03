@@ -78,6 +78,7 @@ from parol6_msgs.msg import WeldLine, WeldLineArray
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point32, Point
 from std_msgs.msg import ColorRGBA
+from std_srvs.srv import Trigger
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -144,6 +145,10 @@ class RedLineDetector(Node):
         self.declare_parameter('publish_debug_images', True)
         self.declare_parameter('single_frame_mode', False)
         
+        # Capture mode: service-triggered single-frame processing
+        # When True, the node is idle until /red_line_detector/capture is called
+        self.declare_parameter('capture_mode', False)
+        
         # ============================================================
         # GET PARAMETERS
         # ============================================================
@@ -170,6 +175,11 @@ class RedLineDetector(Node):
         
         self.publish_debug = self.get_parameter('publish_debug_images').value
         self.single_frame_mode = self.get_parameter('single_frame_mode').value
+        self.capture_mode = self.get_parameter('capture_mode').value
+        
+        # Internal state for capture mode
+        self._capture_requested = False
+        self._capture_result_lines = 0
         
         # ============================================================
         # INITIALIZE CV BRIDGE
@@ -212,12 +222,31 @@ class RedLineDetector(Node):
         # CREATE SUBSCRIBER
         # ============================================================
         
-        self.image_sub = self.create_subscription(
-            Image,
-            '/kinect2/qhd/image_color_rect',
-            self.image_callback,
-            10
-        )
+        if self.capture_mode:
+            # In capture mode we start with NO active subscription.
+            # The subscriber is created on-demand when the capture service fires.
+            self.image_sub = None
+        else:
+            self.image_sub = self.create_subscription(
+                Image,
+                '/kinect2/qhd/image_color_rect',
+                self.image_callback,
+                10
+            )
+        
+        # ============================================================
+        # CAPTURE SERVICE (only active in capture_mode)
+        # ============================================================
+        
+        if self.capture_mode:
+            self._capture_srv = self.create_service(
+                Trigger,
+                '/red_line_detector/capture',
+                self._capture_service_callback
+            )
+            self.get_logger().info(
+                'Capture mode ACTIVE. Call /red_line_detector/capture to process one frame.'
+            )
         
         # ============================================================
         # STATISTICS
@@ -232,6 +261,61 @@ class RedLineDetector(Node):
         self.get_logger().info(f'HSV Range 2: {self.hsv_lower_2} to {self.hsv_upper_2}')
         self.get_logger().info(f'Min confidence: {self.min_confidence}')
         self.get_logger().info(f'Single frame mode: {self.single_frame_mode}')
+    
+    # ================================================================
+    # MAIN PROCESSING CALLBACK
+    # ================================================================
+    
+    # ================================================================
+    # CAPTURE SERVICE CALLBACK
+    # ================================================================
+    
+    def _capture_service_callback(self, request, response):
+        """
+        Service handler for /red_line_detector/capture.
+        
+        Creates a one-shot subscription, waits for the next arriving frame,
+        runs the full pipeline, publishes results, then destroys the sub.
+        The caller blocks until the response is returned.
+        """
+        if self.image_sub is not None:
+            response.success = False
+            response.message = 'Capture already in progress'
+            return response
+        
+        self.get_logger().info('Capture service called — waiting for next frame...')
+        self._capture_requested = True
+        self._capture_result_lines = 0
+        
+        # Create a temporary one-shot subscription
+        self.image_sub = self.create_subscription(
+            Image,
+            '/kinect2/qhd/image_color_rect',
+            self.image_callback,
+            10
+        )
+        
+        # Spin until the frame has been processed (image_callback clears self.image_sub)
+        import time
+        timeout = 5.0  # seconds
+        t0 = time.time()
+        while self.image_sub is not None and (time.time() - t0) < timeout:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        
+        if self.image_sub is not None:
+            # Timeout — clean up
+            self.destroy_subscription(self.image_sub)
+            self.image_sub = None
+            self._capture_requested = False
+            response.success = False
+            response.message = 'Timeout waiting for image frame'
+            self.get_logger().warn('Capture timed out waiting for image')
+        else:
+            response.success = True
+            response.message = f'Captured 1 frame, detected {self._capture_result_lines} line(s)'
+            self.get_logger().info(response.message)
+        
+        return response
     
     # ================================================================
     # MAIN PROCESSING CALLBACK
@@ -311,6 +395,15 @@ class RedLineDetector(Node):
                 f'Single-frame mode complete after frame {self.frame_count}; '
                 'stopped image subscription.'
             )
+        
+        # In capture mode: destroy subscription after processing one frame
+        # so the service callback's spin loop exits.
+        if self.capture_mode and self._capture_requested:
+            self._capture_result_lines = len(valid_lines)
+            self._capture_requested = False
+            if self.image_sub is not None:
+                self.destroy_subscription(self.image_sub)
+                self.image_sub = None
     
     # ================================================================
     # DETECTION PIPELINE
