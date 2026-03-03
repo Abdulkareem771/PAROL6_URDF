@@ -380,7 +380,7 @@ return_type PAROL6System::read(
     packets_received_++;
     
     // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
-    const bool USE_REAL_FEEDBACK = false; 
+    const bool USE_REAL_FEEDBACK = true; 
     if (USE_REAL_FEEDBACK) {
       for (size_t i = 0; i < 6; ++i) {
         hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);

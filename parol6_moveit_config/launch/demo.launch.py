@@ -32,6 +32,14 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
+    # For fake hardware execution, we must swap the hardcoded Gazebo plugin with the mock system.
+    fake_robot_description = {
+        "robot_description": moveit_config.robot_description["robot_description"].replace(
+            "ign_ros2_control/IgnitionSystem", 
+            "mock_components/GenericSystem"
+        )
+    }
+
     # Start the actual move_group node/action server
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -81,7 +89,7 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="both",
-        parameters=[moveit_config.robot_description],
+        parameters=[fake_robot_description],
         condition=IfCondition(use_fake_hardware),
     )
 
@@ -95,7 +103,7 @@ def generate_launch_description():
     ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[moveit_config.robot_description, ros2_controllers_path],
+        parameters=[fake_robot_description, ros2_controllers_path],
         output="both",
         condition=IfCondition(use_fake_hardware),
     )
