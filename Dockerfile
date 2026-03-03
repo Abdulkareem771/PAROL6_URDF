@@ -82,3 +82,6 @@ RUN apt-get update && apt-get install -y \
 
 # Install Python packages (YOLOv8, esptool)
 RUN pip3 install ultralytics esptool
+
+# Install libserial-dev for parol6_hardware (added last to preserve cache)
+RUN apt-get update && apt-get install -y libserial-dev && rm -rf /var/lib/apt/lists/*

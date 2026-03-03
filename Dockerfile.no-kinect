@@ -1,0 +1,32 @@
+# Stage 1: Use existing parol6-ultimate:latest as source
+FROM parol6-ultimate:latest as source
+
+# Stage 2: Build clean image - copy everything from source except Kinect components
+FROM parol6-ultimate:latest
+
+# Remove Kinect workspace (entire directory)
+RUN rm -rf /opt/kinect_ws
+
+# Remove libfreenect2 libraries and headers
+RUN rm -rf /usr/local/lib/libfreenect2* && \
+    rm -rf /usr/local/include/libfreenect2 && \
+    rm -rf /usr/local/lib/pkgconfig/freenect2.pc
+
+# Remove Kinect udev rules if they exist
+RUN rm -f /etc/udev/rules.d/90-kinect2.rules
+
+# Update ldconfig to remove libfreenect2 from cache
+RUN ldconfig
+
+# Remove kinect workspace sourcing from bashrc
+RUN sed -i '/kinect_ws/d' /root/.bashrc 2>/dev/null || true
+
+# Set working directory
+WORKDIR /workspace
+
+# Add metadata about this image
+RUN echo "PAROL6 Image - Built from parol6-ultimate:latest (Kinect components excluded)" > /IMAGE_INFO.txt && \
+    echo "Excluded: libfreenect2, kinect_ros2 bridge, /opt/kinect_ws" >> /IMAGE_INFO.txt && \
+    echo "Build date: $(date)" >> /IMAGE_INFO.txt
+
+CMD ["/bin/bash"]

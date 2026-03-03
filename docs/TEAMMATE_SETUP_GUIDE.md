@@ -268,6 +268,49 @@ colcon build --symlink-install
 ros2 topic list | grep joint_states
 ```
 
+### ROS 2 Commands Fail with `!rclpy.ok()` Error
+
+**Symptom:**
+```
+xmlrpc.client.Fault: <Fault 1: "<class 'RuntimeError'>:!rclpy.ok()">
+```
+
+**Cause:** ROS 2 daemon has crashed or is stuck
+
+**Fix:**
+```bash
+# Kill stuck processes
+pkill -9 ros
+
+# Clean daemon
+rm -rf ~/.ros/log/*
+
+# Restart daemon
+ros2 daemon stop
+ros2 daemon start
+
+# Verify
+ros2 topic list
+```
+
+**If that doesn't work, restart the container:**
+```bash
+exit  # Exit container
+docker restart parol6_dev
+docker exec -it parol6_dev bash
+cd /workspace
+source install/setup.bash
+```
+
+### rqt_plot or Other RQT Tools Not Found
+
+**Install missing tools:**
+```bash
+# Inside container
+apt-get update
+apt-get install ros-humble-rqt-plot ros-humble-rqt-graph
+```
+
 ---
 
 ## 📊 Day 3 Validation Checklist

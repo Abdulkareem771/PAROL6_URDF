@@ -25,8 +25,7 @@ apt-get update && apt-get install -y \
 echo "Building libfreenect2 (CPU ONLY - NO OpenGL)..."
 
 cd /tmp
-rm -rf libfreenect2
-git clone https://github.com/OpenKinect/libfreenect2.git
+rm -rf libfrgit clone https://github.com/OpenKinect/libfreenect2.git
 cd libfreenect2
 
 mkdir build && cd build
@@ -65,3 +64,4 @@ echo "source /opt/kinect_ws/install/setup.bash" >> /root/.bashrc
 
 echo ""
 echo "✅ INSTALL COMPLETE"
+eenect2

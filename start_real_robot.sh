@@ -53,13 +53,31 @@ sleep 2
 echo -e "${GREEN}✓ Container started${NC}"
 echo ""
 
-# Build workspace (Critical: builds the new driver package inside Docker)
-echo -e "${BLUE}[2/3]${NC} Building workspace (This may take a minute)..."
+# Install libserial-dev from local cache (no download needed!)
+echo -e "${BLUE}[2/4]${NC} Installing libserial-dev from cache..."
+if [ -d ".docker_cache" ] && [ "$(ls -A .docker_cache/*.deb 2>/dev/null)" ]; then
+  docker exec $CONTAINER_NAME bash -c "dpkg -i /workspace/.docker_cache/*.deb 2>/dev/null; apt-get install -f -y > /dev/null 2>&1; exit 0"
+  echo -e "${GREEN}✓ Installed from cache (no download)${NC}"
+else
+  echo -e "${YELLOW}⚠️  Cache not found, downloading...${NC}"
+  docker exec $CONTAINER_NAME bash -c "apt-get update > /dev/null 2>&1 && apt-get install -y libserial-dev > /dev/null 2>&1"
+  echo -e "${GREEN}✓ Downloaded and installed${NC}"
+fi
+echo ""
+
+# Install ROS 2 controllers (required for ros2_control)
+echo -e "${BLUE}[3/4]${NC} Installing ROS 2 controllers..."
+docker exec $CONTAINER_NAME bash -c "apt-get install -y ros-humble-ros2-controllers ros-humble-ros2-control ros-humble-ros2controlcli > /dev/null 2>&1 || exit 0"
+echo -e "${GREEN}✓ Controllers installed${NC}"
+echo ""
+
+# Build workspace
+echo -e "${BLUE}[4/4]${NC} Building workspace..."
 # Clean workspace inside Docker to avoid pollution/permission issues
 docker exec $CONTAINER_NAME bash -c "rm -rf /workspace/build /workspace/install /workspace/log"
 
 # Using --packages-select to avoid building unrelated packages (like microros) found in the dir
-docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_driver parol6_moveit_config" > /tmp/parol6_real_build.log 2>&1
+docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_hardware parol6_moveit_config" > /tmp/parol6_real_build.log 2>&1
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Build successful${NC}"
@@ -71,15 +89,15 @@ else
 fi
 echo ""
 
-# Launch Real Robot Viz
-echo -e "${BLUE}[3/3]${NC} Launching Real Robot Driver + MoveIt + RViz..."
+# Launch Real Robot
+echo -e "${BLUE}[4/4]${NC} Launching Real Robot Driver + MoveIt + RViz..."
 echo -e "${YELLOW}⚠️  Keep this terminal open!${NC}"
 echo ""
 
 docker exec -it $CONTAINER_NAME bash -c "
   source /opt/ros/humble/setup.bash && \
   source /workspace/install/setup.bash && \
-  ros2 launch parol6_driver real_robot_viz.launch.py
+  ros2 launch parol6_hardware real_robot.launch.py
 "
 
 # Cleanup

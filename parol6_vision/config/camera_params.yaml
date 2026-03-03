@@ -24,14 +24,14 @@
     # UPDATE THESE VALUES AFTER CALIBRATION!
     camera_to_base_transform:
       translation:
-        x: 0.5   # meters
+        x: 0.3   # meters (Reverted)
         y: 0.0
-        z: 0.6
+        z: 0.45  # meters
       rotation:  # Quaternion [x, y, z, w]
-        x: 0.0
-        y: 0.0
-        z: 0.0
-        w: 1.0
+        x: 0.5
+        y: 0.5
+        z: 0.5
+        w: 0.5
 
     # Depth sensor limits
     depth_range:
