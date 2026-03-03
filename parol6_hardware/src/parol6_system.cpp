@@ -385,11 +385,37 @@ return_type PAROL6System::read(
       // Kinematic Sign Inversion: J1, J3, J6 are mechanically inverted relative to URDF
       const double dir_signs[6] = {-1.0, 1.0, -1.0, 1.0, 1.0, -1.0};
       
+      // URDF joint position limits (from parol6.urdf) — used to reject garbage fake-encoder values
+      // Format: {lower_limit, upper_limit} for JL1..JL6
+      const double joint_lower[6] = {-3.14159, -0.98,   -2.0, -3.14159, -3.14159, -3.14159};
+      const double joint_upper[6] = { 3.14159,  1.0,    1.3,  3.14159,  3.14159,  3.14159};
+
+      // Parse and sign-correct all 6 joints
+      double candidate_pos[6], candidate_vel[6];
+      bool all_valid = true;
       for (size_t i = 0; i < 6; ++i) {
-        hw_state_positions_[i] = std::stod(tokens[2 + i * 2]) * dir_signs[i];
-        hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]) * dir_signs[i];
+        candidate_pos[i] = std::stod(tokens[2 + i * 2]) * dir_signs[i];
+        candidate_vel[i] = std::stod(tokens[3 + i * 2]) * dir_signs[i];
+        // Reject packets where ANY joint is outside its URDF limits + 10% tolerance
+        double range = joint_upper[i] - joint_lower[i];
+        if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||
+            candidate_pos[i] > joint_upper[i] + 0.1 * range) {
+          RCLCPP_WARN_THROTTLE(logger_, clock_, 2000,
+            "Joint J%zu feedback %.4f outside bounds [%.2f, %.2f] — ignoring packet",
+            i + 1, candidate_pos[i], joint_lower[i], joint_upper[i]);
+          all_valid = false;
+          break;
+        }
       }
-      return return_type::OK; // Skip spoofing if successfully parsed
+      
+      if (all_valid) {
+        for (size_t i = 0; i < 6; ++i) {
+          hw_state_positions_[i] = candidate_pos[i];
+          hw_state_velocities_[i] = candidate_vel[i];
+        }
+        return return_type::OK; // Skip spoofing if successfully parsed and valid
+      }
+      // Fall through to spoof if any value was out of range
     }
     
     // Log statistics every 5 minutes (thesis validation data)
