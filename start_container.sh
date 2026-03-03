@@ -65,6 +65,7 @@ else
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
     -v $(pwd):/workspace \
+    -v /home/kareem:/host_home:ro \
     -v /dev:/dev \
     -v /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro \
     -v /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro \

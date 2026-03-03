@@ -61,3 +61,21 @@ venvs/vision_venvs/ultralytics_cpu_env/bin/*
 venvs/vision_venvs/ultralytics_cpu_env/data/*
 venvs/vision_venvs/ultralytics_cpu_env/lib64/*
 venvs/vision_venvs/ultralytics_cpu_env/lib/*
+
+parol6-ultimate-20260124.tar.gz
+
+
+#venvs/*
+legacy code open loop/*
+logs/launchers/*
+
+# ML model weights (large binary files — store on Colab or a model registry instead)
+*.pth
+*.pt
+*.onnx
+*.h5
+*.weights
+
+# Training output images / artifacts that are regenerated each run
+vision_work/resunet_training/test_results/
+vision_work/resunet_training/Tests/
