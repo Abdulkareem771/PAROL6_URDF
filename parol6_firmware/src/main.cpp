@@ -144,16 +144,30 @@ void run_control_loop_isr() {
         current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
         
-        // Export to telemetry buffer (safe because floats on 32-bit ARM are atomic)
-        telemetry_pos[i] = actual_pos;
-        telemetry_vel[i] = actual_vel;
+        // --- Gear ratio scaling: convert motor-shaft angle → joint-space angle ---
+        // QuadTimerEncoder reads raw PWM duty-cycle → 0..2π per MOTOR revolution.
+        // MoveIt and the ROS hardware interface expect JOINT-space radians.
+        // Dividing by GEAR_RATIOS[i] maps motor revolutions to joint displacement.
+        // This is required for correct bounds checking in parol6_system.cpp and
+        // for the control law pos_error to be in the same units as the ROS command.
+#ifdef NUM_AXES
+        float joint_pos = actual_pos / GEAR_RATIOS[i];
+        float joint_vel = actual_vel / GEAR_RATIOS[i];
+#else
+        static const float fallback_gear[6] = {6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f};
+        float joint_pos = actual_pos / fallback_gear[i];
+        float joint_vel = actual_vel / fallback_gear[i];
+#endif
+        // Export JOINT-SPACE values to telemetry buffer
+        telemetry_pos[i] = joint_pos;
+        telemetry_vel[i] = joint_vel;
         
-        // C. Get Interpolated Setpoint
+        // C. Get Interpolated Setpoint (already in joint space from ROS command)
         float cmd_pos, cmd_vel_ff;
         interpolator[i].tick_1ms(cmd_pos, cmd_vel_ff);
         
-        // D. Control Law (P + FF)
-        float pos_error = cmd_pos - actual_pos;
+        // D. Control Law (P + FF) — error computed in joint space (both sides now match)
+        float pos_error = cmd_pos - joint_pos;
         float velocity_command = (Kp[i] * pos_error);
 #if defined(FEATURE_VEL_FEEDFORWARD) && FEATURE_VEL_FEEDFORWARD == 1
         velocity_command += cmd_vel_ff;
