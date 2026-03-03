@@ -382,9 +382,12 @@ return_type PAROL6System::read(
     // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
     const bool USE_REAL_FEEDBACK = true; 
     if (USE_REAL_FEEDBACK) {
+      // Kinematic Sign Inversion: J1, J3, J6 are mechanically inverted relative to URDF
+      const double dir_signs[6] = {-1.0, 1.0, -1.0, 1.0, 1.0, -1.0};
+      
       for (size_t i = 0; i < 6; ++i) {
-        hw_state_positions_[i] = std::stod(tokens[2 + i * 2]);
-        hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
+        hw_state_positions_[i] = std::stod(tokens[2 + i * 2]) * dir_signs[i];
+        hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]) * dir_signs[i];
       }
       return return_type::OK; // Skip spoofing if successfully parsed
     }
@@ -438,15 +441,18 @@ return_type PAROL6System::write(
   // Use PRIu32 for sequence number portability
   // #include <inttypes.h> -> Already at top
   
+  // Kinematic Sign Inversion: J1, J3, J6 are mechanically inverted relative to URDF
+  const double dir_signs[6] = {-1.0, 1.0, -1.0, 1.0, 1.0, -1.0};
+  
   int written = snprintf(buffer, sizeof(buffer),
            "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
-           hw_command_positions_[0], hw_command_velocities_[0],
-           hw_command_positions_[1], hw_command_velocities_[1],
-           hw_command_positions_[2], hw_command_velocities_[2],
-           hw_command_positions_[3], hw_command_velocities_[3],
-           hw_command_positions_[4], hw_command_velocities_[4],
-           hw_command_positions_[5], hw_command_velocities_[5]);
+           hw_command_positions_[0] * dir_signs[0], hw_command_velocities_[0] * dir_signs[0],
+           hw_command_positions_[1] * dir_signs[1], hw_command_velocities_[1] * dir_signs[1],
+           hw_command_positions_[2] * dir_signs[2], hw_command_velocities_[2] * dir_signs[2],
+           hw_command_positions_[3] * dir_signs[3], hw_command_velocities_[3] * dir_signs[3],
+           hw_command_positions_[4] * dir_signs[4], hw_command_velocities_[4] * dir_signs[4],
+           hw_command_positions_[5] * dir_signs[5], hw_command_velocities_[5] * dir_signs[5]);
 
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
