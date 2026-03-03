@@ -14,11 +14,11 @@ launch:
 
 - arg:
     name: "depth_method"
-    default: "cuda"
+    default: "cpu"
 
 - arg:
     name: "reg_method"
-    default: "cpu"
+    default: "default"
 
 - node:
     pkg: "kinect2_bridge"
@@ -38,7 +38,7 @@ launch:
           value: "$(var base_name)"
 
         - name: "fps_limit"  
-          value: 30.0
+          value: 1.0
 
         - name: "use_png"  
           value: false
