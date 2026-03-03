@@ -138,15 +138,28 @@ The ESP32 firmware suffered from context-switching overhead because the FreeRTOS
 
 ## 5. ROS 2 Communication Strategy
 
-Communication between the ROS 2 Host PC and the Teensy 4.1 maintains compatibility with the legacy `parol6_hardware` interface but is optimized for the deterministic architecture.
+Communication between the ROS 2 Host PC and the Teensy 4.1 is handled by `parol6_hardware/src/parol6_system.cpp` (the `ros2_control` hardware interface) and the firmware's `SerialTransport` module.
 
-*   **Protocol**: ASCII over UART (115200 Baud) or USB CDC.
-*   **Command Format**: `<SEQ, J1, J2, J3, J4, J5, J6, V1, V2, V3, V4, V5, V6>` emitted at ~25 Hz by `ros2_control`.
-*   **Feedback Format**: `<ACK, SEQ, J1, J2, J3, J4, J5, J6, V1, V2, V3, V4, V5, V6>` emitted at ~10 Hz back to ROS.
+*   **Protocol**: ASCII framed with `< >`, terminated by `\n`. UART 115200 Baud or USB CDC.
+*   **Command sent by ROS to Teensy (13 tokens total):**
+    ```
+    <SEQ, J1_pos, J1_vel, J2_pos, J2_vel, J3_pos, J3_vel, J4_pos, J4_vel, J5_pos, J5_vel, J6_pos, J6_vel>
+    ```
+    Positions in radians, velocities in rad/s. Emitted by `ros2_control` at 25 Hz.
+*   **Feedback sent by Teensy to ROS (14 tokens total):**
+    ```
+    <ACK, SEQ, J1_pos, J1_vel, J2_pos, J2_vel, J3_pos, J3_vel, J4_pos, J4_vel, J5_pos, J5_vel, J6_pos, J6_vel>
+    ```
+    Emitted by `main.cpp` `loop()` at `FEEDBACK_RATE_HZ` (configurable from GUI, default 10 Hz).
+
+*   **Kinematic Sign Inversion**: J1, J3, and J6 are physically wired/geared in reverse relative to the URDF mathematical model (per `motor_init.cpp` STM32 legacy firmware). The `parol6_system.cpp` hardware interface applies a `-1.0` multiplier to commands and feedback for these joints before publishing to ROS. The firmware `DIR_INVERT[]` array (set via GUI **Dir Inv** checkbox) applies the same inversion at the stepper motor level.
+
 *   **Decoupling**: The 25 Hz asynchronous stream from ROS is cleanly decoupled from the 1 kHz control loop via a **Lock-Free Circular Queue**.
-*   **Data Integrity**: 
-    - The `SerialTransport` parses bytes in the background `main()` loop to avoid blocking.
-    - Full, validated `RosCommand` structs are pushed to the Queue.
+*   **Data Integrity**: The `SerialTransport` parses bytes in the background `main()` loop to avoid blocking. Full, validated `RosCommand` structs are pushed to the queue. The hardware interface validates all 14 tokens and checks joint bounds before accepting any packet.
+
+> [!NOTE]
+> **Implementation Status (March 2026):** `set_motor_velocity()` in `main.cpp` is currently a stub (empty body). Physical motor output via FlexPWM STEP/DIR is the **next firmware milestone**. All architecture, observer, interpolator, and telemetry layers are fully operational and validated.
+
 ## 6. Real-World Profiling Metrics & Academic KPIs (Phase 1.5 & Phase 3)
 
 To mathematically prove the determinism of this architecture, a bare-metal software profiler leveraging the ARM Cortex-M7 cycle counter (`ARM_DWT_CYCCNT`) was injected directly into the 1 kHz `run_control_loop_isr()`.

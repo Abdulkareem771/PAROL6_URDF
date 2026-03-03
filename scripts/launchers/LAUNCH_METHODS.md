@@ -1,23 +1,38 @@
 # Launch Methods (Separate Operation Modes)
 
-This page defines one launcher per operation mode so each method can run alone.
+Defines one launcher per operation mode. Each launcher is **Docker-aware** — it detects whether it is being invoked from inside or outside the container and adapts accordingly.
 
 ## Launcher Files
 
-- `scripts/launchers/launch_gazebo_only.sh`
-- `scripts/launchers/launch_moveit_with_gazebo.sh`
-- `scripts/launchers/launch_moveit_fake.sh`
-- `scripts/launchers/launch_moveit_real_hw.sh`
+| Script | Description |
+|--------|-------------|
+| `scripts/launchers/launch_gazebo_only.sh` | Physics simulation only (no MoveIt) |
+| `scripts/launchers/launch_moveit_with_gazebo.sh` | MoveIt planning into a running Gazebo world |
+| `scripts/launchers/launch_moveit_fake.sh` | MoveIt + RViz with fake controllers (no hardware) |
+| `scripts/launchers/launch_moveit_real_hw.sh` | MoveIt + RViz connected to the real Teensy hardware |
 
-All launchers:
-- run from host side
-- ensure GUI permissions (`xhost`)
-- start/attach `parol6_dev`
-- source `/workspace/install/setup.bash`
+## How Launchers Work
+
+All launcher scripts share this execution logic:
+
+```
+if running inside Docker container (/.dockerenv exists):
+    source /workspace/install/setup.bash
+    ros2 launch <package> <launchfile> <args>
+else (running on host):
+    xhost +local:root  (grant X11 access)
+    ./start_container.sh  (boot / attach parol6_dev)
+    docker exec -i parol6_dev bash -c "source ... && ros2 launch ..."
+```
+
+> [!IMPORTANT]
+> The GUI's **ROS2 Launch** tab calls these scripts directly from **inside** the container.
+> The scripts auto-detect this and skip the `docker exec` path.
+> If you run them from the host terminal, they will start/attach the container automatically.
 
 ## Method 1: Gazebo Only (Simulation World)
 
-Use when you want only physics simulation and robot visualization.
+Use when you want physics simulation and robot visualization without MoveIt.
 
 ```bash
 ./scripts/launchers/launch_gazebo_only.sh
@@ -26,12 +41,12 @@ Use when you want only physics simulation and robot visualization.
 What it starts:
 - `ros2 launch parol6 ignition.launch.py`
 
-What it does not start:
-- MoveIt RViz
+What it does **not** start:
+- MoveIt / RViz
 
-## Method 2: MoveIt With Gazebo (External Controllers)
+## Method 2: MoveIt With Gazebo
 
-Use when Gazebo is already running and you want Plan/Execute into Gazebo.
+Use when Gazebo is already running and you want to plan/execute trajectories into the simulation.
 
 ```bash
 ./scripts/launchers/launch_moveit_with_gazebo.sh
@@ -40,13 +55,11 @@ Use when Gazebo is already running and you want Plan/Execute into Gazebo.
 What it starts:
 - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
 
-Why `use_fake_hardware:=false`:
-- MoveIt must connect to Gazebo controller manager.
-- It must not spawn a second internal fake controller manager.
+> Why `use_fake_hardware:=false`: MoveIt must connect to the Gazebo controller manager. It must not spawn its own internal fake controller manager or they will conflict.
 
-## Method 3: MoveIt Fake (Standalone)
+## Method 3: MoveIt Fake (RViz Only, No Hardware)
 
-Use when you want MoveIt planning without Gazebo or hardware.
+Use for motion planning validation, URDF checking, and UI testing without any hardware or physics.
 
 ```bash
 ./scripts/launchers/launch_moveit_fake.sh
@@ -56,46 +69,73 @@ What it starts:
 - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=true`
 
 Behavior:
-- Starts internal fake ros2_control stack.
-- Good for pure planning and UI checks.
+- Spawns `mock_components/GenericSystem` (the Ignition plugin is automatically swapped out at launch time)
+- Robot state echoes commands instantly (perfect tracking)
+- Good for checking joint limits, collision geometry, and path planning
 
-## Method 4: MoveIt Real Hardware Bridge Mode
+## Method 4: MoveIt Real Hardware
 
-Use when real hardware controller manager/driver is running (no Gazebo).
+Use when the Teensy 4.1 is physically connected via USB.
 
 ```bash
 ./scripts/launchers/launch_moveit_real_hw.sh
 ```
 
-What it starts:
-- `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
+What it starts (two sequential launch files):
+1. `ros2 launch parol6_hardware real_robot.launch.py` — hardware driver + controller manager + joint_state_broadcaster + parol6_arm_controller
+2. `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false` — MoveIt + RViz connected to the running controller manager
 
-Prerequisite:
-- real hardware path/controller manager must be launched first (for example `start_real_robot.sh` or your real hardware launch pipeline).
+> [!IMPORTANT]
+> **Do not** run `real_robot.launch.py` separately AND then trigger the GUI launcher — the controller spawner runs from `real_robot.launch.py`. Running it twice causes a `Controller already loaded from active state` crash. The launcher handles both launches in the correct order.
 
-## Recommended Startup Order Per Mode
+Prerequisites:
+- Teensy 4.1 connected to host USB
+- Device node allocated as `/dev/ttyACM0` (or configured in `parol6.ros2_control.xacro`)
+- Docker container has `/dev/ttyACM0` passed through (`--device` flag in `start_container.sh`)
+
+### Hardware Telemetry Protocol
+
+The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates with the Teensy over serial at 115200 baud.
+
+**Command (ROS → Teensy):**
+```
+<SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+```
+
+**Feedback (Teensy → ROS):**
+```
+<ACK,SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+```
+
+All values in radians (position) and radians/second (velocity). The hardware interface applies kinematic sign correction for J1, J3, J6 before sending commands and after receiving feedback.
+
+## Recommended Startup Order
 
 ### Gazebo + MoveIt Simulation
 
-1. `./scripts/launchers/launch_gazebo_only.sh`
-2. wait 10-15 seconds
-3. `./scripts/launchers/launch_moveit_with_gazebo.sh`
+```bash
+./scripts/launchers/launch_gazebo_only.sh
+# wait 10–15 seconds for Gazebo to fully load
+./scripts/launchers/launch_moveit_with_gazebo.sh
+```
 
 ### Real Hardware + MoveIt
 
-1. start real hardware pipeline first
-2. `./scripts/launchers/launch_moveit_real_hw.sh`
+```bash
+./scripts/launchers/launch_moveit_real_hw.sh
+```
 
 ### Fake MoveIt Only
 
-1. `./scripts/launchers/launch_moveit_fake.sh`
+```bash
+./scripts/launchers/launch_moveit_fake.sh
+```
 
 ## Shutdown (Clean)
 
-1. Press `Ctrl+C` in MoveIt terminal.
-2. Press `Ctrl+C` in Gazebo terminal (if running).
-3. Exit container shells with `exit`.
-4. Optional:
+1. Press `Ctrl+C` in the launcher terminal.
+2. All child processes (MoveIt, RViz, controller manager) are terminated by the launch system automatically.
+3. Optional hard stop:
 ```bash
 docker stop parol6_dev
 ```
