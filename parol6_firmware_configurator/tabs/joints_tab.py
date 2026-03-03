@@ -13,7 +13,7 @@ from core.config_model import JointConfig, LimitSwitchConfig
 # Columns order
 COLS = [
     "Enabled", "STEP Pin", "DIR Pin", "Enc Pin",
-    "Gear Ratio", "Microstep", "Dir Inv",
+    "Gear Ratio", "Microstep", "Dir Inv", "ROS Inv",
     "Max Vel\n(rad/s)", "Max I\n(mA)", "Kp",
     "Limit\nType", "Limit\nPin", "Limit\nPolarity"
 ]
@@ -121,6 +121,7 @@ class JointsTab(QWidget):
             w["gear"]     = self._make_spin(j.gear_ratio, 0.1, 100.0, 0.1, 4)
             w["micro"]    = self._make_spin(j.microsteps, 1, 64)
             w["dir_inv"]  = self._make_check(j.dir_invert)
+            w["ros_inv"]  = self._make_check(j.ros_dir_invert)
             w["maxvel"]   = self._make_spin(j.max_vel_rad_s, 0.1, 30.0, 0.5, 2)
             w["maxcur"]   = self._make_spin(j.max_current_ma, 0, 3000, 50)
             w["kp"]       = self._make_spin(j.kp, 0.0, 50.0, 0.5, 2)
@@ -134,6 +135,7 @@ class JointsTab(QWidget):
                 w["step_pin"], w["dir_pin"], w["enc_pin"],
                 w["gear"], w["micro"],
                 self._center_widget(w["dir_inv"]),
+                self._center_widget(w["ros_inv"]),
                 w["maxvel"], w["maxcur"], w["kp"],
                 w["lim_type"], w["lim_pin"], w["lim_pol"],
             ]
@@ -160,6 +162,7 @@ class JointsTab(QWidget):
             j.gear_ratio      = w["gear"].value()
             j.microsteps      = w["micro"].value()
             j.dir_invert      = w["dir_inv"].isChecked()
+            j.ros_dir_invert  = w["ros_inv"].isChecked()
             j.max_vel_rad_s   = w["maxvel"].value()
             j.max_current_ma  = w["maxcur"].value()
             j.kp              = w["kp"].value()

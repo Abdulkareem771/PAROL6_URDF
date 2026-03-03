@@ -100,6 +100,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     farr("GEAR_RATIOS",  [j.gear_ratio    for j in cfg.joints])
     arr( "MICROSTEPS",   [j.microsteps    for j in cfg.joints])
     barr("DIR_INVERT",   [j.dir_invert    for j in cfg.joints])
+    barr("ROS_DIR_INVERT", [j.ros_dir_invert for j in cfg.joints])  # Read by parol6_system.cpp via xacro
     barr("JOINT_ENABLED",[j.enabled       for j in cfg.joints])
     farr("MAX_VEL_RAD_S",[j.max_vel_rad_s for j in cfg.joints])
 

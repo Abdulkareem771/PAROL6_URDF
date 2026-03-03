@@ -78,7 +78,30 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
     return CallbackReturn::ERROR;
   }
 
-  // Allocate state and command storage
+  // Load per-joint kinematic sign correction from xacro <param name="ros_invert"> tags.
+  // Expected values: "true" = invert (-1.0), "false" or absent = normal (+1.0).
+  // Fallback: J1, J3, J6 default to -1.0 (from STM32 legacy motor_init.cpp).
+  //
+  // To change these: edit parol6.ros2_control.xacro OR use the GUI Joints tab "ROS Inv" checkbox,
+  // then update the xacro to match.
+  const bool legacy_invert_fallback[6] = {true, false, true, false, false, true};
+  dir_signs_.resize(num_joints);
+  for (size_t i = 0; i < num_joints; ++i) {
+    auto it = info_.joints[i].parameters.find("ros_invert");
+    bool should_invert;
+    if (it != info_.joints[i].parameters.end()) {
+      should_invert = (it->second == "true" || it->second == "1");
+    } else {
+      should_invert = legacy_invert_fallback[i];
+      RCLCPP_WARN(logger_,
+        "Joint '%s' missing 'ros_invert' xacro param — falling back to legacy default (%s)",
+        info_.joints[i].name.c_str(), should_invert ? "true" : "false");
+    }
+    dir_signs_[i] = should_invert ? -1.0 : 1.0;
+    RCLCPP_INFO(logger_, "  ✓ Joint %s: ros_invert=%s (sign=%.1f)",
+      info_.joints[i].name.c_str(), should_invert ? "true" : "false", dir_signs_[i]);
+  }
+
   hw_state_positions_.resize(num_joints, 0.0);
   hw_state_velocities_.resize(num_joints, 0.0);
   hw_command_positions_.resize(num_joints, 0.0);
@@ -382,11 +405,9 @@ return_type PAROL6System::read(
     // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
     const bool USE_REAL_FEEDBACK = true; 
     if (USE_REAL_FEEDBACK) {
-      // Kinematic Sign Inversion: J1, J3, J6 are mechanically inverted relative to URDF
-      const double dir_signs[6] = {-1.0, 1.0, -1.0, 1.0, 1.0, -1.0};
-      
-      // URDF joint position limits (from parol6.urdf) — used to reject garbage fake-encoder values
-      // Format: {lower_limit, upper_limit} for JL1..JL6
+      // Kinematic sign correction loaded from xacro ros_invert params in on_init()
+
+      // URDF joint position limits — used to reject garbage fake-encoder values
       const double joint_lower[6] = {-3.14159, -0.98,   -2.0, -3.14159, -3.14159, -3.14159};
       const double joint_upper[6] = { 3.14159,  1.0,    1.3,  3.14159,  3.14159,  3.14159};
 
@@ -394,8 +415,8 @@ return_type PAROL6System::read(
       double candidate_pos[6], candidate_vel[6];
       bool all_valid = true;
       for (size_t i = 0; i < 6; ++i) {
-        candidate_pos[i] = std::stod(tokens[2 + i * 2]) * dir_signs[i];
-        candidate_vel[i] = std::stod(tokens[3 + i * 2]) * dir_signs[i];
+        candidate_pos[i] = std::stod(tokens[2 + i * 2]) * dir_signs_[i];
+        candidate_vel[i] = std::stod(tokens[3 + i * 2]) * dir_signs_[i];
         // Reject packets where ANY joint is outside its URDF limits + 10% tolerance
         double range = joint_upper[i] - joint_lower[i];
         if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||
@@ -467,18 +488,17 @@ return_type PAROL6System::write(
   // Use PRIu32 for sequence number portability
   // #include <inttypes.h> -> Already at top
   
-  // Kinematic Sign Inversion: J1, J3, J6 are mechanically inverted relative to URDF
-  const double dir_signs[6] = {-1.0, 1.0, -1.0, 1.0, 1.0, -1.0};
+  // Kinematic sign correction from on_init() (xacro ros_invert params)
   
   int written = snprintf(buffer, sizeof(buffer),
            "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
-           hw_command_positions_[0] * dir_signs[0], hw_command_velocities_[0] * dir_signs[0],
-           hw_command_positions_[1] * dir_signs[1], hw_command_velocities_[1] * dir_signs[1],
-           hw_command_positions_[2] * dir_signs[2], hw_command_velocities_[2] * dir_signs[2],
-           hw_command_positions_[3] * dir_signs[3], hw_command_velocities_[3] * dir_signs[3],
-           hw_command_positions_[4] * dir_signs[4], hw_command_velocities_[4] * dir_signs[4],
-           hw_command_positions_[5] * dir_signs[5], hw_command_velocities_[5] * dir_signs[5]);
+           hw_command_positions_[0] * dir_signs_[0], hw_command_velocities_[0] * dir_signs_[0],
+           hw_command_positions_[1] * dir_signs_[1], hw_command_velocities_[1] * dir_signs_[1],
+           hw_command_positions_[2] * dir_signs_[2], hw_command_velocities_[2] * dir_signs_[2],
+           hw_command_positions_[3] * dir_signs_[3], hw_command_velocities_[3] * dir_signs_[3],
+           hw_command_positions_[4] * dir_signs_[4], hw_command_velocities_[4] * dir_signs_[4],
+           hw_command_positions_[5] * dir_signs_[5], hw_command_velocities_[5] * dir_signs_[5]);
 
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);

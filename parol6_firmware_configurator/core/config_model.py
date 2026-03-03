@@ -38,7 +38,8 @@ class JointConfig:
     gear_ratio: float = 6.4
     microsteps: int = 32
     steps_per_rev: int = 200
-    dir_invert: bool = False
+    dir_invert: bool = False        # Teensy DIR pin inversion (physical motor direction)
+    ros_dir_invert: bool = False    # ROS kinematic sign inversion (read/write in parol6_system.cpp)
 
     # Safety
     max_vel_rad_s: float = 3.0
@@ -123,32 +124,38 @@ class RobotConfig:
 
     joints: List[JointConfig] = field(default_factory=lambda: [
         JointConfig("J1", step_pin=2,  dir_pin=30, encoder_pin=10, gear_ratio=6.4,
-                    microsteps=32, dir_invert=True,  max_vel_rad_s=3.0, max_current_ma=2000,
+                    microsteps=32, dir_invert=True,  ros_dir_invert=True,
+                    max_vel_rad_s=3.0, max_current_ma=2000,
                     kp=5.0, homed_position_steps=13500, standby_position_steps=10240,
                     limit=LimitSwitchConfig(enabled=False, pin=20, switch_type="INDUCTIVE_NPN", polarity="FALLING")),
 
         JointConfig("J2", step_pin=6,  dir_pin=31, encoder_pin=11, gear_ratio=20.0,
-                    microsteps=32, dir_invert=False, max_vel_rad_s=3.0, max_current_ma=2000,
+                    microsteps=32, dir_invert=False, ros_dir_invert=False,
+                    max_vel_rad_s=3.0, max_current_ma=2000,
                     kp=5.0, homed_position_steps=19588, standby_position_steps=-32000,
                     limit=LimitSwitchConfig(enabled=False, pin=21, switch_type="INDUCTIVE_NPN", polarity="RISING")),
 
         JointConfig("J3", step_pin=7,  dir_pin=32, encoder_pin=12, gear_ratio=18.0952381,
-                    microsteps=32, dir_invert=True,  max_vel_rad_s=6.0, max_current_ma=1900,
+                    microsteps=32, dir_invert=True,  ros_dir_invert=True,
+                    max_vel_rad_s=6.0, max_current_ma=1900,
                     kp=2.0, homed_position_steps=23020, standby_position_steps=57905,
                     limit=LimitSwitchConfig(enabled=False, pin=22, switch_type="INDUCTIVE_NPN", polarity="RISING")),
 
         JointConfig("J4", step_pin=8,  dir_pin=33, encoder_pin=14, gear_ratio=4.0,
-                    microsteps=32, dir_invert=False, max_vel_rad_s=6.0, max_current_ma=1700,
+                    microsteps=32, dir_invert=False, ros_dir_invert=False,
+                    max_vel_rad_s=6.0, max_current_ma=1700,
                     kp=2.0, homed_position_steps=-10200, standby_position_steps=0,
                     limit=LimitSwitchConfig(enabled=False, pin=23, switch_type="MECHANICAL", polarity="RISING")),
 
         JointConfig("J5", step_pin=4,  dir_pin=34, encoder_pin=15, gear_ratio=4.0,
-                    microsteps=32, dir_invert=False, max_vel_rad_s=6.0, max_current_ma=1700,
+                    microsteps=32, dir_invert=False, ros_dir_invert=False,
+                    max_vel_rad_s=6.0, max_current_ma=1700,
                     kp=2.0, homed_position_steps=8900,  standby_position_steps=0,
                     limit=LimitSwitchConfig(enabled=False, pin=24, switch_type="INDUCTIVE_NPN", polarity="RISING")),
 
         JointConfig("J6", step_pin=5,  dir_pin=35, encoder_pin=18, gear_ratio=10.0,
-                    microsteps=32, dir_invert=True,  max_vel_rad_s=6.0, max_current_ma=965,
+                    microsteps=32, dir_invert=True,  ros_dir_invert=True,
+                    max_vel_rad_s=6.0, max_current_ma=965,
                     kp=2.0, homed_position_steps=15900, standby_position_steps=32000,
                     limit=LimitSwitchConfig(enabled=False, pin=25, switch_type="INDUCTIVE_NPN", polarity="FALLING")),
     ])
