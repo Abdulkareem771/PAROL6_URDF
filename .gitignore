@@ -63,3 +63,5 @@ venvs/*
 #start_container.sh
 >>>>>>> real-robot-integration
 src/kinect2_ros2
+legacy code open loop/*
+logs/launchers/*
