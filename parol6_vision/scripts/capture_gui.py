@@ -354,11 +354,10 @@ class CaptureWindow(QMainWindow):
         self._build_ui()
         self._connect_signals()
 
-        self._ros_timer = QTimer(self)
-        self._ros_timer.setInterval(30)
-        self._ros_timer.timeout.connect(lambda: rclpy.spin_once(self.node, timeout_sec=0.0))
-        self._ros_timer.start()
-
+        # NOTE: do NOT call rclpy.spin_once here — the MultiThreadedExecutor
+        # background thread is the sole ROS spinner. All Qt updates arrive
+        # via pyqtSignal which is thread-safe. A second spin_once on the
+        # Qt main thread would race against the executor and cause segfaults.
         self._health_timer = QTimer(self)
         self._health_timer.setInterval(1000)
         self._health_timer.timeout.connect(self._poll_health)
@@ -945,7 +944,6 @@ class CaptureWindow(QMainWindow):
     # ── Cleanup ───────────────────────────────────────────────────────
 
     def closeEvent(self, event):
-        self._ros_timer.stop()
         self._health_timer.stop()
         for p in self._procs.values():
             p.stop()
