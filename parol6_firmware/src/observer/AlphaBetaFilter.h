@@ -9,6 +9,12 @@ public:
         beta_dt_inv_ = beta_ / dt_s;
     }
 
+    void set_gains(float alpha, float beta) {
+        alpha_ = alpha;
+        beta_ = beta;
+        beta_dt_inv_ = beta_ / dt_;
+    }
+
     void set_initial_position(float initial_rad) {
         estimated_pos_ = initial_rad;
         estimated_vel_ = 0.0f;

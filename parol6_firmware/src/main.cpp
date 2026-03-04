@@ -9,6 +9,22 @@
 #  define CONTROL_LOOP_PERIOD_US  1000
 #  define FEEDBACK_RATE_HZ        10
 #  define VELOCITY_DEADBAND_RAD_S 0.02f
+#  define NUM_AXES                6
+
+static const int   ENCODER_PINS[6]     = {10, 11, 12, 14, 15, 18};
+static const int   STEP_PINS[6]        = {2, 6, 7, 8, 4, 5};
+static const int   DIR_PINS[6]         = {30, 31, 32, 33, 34, 35};
+static const float GEAR_RATIOS[6]      = {6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f};
+static const bool  DIR_INVERT[6]       = {true, false, true, false, false, true};
+static const int   MICROSTEPS[6]       = {32, 32, 32, 32, 32, 32};
+static const float KP_GAINS[6]         = {5.0f, 5.0f, 2.0f, 2.0f, 2.0f, 2.0f};
+static const float KI_GAINS[6]         = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+static const float MAX_VEL_RAD_S[6]    = {3.0f, 3.0f, 6.0f, 6.0f, 6.0f, 6.0f};
+static const float MAX_INTEGRAL[6]     = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+static const float AB_ALPHA[6]         = {0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f};
+static const float AB_BETA[6]          = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
+static const bool  JOINT_ENABLED[6]    = {true, true, true, true, true, true};
+static const float HOME_OFFSETS_RAD[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 #endif
 
 #include "transport/SerialTransport.h"
@@ -30,9 +46,7 @@
 // Global Architecture Instantiation
 // -------------------------------------------------------------------------
 
-#ifndef NUM_AXES
-#define NUM_AXES 6
-#endif
+
 #define ISR_PROFILER_PIN 13 // Standard LED Pin on Teensy for oscilloscope hookup
 
 // RTOS/Main Loop Transport
@@ -116,13 +130,11 @@ volatile uint32_t last_isr_time_us = 0;
 
 // Motor Output HAL — converts ControlLaw velocity (rad/s) into STEP frequency + DIR
 void set_motor_velocity(int axis, float velocity_rad_s) {
-#ifdef JOINT_ENABLED
     // Honour per-joint enable flag from GUI config.h
     if (!JOINT_ENABLED[axis]) {
         stepper[axis].stop();
         return;
     }
-#endif
     float freq_hz;
     bool  forward;
     actuator[axis].compute(velocity_rad_s, freq_hz, forward);
@@ -146,23 +158,11 @@ void run_control_loop_isr() {
     float current_positions[NUM_AXES];
     float commanded_velocities[NUM_AXES];
 
-#ifdef KP_GAINS
     // Use GUI-configured per-joint gains and limits
     static const float* Kp          = KP_GAINS;
     static const float* MAX_VEL_CMD = MAX_VEL_RAD_S;
-#else
-    // Fallback defaults if no config.h
-    const float Kp[NUM_AXES]          = { 5.0f,  5.0f,  2.0f, 2.0f, 2.0f, 2.0f };
-    const float MAX_VEL_CMD[NUM_AXES] = { 3.0f,  3.0f,  6.0f, 6.0f, 6.0f, 6.0f };
-#endif
-
-#ifdef KI_GAINS
     static const float* Ki          = KI_GAINS;
     static const float* MaxIntegral = MAX_INTEGRAL;
-#else
-    const float Ki[NUM_AXES]          = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-    const float MaxIntegral[NUM_AXES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-#endif
 
     // 1. Compute Math for All Axes First
     for (int i = 0; i < NUM_AXES; i++) {
@@ -188,14 +188,8 @@ void run_control_loop_isr() {
         // Dividing by GEAR_RATIOS[i] maps motor revolutions to joint displacement.
         // This is required for correct bounds checking in parol6_system.cpp and
         // for the control law pos_error to be in the same units as the ROS command.
-#ifdef NUM_AXES
         float joint_pos = actual_pos / GEAR_RATIOS[i];
         float joint_vel = actual_vel / GEAR_RATIOS[i];
-#else
-        static const float fallback_gear[6] = {6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f};
-        float joint_pos = actual_pos / fallback_gear[i];
-        float joint_vel = actual_vel / fallback_gear[i];
-#endif
         // Export JOINT-SPACE values to telemetry buffer
         telemetry_pos[i] = joint_pos;
         telemetry_vel[i] = joint_vel;
@@ -235,18 +229,9 @@ void run_control_loop_isr() {
 #if defined(FIXED_STEP_FREQ_HZ) && FIXED_STEP_FREQ_HZ > 0
         float ol_freq = (float)FIXED_STEP_FREQ_HZ;
         
-        // Calculate joint-space velocity so ActuatorModel converts it back to the exact ol_freq in set_motor_velocity
-        float steps_per_rev = 3200.0f; // Default 16 microsteps * 200 resolution
-#ifdef MICROSTEPS
-        steps_per_rev = 200.0f * (float)MICROSTEPS[i];
-#endif
+        float steps_per_rev = 200.0f * (float)MICROSTEPS[i];
         float motor_revs_sec = ol_freq / steps_per_rev;
-#ifdef NUM_AXES
         float joint_rad_s = (motor_revs_sec * 2.0f * (float)M_PI) / GEAR_RATIOS[i];
-#else
-        static const float default_gr[6] = {6.4f, 20.0f, 18.0952f, 4.0f, 4.0f, 10.0f};
-        float joint_rad_s = (motor_revs_sec * 2.0f * (float)M_PI) / default_gr[i];
-#endif
         commanded_velocities[i] = joint_rad_s; // Bypass control law entirely
 #else
         commanded_velocities[i] = velocity_command;
@@ -313,16 +298,12 @@ void setup() {
         
         float initial_motor_pos = encoder_hal[i].read_angle();
         observer[i].set_initial_position(initial_motor_pos);
+        observer[i].set_gains(AB_ALPHA[i], AB_BETA[i]);
         // Seed interpolator and telemetry in JOINT space, not motor space.
         // The control law computes error as (cmd_pos - joint_pos) where joint_pos = motor_pos / gear.
         // If interpolator is seeded with motor_pos, the first ISR tick produces a massive position
         // error = motor_pos * (1 - 1/gear_ratio), causing a violent startup jerk.
-#ifdef NUM_AXES
         float initial_joint_pos = initial_motor_pos / GEAR_RATIOS[i];
-#else
-        const float fallback_g[6] = {6.4f, 20.0f, 18.0952381f, 4.0f, 4.0f, 10.0f};
-        float initial_joint_pos = initial_motor_pos / fallback_g[i];
-#endif
         interpolator[i].reset(initial_joint_pos);
         telemetry_pos[i] = initial_joint_pos;
         telemetry_vel[i] = 0.0f;
@@ -368,11 +349,7 @@ void loop() {
             noInterrupts();
             supervisor.init(current_tick); // Un-brick the robot if it was in ESTOP
             for (int i = 0; i < NUM_AXES; i++) {
-#ifdef HOME_OFFSETS_RAD
                 float offset = HOME_OFFSETS_RAD[i];
-#else
-                float offset = 0.0f;
-#endif
                 float motor_space_rad = offset * GEAR_RATIOS[i];
                 observer[i].set_initial_position(motor_space_rad);
                 interpolator[i].reset(offset);

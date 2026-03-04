@@ -92,3 +92,7 @@ class BuildWorker(QThread):
         else:
             self.output_line.emit(f"[BUILD] ❌ Build failed (exit code {rc}).")
             self.finished_err.emit(rc)
+
+    def abort(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
