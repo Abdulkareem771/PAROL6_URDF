@@ -23,7 +23,7 @@ Usage:
 import os
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess, DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
@@ -45,6 +45,12 @@ def generate_launch_description():
         description='true = process one camera frame then stop detector subscription'
     )
     single_frame_detection = LaunchConfiguration('single_frame_detection')
+
+    gui_mode_arg = DeclareLaunchArgument(
+        'gui_mode', default_value='false',
+        description='true = GUI handles vision nodes; false = launch them here'
+    )
+    gui_mode = LaunchConfiguration('gui_mode')
 
     # ── MoveIt Config ──────────────────────────────────────────────────
     pkg_parol6            = get_package_share_directory('parol6')
@@ -111,6 +117,7 @@ def generate_launch_description():
         executable='red_line_detector',
         name='red_line_detector',
         output='screen',
+        condition=UnlessCondition(gui_mode),
         parameters=[{
             'publish_debug_images': True,
             'single_frame_mode': ParameterValue(single_frame_detection, value_type=bool),
@@ -123,6 +130,7 @@ def generate_launch_description():
         executable='depth_matcher',
         name='depth_matcher',
         output='screen',
+        condition=UnlessCondition(gui_mode),
         parameters=[{
             'sync_time_tolerance': 0.5,
             'min_depth_quality': 0.05,
@@ -138,6 +146,7 @@ def generate_launch_description():
         executable='path_generator',
         name='path_generator',
         output='screen',
+        condition=UnlessCondition(gui_mode),
         parameters=[{
             'spline_degree': 3,
             'spline_smoothing': 0.005,
@@ -221,6 +230,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_bag_arg,
         single_frame_detection_arg,
+        gui_mode_arg,
         # Bag
         play_bag,
         # TFs

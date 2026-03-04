@@ -38,5 +38,5 @@ setup(
     },
 
 
-    scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
+    scripts=['test/mock_camera_publisher.py', 'test/check_path.py', 'scripts/capture_gui.py'],
 )
