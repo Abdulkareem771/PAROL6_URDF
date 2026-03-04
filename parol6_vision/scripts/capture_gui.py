@@ -772,7 +772,7 @@ class CaptureWindow(QMainWindow):
                 p._proc = None
 
     def _start_all_vision(self):
-        bag = "Bag" in self._combo_source.currentText()
+        bag = "Bag" in self._cb_data_source.currentText()
         a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
         self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=a)
         self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm, custom_args=a)
@@ -780,17 +780,17 @@ class CaptureWindow(QMainWindow):
         self._log("[GUI] 🚀 Started all Vision Nodes.")
 
     def _do_start_det(self):
-        bag = "Bag" in self._combo_source.currentText()
+        bag = "Bag" in self._cb_data_source.currentText()
         a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
         self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=a)
 
     def _do_start_dm(self):
-        bag = "Bag" in self._combo_source.currentText()
+        bag = "Bag" in self._cb_data_source.currentText()
         a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
         self._start_proc('dm', self._btn_start_dm, self._btn_stop_dm, custom_args=a)
         
     def _do_start_pg(self):
-        bag = "Bag" in self._combo_source.currentText()
+        bag = "Bag" in self._cb_data_source.currentText()
         a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
         self._start_proc('pg', self._btn_start_pg, self._btn_stop_pg, custom_args=a)
 
