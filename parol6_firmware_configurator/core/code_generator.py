@@ -45,6 +45,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     w(f"#define FEATURE_ENCODER_TEST_MODE {int(f.encoder_test_mode)}")
     w(f"#define FEATURE_SINE_TEST_MODE    {int(f.sine_test_mode)}")
     w(f"#define FEATURE_HARDWARE_PWM      {int(f.hardware_pwm_step_dir)}")
+    w(f"#define FEATURE_HARDWARE_ENCODER  {int(f.hardware_encoder_qtimer)}")
     w(f"#define FIXED_STEP_FREQ_HZ        {f.fixed_step_freq_hz}  // 0=off")
     w(f"#define VELOCITY_DEADBAND_RAD_S   {f.velocity_deadband_rad_s}f")
     w()

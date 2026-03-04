@@ -82,6 +82,7 @@ class FeatureFlags:
     encoder_test_mode: bool = False        # Disables control loop, just reads encoders
     sine_test_mode: bool = False           # Automatically sweeps joints in a sine wave
     hardware_pwm_step_dir: bool = True     # True = FlexPWM, False = basic software bitbang
+    hardware_encoder_qtimer: bool = True   # True = QuadTimer, False = standard attachInterrupt
     fixed_step_freq_hz: int = 0           # 0=off; >0 = all STEP pins at this fixed Hz
     velocity_deadband_rad_s: float = 0.02
 

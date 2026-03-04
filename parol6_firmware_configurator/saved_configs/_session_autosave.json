@@ -194,6 +194,8 @@
     "velocity_deadband": true,
     "encoder_test_mode": false,
     "sine_test_mode": false,
+    "hardware_pwm_step_dir": true,
+    "hardware_encoder_qtimer": true,
     "fixed_step_freq_hz": 0,
     "velocity_deadband_rad_s": 0.02
   },

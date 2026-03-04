@@ -95,7 +95,11 @@ class FeaturesTab(QWidget):
             "Hardware PWM Stepper Drive",
             "Uses FlexPWM hardware timers to generate STEP pulses (zero CPU overhead). Disable to fallback to basic software bitbang toggling.")
 
-        for row in (self.f_filter, self.f_ff, self.f_deadband, self.f_hardware_pwm):
+        self.f_hardware_encoder = FeatureRow(
+            "Hardware Encoder (QuadTimer)",
+            "Uses i.MXRT QuadTimers to count encoder PWM pulses (zero CPU interrupts). Disable to fallback to proven Software ISRs (attachInterrupt).")
+
+        for row in (self.f_filter, self.f_ff, self.f_deadband, self.f_hardware_pwm, self.f_hardware_encoder):
             row.changed.connect(self.changed)
             ctrl_lay.addWidget(row)
 
@@ -176,6 +180,7 @@ class FeaturesTab(QWidget):
         self.f_antiglitch.value= flags.anti_glitch_filter
         self.f_deadband.value  = flags.velocity_deadband
         self.f_hardware_pwm.value = flags.hardware_pwm_step_dir
+        self.f_hardware_encoder.value = flags.hardware_encoder_qtimer
         self.f_enc_test.value  = flags.encoder_test_mode
         self.f_sine_test.value = flags.sine_test_mode
         self.fixed_freq.setValue(flags.fixed_step_freq_hz)
@@ -190,6 +195,7 @@ class FeaturesTab(QWidget):
         flags.anti_glitch_filter      = self.f_antiglitch.value
         flags.velocity_deadband       = self.f_deadband.value
         flags.hardware_pwm_step_dir   = self.f_hardware_pwm.value
+        flags.hardware_encoder_qtimer = self.f_hardware_encoder.value
         flags.encoder_test_mode       = self.f_enc_test.value
         flags.sine_test_mode          = self.f_sine_test.value
         flags.fixed_step_freq_hz      = self.fixed_freq.value()
