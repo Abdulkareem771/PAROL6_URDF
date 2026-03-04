@@ -33,13 +33,6 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
 
-    # ── Launch Arguments ───────────────────────────────────────────────
-    use_bag_arg = DeclareLaunchArgument(
-        'use_bag', default_value='true',
-        description='true = replay bag; false = use live Kinect'
-    )
-    use_bag = LaunchConfiguration('use_bag')
-
     single_frame_detection_arg = DeclareLaunchArgument(
         'single_frame_detection', default_value='true',
         description='true = process one camera frame then stop detector subscription'
@@ -67,16 +60,6 @@ def generate_launch_description():
     )
 
     ros2_controllers_yaml = os.path.join(pkg_moveit, 'config', 'ros2_controllers.yaml')
-
-    # ── 1. Bag Player (conditional) ────────────────────────────────────
-    bag_path = '/workspace/rosbag2_2026_01_26-23_26_59'
-    play_bag = ExecuteProcess(
-        cmd=['ros2', 'bag', 'play', bag_path, '--loop',
-             '--remap', '/tf_static:=/tf_static_bag_discard',
-             '--remap', '/tf:=/tf_bag_discard'],
-        output='screen',
-        condition=IfCondition(use_bag)
-    )
 
     # ── 2. Static TFs ──────────────────────────────────────────────────
     static_tf_world = Node(
@@ -228,11 +211,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        use_bag_arg,
         single_frame_detection_arg,
         gui_mode_arg,
-        # Bag
-        play_bag,
         # TFs
         static_tf_world,
         static_tf_camera,

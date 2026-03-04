@@ -179,17 +179,28 @@ class DepthMatcher(Node):
             # --------------------------------------------------------
             # CAPTURE MODE — service-triggered, one-shot per call
             # --------------------------------------------------------
-            self._capture_subs = []   # holds temporary subscribers
+            self.get_logger().info(
+                'Depth Matcher — capture mode ACTIVE. '
+                'Listening for 2D lines in background, waiting for Trigger to sample depth.'
+            )
+            self.latest_2d_lines = None
+            self.lines_sub = self.create_subscription(
+                WeldLineArray,
+                '/vision/weld_lines_2d',
+                self._cache_2d_lines,
+                10,
+                callback_group=self.cb_group
+            )
             self._capture_srv = self.create_service(
                 Trigger,
                 '/depth_matcher/capture',
                 self._capture_service_callback,
                 callback_group=self.cb_group
             )
-            self.get_logger().info(
-                'Depth Matcher — capture mode ACTIVE. '
-                'Call /depth_matcher/capture to run one depth-matching cycle.'
-            )
+            
+    def _cache_2d_lines(self, msg):
+        """Background callback to cache the most recent 2D detections"""
+        self.latest_2d_lines = msg
         
     # ================================================================
     # CAPTURE SERVICE CALLBACK
@@ -199,17 +210,19 @@ class DepthMatcher(Node):
         """
         Service handler for /depth_matcher/capture (capture mode only).
 
-        Waits for the latest available WeldLineArray, depth image, and
-        camera_info (each as separate one-shot subscriptions), then calls
-        synchronized_callback manually with those messages.
+        Validates presence of cached 2D lines, then grabs the CURRENT
+        streaming depth frame to perform the matching.
         """
         import time
-        self.get_logger().info('Depth capture service called — collecting latest messages...')
+        if self.latest_2d_lines is None:
+            response.success = False
+            response.message = 'No 2D line data available. Please run detector first.'
+            self.get_logger().warn(response.message)
+            return response
 
-        latest = {'lines': None, 'depth': None, 'info': None}
+        self.get_logger().info('Depth capture service called — matching cached 2D lines with current depth...')
 
-        def _cb_lines(msg):
-            latest['lines'] = msg
+        latest = {'depth': None, 'info': None}
 
         def _cb_depth(msg):
             latest['depth'] = msg
@@ -217,11 +230,9 @@ class DepthMatcher(Node):
         def _cb_info(msg):
             latest['info'] = msg
 
-        # Create temporary subscribers
-        sub_lines = self.create_subscription(WeldLineArray, '/vision/weld_lines_2d', _cb_lines, 1, callback_group=self.cb_group)
+        # Read the live/streaming topics
         sub_depth = self.create_subscription(Image, '/kinect2/qhd/image_depth_rect', _cb_depth, 1, callback_group=self.cb_group)
         sub_info = self.create_subscription(CameraInfo, '/kinect2/qhd/camera_info', _cb_info, 1, callback_group=self.cb_group)
-        self._capture_subs = [sub_lines, sub_depth, sub_info]
 
         timeout = 5.0
         t0 = time.time()
@@ -231,20 +242,19 @@ class DepthMatcher(Node):
                 break
 
         # Destroy temporary subscribers
-        for sub in self._capture_subs:
-            self.destroy_subscription(sub)
-        self._capture_subs = []
+        self.destroy_subscription(sub_depth)
+        self.destroy_subscription(sub_info)
 
         if not all(v is not None for v in latest.values()):
             missing = [k for k, v in latest.items() if v is None]
             response.success = False
-            response.message = f'Timeout: missing messages: {missing}'
+            response.message = f'Timeout waiting for streaming frames: {missing}'
             self.get_logger().warn(response.message)
             return response
 
-        # Run through the existing synchronized pipeline
+        # Run through the existing synchronized pipeline using cached 2D data + live 3D data
         try:
-            self.synchronized_callback(latest['lines'], latest['depth'], latest['info'])
+            self.synchronized_callback(self.latest_2d_lines, latest['depth'], latest['info'])
             response.success = True
             response.message = 'Depth matching complete. Check /vision/weld_lines_3d.'
         except Exception as e:

@@ -268,12 +268,14 @@ class NodeProcess:
         if self.running:
             return
         
-        args_to_use = self._args
+        args_to_use = list(self._args)
         if custom_args is not None:
-            args_to_use = custom_args
+            args_to_use.extend(custom_args)
 
         if self._exe.endswith('.launch.py'):
             cmd = ['ros2', 'launch', self._pkg, self._exe] + args_to_use
+        elif self._pkg == 'bag':
+            cmd = ['ros2', 'bag', self._exe] + args_to_use
         else:
             cmd = ['ros2', 'run', self._pkg, self._exe, '--ros-args'] + args_to_use
             
@@ -298,7 +300,8 @@ class NodeProcess:
                 env=env,
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.STDOUT,
-                text=True, bufsize=1)
+                text=True, bufsize=1
+            )
             threading.Thread(target=self._stream, daemon=True).start()
         except FileNotFoundError as e:
             self._log(f'[ERROR] {e}')
@@ -371,6 +374,10 @@ class CaptureWindow(QMainWindow):
         # ── Node processes ────────────────────────────────────────────
         FROZEN = CaptureGUINode.FROZEN_TOPIC
         self._procs = {
+            'bag': NodeProcess('RosBag', 'bag', 'play', 
+                               ['/workspace/rosbag2_2026_01_26-23_26_59', '--loop', 
+                                '--remap', '/tf_static:=/tf_static_bag_discard', 
+                                '--remap', '/tf:=/tf_bag_discard'], self._log),
             'backend': NodeProcess('Backend', 'parol6_vision', 'vision_moveit.launch.py',
                                    ['gui_mode:=true'], self._log),
             'det': NodeProcess('Detector',    'parol6_vision', 'red_line_detector',
@@ -379,9 +386,13 @@ class CaptureWindow(QMainWindow):
                                 '--remap', f'/kinect2/qhd/image_color_rect:={FROZEN}'],
                                self._log),
             'dm':  NodeProcess('DepthMatcher', 'parol6_vision', 'depth_matcher',
-                               ['-p', 'capture_mode:=true'], self._log),
+                               ['-p', 'capture_mode:=true',
+                                '-p', 'min_depth_quality:=0.05',
+                                '-p', 'max_depth:=5000.0',
+                                '-p', 'min_depth:=100.0',
+                                '-p', 'min_valid_points:=2'], self._log),
             'pg':  NodeProcess('PathGen',      'parol6_vision', 'path_generator',
-                               [], self._log),
+                               ['-p', 'min_points_for_path:=3'], self._log),
             'mc':  NodeProcess('MoveIt',       'parol6_vision', 'moveit_controller',
                                [], self._log),
         }
@@ -468,8 +479,14 @@ class CaptureWindow(QMainWindow):
         self._btn_stop_backend  = QPushButton('■  Stop Backend')
         self._btn_stop_backend.setEnabled(False)
         self._led_backend = led_label()
-        
         _node_row(self._btn_start_backend, self._btn_stop_backend, self._led_backend, bc_l)
+
+        self._btn_start_bag = QPushButton('▶  Start Bag')
+        self._btn_stop_bag  = QPushButton('■  Stop Bag')
+        self._btn_stop_bag.setEnabled(False)
+        self._led_bag = led_label()
+        _node_row(self._btn_start_bag, self._btn_stop_bag, self._led_bag, bc_l)
+        
         lv.addWidget(bc)
 
         # ── Node Controls ─────────────────────────────────────────────
@@ -486,11 +503,6 @@ class CaptureWindow(QMainWindow):
         all_row.addWidget(self._btn_start_all_vision)
         all_row.addWidget(self._btn_stop_all_vision)
         nc_l.addLayout(all_row)
-
-        self._chk_stream_mode = QCheckBox('Continuous Camera Stream')
-        self._chk_stream_mode.setToolTip('Check this to run vision pipeline on live stream instead of capture mode.')
-        self._chk_stream_mode.setStyleSheet('color:#aaf;')
-        nc_l.addWidget(self._chk_stream_mode)
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -650,7 +662,7 @@ class CaptureWindow(QMainWindow):
         # Status bar
         sb = self.statusBar()
         self._sb_labels = {}
-        for key, text in [('backend', 'Backend: ⬛'), ('det','Detector: ⬛'),('dm','DepthMatcher: ⬛'),
+        for key, text in [('bag','Bag: ⬛'),('backend', 'Backend: ⬛'), ('det','Detector: ⬛'),('dm','DepthMatcher: ⬛'),
                            ('pg','PathGen: ⬛'),('mc','MoveIt: ⬛'),('cap','Captures: 0')]:
             lbl = QLabel(text)
             self._sb_labels[key] = lbl
@@ -700,6 +712,8 @@ class CaptureWindow(QMainWindow):
         self._btn_stop_all_vision.clicked.connect(self._stop_all_vision)
 
         # Node control buttons
+        self._btn_start_bag.clicked.connect(    lambda: self._start_proc('bag',     self._btn_start_bag,     self._btn_stop_bag))
+        self._btn_stop_bag.clicked.connect(     lambda: self._stop_proc( 'bag',     self._btn_start_bag,     self._btn_stop_bag))
         self._btn_start_backend.clicked.connect(self._start_backend)
         self._btn_stop_backend.clicked.connect( lambda: self._stop_proc('backend', self._btn_start_backend, self._btn_stop_backend))
         self._btn_start_det.clicked.connect(self._do_start_det)
@@ -751,30 +765,34 @@ class CaptureWindow(QMainWindow):
 
     def _do_kill_zombies(self):
         self._log("[GUI] ☠  Forcefully terminating all background ROS nodes...")
-        cmd = "pkill -9 -f 'ros2 bag'; pkill -9 -f 'bag play'; pkill -9 -f 'red_line_detector'; pkill -9 -f 'depth_matcher'; pkill -9 -f 'path_generator'; pkill -9 -f 'moveit_controller'; pkill -9 -f 'point_cloud_xyzrgb'; pkill -9 -f 'move_group'; pkill -9 -f 'static_transform'; pkill -9 -f 'spawner'; pkill -9 -f 'robot_state_publisher'; pkill -9 -f 'rviz2'"
+        cmd = "killall -9 rviz2; pkill -9 -f 'rviz2'; pkill -9 -f 'ros2 launch'; pkill -9 -f 'ros2 bag'; pkill -9 -f 'bag play'; pkill -9 -f 'red_line_detector'; pkill -9 -f 'depth_matcher'; pkill -9 -f 'path_generator'; pkill -9 -f 'moveit_controller'; pkill -9 -f 'point_cloud_xyzrgb'; pkill -9 -f 'move_group'; pkill -9 -f 'static_transform'; pkill -9 -f 'spawner'; pkill -9 -f 'robot_state_publisher'"
         subprocess.Popen(['bash', '-c', cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for p in self._procs.values():
             if p._proc:
                 p._proc = None
 
     def _start_all_vision(self):
-        det_args = ['-p', 'capture_mode:=false', '-p', 'publish_debug_images:=true'] if self._chk_stream_mode.isChecked() else None
-        dm_args = ['-p', 'capture_mode:=false'] if self._chk_stream_mode.isChecked() else None
-        
-        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=det_args)
-        self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm, custom_args=dm_args)
-        self._start_proc('pg',  self._btn_start_pg,  self._btn_stop_pg)
-        
-        mode = "Stream" if self._chk_stream_mode.isChecked() else "Capture"
-        self._log(f"[GUI] 🚀 Started all Vision Nodes ({mode} mode).")
+        bag = "Bag" in self._combo_source.currentText()
+        a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
+        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=a)
+        self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm, custom_args=a)
+        self._start_proc('pg',  self._btn_start_pg,  self._btn_stop_pg, custom_args=a)
+        self._log("[GUI] 🚀 Started all Vision Nodes.")
 
     def _do_start_det(self):
-        args = ['-p', 'capture_mode:=false', '-p', 'publish_debug_images:=true'] if self._chk_stream_mode.isChecked() else None
-        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=args)
+        bag = "Bag" in self._combo_source.currentText()
+        a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
+        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=a)
 
     def _do_start_dm(self):
-        args = ['-p', 'capture_mode:=false'] if self._chk_stream_mode.isChecked() else None
-        self._start_proc('dm', self._btn_start_dm, self._btn_stop_dm, custom_args=args)
+        bag = "Bag" in self._combo_source.currentText()
+        a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
+        self._start_proc('dm', self._btn_start_dm, self._btn_stop_dm, custom_args=a)
+        
+    def _do_start_pg(self):
+        bag = "Bag" in self._combo_source.currentText()
+        a = ['-p', f'use_sim_time:={"true" if bag else "false"}']
+        self._start_proc('pg', self._btn_start_pg, self._btn_stop_pg, custom_args=a)
 
     def _stop_all_vision(self):
         self._stop_proc('det', self._btn_start_det, self._btn_stop_det)
@@ -791,6 +809,7 @@ class CaptureWindow(QMainWindow):
 
     def _poll_health(self):
         meta = [
+            (self._procs['bag'],     self._led_bag,     self._btn_start_bag,     self._btn_stop_bag,     'bag',     'Bag'),
             (self._procs['backend'], self._led_backend, self._btn_start_backend, self._btn_stop_backend, 'backend', 'Backend'),
             (self._procs['det'], self._led_det, self._btn_start_det, self._btn_stop_det, 'det', 'Detector'),
             (self._procs['dm'],  self._led_dm,  self._btn_start_dm,  self._btn_stop_dm,  'dm',  'DepthMatcher'),
