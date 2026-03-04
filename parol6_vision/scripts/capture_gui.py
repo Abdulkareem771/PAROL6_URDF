@@ -87,6 +87,7 @@ QAbstractItemView= _W.QAbstractItemView
 QScrollArea      = _W.QScrollArea
 QCheckBox        = _W.QCheckBox
 QComboBox        = _W.QComboBox
+QFrame           = _W.QFrame
 Qt               = _C.Qt
 QTimer           = _C.QTimer
 QObject          = _C.QObject
@@ -273,9 +274,21 @@ class NodeProcess:
             cmd = ['ros2', 'run', self._pkg, self._exe, '--ros-args'] + args_to_use
             
         self._log(f'[NODE] $ {" ".join(cmd)}')
+        
+        # Wrap everything in a bash shell to ensure environment variables (DISPLAY) 
+        # and ROS paths are resolved properly for subprocesses.
+        # Use 'exec' so the ROS process takes over the bash PID, allowing it to be killed cleanly.
+        full_cmd = (
+            "source /opt/ros/humble/setup.bash && "
+            "source /workspace/install/setup.bash && " +
+            "exec " + " ".join(cmd)
+        )
+        
         try:
             self._proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                ['bash', '-c', full_cmd], 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT,
                 text=True, bufsize=1)
             threading.Thread(target=self._stream, daemon=True).start()
         except FileNotFoundError as e:
@@ -437,6 +450,10 @@ class CaptureWindow(QMainWindow):
         src_row.addWidget(QLabel("Data Source:"))
         src_row.addWidget(self._cb_data_source)
         bc_l.addLayout(src_row)
+        
+        self._btn_kill_zombies = QPushButton('☠  Emergency: Kill Zombies')
+        self._btn_kill_zombies.setStyleSheet('background:#6a2a2a;color:#ffaaaa;font-weight:bold;border:1px solid #9a3a3a;')
+        bc_l.addWidget(self._btn_kill_zombies)
 
         self._btn_start_backend = QPushButton('▶  Start Backend')
         self._btn_stop_backend  = QPushButton('■  Stop Backend')
@@ -449,6 +466,22 @@ class CaptureWindow(QMainWindow):
         # ── Node Controls ─────────────────────────────────────────────
         nc = QGroupBox('Node Controls')
         nc_l = QVBoxLayout(nc)
+
+        self._btn_start_all_vision = QPushButton('🚀  Start All Vision Nodes')
+        self._btn_start_all_vision.setStyleSheet('background:#2a4a5a;color:#aaddff;')
+        self._btn_stop_all_vision  = QPushButton('🛑  Stop All Vision Nodes')
+        self._btn_stop_all_vision.setEnabled(False)
+        self._btn_stop_all_vision.setStyleSheet('background:#4a2a2a;color:#ffaaaa;')
+        
+        all_row = QHBoxLayout()
+        all_row.addWidget(self._btn_start_all_vision)
+        all_row.addWidget(self._btn_stop_all_vision)
+        nc_l.addLayout(all_row)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("background-color:#3a3a5c;")
+        nc_l.addWidget(line)
 
         def _make_node_row(key, label_start, label_stop):
             bs = QPushButton(f'▶  {label_start}')
@@ -648,6 +681,10 @@ class CaptureWindow(QMainWindow):
         self.sigs.hz_update.connect(self._on_hz)
         self.sigs.service_resp.connect(self._on_service_resp)
 
+        self._btn_kill_zombies.clicked.connect(self._do_kill_zombies)
+        self._btn_start_all_vision.clicked.connect(self._start_all_vision)
+        self._btn_stop_all_vision.clicked.connect(self._stop_all_vision)
+
         # Node control buttons
         self._btn_start_backend.clicked.connect(self._start_backend)
         self._btn_stop_backend.clicked.connect( lambda: self._stop_proc('backend', self._btn_start_backend, self._btn_stop_backend))
@@ -698,6 +735,26 @@ class CaptureWindow(QMainWindow):
             self._cb_data_source.setEnabled(True)
         stop_btn.setEnabled(False)
 
+    def _do_kill_zombies(self):
+        self._log("[GUI] ☠  Forcefully terminating all background ROS nodes...")
+        cmd = "pkill -9 -f 'bag play'; pkill -9 -f 'red_line_detector'; pkill -9 -f 'depth_matcher'; pkill -9 -f 'path_generator'; pkill -9 -f 'moveit_controller'; pkill -9 -f 'point_cloud_xyzrgb'; pkill -9 -f 'move_group'; pkill -9 -f 'static_transform'; pkill -9 -f 'spawner'; pkill -9 -f 'robot_state_publisher'; pkill -9 -f 'rviz2'"
+        subprocess.Popen(['bash', '-c', cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for p in self._procs.values():
+            if p._proc:
+                p._proc = None
+
+    def _start_all_vision(self):
+        self._start_proc('det', self._btn_start_det, self._btn_stop_det)
+        self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm)
+        self._start_proc('pg',  self._btn_start_pg,  self._btn_stop_pg)
+        self._log("[GUI] 🚀 Started all Vision Nodes.")
+
+    def _stop_all_vision(self):
+        self._stop_proc('det', self._btn_start_det, self._btn_stop_det)
+        self._stop_proc('dm',  self._btn_start_dm,  self._btn_stop_dm)
+        self._stop_proc('pg',  self._btn_start_pg,  self._btn_stop_pg)
+        self._log("[GUI] 🛑 Stopped all Vision Nodes.")
+
     _NODE_META = {
         'det': ('Detector',      '_btn_start_det', '_btn_stop_det', '_led_det', 'det'),
         'dm':  ('DepthMatcher',  '_btn_start_dm',  '_btn_stop_dm',  '_led_dm',  'dm'),
@@ -723,6 +780,12 @@ class CaptureWindow(QMainWindow):
                 if not bs.isEnabled():
                     bs.setEnabled(True)
                     be.setEnabled(False)
+
+        vision_running = any(self._procs[k].running for k in ['det', 'dm', 'pg'])
+        vision_all_running = all(self._procs[k].running for k in ['det', 'dm', 'pg'])
+        
+        self._btn_start_all_vision.setEnabled(not vision_all_running)
+        self._btn_stop_all_vision.setEnabled(vision_running)
 
     # ── Step 1: Capture ───────────────────────────────────────────────
 
