@@ -15,7 +15,11 @@
 #include "safety/Supervisor.h"
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
+#if defined(FEATURE_HARDWARE_ENCODER) && FEATURE_HARDWARE_ENCODER == 1
 #include "hal/QuadTimerEncoder.h"
+#else
+#include "hal/SoftwareInterruptEncoder.h"
+#endif
 #if defined(FEATURE_HARDWARE_PWM) && FEATURE_HARDWARE_PWM == 1
 #include "hal/FlexPWMGenerator.h"
 #else
@@ -56,10 +60,17 @@ volatile float telemetry_pos[NUM_AXES];
 volatile float telemetry_vel[NUM_AXES];
 
 // Hardware Abstraction (Phase 3: Zero-interrupt QuadTimers)
+#if defined(FEATURE_HARDWARE_ENCODER) && FEATURE_HARDWARE_ENCODER == 1
 QuadTimerEncoder encoder_hal[NUM_AXES] = {
-    QuadTimerEncoder(10), QuadTimerEncoder(11), QuadTimerEncoder(12),
-    QuadTimerEncoder(14), QuadTimerEncoder(15), QuadTimerEncoder(18)
+    QuadTimerEncoder(ENCODER_PINS[0]), QuadTimerEncoder(ENCODER_PINS[1]), QuadTimerEncoder(ENCODER_PINS[2]),
+    QuadTimerEncoder(ENCODER_PINS[3]), QuadTimerEncoder(ENCODER_PINS[4]), QuadTimerEncoder(ENCODER_PINS[5])
 };
+#else
+SoftwareInterruptEncoder encoder_hal[NUM_AXES] = {
+    SoftwareInterruptEncoder(ENCODER_PINS[0], 0), SoftwareInterruptEncoder(ENCODER_PINS[1], 1), SoftwareInterruptEncoder(ENCODER_PINS[2], 2),
+    SoftwareInterruptEncoder(ENCODER_PINS[3], 3), SoftwareInterruptEncoder(ENCODER_PINS[4], 4), SoftwareInterruptEncoder(ENCODER_PINS[5], 5)
+};
+#endif
 
 // Phase 4 Stage 2: Per-axis stepper drivers (STEP + DIR)
 // STEP pins: Zone 2 FlexPWM-capable [2, 6, 7, 8, 4, 5]
@@ -221,12 +232,9 @@ void run_control_loop_isr() {
         // F. Velocity deadband (configured in GUI or default)
         if (fabsf(velocity_command) < VELOCITY_DEADBAND_RAD_S) velocity_command = 0.0f;
         
-#if defined(FEATURE_OPEN_LOOP_MODE) && FEATURE_OPEN_LOOP_MODE == 1
-#ifdef FIXED_STEP_FREQ
-        float ol_freq = FIXED_STEP_FREQ[i];
-#else
-        float ol_freq = 0.0f;
-#endif
+#if defined(FIXED_STEP_FREQ_HZ) && FIXED_STEP_FREQ_HZ > 0
+        float ol_freq = (float)FIXED_STEP_FREQ_HZ;
+        
         // Calculate joint-space velocity so ActuatorModel converts it back to the exact ol_freq in set_motor_velocity
         float steps_per_rev = 3200.0f; // Default 16 microsteps * 200 resolution
 #ifdef MICROSTEPS
