@@ -12,8 +12,17 @@ public:
     void set_initial_position(float initial_rad) {
         estimated_pos_ = initial_rad;
         estimated_vel_ = 0.0f;
-        last_raw_angle_ = initial_rad;
-        turn_offset_ = 0.0f;
+        
+        // Ensure last_raw_angle_ is bounded [0, 2PI) exactly as the raw hardware sends it
+        last_raw_angle_ = fmodf(initial_rad, 2.0f * (float)M_PI);
+        if (last_raw_angle_ < 0.0f) last_raw_angle_ += 2.0f * (float)M_PI;
+        
+        // The remaining multiple of 2PI is our turn_offset memory
+        turn_offset_ = initial_rad - last_raw_angle_;
+        
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+        glitch_consecutive_ = 0;
+#endif
     }
 
     // Called at control frequency with raw, potentially wrapped sensor data

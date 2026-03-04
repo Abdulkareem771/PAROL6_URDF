@@ -45,6 +45,7 @@ AlphaBetaFilter observer[NUM_AXES] = {
 };
 
 LinearInterpolator interpolator[NUM_AXES];
+volatile float integral_error[NUM_AXES] = {0.0f};
 
 // Telemetry Export for Main Loop
 volatile float telemetry_pos[NUM_AXES];
@@ -120,12 +121,20 @@ void run_control_loop_isr() {
 
 #ifdef KP_GAINS
     // Use GUI-configured per-joint gains and limits
-    static const float* Kp         = KP_GAINS;
+    static const float* Kp          = KP_GAINS;
     static const float* MAX_VEL_CMD = MAX_VEL_RAD_S;
 #else
     // Fallback defaults if no config.h
     const float Kp[NUM_AXES]          = { 5.0f,  5.0f,  2.0f, 2.0f, 2.0f, 2.0f };
     const float MAX_VEL_CMD[NUM_AXES] = { 3.0f,  3.0f,  6.0f, 6.0f, 6.0f, 6.0f };
+#endif
+
+#ifdef KI_GAINS
+    static const float* Ki          = KI_GAINS;
+    static const float* MaxIntegral = MAX_INTEGRAL;
+#else
+    const float Ki[NUM_AXES]          = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    const float MaxIntegral[NUM_AXES] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 #endif
 
     // 1. Compute Math for All Axes First
@@ -168,9 +177,23 @@ void run_control_loop_isr() {
         float cmd_pos, cmd_vel_ff;
         interpolator[i].tick_1ms(cmd_pos, cmd_vel_ff);
         
-        // D. Control Law (P + FF) — error computed in joint space (both sides now match)
+#if defined(FEATURE_SINE_TEST_MODE) && FEATURE_SINE_TEST_MODE == 1
+        // Generate a 0.5 Hz sine wave, +/- 0.5 rad amplitude to bypass ROS
+        float freq_hz = 0.5f;
+        float amp_rad = 0.5f;
+        float time_s = system_tick_ms * 0.001f;
+        cmd_pos = sinf(time_s * freq_hz * 2.0f * (float)M_PI) * amp_rad;
+        cmd_vel_ff = cosf(time_s * freq_hz * 2.0f * (float)M_PI) * amp_rad * (freq_hz * 2.0f * (float)M_PI);
+#endif
+        
+        // D. Control Law (P + I + FF) — error computed in joint space
         float pos_error = cmd_pos - joint_pos;
-        float velocity_command = (Kp[i] * pos_error);
+        
+        integral_error[i] += pos_error * (CONTROL_LOOP_PERIOD_US / 1000000.0f);
+        if (integral_error[i] > MaxIntegral[i]) integral_error[i] = MaxIntegral[i];
+        if (integral_error[i] < -MaxIntegral[i]) integral_error[i] = -MaxIntegral[i];
+        
+        float velocity_command = (Kp[i] * pos_error) + (Ki[i] * integral_error[i]);
 #if defined(FEATURE_VEL_FEEDFORWARD) && FEATURE_VEL_FEEDFORWARD == 1
         velocity_command += cmd_vel_ff;
 #endif
@@ -182,7 +205,28 @@ void run_control_loop_isr() {
         // F. Velocity deadband (configured in GUI or default)
         if (fabsf(velocity_command) < VELOCITY_DEADBAND_RAD_S) velocity_command = 0.0f;
         
+#if defined(FEATURE_OPEN_LOOP_MODE) && FEATURE_OPEN_LOOP_MODE == 1
+#ifdef FIXED_STEP_FREQ
+        float ol_freq = FIXED_STEP_FREQ[i];
+#else
+        float ol_freq = 0.0f;
+#endif
+        // Calculate joint-space velocity so ActuatorModel converts it back to the exact ol_freq in set_motor_velocity
+        float steps_per_rev = 3200.0f; // Default 16 microsteps * 200 resolution
+#ifdef MICROSTEPS
+        steps_per_rev = 200.0f * (float)MICROSTEPS[i];
+#endif
+        float motor_revs_sec = ol_freq / steps_per_rev;
+#ifdef NUM_AXES
+        float joint_rad_s = (motor_revs_sec * 2.0f * (float)M_PI) / GEAR_RATIOS[i];
+#else
+        static const float default_gr[6] = {6.4f, 20.0f, 18.0952f, 4.0f, 4.0f, 10.0f};
+        float joint_rad_s = (motor_revs_sec * 2.0f * (float)M_PI) / default_gr[i];
+#endif
+        commanded_velocities[i] = joint_rad_s; // Bypass control law entirely
+#else
         commanded_velocities[i] = velocity_command;
+#endif
     }
     
     // 2. Safety check uses observer velocities and unified monotonic tick
@@ -297,6 +341,7 @@ void loop() {
                 float motor_space_rad = offset * GEAR_RATIOS[i];
                 observer[i].set_initial_position(motor_space_rad);
                 interpolator[i].reset(offset);
+                integral_error[i] = 0.0f; // Clear I windup on teleport
                 telemetry_pos[i] = offset;
                 telemetry_vel[i] = 0.0f;
             }
@@ -307,12 +352,22 @@ void loop() {
         // Dynamically compute the duration since the last valid ROS packet
         static uint32_t last_cmd_ts = 0;
         uint32_t delta_ms = 40; // Default fallback (25Hz)
+        
+#if defined(FEATURE_INTERPOLATOR_LOCK) && FEATURE_INTERPOLATOR_LOCK == 1
+#ifdef ROS_COMMAND_RATE_HZ
+        delta_ms = 1000 / ROS_COMMAND_RATE_HZ;
+#else
+        delta_ms = 20; // 50 Hz fallback
+#endif
+        last_cmd_ts = current_tick;
+#else
         if (last_cmd_ts != 0 && current_tick > last_cmd_ts) {
             delta_ms = current_tick - last_cmd_ts;
             // Cap the duration to prevent massive interpolation swings if a packet drops
             if (delta_ms > 100) delta_ms = 100;
         }
         last_cmd_ts = current_tick;
+#endif
 
         for (int i = 0; i < NUM_AXES; i++) {
             interpolator[i].set_target(cmd.positions[i], cmd.velocities[i], delta_ms); 

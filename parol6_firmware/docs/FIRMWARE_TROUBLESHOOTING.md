@@ -131,11 +131,65 @@ docker exec parol6_dev pkill -9 -f "move_group|rviz2|ros2_control_node|robot_sta
 
 ---
 
+### Issue 6: Robot Violently Jumps on MoveIt Execution Start
+
+**Symptoms:**
+You send an trajectory from MoveIt. As soon as the trajectory begins, one or more joints violently jump to a random position and MoveIt instantly throws `TIMED_OUT` or `Goal Tolerance Violated`.
+
+**Root Cause:**
+A serialization format mismatch between the ROS 2 Hardware Interface (`parol6_system.cpp`) and the Teensy Firmware parser (`SerialTransport.h`). If ROS packs the positions and velocities *interleaved* (`<seq, p1, v1, p2, v2...>`), but the Teensy parses them *grouped* (`<seq, p1, p2, p3... v1, v2...>`), the Teensy will interpret Joint 1's velocity command as Joint 2's position target. Since velocities are small numbers (e.g. `0.2 rad/s`), Joint 2 attempts to instantly travel to position `0.2 rad`, causing a violent mechanical jump and tracking abortion.
+
+**Fix:**
+Ensure `parol6_system.cpp` packs its arrays in the exact grouped format the firmware expects:
+```cpp
+// Correct format: Grouped
+snprintf(buffer, sizeof(buffer), "<%u,%.3f,%.3f...%.3f,%.3f...>", 
+         seq, pos[0], pos[1], /*...*/ vel[0], vel[1] /*...*/);
+```
+
+---
+
+### Issue 7: Robot Spins Uncontrollably After `<HOME>` Command
+
+**Symptoms:**
+When pressing the `HOME ALL` button in the UI, a joint that has a homing offset greater than radians `> 2π` (e.g. 1.2 revolutions) instantly begins spinning out of control.
+
+**Root Cause:**
+If the `AlphaBetaFilter` is initialized with a raw float `> 2π`, it assumes the raw hardware magnetic sensor suddenly jumped from `0` to `> 2π`. The MT6816 encoder *only* outputs `[0, 2π)`. If the filter doesn't strip the modulo `2π` component from the initialization vector and store it as a structural multi-turn offset, the filter tracking math will explode trying to "catch up" to an impossible continuous rotation error.
+
+**Fix:**
+The observer initialization must explicitly decouple the hardware modulo frame from the multi-turn integer offset:
+```cpp
+void set_initial_position(float initial_rad) {
+    last_raw_angle_ = fmodf(initial_rad, 2.0f * M_PI);
+    turn_offset_ = initial_rad - last_raw_angle_;
+}
+```
+
+---
+
 ## ⏱️ Hard Real-Time & Hardware Diagnostics
 
-With the transition to the hard real-time Teensy 4.1 architecture (Phase 4), new physical and timing failure modes exist outside of the ROS domain.
+With the transition to the hard real-time Teensy 4.1 architecture (Phase 4), new physical and timing failure modes exist outside of the ROS domain. We have implemented several diagnostic testing modes inside `main.cpp` (controllable via the Configurator GUI) to isolate mechanical issues from PID issues.
 
-### Issue 6: Control Jitter Measuring > 1 µs
+### Diagnostic 1: Open-Loop Mode Bypass
+
+**Use Case:** A motor is making terrible grinding noises or missing steps, and you don't know if the PID loop is unstable or if the mechanical belt is too tight.
+**How it works:** Check `Open-Loop Mode` in the GUI and set a fixed `Open-Loop Hz`. The firmware completely bypasses the MT6816 observer and the PID control law, issuing a hardcoded step frequency directly to the stepper driver. If the motor *still* binds in Open-Loop mode, the issue is entirely mechanical or electrical (current limit on the driver).
+
+### Diagnostic 2: Internal Sine Sweep Test
+
+**Use Case:** The robot runs perfectly using fake hardware, but micro-stutters wildly when commanded by MoveIt in real life.
+**How it works:** Check `Sine Test Mode` in the GUI. The firmware ignores all USB trajectories and generates a perfect `0.5 Hz` sine wave internally. If the robot moves perfectly smooth during the Sine Test, but stutters during MoveIt execution, the issue is USB packet jitter (or the ROS `ControllerManager` loop rate constraint), *not* the PID tuning. 
+
+### Diagnostic 3: Interpolator Duration Lock
+
+**Use Case:** USB latency causes consecutive packets to arrive at `18ms`, `22ms`, `15ms`, `25ms` intervals. The dynamic interpolator calculates violent velocity spikes to bridge the erratic gaps.
+**How it works:** Check `Lock Duration to ROS Rate` in the GUI. The firmware ignores actual packet arrival timestamps and forces the interpolator to assume a perfect gap (e.g. exactly `20ms` for `50 Hz`). This acts as a powerful low-pass jitter filter at the expense of slight lagging tracking error.
+
+---
+
+### Issue 8: Control Jitter Measuring > 1 µs
 
 **Symptoms:**
 When profiling the 1 kHz `run_control_loop_isr` with an oscilloscope on the `ISR_PROFILER_PIN` or reading the DWT Cycle Counter telemetry, you notice the jitter (deviation from the strict 1000 µs interval) occasionally spikes to 15 µs or more.

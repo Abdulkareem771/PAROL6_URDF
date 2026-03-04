@@ -498,7 +498,7 @@ spoof_states:
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Format: <SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+  // Format: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
   // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
   char buffer[512];  // Larger buffer for velocity data
   
@@ -507,15 +507,23 @@ return_type PAROL6System::write(
   
   // Kinematic sign correction from on_init() (xacro ros_invert params)
   
+  // Format: <SEQ,J1_p,J2_p,J3_p,J4_p,J5_p,J6_p,J1_v,J2_v,J3_v,J4_v,J5_v,J6_v>
+  
   int written = snprintf(buffer, sizeof(buffer),
            "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
-           hw_command_positions_[0] * dir_signs_[0], hw_command_velocities_[0] * dir_signs_[0],
-           hw_command_positions_[1] * dir_signs_[1], hw_command_velocities_[1] * dir_signs_[1],
-           hw_command_positions_[2] * dir_signs_[2], hw_command_velocities_[2] * dir_signs_[2],
-           hw_command_positions_[3] * dir_signs_[3], hw_command_velocities_[3] * dir_signs_[3],
-           hw_command_positions_[4] * dir_signs_[4], hw_command_velocities_[4] * dir_signs_[4],
-           hw_command_positions_[5] * dir_signs_[5], hw_command_velocities_[5] * dir_signs_[5]);
+           hw_command_positions_[0] * dir_signs_[0],
+           hw_command_positions_[1] * dir_signs_[1],
+           hw_command_positions_[2] * dir_signs_[2],
+           hw_command_positions_[3] * dir_signs_[3],
+           hw_command_positions_[4] * dir_signs_[4],
+           hw_command_positions_[5] * dir_signs_[5],
+           hw_command_velocities_[0] * dir_signs_[0],
+           hw_command_velocities_[1] * dir_signs_[1],
+           hw_command_velocities_[2] * dir_signs_[2],
+           hw_command_velocities_[3] * dir_signs_[3],
+           hw_command_velocities_[4] * dir_signs_[4],
+           hw_command_velocities_[5] * dir_signs_[5]);
 
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
