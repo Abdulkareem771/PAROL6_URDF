@@ -163,3 +163,48 @@ A common trigger is accidentally introduced floating-point division by zero (e.g
 **Fix:**
 1. **Remove Divisions**: Audit the filter and interpolator math. Replace `A / B` with `A * (1.0f / B)` pre-computed in constructors where possible.
 2. **Check Unwrapping Logic**: Ensure the 360-degree `M_PI` encoder unwrap bounds cannot get stuck in an infinite `while()` loop if the sensor completely disconnects and sends garbage floating-point noise. Always use bounded `if()` statements for angle wrapping.
+
+---
+
+## 🏗️ Core Architecture & Timing Domains
+
+For new developers joining the team, it is critical to understand the real-time segregation within `main.cpp`.
+
+### 1. The 1 kHz Hardware Timer ISR (`run_control_loop_isr`)
+- **Strictly Deterministic:** This loop does **zero** waiting. It contains no `delay()`, no serial formatting, no unbounded loops. It runs mathematical calculations (P+FF control law, AlphaBeta filter, Interpolator tick) and writes directly to hardware registers.
+- **Profiling Built-In:** The CPU cycle counter (`ARM_DWT_CYCCNT`) measures exactly how many microseconds the ISR takes, providing a verifiable proof of real-time execution limits.
+- **Zero-Interrupt Sensor Capture:** The `QuadTimerEncoder` uses hardware gated-counters. Instead of the CPU being interrupted 10,000 times a second to measure PWM pulses, the hardware does it silently. 
+
+### 2. The Background Loop (`loop()`)
+- Handles slow, unpredictable tasks: reading USB/UART bytes, decoding ROS packets, and `sprintf` generating telemetry output.
+- **Lock-free Data Transfer:** It uses a `CircularBuffer` to pass parsed commands from the background loop to the ISR. 
+- When updating telemetry, it briefly pauses interrupts (`noInterrupts()`) just long enough to copy the floats, preventing "data tearing".
+
+### 3. Absolute Initialization & Homing
+The MT6816 encoder is absolute within **one motor revolution**, but because of the gear ratios (e.g. 20:1), the joint can be in up to 20 physical positions that map to the exact same motor-encoder value.
+* **Important:** The firmware currently assumes the *current physical position on boot* is exactly the joint-space position derived from the raw motor angle. 
+* **Action Required:** You MUST manually align/home the robot to its known 0-pose before powering on the Teensy, until the limit-switch absolute homing sequence is implemented in firmware.
+
+---
+
+## 🧲 Encoder Hardware: QuadTimers vs Interrupts
+
+The MT6816 magnetic encoder outputs absolute angle data encoded in the duty cycle of a 971 Hz PWM signal. 
+
+**DO NOT use Interrupt Mode to read these encoders.**
+
+### Why `PwmCaptureEncoder` (Interrupt Mode) Fails
+The naive interrupt stub has severe flaws:
+1. **Hardcoded Assumed Period:** Assumes 1000 µs frame; the MT6816 is actually 1029.75 µs. This 3% error skews all angles.
+2. **Naive Math:** Maps 0-100% duty to 0-360°. The MT6816 actually maps data into a 4096-count window nested inside a 4119-count total frame.
+3. **Low Resolution:** Arduino `micros()` provides 1 µs resolution. The MT6816 PWM clock is 250 ns. `micros()` destroys 75% of the sensor's physical precision.
+4. **CPU Starvation:** 6 joints × 2 edges × 1000 Hz = 12,000 interrupts per second, destroying the PID control loop timing.
+
+### Why `QuadTimerEncoder` is Superior
+The QuadTimer implementation uses the NXP i.MXRT hardware timers in "Gated Count" mode.
+* It measures the HIGH time at **53.3 nanosecond** resolution (IP-BUS ÷ 8).
+* It accumulates ticks over 10 full MT6816 frames (~10 ms) before calculating the angle, completely eliminating mid-frame sampling artifacts and multiplying the precision.
+* It implements the precise `(duty * 4119 - 1) / 4096` math from the MT6816 datasheet.
+* **It uses exactly 0% CPU overhead.** The 1 kHz ISR simply reads a register (`CNTR`).
+
+**Conclusion:** Always use the natively supported QuadTimer pins (10, 11, 12, 14, 15, 18). Interrupt mode is deprecated and removed.

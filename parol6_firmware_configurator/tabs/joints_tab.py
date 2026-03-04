@@ -14,7 +14,8 @@ from core.config_model import JointConfig, LimitSwitchConfig
 COLS = [
     "Enabled", "STEP Pin", "DIR Pin", "Enc Pin",
     "Gear Ratio", "Microstep", "Dir Inv", "ROS Inv",
-    "Max Vel\n(rad/s)", "Max I\n(mA)", "Kp",
+    "Max Vel\n(rad/s)", "Max Cur\n(mA)", "Kp", "Ki", "Max I\n(windup)",
+    "Home\nOffset(rad)",
     "Limit\nType", "Limit\nPin", "Limit\nPolarity"
 ]
 
@@ -125,6 +126,9 @@ class JointsTab(QWidget):
             w["maxvel"]   = self._make_spin(j.max_vel_rad_s, 0.1, 30.0, 0.5, 2)
             w["maxcur"]   = self._make_spin(j.max_current_ma, 0, 3000, 50)
             w["kp"]       = self._make_spin(j.kp, 0.0, 50.0, 0.5, 2)
+            w["ki"]       = self._make_spin(j.ki, 0.0, 50.0, 0.1, 2)
+            w["max_i"]    = self._make_spin(j.max_integral, 0.0, 100.0, 1.0, 2)
+            w["home"]     = self._make_spin(j.home_offset_rad, -10.0, 10.0, 0.1, 4)
             w["lim_type"] = self._make_combo(LIMIT_TYPES, j.limit.switch_type)
             w["lim_pin"]  = self._make_spin(j.limit.pin, 0, 55)
             w["lim_pol"]  = self._make_combo(LIMIT_POLARITY, j.limit.polarity)
@@ -136,7 +140,7 @@ class JointsTab(QWidget):
                 w["gear"], w["micro"],
                 self._center_widget(w["dir_inv"]),
                 self._center_widget(w["ros_inv"]),
-                w["maxvel"], w["maxcur"], w["kp"],
+                w["maxvel"], w["maxcur"], w["kp"], w["ki"], w["max_i"], w["home"],
                 w["lim_type"], w["lim_pin"], w["lim_pol"],
             ]
             for col, widget in enumerate(cells):
@@ -166,6 +170,9 @@ class JointsTab(QWidget):
             j.max_vel_rad_s   = w["maxvel"].value()
             j.max_current_ma  = w["maxcur"].value()
             j.kp              = w["kp"].value()
+            j.ki              = w["ki"].value()
+            j.max_integral    = w["max_i"].value()
+            j.home_offset_rad = w["home"].value()
             j.limit.switch_type = w["lim_type"].currentText()
             j.limit.pin         = w["lim_pin"].value()
             j.limit.polarity    = w["lim_pol"].currentText()

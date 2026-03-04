@@ -64,20 +64,18 @@ class FeaturesTab(QWidget):
         sub.setStyleSheet("color:#a6adc8; font-size:12px;")
         root.addWidget(sub)
 
-        # ── Encoder Mode ─────────────────────────────────────────────
-        enc_box = QGroupBox("Encoder Mode")
-        enc_lay = QHBoxLayout(enc_box)
-        enc_lay.addWidget(QLabel("Mode:"))
-        self.enc_mode = QComboBox()
-        self.enc_mode.addItems(["QUADTIMER", "INTERRUPT"])
-        self.enc_mode.setToolTip(
-            "QUADTIMER: hardware offload, ~2–4 µs ISR budget.\n"
-            "INTERRUPT: software GPIO ISR, ~8–12 µs ISR budget."
+        # ── Interpolator ─────────────────────────────────────────────
+        interp_box = QGroupBox("Interpolator Configuration")
+        interp_lay = QVBoxLayout(interp_box)
+        
+        self.f_lock = FeatureRow(
+            "Lock Duration to ROS Rate",
+            "Locks the 1kHz interpolator step size to exactly 1 / ROS_COMMAND_RATE_HZ preventing jitter from network latency."
         )
-        self.enc_mode.currentTextChanged.connect(self.changed)
-        enc_lay.addWidget(self.enc_mode)
-        enc_lay.addStretch()
-        root.addWidget(enc_box)
+        self.f_lock.changed.connect(self.changed)
+        interp_lay.addWidget(self.f_lock)
+        interp_lay.addStretch()
+        root.addWidget(interp_box)
 
         # ── Core Control Features ─────────────────────────────────────
         ctrl_box = QGroupBox("Control Features")
@@ -126,8 +124,15 @@ class FeaturesTab(QWidget):
         self.f_enc_test = FeatureRow(
             "Encoder Test Mode",
             "Disables control loop entirely. Just reads and broadcasts encoder angles. Use in Phase 1 & 2.")
+        
+        self.f_sine_test = FeatureRow(
+            "Sine Sweep Test Mode",
+            "Internally generates a slow sine wave on all enabled joints to test kinematics. Ignores ROS commands.")
+        
         self.f_enc_test.changed.connect(self.changed)
+        self.f_sine_test.changed.connect(self.changed)
         debug_lay.addWidget(self.f_enc_test)
+        debug_lay.addWidget(self.f_sine_test)
 
         freq_row = QHBoxLayout()
         freq_row.addWidget(QLabel("Fixed STEP Frequency (Hz):"))
@@ -159,7 +164,7 @@ class FeaturesTab(QWidget):
 
     # ------------------------------------------------------------------
     def load(self, flags: FeatureFlags) -> None:
-        self.enc_mode.setCurrentText(flags.encoder_mode)
+        self.f_lock.value      = flags.lock_interpolator
         self.f_filter.value    = flags.alphabeta_filter
         self.f_ff.value        = flags.velocity_feedforward
         self.f_watchdog.value  = flags.watchdog
@@ -167,11 +172,12 @@ class FeaturesTab(QWidget):
         self.f_antiglitch.value= flags.anti_glitch_filter
         self.f_deadband.value  = flags.velocity_deadband
         self.f_enc_test.value  = flags.encoder_test_mode
+        self.f_sine_test.value = flags.sine_test_mode
         self.fixed_freq.setValue(flags.fixed_step_freq_hz)
         self.deadband_val.setValue(flags.velocity_deadband_rad_s)
 
     def save(self, flags: FeatureFlags) -> None:
-        flags.encoder_mode            = self.enc_mode.currentText()
+        flags.lock_interpolator       = self.f_lock.value
         flags.alphabeta_filter        = self.f_filter.value
         flags.velocity_feedforward    = self.f_ff.value
         flags.watchdog                = self.f_watchdog.value
@@ -179,5 +185,6 @@ class FeaturesTab(QWidget):
         flags.anti_glitch_filter      = self.f_antiglitch.value
         flags.velocity_deadband       = self.f_deadband.value
         flags.encoder_test_mode       = self.f_enc_test.value
+        flags.sine_test_mode          = self.f_sine_test.value
         flags.fixed_step_freq_hz      = self.fixed_freq.value()
         flags.velocity_deadband_rad_s = self.deadband_val.value()

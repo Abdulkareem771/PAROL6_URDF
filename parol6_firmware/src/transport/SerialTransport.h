@@ -18,6 +18,7 @@ struct RosCommand {
     float positions[6];
     float velocities[6];
     uint32_t timestamp_us;
+    bool is_home_cmd;
 };
 
 class SerialTransport {
@@ -67,12 +68,20 @@ private:
     int rx_pos_ = 0;
     
     // Quick parse: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+    // Or special command: <HOME>
     bool parse_string(char* str, RosCommand& cmd) {
         if (str[0] != '<' || str[strlen(str) - 1] != '>') return false;
+        
+        cmd.is_home_cmd = false;
         
         // Remove brackets
         str[strlen(str) - 1] = '\0';
         char* pt = str + 1;
+        
+        if (strcmp(pt, "HOME") == 0) {
+            cmd.is_home_cmd = true;
+            return true;
+        }
         
         char* token = strtok(pt, ",");
         if (!token) return false;

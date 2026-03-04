@@ -144,6 +144,12 @@ class JogTab(QWidget):
         free_btn = QPushButton("Free Drive (all zero vel)")
         free_btn.clicked.connect(self._free_drive)
         glob.addWidget(free_btn)
+        
+        home_btn = QPushButton("🏠 HOME ALL")
+        home_btn.setStyleSheet("background:#89dceb; color:#1e1e2e; font-weight:bold; font-size:13px; padding:6px 18px;")
+        home_btn.clicked.connect(self._send_home)
+        glob.addWidget(home_btn)
+        
         glob.addStretch()
         root.addLayout(glob)
 
@@ -227,3 +233,8 @@ class JogTab(QWidget):
 
     def _free_drive(self) -> None:
         self._stop_all()
+
+    def _send_home(self) -> None:
+        self._stop_all()
+        self.send_command.emit("<HOME>")
+

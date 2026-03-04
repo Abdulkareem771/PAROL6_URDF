@@ -35,8 +35,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     w("// ── Feature Flags ─────────────────────────────────────────────")
     f = cfg.features
 
-    mode_val = 0 if f.encoder_mode == "QUADTIMER" else 1
-    w(f"#define ENCODER_MODE              {mode_val}  // 0=QUADTIMER 1=INTERRUPT")
+    w(f"#define FEATURE_INTERPOLATOR_LOCK {int(f.lock_interpolator)}")
     w(f"#define FEATURE_ALPHABETA_FILTER  {int(f.alphabeta_filter)}")
     w(f"#define FEATURE_VEL_FEEDFORWARD   {int(f.velocity_feedforward)}")
     w(f"#define FEATURE_WATCHDOG          {int(f.watchdog)}")
@@ -44,6 +43,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     w(f"#define FEATURE_ANTI_GLITCH       {int(f.anti_glitch_filter)}")
     w(f"#define FEATURE_VEL_DEADBAND      {int(f.velocity_deadband)}")
     w(f"#define FEATURE_ENCODER_TEST_MODE {int(f.encoder_test_mode)}")
+    w(f"#define FEATURE_SINE_TEST_MODE    {int(f.sine_test_mode)}")
     w(f"#define FIXED_STEP_FREQ_HZ        {f.fixed_step_freq_hz}  // 0=off")
     w(f"#define VELOCITY_DEADBAND_RAD_S   {f.velocity_deadband_rad_s}f")
     w()
@@ -115,6 +115,8 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
 
     w("// ── Control Gains ─────────────────────────────────────────────")
     farr("KP_GAINS",    [j.kp    for j in cfg.joints])
+    farr("KI_GAINS",    [j.ki    for j in cfg.joints])
+    farr("MAX_INTEGRAL",[j.max_integral for j in cfg.joints])
     farr("AB_ALPHA",    [j.alpha for j in cfg.joints])
     farr("AB_BETA",     [j.beta  for j in cfg.joints])
     w()
@@ -131,6 +133,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
 
     w("// ── Homing Configuration ──────────────────────────────────────")
     arr( "HOMING_ORDER",   cfg.homing.order)
+    farr("HOME_OFFSETS_RAD", [j.home_offset_rad for j in cfg.joints])
     arr( "HOMING_SPEED",   [j.homing_speed_steps_s  for j in cfg.joints])
     arr( "HOMED_OFFSET",   [j.homed_position_steps  for j in cfg.joints])
     arr( "STANDBY_POS",    [j.standby_position_steps for j in cfg.joints])

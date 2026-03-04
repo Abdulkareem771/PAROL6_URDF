@@ -285,6 +285,25 @@ void loop() {
         supervisor.feed_watchdog(current_tick);
 #endif
 
+        if (cmd.is_home_cmd) {
+            // Triggered by the new "HOME ALL" button in the GUI
+            noInterrupts();
+            for (int i = 0; i < NUM_AXES; i++) {
+#ifdef HOME_OFFSETS_RAD
+                float offset = HOME_OFFSETS_RAD[i];
+#else
+                float offset = 0.0f;
+#endif
+                float motor_space_rad = offset * GEAR_RATIOS[i];
+                observer[i].set_initial_position(motor_space_rad);
+                interpolator[i].reset(offset);
+                telemetry_pos[i] = offset;
+                telemetry_vel[i] = 0.0f;
+            }
+            interrupts();
+            continue; // Skip normal positional interpolation
+        }
+
         // Dynamically compute the duration since the last valid ROS packet
         static uint32_t last_cmd_ts = 0;
         uint32_t delta_ms = 40; // Default fallback (25Hz)

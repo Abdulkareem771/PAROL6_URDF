@@ -52,8 +52,11 @@ class JointConfig:
 
     # Control gains
     kp: float = 5.0
+    ki: float = 0.0
+    max_integral: float = 5.0
     alpha: float = 0.1    # AlphaBeta filter position correction factor
     beta: float = 0.005   # AlphaBeta filter velocity correction factor
+    home_offset_rad: float = 0.0 # Absolute physical offset in radians
 
     # Limit switch
     limit: LimitSwitchConfig = field(default_factory=LimitSwitchConfig)
@@ -69,7 +72,7 @@ class JointConfig:
 # ---------------------------------------------------------------------------
 @dataclass
 class FeatureFlags:
-    encoder_mode: str = "QUADTIMER"        # QUADTIMER | INTERRUPT
+    lock_interpolator: bool = True         # True = 1000/comms.ros_command_rate_hz
     alphabeta_filter: bool = True
     velocity_feedforward: bool = True
     watchdog: bool = True
@@ -77,6 +80,7 @@ class FeatureFlags:
     anti_glitch_filter: bool = True
     velocity_deadband: bool = True
     encoder_test_mode: bool = False        # Disables control loop, just reads encoders
+    sine_test_mode: bool = False           # Automatically sweeps joints in a sine wave
     fixed_step_freq_hz: int = 0           # 0=off; >0 = all STEP pins at this fixed Hz
     velocity_deadband_rad_s: float = 0.02
 
