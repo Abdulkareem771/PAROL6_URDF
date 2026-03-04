@@ -69,8 +69,15 @@ public:
             return; // Unsupported pin — tmr_ stays nullptr; read_angle() returns 0
         }
 
+        // Enable standard input pullup first to prime GPIO
+        pinMode(pin_, INPUT_PULLUP);
+
         // Pad mux: QuadTimer Alt-1 + SION (Software Input On forces pad → input path)
         *(portConfigRegister(pin_)) = 1 | 0x10;
+
+        // Pad control: 100K Pull-Up, Hysteresis enabled, Fast Slew Rate
+        // This is CRITICAL because the MT6816 PWM acts like an open-drain line
+        *(portControlRegister(pin_)) = 0x1B0B0;
 
         // Reset channel
         tmr_->CH[ch_].CTRL   = 0;
