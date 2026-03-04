@@ -13,7 +13,8 @@ from PyQt6.QtGui import QFont
 
 class LaunchWorker(QThread):
     """Runs a bash script in a background thread and emits its output."""
-    output_line = pyqtSignal(str)
+    output_rviz = pyqtSignal(str)
+    output_gazebo = pyqtSignal(str)
     finished_ok = pyqtSignal()
     finished_err = pyqtSignal(int)
 
@@ -25,7 +26,10 @@ class LaunchWorker(QThread):
 
     def run(self) -> None:
         cmd = [self._script_path] + self._args
-        self.output_line.emit(f"[LAUNCH] $ {' '.join(cmd)}")
+        msg = f"[LAUNCH] $ {' '.join(cmd)}"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+        
         try:
             env = os.environ.copy()
             # Ensure standard binary paths are present just in case the GUI was launched strangely
@@ -43,23 +47,39 @@ class LaunchWorker(QThread):
                 env=env,
             )
             for line in self._proc.stdout:
-                self.output_line.emit(line.rstrip())
+                line = line.rstrip()
+                # Basic heuristic: if it mentions ruby, ign, gazebo, or spawn, it's probably physics
+                lower = line.lower()
+                if "ign" in lower or "gazebo" in lower or "/usr/bin/ruby" in lower or "spawn" in lower:
+                    self.output_gazebo.emit(line)
+                else:
+                    self.output_rviz.emit(line)
             self._proc.wait()
             rc = self._proc.returncode
         except Exception as e:
-            self.output_line.emit(f"[LAUNCH] ERROR: {e}")
+            msg = f"[LAUNCH] ERROR: {e}"
+            self.output_rviz.emit(msg)
+            self.output_gazebo.emit(msg)
             rc = -1
 
+        msg = "[LAUNCH] Process Exited." if rc == 0 else f"[LAUNCH] ❌ Stopped (code {rc})"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+        
         if rc == 0:
-            self.output_line.emit("[LAUNCH] ✅ Process exited cleanly.")
             self.finished_ok.emit()
         else:
-            self.output_line.emit(f"[LAUNCH] ❌ Process failed or was terminated (code {rc}).")
             self.finished_err.emit(rc)
 
     def abort(self) -> None:
         if self._proc and self._proc.poll() is None:
-            self._proc.terminate()
+            # Send SIGINT (Ctrl+C) instead of terminate so the bash script's trap catches it
+            import signal
+            os.kill(self._proc.pid, signal.SIGINT)
+            try:
+                self._proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self._proc.terminate()
 
 
 class LaunchTab(QWidget):
@@ -95,7 +115,7 @@ class LaunchTab(QWidget):
         
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("Method 1: Gazebo Only (Simulation World)", "launch_gazebo_only.sh")
-        self.mode_combo.addItem("Method 2: MoveIt With Gazebo (External)", "launch_moveit_with_gazebo.sh")
+        self.mode_combo.addItem("Method 2: Gazebo AND MoveIt (Simulated)", "launch_moveit_with_gazebo.sh")
         self.mode_combo.addItem("Method 3: MoveIt Fake (Standalone RViz)", "launch_moveit_fake.sh")
         self.mode_combo.addItem("Method 4: MoveIt Real Hardware", "launch_moveit_real_hw.sh")
         self.mode_combo.setMinimumWidth(300)
@@ -110,39 +130,57 @@ class LaunchTab(QWidget):
         cl.addStretch()
         root.addWidget(ctrls)
 
-        # ── Output Log ──────────────────────────────────────────────────────
-        log_group = QGroupBox("Terminal Output (RViz / Gazebo Logs)")
-        ll = QVBoxLayout(log_group)
+        # ── Output Logs (Split) ─────────────────────────────────────────────
+        logs_layout = QHBoxLayout()
+        logs_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.log_out = QTextEdit()
-        self.log_out.setReadOnly(True)
-        self.log_out.setFont(QFont("Monospace", 10))
-        self.log_out.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        self.log_out.setStyleSheet("background:#11111b; color:#a6adc8;")
-        ll.addWidget(self.log_out)
+        # RViz / MoveIt
+        rviz_group = QGroupBox("ROS 2 / MoveIt Logs")
+        rl = QVBoxLayout(rviz_group)
+        self.log_rviz = QTextEdit()
+        self.log_rviz.setReadOnly(True)
+        self.log_rviz.setFont(QFont("Monospace", 9))
+        self.log_rviz.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.log_rviz.setStyleSheet("background:#11111b; color:#a6adc8;")
+        rl.addWidget(self.log_rviz)
+        logs_layout.addWidget(rviz_group)
         
-        root.addWidget(log_group)
+        # Gazebo
+        gazebo_group = QGroupBox("Gazebo / Physics Logs")
+        gl = QVBoxLayout(gazebo_group)
+        self.log_gazebo = QTextEdit()
+        self.log_gazebo.setReadOnly(True)
+        self.log_gazebo.setFont(QFont("Monospace", 9))
+        self.log_gazebo.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.log_gazebo.setStyleSheet("background:#11111b; color:#89b4fa;")
+        gl.addWidget(self.log_gazebo)
+        logs_layout.addWidget(gazebo_group)
+        
+        root.addLayout(logs_layout)
 
     def _toggle_launch(self) -> None:
         if self._worker:
             # Terminate current process
-            self.log_out.append("[LAUNCH] Stopping process...")
+            self.log_rviz.append("[LAUNCH] Stopping process...")
+            self.log_gazebo.append("[LAUNCH] Stopping process...")
             self._worker.abort()
             self._worker = None
             self._set_button_state(False)
             return
 
         # Start new process
-        self.log_out.clear()
+        self.log_rviz.clear()
+        self.log_gazebo.clear()
         script_name = self.mode_combo.currentData()
         script_path = os.path.join(self._launchers_dir, script_name)
         
         if not os.path.exists(script_path):
-            self.log_out.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
+            self.log_rviz.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
             return
             
         self._worker = LaunchWorker(script_path, [])
-        self._worker.output_line.connect(self.log_out.append)
+        self._worker.output_rviz.connect(self.log_rviz.append)
+        self._worker.output_gazebo.connect(self.log_gazebo.append)
         self._worker.finished_ok.connect(self._on_finished)
         self._worker.finished_err.connect(self._on_finished)
         self._worker.start()

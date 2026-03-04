@@ -20,8 +20,11 @@
       "homed_position_steps": 13500,
       "standby_position_steps": 10240,
       "kp": 5.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": true,
         "pin": 20,
@@ -47,8 +50,11 @@
       "homed_position_steps": 19588,
       "standby_position_steps": -32000,
       "kp": 3.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": true,
         "pin": 21,
@@ -74,8 +80,11 @@
       "homed_position_steps": 23020,
       "standby_position_steps": 57905,
       "kp": 3.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": true,
         "pin": 22,
@@ -101,8 +110,11 @@
       "homed_position_steps": -10200,
       "standby_position_steps": 0,
       "kp": 2.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": true,
         "pin": 23,
@@ -128,8 +140,11 @@
       "homed_position_steps": 8900,
       "standby_position_steps": 0,
       "kp": 2.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": true,
         "pin": 24,
@@ -155,8 +170,11 @@
       "homed_position_steps": 15900,
       "standby_position_steps": 32000,
       "kp": 2.0,
+      "ki": 0.0,
+      "max_integral": 5.0,
       "alpha": 0.1,
       "beta": 0.005,
+      "home_offset_rad": 0.0,
       "limit": {
         "enabled": false,
         "pin": 25,
@@ -167,7 +185,7 @@
     }
   ],
   "features": {
-    "encoder_mode": "QUADTIMER",
+    "lock_interpolator": true,
     "alphabeta_filter": true,
     "velocity_feedforward": true,
     "watchdog": true,
@@ -175,6 +193,7 @@
     "anti_glitch_filter": true,
     "velocity_deadband": true,
     "encoder_test_mode": false,
+    "sine_test_mode": false,
     "fixed_step_freq_hz": 0,
     "velocity_deadband_rad_s": 0.02
   },

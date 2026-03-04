@@ -44,18 +44,19 @@ What it starts:
 What it does **not** start:
 - MoveIt / RViz
 
-## Method 2: MoveIt With Gazebo
+## Method 2: Gazebo AND MoveIt (Simulated)
 
-Use when Gazebo is already running and you want to plan/execute trajectories into the simulation.
+Use when you want to run the full simulated software stack (Physics + Motion Planning) locally without hardware.
 
 ```bash
 ./scripts/launchers/launch_moveit_with_gazebo.sh
 ```
 
 What it starts:
-- `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
+1. `ros2 launch parol6 ignition.launch.py` (in background)
+2. `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false` (in foreground, after 5s delay)
 
-> Why `use_fake_hardware:=false`: MoveIt must connect to the Gazebo controller manager. It must not spawn its own internal fake controller manager or they will conflict.
+> Why `use_fake_hardware:=false`: MoveIt connects directly to the Gazebo controller manager.
 
 ## Method 3: MoveIt Fake (RViz Only, No Hardware)
 
@@ -114,8 +115,7 @@ All values in radians (position) and radians/second (velocity). The hardware int
 ### Gazebo + MoveIt Simulation
 
 ```bash
-./scripts/launchers/launch_gazebo_only.sh
-# wait 10–15 seconds for Gazebo to fully load
+# This script now automatically starts BOTH Gazebo and MoveIt
 ./scripts/launchers/launch_moveit_with_gazebo.sh
 ```
 
