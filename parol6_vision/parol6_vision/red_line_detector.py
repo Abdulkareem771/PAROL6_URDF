@@ -84,6 +84,8 @@ import cv2
 import numpy as np
 from skimage import morphology
 from sklearn.decomposition import PCA
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 
 class RedLineDetector(Node):
@@ -238,11 +240,14 @@ class RedLineDetector(Node):
         # CAPTURE SERVICE (only active in capture_mode)
         # ============================================================
         
+        self.cb_group = ReentrantCallbackGroup()
+        
         if self.capture_mode:
             self._capture_srv = self.create_service(
                 Trigger,
                 '/red_line_detector/capture',
-                self._capture_service_callback
+                self._capture_service_callback,
+                callback_group=self.cb_group
             )
             self.get_logger().info(
                 'Capture mode ACTIVE. Call /red_line_detector/capture to process one frame.'
@@ -292,7 +297,8 @@ class RedLineDetector(Node):
             Image,
             '/kinect2/qhd/image_color_rect',
             self.image_callback,
-            10
+            10,
+            callback_group=self.cb_group
         )
         
         # Spin until the frame has been processed (image_callback clears self.image_sub)
@@ -829,9 +835,11 @@ def main(args=None):
     rclpy.init(args=args)
     
     node = RedLineDetector()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

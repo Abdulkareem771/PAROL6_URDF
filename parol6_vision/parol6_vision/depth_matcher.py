@@ -67,6 +67,8 @@ from tf2_ros import TransformException
 import message_filters
 import numpy as np
 import cv2
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
 
 
 class DepthMatcher(Node):
@@ -150,6 +152,8 @@ class DepthMatcher(Node):
         
         self.bridge = CvBridge()
         
+        self.cb_group = ReentrantCallbackGroup()
+        
         if not self.capture_mode:
             self.lines_sub = message_filters.Subscriber(
                 self, WeldLineArray, '/vision/weld_lines_2d'
@@ -179,7 +183,8 @@ class DepthMatcher(Node):
             self._capture_srv = self.create_service(
                 Trigger,
                 '/depth_matcher/capture',
-                self._capture_service_callback
+                self._capture_service_callback,
+                callback_group=self.cb_group
             )
             self.get_logger().info(
                 'Depth Matcher — capture mode ACTIVE. '
@@ -213,9 +218,9 @@ class DepthMatcher(Node):
             latest['info'] = msg
 
         # Create temporary subscribers
-        sub_lines = self.create_subscription(WeldLineArray, '/vision/weld_lines_2d', _cb_lines, 1)
-        sub_depth = self.create_subscription(Image, '/kinect2/qhd/image_depth_rect', _cb_depth, 1)
-        sub_info = self.create_subscription(CameraInfo, '/kinect2/qhd/camera_info', _cb_info, 1)
+        sub_lines = self.create_subscription(WeldLineArray, '/vision/weld_lines_2d', _cb_lines, 1, callback_group=self.cb_group)
+        sub_depth = self.create_subscription(Image, '/kinect2/qhd/image_depth_rect', _cb_depth, 1, callback_group=self.cb_group)
+        sub_info = self.create_subscription(CameraInfo, '/kinect2/qhd/camera_info', _cb_info, 1, callback_group=self.cb_group)
         self._capture_subs = [sub_lines, sub_depth, sub_info]
 
         timeout = 5.0
@@ -493,9 +498,11 @@ class DepthMatcher(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = DepthMatcher()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

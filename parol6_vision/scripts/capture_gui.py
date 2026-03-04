@@ -129,6 +129,7 @@ class CaptureGUINode(Node):
 
         self._waiting_capture = False
         self._frozen_frame    = None
+        self._frozen_header   = None
         self._hz_stamps       = {k: [] for k in ('camera','debug','lines2d','lines3d','path')}
 
         # Publishers
@@ -148,6 +149,7 @@ class CaptureGUINode(Node):
         self.exec_client   = self.create_client(Trigger, '/moveit_controller/execute_welding_path')
 
         self.create_timer(1.0, self._emit_hz)
+        self.create_timer(0.1, self._timer_republish)
         self.get_logger().info('CaptureGUINode ready')
 
     # ── Callbacks ────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ class CaptureGUINode(Node):
         if self._waiting_capture:
             self._waiting_capture = False
             self._frozen_frame = bgr.copy()
+            self._frozen_header = msg.header
             try:
                 fm = self.bridge.cv2_to_imgmsg(bgr, encoding='bgr8')
                 fm.header = msg.header
@@ -197,16 +200,17 @@ class CaptureGUINode(Node):
         self.signals.log_message.emit('[INFO] Waiting for next camera frame...')
 
     def republish_frozen(self):
-        if self._frozen_frame is None:
-            return False
+        return self._frozen_frame is not None
+
+    def _timer_republish(self):
+        if self._frozen_frame is None or getattr(self, '_frozen_header', None) is None:
+            return
         try:
             msg = self.bridge.cv2_to_imgmsg(self._frozen_frame, encoding='bgr8')
+            msg.header = self._frozen_header
             self.frozen_pub.publish(msg)
-            self.signals.log_message.emit('[INFO] Re-published frozen frame.')
-            return True
-        except Exception as e:
-            self.signals.log_message.emit(f'[ERROR] {e}')
-            return False
+        except Exception:
+            pass
 
     def get_frozen_frame(self):
         return self._frozen_frame
@@ -284,9 +288,14 @@ class NodeProcess:
             "exec " + " ".join(cmd)
         )
         
+        env = os.environ.copy()
+        env.pop('QT_PLUGIN_PATH', None)
+        env.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
+        
         try:
             self._proc = subprocess.Popen(
                 ['bash', '-c', full_cmd], 
+                env=env,
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.STDOUT,
                 text=True, bufsize=1)
@@ -477,6 +486,11 @@ class CaptureWindow(QMainWindow):
         all_row.addWidget(self._btn_start_all_vision)
         all_row.addWidget(self._btn_stop_all_vision)
         nc_l.addLayout(all_row)
+
+        self._chk_stream_mode = QCheckBox('Continuous Camera Stream')
+        self._chk_stream_mode.setToolTip('Check this to run vision pipeline on live stream instead of capture mode.')
+        self._chk_stream_mode.setStyleSheet('color:#aaf;')
+        nc_l.addWidget(self._chk_stream_mode)
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -688,9 +702,9 @@ class CaptureWindow(QMainWindow):
         # Node control buttons
         self._btn_start_backend.clicked.connect(self._start_backend)
         self._btn_stop_backend.clicked.connect( lambda: self._stop_proc('backend', self._btn_start_backend, self._btn_stop_backend))
-        self._btn_start_det.clicked.connect(lambda: self._start_proc('det', self._btn_start_det, self._btn_stop_det))
+        self._btn_start_det.clicked.connect(self._do_start_det)
         self._btn_stop_det.clicked.connect( lambda: self._stop_proc( 'det', self._btn_start_det, self._btn_stop_det))
-        self._btn_start_dm.clicked.connect( lambda: self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm))
+        self._btn_start_dm.clicked.connect( self._do_start_dm)
         self._btn_stop_dm.clicked.connect(  lambda: self._stop_proc( 'dm',  self._btn_start_dm,  self._btn_stop_dm))
         self._btn_start_pg.clicked.connect( lambda: self._start_proc('pg',  self._btn_start_pg,  self._btn_stop_pg))
         self._btn_stop_pg.clicked.connect(  lambda: self._stop_proc( 'pg',  self._btn_start_pg,  self._btn_stop_pg))
@@ -723,8 +737,8 @@ class CaptureWindow(QMainWindow):
         self._cb_data_source.setEnabled(False)
         self._btn_stop_backend.setEnabled(True)
 
-    def _start_proc(self, key, start_btn, stop_btn):
-        self._procs[key].start()
+    def _start_proc(self, key, start_btn, stop_btn, custom_args=None):
+        self._procs[key].start(custom_args=custom_args)
         start_btn.setEnabled(False)
         stop_btn.setEnabled(True)
 
@@ -737,17 +751,30 @@ class CaptureWindow(QMainWindow):
 
     def _do_kill_zombies(self):
         self._log("[GUI] ☠  Forcefully terminating all background ROS nodes...")
-        cmd = "pkill -9 -f 'bag play'; pkill -9 -f 'red_line_detector'; pkill -9 -f 'depth_matcher'; pkill -9 -f 'path_generator'; pkill -9 -f 'moveit_controller'; pkill -9 -f 'point_cloud_xyzrgb'; pkill -9 -f 'move_group'; pkill -9 -f 'static_transform'; pkill -9 -f 'spawner'; pkill -9 -f 'robot_state_publisher'; pkill -9 -f 'rviz2'"
+        cmd = "pkill -9 -f 'ros2 bag'; pkill -9 -f 'bag play'; pkill -9 -f 'red_line_detector'; pkill -9 -f 'depth_matcher'; pkill -9 -f 'path_generator'; pkill -9 -f 'moveit_controller'; pkill -9 -f 'point_cloud_xyzrgb'; pkill -9 -f 'move_group'; pkill -9 -f 'static_transform'; pkill -9 -f 'spawner'; pkill -9 -f 'robot_state_publisher'; pkill -9 -f 'rviz2'"
         subprocess.Popen(['bash', '-c', cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for p in self._procs.values():
             if p._proc:
                 p._proc = None
 
     def _start_all_vision(self):
-        self._start_proc('det', self._btn_start_det, self._btn_stop_det)
-        self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm)
+        det_args = ['-p', 'capture_mode:=false', '-p', 'publish_debug_images:=true'] if self._chk_stream_mode.isChecked() else None
+        dm_args = ['-p', 'capture_mode:=false'] if self._chk_stream_mode.isChecked() else None
+        
+        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=det_args)
+        self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm, custom_args=dm_args)
         self._start_proc('pg',  self._btn_start_pg,  self._btn_stop_pg)
-        self._log("[GUI] 🚀 Started all Vision Nodes.")
+        
+        mode = "Stream" if self._chk_stream_mode.isChecked() else "Capture"
+        self._log(f"[GUI] 🚀 Started all Vision Nodes ({mode} mode).")
+
+    def _do_start_det(self):
+        args = ['-p', 'capture_mode:=false', '-p', 'publish_debug_images:=true'] if self._chk_stream_mode.isChecked() else None
+        self._start_proc('det', self._btn_start_det, self._btn_stop_det, custom_args=args)
+
+    def _do_start_dm(self):
+        args = ['-p', 'capture_mode:=false'] if self._chk_stream_mode.isChecked() else None
+        self._start_proc('dm', self._btn_start_dm, self._btn_stop_dm, custom_args=args)
 
     def _stop_all_vision(self):
         self._stop_proc('det', self._btn_start_det, self._btn_stop_det)
