@@ -10,10 +10,7 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
-    
-    # If using fake hardware, we are NOT in simulation. If NOT fake hardware, we ARE in simulation.
-    from launch.substitutions import PythonExpression
-    use_sim_time = PythonExpression(["not '", use_fake_hardware, "' == 'true'"])
+    use_sim_time = LaunchConfiguration("use_sim_time")
 
     moveit_config = (
         MoveItConfigsBuilder("parol6")
@@ -51,7 +48,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             moveit_config.to_dict(),
-            {"use_sim_time": True},
+            {"use_sim_time": use_sim_time},
         ],
     )
 
@@ -69,8 +66,11 @@ def generate_launch_description():
         output="log",
         arguments=["-d", rviz_config_file],
         parameters=[
-            moveit_config.to_dict(),
-            {"use_sim_time": True},
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.planning_pipelines,
+            moveit_config.robot_description_kinematics,
+            {"use_sim_time": use_sim_time},
         ],
     )
 
@@ -128,6 +128,11 @@ def generate_launch_description():
                 "use_fake_hardware",
                 default_value="true",
                 description="Start internal ros2_control stack (true) or use external controllers like Gazebo (false).",
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use simulation (Gazebo) clock if true",
             ),
             move_group_node,
             rviz_node,

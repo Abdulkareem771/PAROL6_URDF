@@ -131,11 +131,18 @@ All values in radians (position) and radians/second (velocity). The hardware int
 ./scripts/launchers/launch_moveit_fake.sh
 ```
 
-## Shutdown (Clean)
+## Shutdown & Cleanup
 
-1. Press `Ctrl+C` in the launcher terminal.
-2. All child processes (MoveIt, RViz, controller manager) are terminated by the launch system automatically.
-3. Optional hard stop:
+1. Close the ROS 2 Configurator GUI.
+2. If running scripts manually, press `Ctrl+C` in the launcher terminal.
+3. All child processes (MoveIt, RViz, controller manager) are terminated by the launch system automatically.
+4. Optional hard stop:
 ```bash
 docker stop parol6_dev
 ```
+
+### ☠️ GUI "Kill All" Feature
+
+If you experience issues like **RViz freezing**, **"Requesting initial scene failed"**, or terminal lockups, it means there are dangling / zombie ROS 2 nodes running silently in the container's background fighting over the network.
+
+Click the **☠️ Kill All** button at the bottom of the ROS 2 Launch Tab in the Firmware Configurator GUI. This safely executes a mass `pkill` targetting Gazebo, MoveIt, and RViz inside the container to give you a clean slate without having to restart the entire Docker environment.

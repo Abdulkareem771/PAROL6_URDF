@@ -126,6 +126,12 @@ class LaunchTab(QWidget):
         self.launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
         self.launch_btn.clicked.connect(self._toggle_launch)
         cl.addWidget(self.launch_btn)
+
+        self.kill_btn = QPushButton("☠️ Kill All")
+        self.kill_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
+        self.kill_btn.clicked.connect(self._kill_all_nodes)
+        self.kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
+        cl.addWidget(self.kill_btn)
         
         cl.addStretch()
         root.addWidget(ctrls)
@@ -200,3 +206,22 @@ class LaunchTab(QWidget):
     def _on_finished(self) -> None:
         self._worker = None
         self._set_button_state(False)
+
+    def _kill_all_nodes(self) -> None:
+        if hasattr(self, 'log_rviz'):
+            self.log_rviz.append("[LAUNCH] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
+        
+        # Send pkill via docker exec if on host, or directly if in container
+        cmd = "pkill -9 -f 'rviz2|ign|gazebo|ruby|move_group|parameter_bridge'"
+        if os.path.exists("/.dockerenv"):
+            full_cmd = ["bash", "-c", cmd]
+        else:
+            full_cmd = ["docker", "exec", "parol6_dev", "bash", "-c", cmd]
+            
+        try:
+            subprocess.run(full_cmd, check=False)
+            if hasattr(self, 'log_rviz'):
+                self.log_rviz.append("[LAUNCH] ✅ Kill command executed. Zombie processes terminated.")
+        except Exception as e:
+            if hasattr(self, 'log_rviz'):
+                self.log_rviz.append(f"[LAUNCH] ❌ Error executing kill: {e}")
