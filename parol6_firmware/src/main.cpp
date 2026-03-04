@@ -329,9 +329,20 @@ void loop() {
         supervisor.feed_watchdog(current_tick);
 #endif
 
+        if (cmd.is_enable_cmd) {
+            noInterrupts();
+            supervisor.init(current_tick);
+            for (int i = 0; i < NUM_AXES; i++) {
+                interpolator[i].reset(telemetry_pos[i]);
+            }
+            interrupts();
+            continue;
+        }
+
         if (cmd.is_home_cmd) {
             // Triggered by the new "HOME ALL" button in the GUI
             noInterrupts();
+            supervisor.init(current_tick); // Un-brick the robot if it was in ESTOP
             for (int i = 0; i < NUM_AXES; i++) {
 #ifdef HOME_OFFSETS_RAD
                 float offset = HOME_OFFSETS_RAD[i];

@@ -141,6 +141,11 @@ class JogTab(QWidget):
         stop_all.clicked.connect(self._stop_all)
         glob.addWidget(stop_all)
 
+        enable_btn = QPushButton("🔓 CLEAR FAULT / ENABLE")
+        enable_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold; font-size:13px; padding:6px 18px;")
+        enable_btn.clicked.connect(self._send_enable)
+        glob.addWidget(enable_btn)
+
         free_btn = QPushButton("Free Drive (all zero vel)")
         free_btn.clicked.connect(self._free_drive)
         glob.addWidget(free_btn)
@@ -237,4 +242,8 @@ class JogTab(QWidget):
     def _send_home(self) -> None:
         self._stop_all()
         self.send_command.emit("<HOME>")
+
+    def _send_enable(self) -> None:
+        self._stop_all()
+        self.send_command.emit("<ENABLE>")
 

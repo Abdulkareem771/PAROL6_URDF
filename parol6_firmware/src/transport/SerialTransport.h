@@ -19,6 +19,7 @@ struct RosCommand {
     float velocities[6];
     uint32_t timestamp_us;
     bool is_home_cmd;
+    bool is_enable_cmd;
 };
 
 class SerialTransport {
@@ -73,6 +74,7 @@ private:
         if (str[0] != '<' || str[strlen(str) - 1] != '>') return false;
         
         cmd.is_home_cmd = false;
+        cmd.is_enable_cmd = false;
         
         // Remove brackets
         str[strlen(str) - 1] = '\0';
@@ -80,6 +82,10 @@ private:
         
         if (strcmp(pt, "HOME") == 0) {
             cmd.is_home_cmd = true;
+            return true;
+        }
+        if (strcmp(pt, "ENABLE") == 0) {
+            cmd.is_enable_cmd = true;
             return true;
         }
         
