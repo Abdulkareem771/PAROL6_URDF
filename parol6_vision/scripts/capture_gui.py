@@ -86,6 +86,7 @@ QFileDialog      = _W.QFileDialog
 QAbstractItemView= _W.QAbstractItemView
 QScrollArea      = _W.QScrollArea
 QCheckBox        = _W.QCheckBox
+QComboBox        = _W.QComboBox
 Qt               = _C.Qt
 QTimer           = _C.QTimer
 QObject          = _C.QObject
@@ -108,6 +109,7 @@ class ROSSignals(QObject):
     path_received= pyqtSignal(object)   # nav_msgs/Path
     log_message  = pyqtSignal(str)
     hz_update    = pyqtSignal(str, float)
+    service_resp = pyqtSignal(str, object, bool) # name, result, is_pipeline
 
 
 # ===================================================================
@@ -208,25 +210,25 @@ class CaptureGUINode(Node):
     def get_frozen_frame(self):
         return self._frozen_frame
 
-    def _call_service(self, client, name, callback):
+    def _call_service(self, client, name, is_pipeline=False):
         if not client.service_is_ready():
             self.signals.log_message.emit(f'[WARN] {name} not available')
-            callback(None)
+            self.signals.service_resp.emit(name, None, is_pipeline)
             return
         fut = client.call_async(Trigger.Request())
-        fut.add_done_callback(lambda f: callback(f.result()))
+        fut.add_done_callback(lambda f: self.signals.service_resp.emit(name, f.result(), is_pipeline))
 
-    def call_detect_service(self, cb):
-        self._call_service(self.detect_client, '/red_line_detector/capture', cb)
+    def call_detect_service(self, is_pipeline=False):
+        self._call_service(self.detect_client, 'detect', is_pipeline)
 
-    def call_depth_service(self, cb):
-        self._call_service(self.depth_client, '/depth_matcher/capture', cb)
+    def call_depth_service(self, is_pipeline=False):
+        self._call_service(self.depth_client, 'depth', is_pipeline)
 
-    def call_path_service(self, cb):
-        self._call_service(self.path_client, '/path_generator/trigger_path_generation', cb)
+    def call_path_service(self, is_pipeline=False):
+        self._call_service(self.path_client, 'path', is_pipeline)
 
-    def call_exec_service(self, cb):
-        self._call_service(self.exec_client, '/moveit_controller/execute_welding_path', cb)
+    def call_exec_service(self, is_pipeline=False):
+        self._call_service(self.exec_client, 'exec', is_pipeline)
 
     # ── Hz ───────────────────────────────────────────────────────────
 
@@ -257,10 +259,19 @@ class NodeProcess:
     def running(self):
         return self._proc is not None and self._proc.poll() is None
 
-    def start(self):
+    def start(self, custom_args=None):
         if self.running:
             return
-        cmd = ['ros2', 'run', self._pkg, self._exe, '--ros-args'] + self._args
+        
+        args_to_use = self._args
+        if custom_args is not None:
+            args_to_use = custom_args
+
+        if self._exe.endswith('.launch.py'):
+            cmd = ['ros2', 'launch', self._pkg, self._exe] + args_to_use
+        else:
+            cmd = ['ros2', 'run', self._pkg, self._exe, '--ros-args'] + args_to_use
+            
         self._log(f'[NODE] $ {" ".join(cmd)}')
         try:
             self._proc = subprocess.Popen(
@@ -338,6 +349,8 @@ class CaptureWindow(QMainWindow):
         # ── Node processes ────────────────────────────────────────────
         FROZEN = CaptureGUINode.FROZEN_TOPIC
         self._procs = {
+            'backend': NodeProcess('Backend', 'parol6_vision', 'vision_moveit.launch.py',
+                                   ['gui_mode:=true'], self._log),
             'det': NodeProcess('Detector',    'parol6_vision', 'red_line_detector',
                                ['-p', 'capture_mode:=true',
                                 '-p', 'publish_debug_images:=true',
@@ -413,6 +426,25 @@ class CaptureWindow(QMainWindow):
         lv = QVBoxLayout(left_inner)
         lv.setSpacing(5)
         lv.setContentsMargins(4, 4, 4, 4)
+
+        # ── Backend Controls ──────────────────────────────────────────
+        bc = QGroupBox('Backend Infrastructure')
+        bc_l = QVBoxLayout(bc)
+
+        src_row = QHBoxLayout()
+        self._cb_data_source = QComboBox()
+        self._cb_data_source.addItems(["ROS Bag (Simulation)", "Live Camera"])
+        src_row.addWidget(QLabel("Data Source:"))
+        src_row.addWidget(self._cb_data_source)
+        bc_l.addLayout(src_row)
+
+        self._btn_start_backend = QPushButton('▶  Start Backend')
+        self._btn_stop_backend  = QPushButton('■  Stop Backend')
+        self._btn_stop_backend.setEnabled(False)
+        self._led_backend = led_label()
+        
+        _node_row(self._btn_start_backend, self._btn_stop_backend, self._led_backend, bc_l)
+        lv.addWidget(bc)
 
         # ── Node Controls ─────────────────────────────────────────────
         nc = QGroupBox('Node Controls')
@@ -571,7 +603,7 @@ class CaptureWindow(QMainWindow):
         # Status bar
         sb = self.statusBar()
         self._sb_labels = {}
-        for key, text in [('det','Detector: ⬛'),('dm','DepthMatcher: ⬛'),
+        for key, text in [('backend', 'Backend: ⬛'), ('det','Detector: ⬛'),('dm','DepthMatcher: ⬛'),
                            ('pg','PathGen: ⬛'),('mc','MoveIt: ⬛'),('cap','Captures: 0')]:
             lbl = QLabel(text)
             self._sb_labels[key] = lbl
@@ -614,8 +646,11 @@ class CaptureWindow(QMainWindow):
         self.sigs.path_received.connect(self._on_path)
         self.sigs.log_message.connect(self._log)
         self.sigs.hz_update.connect(self._on_hz)
+        self.sigs.service_resp.connect(self._on_service_resp)
 
         # Node control buttons
+        self._btn_start_backend.clicked.connect(self._start_backend)
+        self._btn_stop_backend.clicked.connect( lambda: self._stop_proc('backend', self._btn_start_backend, self._btn_stop_backend))
         self._btn_start_det.clicked.connect(lambda: self._start_proc('det', self._btn_start_det, self._btn_stop_det))
         self._btn_stop_det.clicked.connect( lambda: self._stop_proc( 'det', self._btn_start_det, self._btn_stop_det))
         self._btn_start_dm.clicked.connect( lambda: self._start_proc('dm',  self._btn_start_dm,  self._btn_stop_dm))
@@ -639,6 +674,18 @@ class CaptureWindow(QMainWindow):
 
     # ── Node process control ──────────────────────────────────────────
 
+    def _start_backend(self):
+        # Determine if we are using bag or live
+        is_bag = self._cb_data_source.currentText() == "ROS Bag (Simulation)"
+        bag_arg = 'use_bag:=true' if is_bag else 'use_bag:=false'
+        
+        args = ['gui_mode:=true', bag_arg]
+        self._procs['backend'].start(custom_args=args)
+        
+        self._btn_start_backend.setEnabled(False)
+        self._cb_data_source.setEnabled(False)
+        self._btn_stop_backend.setEnabled(True)
+
     def _start_proc(self, key, start_btn, stop_btn):
         self._procs[key].start()
         start_btn.setEnabled(False)
@@ -647,6 +694,8 @@ class CaptureWindow(QMainWindow):
     def _stop_proc(self, key, start_btn, stop_btn):
         self._procs[key].stop()
         start_btn.setEnabled(True)
+        if key == 'backend':
+            self._cb_data_source.setEnabled(True)
         stop_btn.setEnabled(False)
 
     _NODE_META = {
@@ -658,6 +707,7 @@ class CaptureWindow(QMainWindow):
 
     def _poll_health(self):
         meta = [
+            (self._procs['backend'], self._led_backend, self._btn_start_backend, self._btn_stop_backend, 'backend', 'Backend'),
             (self._procs['det'], self._led_det, self._btn_start_det, self._btn_stop_det, 'det', 'Detector'),
             (self._procs['dm'],  self._led_dm,  self._btn_start_dm,  self._btn_stop_dm,  'dm',  'DepthMatcher'),
             (self._procs['pg'],  self._led_pg,  self._btn_start_pg,  self._btn_stop_pg,  'pg',  'PathGen'),
@@ -679,11 +729,21 @@ class CaptureWindow(QMainWindow):
     def _do_capture(self):
         self._btn_capture.setEnabled(False)
         self.node.request_capture()
-        QTimer.singleShot(400, self._call_detect)
+        QTimer.singleShot(400, lambda: self._call_detect(is_pipeline=False))
 
-    def _call_detect(self):
+    def _call_detect(self, is_pipeline=False):
         self._log('[GUI] Calling /red_line_detector/capture...')
-        self.node.call_detect_service(self._on_detect_resp)
+        self.node.call_detect_service(is_pipeline)
+
+    def _on_service_resp(self, name, resp, is_pipeline):
+        if name == 'detect':
+            self._on_detect_resp(resp, is_pipeline)
+        elif name == 'depth':
+            self._on_depth_resp(resp, is_pipeline)
+        elif name == 'path':
+            self._on_path_resp(resp, is_pipeline)
+        elif name == 'exec':
+            self._on_exec_resp(resp, is_pipeline)
 
     def _on_detect_resp(self, resp, _pipeline=False):
         self._btn_capture.setEnabled(True)
@@ -714,7 +774,7 @@ class CaptureWindow(QMainWindow):
     def _do_redetect(self):
         if not self.node.republish_frozen():
             return
-        QTimer.singleShot(150, self._call_detect)
+        QTimer.singleShot(150, lambda: self._call_detect(is_pipeline=False))
 
     def _do_save(self):
         frozen = self.node.get_frozen_frame()
@@ -732,7 +792,7 @@ class CaptureWindow(QMainWindow):
     def _do_match(self, _pipeline=False):
         self._btn_match.setEnabled(False)
         self._log('[GUI] Calling /depth_matcher/capture...')
-        self.node.call_depth_service(lambda r: self._on_depth_resp(r, _pipeline))
+        self.node.call_depth_service(_pipeline)
 
     def _on_depth_resp(self, resp, _pipeline=False):
         self._btn_match.setEnabled(True)
@@ -754,7 +814,7 @@ class CaptureWindow(QMainWindow):
     def _do_gen_path(self, _pipeline=False):
         self._btn_gen_path.setEnabled(False)
         self._log('[GUI] Calling /path_generator/trigger_path_generation...')
-        self.node.call_path_service(lambda r: self._on_path_resp(r, _pipeline))
+        self.node.call_path_service(_pipeline)
 
     def _on_path_resp(self, resp, _pipeline=False):
         self._btn_gen_path.setEnabled(True)
@@ -787,7 +847,7 @@ class CaptureWindow(QMainWindow):
         self._lbl_exec_status.setText('⏳ Executing...')
         self._lbl_exec_status.setStyleSheet('color:#ffee44;')
         self._log('[GUI] Calling /moveit_controller/execute_welding_path...')
-        self.node.call_exec_service(lambda r: self._on_exec_resp(r, _pipeline))
+        self.node.call_exec_service(_pipeline)
 
     def _on_exec_resp(self, resp, _pipeline=False):
         self._btn_execute.setEnabled(self._chk_enable_exec.isChecked())
@@ -820,8 +880,7 @@ class CaptureWindow(QMainWindow):
         self._pipeline_bar.setFormat('Capture')
         self._btn_capture.setEnabled(False)
         self.node.request_capture()
-        QTimer.singleShot(400, lambda: self.node.call_detect_service(
-            lambda r: self._on_detect_resp(r, _pipeline=True)))
+        QTimer.singleShot(400, lambda: self.node.call_detect_service(is_pipeline=True))
 
     def _advance_pipeline(self, stage: int):
         """Called after each stage succeeds to trigger the next."""
@@ -829,11 +888,11 @@ class CaptureWindow(QMainWindow):
         if stage == 2:  # depth
             self._pipeline_bar.setFormat('Depth Matching')
             self._lbl_pipeline_status.setText('⏳ Stage 2/4: Matching depth...')
-            self.node.call_depth_service(lambda r: self._on_depth_resp(r, _pipeline=True))
+            self.node.call_depth_service(is_pipeline=True)
         elif stage == 3:  # path gen
             self._pipeline_bar.setFormat('Path Generation')
             self._lbl_pipeline_status.setText('⏳ Stage 3/4: Generating path...')
-            self.node.call_path_service(lambda r: self._on_path_resp(r, _pipeline=True))
+            self.node.call_path_service(is_pipeline=True)
         elif stage == 4:  # execute
             self._pipeline_bar.setFormat('Executing')
             self._lbl_pipeline_status.setText('⏳ Stage 4/4: Executing weld...')
