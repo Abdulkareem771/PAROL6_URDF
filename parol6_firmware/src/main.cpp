@@ -16,7 +16,11 @@
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
 #include "hal/QuadTimerEncoder.h"
+#if defined(FEATURE_HARDWARE_PWM) && FEATURE_HARDWARE_PWM == 1
 #include "hal/FlexPWMGenerator.h"
+#else
+#include "hal/ToneStepper.h"
+#endif
 #include "hal/ActuatorModel.h"
 // -------------------------------------------------------------------------
 // Global Architecture Instantiation
@@ -60,6 +64,7 @@ QuadTimerEncoder encoder_hal[NUM_AXES] = {
 // Phase 4 Stage 2: Per-axis stepper drivers (STEP + DIR)
 // STEP pins: Zone 2 FlexPWM-capable [2, 6, 7, 8, 4, 5]
 // DIR  pins: Zone 3 pure GPIO        [30,31,32,33,34,35]
+#if defined(FEATURE_HARDWARE_PWM) && FEATURE_HARDWARE_PWM == 1
 FlexPWMGenerator stepper[NUM_AXES] = {
     FlexPWMGenerator(STEP_PINS[0], DIR_PINS[0]),  // J1: step=2,  dir=30
     FlexPWMGenerator(STEP_PINS[1], DIR_PINS[1]),  // J2: step=6,  dir=31
@@ -68,6 +73,17 @@ FlexPWMGenerator stepper[NUM_AXES] = {
     FlexPWMGenerator(STEP_PINS[4], DIR_PINS[4]),  // J5: step=4,  dir=34
     FlexPWMGenerator(STEP_PINS[5], DIR_PINS[5]),  // J6: step=5,  dir=35
 };
+#else
+// Safe fallback if hardware PWM generation is disabled.
+ToneStepper stepper[NUM_AXES] = {
+    ToneStepper(STEP_PINS[0], DIR_PINS[0]),
+    ToneStepper(STEP_PINS[1], DIR_PINS[1]),
+    ToneStepper(STEP_PINS[2], DIR_PINS[2]),
+    ToneStepper(STEP_PINS[3], DIR_PINS[3]),
+    ToneStepper(STEP_PINS[4], DIR_PINS[4]),
+    ToneStepper(STEP_PINS[5], DIR_PINS[5]),
+};
+#endif
 
 // Phase 4 Stage 2: Kinematic models — converts rad/s -> step_freq + DIR
 // Gear ratios and direction signs sourced from STM32 legacy motor_init.cpp

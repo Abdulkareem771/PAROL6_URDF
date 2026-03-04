@@ -91,7 +91,11 @@ class FeaturesTab(QWidget):
             "Velocity Deadband",
             "Suppresses micro-stepping noise when stationary. Threshold: 0.02 rad/s.")
 
-        for row in (self.f_filter, self.f_ff, self.f_deadband):
+        self.f_hardware_pwm = FeatureRow(
+            "Hardware PWM Stepper Drive",
+            "Uses FlexPWM hardware timers to generate STEP pulses (zero CPU overhead). Disable to fallback to basic software bitbang toggling.")
+
+        for row in (self.f_filter, self.f_ff, self.f_deadband, self.f_hardware_pwm):
             row.changed.connect(self.changed)
             ctrl_lay.addWidget(row)
 
@@ -171,6 +175,7 @@ class FeaturesTab(QWidget):
         self.f_supervisor.value= flags.safety_supervisor
         self.f_antiglitch.value= flags.anti_glitch_filter
         self.f_deadband.value  = flags.velocity_deadband
+        self.f_hardware_pwm.value = flags.hardware_pwm_step_dir
         self.f_enc_test.value  = flags.encoder_test_mode
         self.f_sine_test.value = flags.sine_test_mode
         self.fixed_freq.setValue(flags.fixed_step_freq_hz)
@@ -184,6 +189,7 @@ class FeaturesTab(QWidget):
         flags.safety_supervisor       = self.f_supervisor.value
         flags.anti_glitch_filter      = self.f_antiglitch.value
         flags.velocity_deadband       = self.f_deadband.value
+        flags.hardware_pwm_step_dir   = self.f_hardware_pwm.value
         flags.encoder_test_mode       = self.f_enc_test.value
         flags.sine_test_mode          = self.f_sine_test.value
         flags.fixed_step_freq_hz      = self.fixed_freq.value()
