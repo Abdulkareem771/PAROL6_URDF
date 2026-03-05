@@ -80,3 +80,5 @@ vision_work/color images to calibrate/*
 legacy code open loop/*
 logs/launchers/*
 logs/launchers/*
+
+parol6_vision/data/images_captured/*
