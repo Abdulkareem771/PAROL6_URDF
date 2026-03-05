@@ -122,6 +122,35 @@ def generate_launch_description():
             )
         ]
 
+    # Camera TFs
+    publish_camera_tf = LaunchConfiguration("publish_camera_tf")
+    
+    # Static TF (Base Link -> Kinect Base)
+    static_tf_camera = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_transform_publisher_camera',
+        # Position: x=1.2m, y=0.0, z=0.65m
+        # Orientation: roll=-π/2, pitch=0, yaw=+π/2 (approx -1.5708, 0.0, 1.5708)
+        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
+                   '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '1.5708',
+                   '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
+        output='screen',
+        condition=IfCondition(publish_camera_tf),
+    )
+
+    # Static TF (Kinect Link -> RGB Optical Frame)
+    static_tf_optical = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_transform_publisher_optical',
+        arguments=['--x', '0.0', '--y', '0.0', '--z', '0.0',
+                   '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '-1.5708',
+                   '--frame-id', 'kinect2_link', '--child-frame-id', 'kinect2_rgb_optical_frame'],
+        output='screen',
+        condition=IfCondition(publish_camera_tf),
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -134,11 +163,18 @@ def generate_launch_description():
                 default_value="false",
                 description="Use simulation (Gazebo) clock if true",
             ),
+            DeclareLaunchArgument(
+                "publish_camera_tf",
+                default_value="true",
+                description="Publish static TF for the camera relative to base_link",
+            ),
             move_group_node,
             rviz_node,
             static_tf_node,
             robot_state_publisher,
             ros2_control_node,
+            static_tf_camera,
+            static_tf_optical,
         ]
         + load_controllers
     )

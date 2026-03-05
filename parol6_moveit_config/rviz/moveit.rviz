@@ -196,8 +196,27 @@ Visualization Manager:
         Robot Alpha: 1
         Show Robot Collision: true
         Show Robot Visual: true
-      Value: true
       Velocity_Scaling_Factor: 1
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        base_link:
+          Value: true
+        kinect2_link:
+          Value: true
+        kinect2_rgb_optical_frame:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 0.3
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
