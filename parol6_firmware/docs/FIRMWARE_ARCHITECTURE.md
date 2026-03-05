@@ -64,9 +64,9 @@ The firmware is designed around a strict separation of concerns, decoupling the 
 | **`SafetySupervisor`** | Main Loop / ISR | E-Stops, runaway limits, watchdog timeouts | MUST execute *before* Motor Output dispatch. |
 | **`AlphaBetaFilter`** | 1 kHz ISR | Predicts vel/pos from noisy raw angles and unwraps `M_PI` bounds | A Kalman filter was rejected due to variable matrix operations and non-deterministic execution time on embedded hardware without hardware acceleration. Requires encoder sampling > 2x max mechanical speed to avoid unwrap aliasing. |
 | **`LinearInterpolator`** | Main Loop / ISR | Up-samples 25 Hz ROS commands to smooth 1 ms deltas | Pure kinematic domain (radians only). |
-| **`EncoderHAL`** | 1 kHz ISR | Extracts physical timer registers to radians | Absolute determinism required |
+| **`EncoderHAL`** | 1 kHz ISR | Extracts physical timer registers to radians | Absolute determinism required. Supported by `QuadTimerEncoder` (Hardware) or `SoftwareInterruptEncoder` (Software Fallback). |
 | **`ControlLaw`** | 1 kHz ISR | `cmd_vel_ff + (Kp * pos_error)` clamped to `MAX_VEL_CMD` | Float math (FPU accelerated). All math uses single-precision floats with bounded execution time; migration to fixed-point is structurally possible without architectural changes. |
-| **`ActuatorModel / MotorHAL`** | 1 kHz ISR | Applies exact mechanical gear ratios (e.g., J3 `18.095`) to convert radians to steps, dispatches pulses | Separates actuation gear dynamics from pure kinematic math. |
+| **`ActuatorModel / MotorHAL`** | 1 kHz ISR | Applies exact mechanical gear ratios (e.g., J3 `18.095`) to convert radians to steps, dispatches pulses | Separates actuation gear dynamics from pure kinematic math. Supported by `FlexPWMGenerator` (Hardware) or `ToneStepper` (Software Fallback). |
 
 > **Architectural Note on FlexPWM & Stepper Drivers (e.g., MKServo42C)**
 > The firmware uses the i.MXRT1062 `FlexPWM` peripheral to generate STEP signals. It is crucial to understand that we are **NOT** using "Analog-style PWM" (where duty cycle controls voltage/speed). Instead, we are using FlexPWM as a **Hardware Metronome**. 

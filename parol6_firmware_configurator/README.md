@@ -60,6 +60,7 @@ The **ROS2 Launch** tab calls the `.sh` launcher scripts located in `scripts/lau
 
 | Mode | Script Called | Description |
 |------|--------------|-------------|
+| Fake Feedback | `launch_fake_feedback.sh` | Publishes sinusoidal joint states to animate RViz independently |
 | Fake | `launch_moveit_fake.sh` | RViz + fake controllers (no hardware) |
 | Simulation | `launch_gazebo_only.sh` + `launch_moveit_with_gazebo.sh` | Gazebo + MoveIt |
 | Real Hardware | `launch_moveit_real_hw.sh` | Teensy-in-the-loop via `parol6_hardware` |
