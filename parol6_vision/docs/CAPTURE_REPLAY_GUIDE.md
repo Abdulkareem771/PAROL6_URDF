@@ -155,10 +155,16 @@ ros2 launch parol6_vision capture_and_replay.launch.py \
 
 **Terminal 1 — Stage 1 (capture)**
 ```bash
+# Keyboard mode (default)
 ros2 run parol6_vision capture_images \
     --ros-args -p capture_mode:=keyboard
 
 # When ready, type 's' + Enter to save a pair
+
+# Timed mode — save one pair every 90 s
+ros2 run parol6_vision capture_images \
+    --ros-args -p capture_mode:=timed -p frame_time:=90.0
+
 ```
 
 **Terminal 2 — Stage 2 (replay)**
