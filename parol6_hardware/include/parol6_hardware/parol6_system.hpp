@@ -61,8 +61,9 @@ private:
   std::vector<double> hw_state_positions_;
   std::vector<double> hw_state_velocities_;
 
-  // Command interfaces (positions)
+  // Command interfaces (positions, velocities)
   std::vector<double> hw_command_positions_;
+  std::vector<double> hw_command_velocities_;  // NEW: velocity commands
 
   // Logger (namespace-qualified for better filtering)
   rclcpp::Logger logger_{rclcpp::get_logger("parol6_hardware.system")};
@@ -83,7 +84,7 @@ private:
   uint64_t parse_errors_ = 0;
   
   // Latency tracking (thesis evidence)
-  rclcpp::Time last_rx_time_;
+  rclcpp::Time last_rx_time_{0, 0, RCL_ROS_TIME};
   double max_rx_period_ms_ = 0.0;
   
   // Clock for throttling logs

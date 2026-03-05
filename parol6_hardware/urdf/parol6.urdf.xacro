@@ -26,7 +26,7 @@
 
   <!-- Arguments -->
   <xacro:arg name="use_ros2_control" default="true"/>
-  <xacro:arg name="serial_port" default="/dev/ttyUSB0"/>
+  <xacro:arg name="serial_port" default="/dev/ttyACM0"/>
   <xacro:arg name="baud_rate" default="115200"/>
 
   <!-- ========================================================================

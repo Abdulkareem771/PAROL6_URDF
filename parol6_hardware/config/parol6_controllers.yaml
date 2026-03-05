@@ -20,19 +20,22 @@ parol6_arm_controller:
 
     command_interfaces:
       - position
+      - velocity  # Enable velocity control
 
     state_interfaces:
       - position
-      - velocity
+      - velocity  # Keep velocity state for monitoring
 
     allow_nonzero_velocity_at_trajectory_end: true
 
     constraints:
-      stopped_velocity_tolerance: 0.01
-      goal_time: 20.0  # Allow 20 seconds for smooth step/dir movements
-      joint_L1: {trajectory: 2.0, goal: 0.1}
-      joint_L2: {trajectory: 2.0, goal: 0.1}
-      joint_L3: {trajectory: 2.0, goal: 0.1}
-      joint_L4: {trajectory: 2.0, goal: 0.1}
-      joint_L5: {trajectory: 2.0, goal: 0.1}
-      joint_L6: {trajectory: 2.0, goal: 0.1}
+      stopped_velocity_tolerance: 1.0   # Must be >= Kp × goal_tolerance (5.0 × 0.2 = 1.0)
+      goal_time: 60.0  # Generous time to reach goal
+      # trajectory: 5.0 rad (~286°) — allows normal lag, catches catastrophic errors
+      joint_L1: {trajectory: 5.0, goal: 0.2}
+      joint_L2: {trajectory: 5.0, goal: 0.2}
+      joint_L3: {trajectory: 5.0, goal: 0.2}
+      joint_L4: {trajectory: 5.0, goal: 0.2}
+      joint_L5: {trajectory: 5.0, goal: 0.2}
+      joint_L6: {trajectory: 5.0, goal: 0.2}
+

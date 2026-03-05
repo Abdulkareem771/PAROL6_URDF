@@ -456,7 +456,7 @@
 
   <gazebo>
     <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>/workspace/install/parol6/share/parol6/config/ros2_controllers.yaml</parameters>
+      <parameters>/workspace/install/parol6/share/parol6/config/ros2_controllers_sim.yaml</parameters>
       <robot_param>robot_description</robot_param>
       <robot_param_node>robot_state_publisher</robot_param_node>
     </plugin>
