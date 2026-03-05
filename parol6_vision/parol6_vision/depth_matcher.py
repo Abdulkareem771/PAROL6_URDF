@@ -76,7 +76,7 @@ class DepthMatcher(Node):
     
     Subscribed Topics:
         /vision/weld_lines_2d (WeldLineArray): 2D detections
-        /kinect2/qhd/image_depth_rect (Image): Aligned depth image
+        /vision/captured_image_depth (Image): Aligned depth image (replayed)
         /kinect2/qhd/camera_info (CameraInfo): Camera intrinsics
         
     Published Topics:
@@ -145,7 +145,7 @@ class DepthMatcher(Node):
             self, WeldLineArray, '/vision/weld_lines_2d'
         )
         self.depth_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_depth_rect'
+            self, Image, '/vision/captured_image_depth'
         )
         self.info_sub = message_filters.Subscriber(
             self, CameraInfo, '/kinect2/qhd/camera_info'

@@ -92,7 +92,7 @@ class RedLineDetector(Node):
     Detects red marker lines indicating welding seams using computer vision.
     
     Subscribed Topics:
-        /kinect2/qhd/image_color_rect (sensor_msgs/Image): Rectified RGB image
+        /vision/captured_image_color (sensor_msgs/Image): Replayed colour image
         
     Published Topics:
         /vision/weld_lines_2d (parol6_msgs/WeldLineArray): Detected weld lines
@@ -214,7 +214,7 @@ class RedLineDetector(Node):
         
         self.image_sub = self.create_subscription(
             Image,
-            '/kinect2/qhd/image_color_rect',
+            '/vision/captured_image_color',
             self.image_callback,
             10
         )

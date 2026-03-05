@@ -91,7 +91,8 @@ def generate_launch_description():
         output='screen',
     )
 
-    # ── Red Line Detector (remapped to replay colour topic) ──────────
+    # ── Red Line Detector ────────────────────────────────────────────
+    # Subscribes to /vision/captured_image_color (hardcoded in node source)
     detector_node = Node(
         package='parol6_vision',
         executable='red_line_detector',
@@ -99,21 +100,16 @@ def generate_launch_description():
         parameters=[detection_config, {
             'publish_debug_images': True,
         }],
-        remappings=[
-            ('/kinect2/qhd/image_color_rect', '/vision/captured_image_color'),
-        ],
         output='screen',
     )
 
-    # ── Depth Matcher (remapped to replay depth topic) ───────────────
+    # ── Depth Matcher ─────────────────────────────────────────────────
+    # Subscribes to /vision/captured_image_depth (hardcoded in node source)
     depth_node = Node(
         package='parol6_vision',
         executable='depth_matcher',
         name='depth_matcher',
         parameters=[detection_config],
-        remappings=[
-            ('/kinect2/qhd/image_depth_rect', '/vision/captured_image_depth'),
-        ],
         output='screen',
     )
 
