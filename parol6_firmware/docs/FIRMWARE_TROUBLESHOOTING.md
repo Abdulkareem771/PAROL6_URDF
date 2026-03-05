@@ -131,11 +131,65 @@ docker exec parol6_dev pkill -9 -f "move_group|rviz2|ros2_control_node|robot_sta
 
 ---
 
+### Issue 6: Robot Violently Jumps on MoveIt Execution Start
+
+**Symptoms:**
+You send an trajectory from MoveIt. As soon as the trajectory begins, one or more joints violently jump to a random position and MoveIt instantly throws `TIMED_OUT` or `Goal Tolerance Violated`.
+
+**Root Cause:**
+A serialization format mismatch between the ROS 2 Hardware Interface (`parol6_system.cpp`) and the Teensy Firmware parser (`SerialTransport.h`). If ROS packs the positions and velocities *interleaved* (`<seq, p1, v1, p2, v2...>`), but the Teensy parses them *grouped* (`<seq, p1, p2, p3... v1, v2...>`), the Teensy will interpret Joint 1's velocity command as Joint 2's position target. Since velocities are small numbers (e.g. `0.2 rad/s`), Joint 2 attempts to instantly travel to position `0.2 rad`, causing a violent mechanical jump and tracking abortion.
+
+**Fix:**
+Ensure `parol6_system.cpp` packs its arrays in the exact grouped format the firmware expects:
+```cpp
+// Correct format: Grouped
+snprintf(buffer, sizeof(buffer), "<%u,%.3f,%.3f...%.3f,%.3f...>", 
+         seq, pos[0], pos[1], /*...*/ vel[0], vel[1] /*...*/);
+```
+
+---
+
+### Issue 7: Robot Spins Uncontrollably After `<HOME>` Command
+
+**Symptoms:**
+When pressing the `HOME ALL` button in the UI, a joint that has a homing offset greater than radians `> 2π` (e.g. 1.2 revolutions) instantly begins spinning out of control.
+
+**Root Cause:**
+If the `AlphaBetaFilter` is initialized with a raw float `> 2π`, it assumes the raw hardware magnetic sensor suddenly jumped from `0` to `> 2π`. The MT6816 encoder *only* outputs `[0, 2π)`. If the filter doesn't strip the modulo `2π` component from the initialization vector and store it as a structural multi-turn offset, the filter tracking math will explode trying to "catch up" to an impossible continuous rotation error.
+
+**Fix:**
+The observer initialization must explicitly decouple the hardware modulo frame from the multi-turn integer offset:
+```cpp
+void set_initial_position(float initial_rad) {
+    last_raw_angle_ = fmodf(initial_rad, 2.0f * M_PI);
+    turn_offset_ = initial_rad - last_raw_angle_;
+}
+```
+
+---
+
 ## ⏱️ Hard Real-Time & Hardware Diagnostics
 
-With the transition to the hard real-time Teensy 4.1 architecture (Phase 4), new physical and timing failure modes exist outside of the ROS domain.
+With the transition to the hard real-time Teensy 4.1 architecture (Phase 4), new physical and timing failure modes exist outside of the ROS domain. We have implemented several diagnostic testing modes inside `main.cpp` (controllable via the Configurator GUI) to isolate mechanical issues from PID issues.
 
-### Issue 6: Control Jitter Measuring > 1 µs
+### Diagnostic 1: Open-Loop Mode Bypass
+
+**Use Case:** A motor is making terrible grinding noises or missing steps, and you don't know if the PID loop is unstable or if the mechanical belt is too tight.
+**How it works:** Check `Open-Loop Mode` in the GUI and set a fixed `Open-Loop Hz`. The firmware completely bypasses the MT6816 observer and the PID control law, issuing a hardcoded step frequency directly to the stepper driver. If the motor *still* binds in Open-Loop mode, the issue is entirely mechanical or electrical (current limit on the driver).
+
+### Diagnostic 2: Internal Sine Sweep Test
+
+**Use Case:** The robot runs perfectly using fake hardware, but micro-stutters wildly when commanded by MoveIt in real life.
+**How it works:** Check `Sine Test Mode` in the GUI. The firmware ignores all USB trajectories and generates a perfect `0.5 Hz` sine wave internally. If the robot moves perfectly smooth during the Sine Test, but stutters during MoveIt execution, the issue is USB packet jitter (or the ROS `ControllerManager` loop rate constraint), *not* the PID tuning. 
+
+### Diagnostic 3: Interpolator Duration Lock
+
+**Use Case:** USB latency causes consecutive packets to arrive at `18ms`, `22ms`, `15ms`, `25ms` intervals. The dynamic interpolator calculates violent velocity spikes to bridge the erratic gaps.
+**How it works:** Check `Lock Duration to ROS Rate` in the GUI. The firmware ignores actual packet arrival timestamps and forces the interpolator to assume a perfect gap (e.g. exactly `20ms` for `50 Hz`). This acts as a powerful low-pass jitter filter at the expense of slight lagging tracking error.
+
+---
+
+### Issue 8: Control Jitter Measuring > 1 µs
 
 **Symptoms:**
 When profiling the 1 kHz `run_control_loop_isr` with an oscilloscope on the `ISR_PROFILER_PIN` or reading the DWT Cycle Counter telemetry, you notice the jitter (deviation from the strict 1000 µs interval) occasionally spikes to 15 µs or more.
@@ -163,3 +217,48 @@ A common trigger is accidentally introduced floating-point division by zero (e.g
 **Fix:**
 1. **Remove Divisions**: Audit the filter and interpolator math. Replace `A / B` with `A * (1.0f / B)` pre-computed in constructors where possible.
 2. **Check Unwrapping Logic**: Ensure the 360-degree `M_PI` encoder unwrap bounds cannot get stuck in an infinite `while()` loop if the sensor completely disconnects and sends garbage floating-point noise. Always use bounded `if()` statements for angle wrapping.
+
+---
+
+## 🏗️ Core Architecture & Timing Domains
+
+For new developers joining the team, it is critical to understand the real-time segregation within `main.cpp`.
+
+### 1. The 1 kHz Hardware Timer ISR (`run_control_loop_isr`)
+- **Strictly Deterministic:** This loop does **zero** waiting. It contains no `delay()`, no serial formatting, no unbounded loops. It runs mathematical calculations (P+FF control law, AlphaBeta filter, Interpolator tick) and writes directly to hardware registers.
+- **Profiling Built-In:** The CPU cycle counter (`ARM_DWT_CYCCNT`) measures exactly how many microseconds the ISR takes, providing a verifiable proof of real-time execution limits.
+- **Zero-Interrupt Sensor Capture:** The `QuadTimerEncoder` uses hardware gated-counters. Instead of the CPU being interrupted 10,000 times a second to measure PWM pulses, the hardware does it silently. 
+
+### 2. The Background Loop (`loop()`)
+- Handles slow, unpredictable tasks: reading USB/UART bytes, decoding ROS packets, and `sprintf` generating telemetry output.
+- **Lock-free Data Transfer:** It uses a `CircularBuffer` to pass parsed commands from the background loop to the ISR. 
+- When updating telemetry, it briefly pauses interrupts (`noInterrupts()`) just long enough to copy the floats, preventing "data tearing".
+
+### 3. Absolute Initialization & Homing
+The MT6816 encoder is absolute within **one motor revolution**, but because of the gear ratios (e.g. 20:1), the joint can be in up to 20 physical positions that map to the exact same motor-encoder value.
+* **Important:** The firmware currently assumes the *current physical position on boot* is exactly the joint-space position derived from the raw motor angle. 
+* **Action Required:** You MUST manually align/home the robot to its known 0-pose before powering on the Teensy, until the limit-switch absolute homing sequence is implemented in firmware.
+
+---
+
+## 🧲 Encoder Hardware: QuadTimers vs Interrupts
+
+The MT6816 magnetic encoder outputs absolute angle data encoded in the duty cycle of a 971 Hz PWM signal. 
+
+**DO NOT use Interrupt Mode to read these encoders.**
+
+### Why `PwmCaptureEncoder` (Interrupt Mode) Fails
+The naive interrupt stub has severe flaws:
+1. **Hardcoded Assumed Period:** Assumes 1000 µs frame; the MT6816 is actually 1029.75 µs. This 3% error skews all angles.
+2. **Naive Math:** Maps 0-100% duty to 0-360°. The MT6816 actually maps data into a 4096-count window nested inside a 4119-count total frame.
+3. **Low Resolution:** Arduino `micros()` provides 1 µs resolution. The MT6816 PWM clock is 250 ns. `micros()` destroys 75% of the sensor's physical precision.
+4. **CPU Starvation:** 6 joints × 2 edges × 1000 Hz = 12,000 interrupts per second, destroying the PID control loop timing.
+
+### Why `QuadTimerEncoder` is Superior
+The QuadTimer implementation uses the NXP i.MXRT hardware timers in "Gated Count" mode.
+* It measures the HIGH time at **53.3 nanosecond** resolution (IP-BUS ÷ 8).
+* It accumulates ticks over 10 full MT6816 frames (~10 ms) before calculating the angle, completely eliminating mid-frame sampling artifacts and multiplying the precision.
+* It implements the precise `(duty * 4119 - 1) / 4096` math from the MT6816 datasheet.
+* **It uses exactly 0% CPU overhead.** The 1 kHz ISR simply reads a register (`CNTR`).
+
+**Conclusion:** Always use the natively supported QuadTimer pins (10, 11, 12, 14, 15, 18). Interrupt mode is deprecated and removed.

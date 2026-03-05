@@ -39,6 +39,16 @@ These pins are definitively assigned to QuadTimers and cannot be reused for anyt
 *   `22, 23`
 *   `28, 29`
 
+**Confirmed STEP pin assignments (from `ActuatorModel.h`):**
+| Joint | STEP Pin | FlexPWM Submodule |
+| :--- | :--- | :--- |
+| J1 | **Pin 2** | FlexPWM4.2A |
+| J2 | **Pin 6** | FlexPWM2.2A |
+| J3 | **Pin 7** | FlexPWM1.3B |
+| J4 | **Pin 8** | FlexPWM1.3A |
+| J5 | **Pin 4** | FlexPWM2.0A |
+| J6 | **Pin 5** | FlexPWM2.1A |
+
 *Implementation Note*: When writing the Step generation HAL, pick 6 sequential pins from this list to keep XBAR routing clean.
 
 ### Zone 3 — Direction Pins (Pure GPIO)
@@ -48,6 +58,19 @@ These pins are definitively assigned to QuadTimers and cannot be reused for anyt
 
 **Recommended Pins**: 
 *   `30, 31, 32, 33, 34, 35, 36, 37, 38, 39`
+
+> [!WARNING]
+> Do NOT use pins 24-29 for Direction signals. Pins 28, 29 are also listed as Zone 2 (FlexPWM-capable) candidates and are needed as STEP pin overflow if the primary Zone 2 pins get reassigned. Using them for DIR creates an irresolvable conflict.
+
+**Confirmed DIR pin assignments (from `ActuatorModel.h`):**
+| Joint | DIR Pin |
+| :--- | :--- |
+| J1 | **Pin 30** |
+| J2 | **Pin 31** |
+| J3 | **Pin 32** |
+| J4 | **Pin 33** |
+| J5 | **Pin 34** |
+| J6 | **Pin 35** |
 
 *Implementation Note*: Keeping them grouped mathematically simplifies bit-banging if optimization is needed later.
 

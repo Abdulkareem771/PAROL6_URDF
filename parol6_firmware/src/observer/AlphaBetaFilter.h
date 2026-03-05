@@ -9,15 +9,49 @@ public:
         beta_dt_inv_ = beta_ / dt_s;
     }
 
+    void set_gains(float alpha, float beta) {
+        alpha_ = alpha;
+        beta_ = beta;
+        beta_dt_inv_ = beta_ / dt_;
+    }
+
     void set_initial_position(float initial_rad) {
         estimated_pos_ = initial_rad;
         estimated_vel_ = 0.0f;
-        last_raw_angle_ = initial_rad;
-        turn_offset_ = 0.0f;
+        
+        // Ensure last_raw_angle_ is bounded [0, 2PI) exactly as the raw hardware sends it
+        last_raw_angle_ = fmodf(initial_rad, 2.0f * (float)M_PI);
+        if (last_raw_angle_ < 0.0f) last_raw_angle_ += 2.0f * (float)M_PI;
+        
+        // The remaining multiple of 2PI is our turn_offset memory
+        turn_offset_ = initial_rad - last_raw_angle_;
+        
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+        glitch_consecutive_ = 0;
+#endif
     }
 
     // Called at control frequency with raw, potentially wrapped sensor data
     void update(float raw_encoder_angle_rad) {
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+        float glitch_delta = raw_encoder_angle_rad - last_raw_angle_;
+        // Unwrap temporary test delta to [-PI, +PI]
+        if (glitch_delta > M_PI)  glitch_delta -= 2.0f * M_PI;
+        if (glitch_delta < -M_PI) glitch_delta += 2.0f * M_PI;
+
+        // Reject impossible velocities (0.3 rad/tick @ 1ms = 300 rad/s)
+        if (fabsf(glitch_delta) > 0.3f) {
+            glitch_consecutive_++;
+            if (glitch_consecutive_ < 10) {
+                // Glitch! Do prediction step only, skip measurement
+                estimated_pos_ += estimated_vel_ * dt_;
+                return;
+            }
+            // If >= 10, it's a permanent shift (like bootup). Accept it and fall through!
+        }
+        glitch_consecutive_ = 0;
+#endif
+
         // 1. Unwrap absolute boundary crossing (e.g. 0 -> 2PI)
         float delta = raw_encoder_angle_rad - last_raw_angle_;
         if (delta > M_PI)  turn_offset_ -= 2.0f * M_PI;
@@ -47,4 +81,7 @@ private:
     float turn_offset_ = 0.0f;
     float alpha_, beta_, dt_;
     float beta_dt_inv_;
+#if defined(FEATURE_ANTI_GLITCH) && FEATURE_ANTI_GLITCH == 1
+    int glitch_consecutive_ = 0;
+#endif
 };

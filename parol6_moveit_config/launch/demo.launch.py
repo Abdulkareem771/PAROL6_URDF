@@ -10,6 +10,7 @@ from moveit_configs_utils import MoveItConfigsBuilder
 
 def generate_launch_description():
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
+    use_sim_time = LaunchConfiguration("use_sim_time")
 
     moveit_config = (
         MoveItConfigsBuilder("parol6")
@@ -32,6 +33,14 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
+    # For fake hardware execution, we must swap the hardcoded Gazebo plugin with the mock system.
+    fake_robot_description = {
+        "robot_description": moveit_config.robot_description["robot_description"].replace(
+            "ign_ros2_control/IgnitionSystem", 
+            "mock_components/GenericSystem"
+        )
+    }
+
     # Start the actual move_group node/action server
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -39,7 +48,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             moveit_config.to_dict(),
-            {"use_sim_time": True},
+            {"use_sim_time": use_sim_time},
         ],
     )
 
@@ -61,7 +70,7 @@ def generate_launch_description():
             moveit_config.robot_description_semantic,
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
-            {"use_sim_time": True},
+            {"use_sim_time": use_sim_time},
         ],
     )
 
@@ -81,7 +90,7 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="both",
-        parameters=[moveit_config.robot_description],
+        parameters=[fake_robot_description],
         condition=IfCondition(use_fake_hardware),
     )
 
@@ -95,7 +104,7 @@ def generate_launch_description():
     ros2_control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[moveit_config.robot_description, ros2_controllers_path],
+        parameters=[fake_robot_description, ros2_controllers_path],
         output="both",
         condition=IfCondition(use_fake_hardware),
     )
@@ -119,6 +128,11 @@ def generate_launch_description():
                 "use_fake_hardware",
                 default_value="true",
                 description="Start internal ros2_control stack (true) or use external controllers like Gazebo (false).",
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use simulation (Gazebo) clock if true",
             ),
             move_group_node,
             rviz_node,

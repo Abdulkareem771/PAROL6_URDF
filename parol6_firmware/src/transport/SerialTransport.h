@@ -3,23 +3,36 @@
 #include <Arduino.h>
 #include <CircularBuffer.h>
 
+// Select physical transport based on GUI config.h setting.
+// TRANSPORT_MODE: 0 = UART (Serial1 pins 0/1), 1 = USB CDC HS (Native Serial), 2 = Ethernet (UDP)
+#if defined(TRANSPORT_MODE) && TRANSPORT_MODE == 0
+#  define SERIAL_DEV Serial   // Force UART test over USB cable
+#elif defined(TRANSPORT_MODE) && TRANSPORT_MODE == 1
+#  define SERIAL_DEV Serial   // Teensy's Native USB is 'Serial'
+#else
+#  define SERIAL_DEV Serial
+#endif
+
 struct RosCommand {
     uint32_t seq;
     float positions[6];
     float velocities[6];
     uint32_t timestamp_us;
+    bool is_home_cmd;
+    bool is_enable_cmd;
 };
 
 class SerialTransport {
 public:
     void init(uint32_t baud) {
-        Serial.begin(baud);
+        SERIAL_DEV.begin(baud);
     }
+
 
     // Called in main loop (Non-blocking)
     void process_incoming(CircularBuffer<RosCommand, 20>& cmd_queue) {
-        while (Serial.available()) {
-            char c = Serial.read();
+        while (SERIAL_DEV.available()) {
+            char c = SERIAL_DEV.read();
             if (c == '\n' || c == '\r') {
                 if (rx_pos_ > 0) {
                     rx_buf_[rx_pos_] = '\0';
@@ -37,17 +50,17 @@ public:
 
     void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6]) {
         // Format: <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
-        Serial.print("<ACK,");
-        Serial.print(seq);
+        SERIAL_DEV.print("<ACK,");
+        SERIAL_DEV.print(seq);
         for (int i = 0; i < 6; i++) {
-            Serial.print(",");
-            Serial.print(current_pos[i], 4);
+            SERIAL_DEV.print(",");
+            SERIAL_DEV.print(current_pos[i], 4);
         }
         for (int i = 0; i < 6; i++) {
-            Serial.print(",");
-            Serial.print(current_vel[i], 4);
+            SERIAL_DEV.print(",");
+            SERIAL_DEV.print(current_vel[i], 4);
         }
-        Serial.println(">");
+        SERIAL_DEV.println(">");
     }
 
 private:
@@ -56,12 +69,25 @@ private:
     int rx_pos_ = 0;
     
     // Quick parse: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+    // Or special command: <HOME>
     bool parse_string(char* str, RosCommand& cmd) {
         if (str[0] != '<' || str[strlen(str) - 1] != '>') return false;
+        
+        cmd.is_home_cmd = false;
+        cmd.is_enable_cmd = false;
         
         // Remove brackets
         str[strlen(str) - 1] = '\0';
         char* pt = str + 1;
+        
+        if (strcmp(pt, "HOME") == 0) {
+            cmd.is_home_cmd = true;
+            return true;
+        }
+        if (strcmp(pt, "ENABLE") == 0) {
+            cmd.is_enable_cmd = true;
+            return true;
+        }
         
         char* token = strtok(pt, ",");
         if (!token) return false;

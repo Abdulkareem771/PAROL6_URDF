@@ -229,6 +229,18 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 **Root Cause (Most Common):**
 Multiple ROS instances or time desync caused TF to jump backwards. Restarting and ensuring sim time fixed it.
 
+### Issue: Plan Succeeds, But Execute Fails Instantly (No error, just fails)
+
+**Symptoms:**
+- The robot spawns correctly in Gazebo.
+- RViz loads and planning succeeds.
+- Clicking "Execute" instantly returns a failure.
+
+**Cause:** The `parol6_arm_controller` is loaded, but MoveIt's trajectory manager cannot link to its action server because it lacks a namespace. 
+
+**Fix:**
+Open `parol6_moveit_config/config/moveit_controllers.yaml` and ensure `action_ns: follow_joint_trajectory` is specified under the `parol6_arm_controller` block. Otherwise, MoveIt doesn't know where to send the action goal.
+
 ### Host GUI Permission Fix (X11)
 
 **Symptoms:**
@@ -390,6 +402,24 @@ source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+**D. Namespace Collisions (Segmentation fault -11)**
+If RViz immediately segfaults specifically when physical hardware or simulation controllers are loaded (but works fine in `fake` mode):
+This is a known ROS 2 Humble bug related to the RViz MotionPlanning plugin's `class_loader`. 
+- **Fix:** Ensure your `demo.launch.py` does NOT pass the entire `moveit_config.to_dict()` into the `rviz_node` parameters. You must selectively pass keys (`robot_description`, `robot_description_semantic`, etc.) instead.
+
+---
+
+### Issue 9.5: RViz Displays "Requesting initial scene failed"
+
+**Symptoms:**
+- RViz opens successfully but doesn't load the robot.
+- The `MotionPlanning` display shows a yellow warning error: `Requesting initial scene failed`.
+
+**Cause:** There are trailing/zombie `move_group` processes running in the background. They are conflicting over the `/monitored_planning_scene` ROS 2 network topic, preventing your new RViz instance from connecting.
+
+**Fix:**
+Click the **☠️ Kill All** button in the ROS 2 Launch Tab of the Firmware Configurator GUI to cleanly terminate all dangling Gazebo and MoveIt instances, then try launching again.
 
 ---
 

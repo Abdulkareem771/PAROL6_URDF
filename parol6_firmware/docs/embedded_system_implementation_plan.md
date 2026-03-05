@@ -335,11 +335,16 @@ public:
 *   Swap out the `micros()` HAL for the `QuadTimer` HAL.
 
 **Phase 4 — STEP/DIR Hardware Integration & Safety (Current)**
-*   Implement explicit hardware FlexPWM (Zone 2) for generating STEP/DIR signals for the MKS Servo42C drives, entirely decoupled from the 1 kHz sensing/control ISR.
-*   Implement a rigorous Direction-Change timing guard (~2 µs pause before resuming steps) to prevent missing pulse counts on direction flips.
+*   **3-Stage FlexPWM Rollout**:
+    1.  **Stage 1 - Dummy Carrier**: Generate a fixed 50 kHz PWM on one pin. Measure ISR jitter. Verify `< 1 µs` deviation holds.
+    2.  **Stage 2 - Velocity-Controlled Axis**: Implement `velocity_command -> pulse frequency` for ONE motor. Validate direction flip timing (~2 µs guard).
+    3.  **Stage 3 - Multi-Axis Scheduler**: Synchronize 6-axis generation and shared time bases.
+*   **MotorHAL Architecture**: Implement strict layer isolation:
+    *   `ActuatorModel` (Math): Gear ratios (`rad/s -> steps/s`).
+    *   `StepScheduler` (Timing): Phase accumulation and frequency register mapping.
+    *   `FlexPWMDriver` (Hardware Layer): Pin muxing, dead-time, and raw IP bus register writes.
 *   Integrate the legacy Limit Switch map (Zone 4) discovered from the open-loop firmware (`LIMIT1` to `LIMIT6` with explicit LOW/HIGH trigger polarities for active inductive sensors).
 *   **Homing & Calibration Layer**: Implement the rigorous 2-stage limit sweep (Fast Seek → Hit → Backoff → Slow Seek) as a distinct architectural layer that establishes the URDF zero-frame before the `ControlLaw` is permitted to engage. This layer enforces the *coupled mechanical dependencies* found in legacy `main.cpp` (e.g., J6 must be moved out of the way before J5 can safely home without a physical collision).
-*   **MotorHAL / ActuatorModel**: Design an actuation layer that explicitly encapsulates the exact non-integer gear reduction ratios (e.g., J3's `18.0952381`) to convert abstract kinematic radians (from the Interpolator) into absolute FlexPWM step counts with zero accumulated floating-point drift.
 *   Formally freeze the ASCII Serial Protocol specification (`<SEQ,pos,vel...>`) including decimal precision and field order. The Transport Layer assumes a byte-stream agnostic interface supporting UART, USB CDC, or bulk endpoints to prevent ROS ↔ MCU drift.
 
 **Phase 5 — USB Transport Evolution**
