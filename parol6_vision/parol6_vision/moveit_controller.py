@@ -267,8 +267,17 @@ class MoveItController(Node):
             self.get_logger().error("Move to home failed — aborting")
             return False
             
+        # 2. Move to the first waypoint in Join Space (Approach)
+        self.get_logger().info("Phase 2: Move to Approach Point (Joint Space)")
+        approach_pose = copy.deepcopy(path.poses[0])
+        # Lift slightly for approach
+        approach_pose.pose.position.z += self.approach_dist
+        if not self.move_to_pose(approach_pose):
+            self.get_logger().error("Approach to start pose failed")
+            return False
+
         # 3. Plan Welding Path (Cartesian Fallback)
-        self.get_logger().info("Phase 2: Planning Weld Trajectory")
+        self.get_logger().info("Phase 3: Planning Weld Trajectory")
         weld_trajectory = self.plan_cartesian_with_fallback(path)
         
         if not weld_trajectory:
@@ -276,7 +285,7 @@ class MoveItController(Node):
             return False
             
         # 4. Execute Weld
-        self.get_logger().info("Phase 3: Executing Weld")
+        self.get_logger().info("Phase 4: Executing Weld")
         if not self.execute_trajectory_action(weld_trajectory):
             self.get_logger().error("Weld execution failed")
             return False
@@ -526,13 +535,18 @@ class MoveItController(Node):
         pos_con.constraint_region = bv
         pos_con.weight = 1.0
 
-        # NOTE: No orientation constraint on the approach move.
-        # Forcing a specific orientation alongside a position constraint drastically
-        # shrinks the IK sample space and causes OMPL to fail with
-        # "Unable to sample valid states for goal tree".
-        # For the approach phase we only need the EE to reach the position.
+        ori_con = OrientationConstraint()
+        ori_con.header = pose_stamped.header
+        ori_con.link_name = self.ee_link
+        ori_con.orientation = pose_stamped.pose.orientation
+        ori_con.absolute_x_axis_tolerance = 0.2
+        ori_con.absolute_y_axis_tolerance = 0.2
+        ori_con.absolute_z_axis_tolerance = 0.2
+        ori_con.weight = 1.0
+
         goal_constraints = Constraints()
         goal_constraints.position_constraints = [pos_con]
+        goal_constraints.orientation_constraints = [ori_con]
 
         # --- Build MoveGroup Goal ---
         goal = MoveGroup.Goal()

@@ -86,6 +86,7 @@ class LaunchTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._worker: LaunchWorker | None = None
+        self._test_worker: LaunchWorker | None = None
         
         # Resolve the scripts/launchers directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -132,6 +133,20 @@ class LaunchTab(QWidget):
         self.kill_btn.clicked.connect(self._kill_all_nodes)
         self.kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
         cl.addWidget(self.kill_btn)
+        
+        # Spacer for separation
+        cl.addSpacing(20)
+        
+        cl.addWidget(QLabel("Test Plan:"))
+        self.test_shape_combo = QComboBox()
+        self.test_shape_combo.addItems(["Straight", "Curve", "Circle", "ZigZag", "Live Camera (No Inject)"])
+        cl.addWidget(self.test_shape_combo)
+        
+        self.test_btn = QPushButton("▶️ Run Auto-Test")
+        self.test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
+        self.test_btn.clicked.connect(self._run_auto_test)
+        self.test_btn.setToolTip("Starts the moveit_controller, injects the selected path shape, and executes it.")
+        cl.addWidget(self.test_btn)
         
         cl.addStretch()
         root.addWidget(ctrls)
@@ -225,3 +240,37 @@ class LaunchTab(QWidget):
         except Exception as e:
             if hasattr(self, 'log_rviz'):
                 self.log_rviz.append(f"[LAUNCH] ❌ Error executing kill: {e}")
+    def _run_auto_test(self) -> None:
+        if self._test_worker:
+            self.log_rviz.append("[TEST] Stopping currently running test...")
+            self._test_worker.abort()
+            self._test_worker = None
+            self.test_btn.setText("▶️ Run Auto-Test")
+            self.test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
+            return
+            
+        script_path = os.path.join(self._launchers_dir, "launch_auto_test.sh")
+        if not os.path.exists(script_path):
+            self.log_rviz.append(f"[TEST] ❌ Error: Cannot find script {script_path}")
+            return
+            
+        shape = self.test_shape_combo.currentText()
+        self.log_rviz.append(f"\n[TEST] Launching comprehensive Auto-Test ({shape})...")
+        self.log_rviz.append("[TEST] Spawning moveit_controller and waiting for services...")
+        
+        self._test_worker = LaunchWorker(script_path, [shape])
+        self._test_worker.output_rviz.connect(self.log_rviz.append)
+        
+        # Hook up resetting the button when the worker naturally finishes
+        self._test_worker.finished_ok.connect(self._on_test_finished)
+        self._test_worker.finished_err.connect(self._on_test_finished)
+        
+        self._test_worker.start()
+        
+        self.test_btn.setText("🛑 Stop Test")
+        self.test_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
+
+    def _on_test_finished(self):
+        self._test_worker = None
+        self.test_btn.setText("▶️ Run Auto-Test")
+        self.test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
