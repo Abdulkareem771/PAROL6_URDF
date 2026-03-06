@@ -21,11 +21,11 @@ Usage
     ros2 launch parol6_vision capture_and_replay.launch.py
 
     # Timed mode, save every 30 s:
-    ros2 launch parol6_vision capture_and_replay.launch.py \\
+    ros2 launch parol6_vision capture_and_replay.launch.py \
         capture_mode:=timed frame_time:=30.0
 
     # Custom image folder:
-    ros2 launch parol6_vision capture_and_replay.launch.py \\
+    ros2 launch parol6_vision capture_and_replay.launch.py \
         save_dir:=/path/to/my/images
 """
 
