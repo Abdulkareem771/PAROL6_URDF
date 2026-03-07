@@ -74,7 +74,7 @@ CLASS_ID_B  = 1    # e.g. "blue block"  / second object class
 
 # Pixels to dilate each object mask outward before computing the intersection.
 # Larger values → wider overlap zone captured.
-CEXPAND_PX  = 10
+CEXPAND_PX  = 30
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -182,7 +182,7 @@ def compute_seam_intersection(
     # 4. Find the largest contour in the intersection region
     contour_I = find_largest_contour(intersection)
 
-    return contour_I, mask_A, mask_B, mask_A_exp, mask_B_exp
+    return contour_I, mask_A, mask_B, mask_A_exp, mask_B_exp, intersection
 
 
 def draw_predictions(
@@ -194,10 +194,15 @@ def draw_predictions(
     show_labels:   bool  = True,
     show_conf:     bool  = True,
     show_seam:     bool  = True,
-) -> np.ndarray:
-    """
-    Render YOLO segmentation result onto *image* and return the annotated copy.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Render YOLO segmentation result onto *image*.
 
+    Returns
+    -------
+    annotated : BGR image with masks, boxes, labels, and seam overlay drawn on it.
+    seam_path : Nx2 int32 array of [x, y] pixel coordinates that belong to the
+                intersection region (empty array when show_seam is False or no
+                intersection exists).
     Parameters
     ----------
     image      : BGR image (H × W × 3)
@@ -212,12 +217,16 @@ def draw_predictions(
         # No detections → show original with a "No detections" banner
         cv2.putText(annotated, "No detections", (20, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 100, 255), 2, cv2.LINE_AA)
-        return annotated
+        return annotated, np.empty((0, 2), dtype=np.int32)
 
     # Pre-compute seam intersection (needs full image size; done once per frame)
-    seam_contour = None
+    seam_contour  = None
+    seam_path     = np.empty((0, 2), dtype=np.int32)   # Nx2 array of [x, y] coords
     if show_seam:
-        seam_contour, _, _, _, _ = compute_seam_intersection(result, h, w)
+        seam_contour, _, _, _, _, seam_mask = compute_seam_intersection(result, h, w)
+        # seam_path: every pixel inside the intersection region as [x, y] pairs
+        ys, xs = np.where(seam_mask > 0)
+        seam_path = np.column_stack((xs, ys)).astype(np.int32) if len(xs) > 0 else np.empty((0, 2), dtype=np.int32)
 
     boxes       = result.boxes          # Boxes object
     masks_data  = result.masks.xy       # list of (N,2) polygon arrays in pixel coords
@@ -270,13 +279,17 @@ def draw_predictions(
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255),
                             1, cv2.LINE_AA)
 
-    # ---- 4. Seam intersection contour ---------------------------------------
-    # Drawn last so it is always visible on top of everything else.
+    # ---- 4. Seam intersection: filled red region + solid red outline ---------
+    # Drawn last so it is always visible on top of all other annotations.
     if show_seam and seam_contour is not None:
-        # Solid red outline (BGR: 0, 0, 255), 3 px thick — same as Image_processing script
+        # 4a. Semi-transparent red fill over the intersection area
+        seam_overlay = annotated.copy()
+        cv2.drawContours(seam_overlay, [seam_contour], -1, (0, 0, 255), cv2.FILLED)
+        cv2.addWeighted(seam_overlay, 0.45, annotated, 0.55, 0, annotated)
+        # 4b. Solid red outline on top (3 px, same as Image_processing script)
         cv2.drawContours(annotated, [seam_contour], -1, (0, 0, 255), 3)
 
-    return annotated
+    return annotated, seam_path
 
 
 def draw_hud(
@@ -412,7 +425,7 @@ def main():
         num_det = len(result.boxes) if result.boxes is not None else 0
 
         # Render
-        annotated = draw_predictions(
+        annotated, seam_path = draw_predictions(
             orig_bgr, result,
             mask_alpha=mask_alpha,
             show_masks=show_masks,
@@ -421,6 +434,10 @@ def main():
             show_conf=show_conf,
             show_seam=show_seam,
         )
+        if seam_path.size > 0:
+            print(f"[SEAM] seam_path: {len(seam_path)} pixels  "
+                  f"| x∈[{seam_path[:,0].min()}, {seam_path[:,0].max()}]  "
+                  f"y∈[{seam_path[:,1].min()}, {seam_path[:,1].max()}]")
         frame = draw_hud(
             annotated,
             idx=idx,
