@@ -15,6 +15,7 @@ Controls:
   B            : Toggle bounding boxes on / off
   L            : Toggle class labels on / off
   C            : Toggle confidence scores on / off
+  I            : Toggle seam-intersection overlay on / off
   S            : Save current annotated frame to disk
   R            : Re-run prediction on current image (useful after conf change)
   Q / ESC      : Quit
@@ -60,9 +61,20 @@ DEVICE               = "cpu"  # "cpu" or "cuda" (or e.g. "cuda:0")
 # ---- Display settings -------------------------------------------------------
 MASK_ALPHA_INIT  = 0.45       # initial mask overlay transparency (0.0 – 1.0)
 ALPHA_STEP       = 0.05       # how much + / - changes the alpha
-WINDOW_NAME      = "YOLO Segmentation Viewer  |  ← →:navigate  M:mask  B:bbox  S:save  Q:quit"
+WINDOW_NAME      = "YOLO Segmentation Viewer  |  ← →:navigate  M:mask  I:seam  S:save  Q:quit"
 WINDOW_WIDTH     = 1280       # initial window width  (resizable)
 WINDOW_HEIGHT    = 720        # initial window height (resizable)
+
+# ---- Seam-intersection (Image_processing_first_mode port) -------------------
+# Class IDs that your YOLO model uses for the two objects whose boundary
+# intersection defines the seam.  Class 0 is typically the first class listed
+# in your dataset.yaml, class 1 the second.  Adjust as needed.
+CLASS_ID_A  = 0    # e.g. "green block" / first  object class
+CLASS_ID_B  = 1    # e.g. "blue block"  / second object class
+
+# Pixels to dilate each object mask outward before computing the intersection.
+# Larger values → wider overlap zone captured.
+CEXPAND_PX  = 10
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -89,6 +101,90 @@ def random_color(seed: int) -> tuple[int, int, int]:
     return (int(bgr[0]), int(bgr[1]), int(bgr[2]))
 
 
+# =============================================================================
+# SEAM-INTERSECTION HELPERS  (ported from Image_processing_first_mode.py)
+# =============================================================================
+
+def find_largest_contour(binary_mask: np.ndarray):
+    """Return the largest external contour found in *binary_mask* (uint8, 0/255).
+
+    Uses CHAIN_APPROX_NONE to keep every boundary pixel, identical to the
+    approach in Image_processing_first_mode.py.  Returns the contour array
+    (shape N×1×2) or None if no contour is found.
+    """
+    contours, _ = cv2.findContours(
+        binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+    )
+    if not contours:
+        return None
+    return max(contours, key=cv2.contourArea)
+
+
+def build_class_mask(result, class_id: int, img_h: int, img_w: int) -> np.ndarray:
+    """Build a binary uint8 mask (0 / 255) that is the union of all YOLO
+    segmentation masks belonging to *class_id* in *result*.
+
+    The YOLO masks are stored as polygon coordinates (result.masks.xy).
+    We fill them onto a blank canvas the same size as the original image.
+    """
+    canvas = np.zeros((img_h, img_w), dtype=np.uint8)
+
+    if result.masks is None:
+        return canvas
+
+    class_ids  = result.boxes.cls.cpu().numpy().astype(int)
+    masks_poly  = result.masks.xy  # list of (N,2) float arrays (pixel coords)
+
+    for poly, cid in zip(masks_poly, class_ids):
+        if cid != class_id or len(poly) == 0:
+            continue
+        pts = poly.astype(np.int32).reshape((-1, 1, 2))
+        cv2.fillPoly(canvas, [pts], 255)
+
+    return canvas
+
+
+def compute_seam_intersection(
+    result,
+    img_h: int,
+    img_w: int,
+    class_id_a: int  = CLASS_ID_A,
+    class_id_b: int  = CLASS_ID_B,
+    expand_px:  int  = CEXPAND_PX,
+):
+    """Compute the intersection region between the dilated masks of two object
+    classes, exactly mirroring the logic in Image_processing_first_mode.py.
+
+    Returns
+    -------
+    contour_I  : np.ndarray | None
+        The largest contour of the intersection region, ready to be drawn with
+        cv2.drawContours(), or None if either class is absent / no intersection.
+    mask_A     : np.ndarray  – raw binary mask for class A (before dilation)
+    mask_B     : np.ndarray  – raw binary mask for class B (before dilation)
+    mask_A_exp : np.ndarray  – dilated mask for class A
+    mask_B_exp : np.ndarray  – dilated mask for class B
+    """
+    # 1. Build per-class binary masks from the YOLO polygon predictions
+    mask_A = build_class_mask(result, class_id_a, img_h, img_w)
+    mask_B = build_class_mask(result, class_id_b, img_h, img_w)
+
+    # 2. Dilate each mask outward by CEXPAND_PX (same as Image_processing script)
+    dil_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1)
+    )
+    mask_A_exp = cv2.dilate(mask_A, dil_kernel)
+    mask_B_exp = cv2.dilate(mask_B, dil_kernel)
+
+    # 3. Compute the intersection of the two expanded masks
+    intersection = cv2.bitwise_and(mask_A_exp, mask_B_exp)
+
+    # 4. Find the largest contour in the intersection region
+    contour_I = find_largest_contour(intersection)
+
+    return contour_I, mask_A, mask_B, mask_A_exp, mask_B_exp
+
+
 def draw_predictions(
     image: np.ndarray,
     result,
@@ -97,6 +193,7 @@ def draw_predictions(
     show_boxes:    bool  = True,
     show_labels:   bool  = True,
     show_conf:     bool  = True,
+    show_seam:     bool  = True,
 ) -> np.ndarray:
     """
     Render YOLO segmentation result onto *image* and return the annotated copy.
@@ -116,6 +213,11 @@ def draw_predictions(
         cv2.putText(annotated, "No detections", (20, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 100, 255), 2, cv2.LINE_AA)
         return annotated
+
+    # Pre-compute seam intersection (needs full image size; done once per frame)
+    seam_contour = None
+    if show_seam:
+        seam_contour, _, _, _, _ = compute_seam_intersection(result, h, w)
 
     boxes       = result.boxes          # Boxes object
     masks_data  = result.masks.xy       # list of (N,2) polygon arrays in pixel coords
@@ -168,6 +270,12 @@ def draw_predictions(
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255),
                             1, cv2.LINE_AA)
 
+    # ---- 4. Seam intersection contour ---------------------------------------
+    # Drawn last so it is always visible on top of everything else.
+    if show_seam and seam_contour is not None:
+        # Solid red outline (BGR: 0, 0, 255), 3 px thick — same as Image_processing script
+        cv2.drawContours(annotated, [seam_contour], -1, (0, 0, 255), 3)
+
     return annotated
 
 
@@ -182,6 +290,7 @@ def draw_hud(
     show_boxes:  bool,
     show_labels: bool,
     show_conf:   bool,
+    show_seam:   bool  = True,
 ) -> np.ndarray:
     """Overlay a status bar at the bottom of the frame."""
     frame  = annotated.copy()
@@ -200,6 +309,7 @@ def draw_hud(
     flags.append(f"Box:{'ON' if show_boxes else 'OFF'}")
     flags.append(f"Label:{'ON' if show_labels else 'OFF'}")
     flags.append(f"Conf:{'ON' if show_conf else 'OFF'}")
+    flags.append(f"Seam:{'ON' if show_seam else 'OFF'}")
     flags.append(f"α={mask_alpha:.2f}")
 
     left_text  = f"[{idx+1}/{total}]  {image_name}   Detections: {num_det}"
@@ -253,6 +363,7 @@ def main():
     show_boxes  = True
     show_labels = True
     show_conf   = True
+    show_seam   = True
 
     # Cache: dict[int -> (original_bgr, result)]
     cache: dict[int, tuple[np.ndarray, object]] = {}
@@ -285,6 +396,8 @@ def main():
     print("  B                : toggle bounding boxes")
     print("  L                : toggle class labels")
     print("  C                : toggle confidence scores")
+    print("  I                : toggle seam-intersection overlay")
+    print(f"                     (CLASS_ID_A={CLASS_ID_A}, CLASS_ID_B={CLASS_ID_B}, CEXPAND_PX={CEXPAND_PX})")
     print("  + / -            : adjust mask opacity")
     print("  S                : save current annotated image")
     print("  R                : rerun prediction (clears cache for this image)")
@@ -306,6 +419,7 @@ def main():
             show_boxes=show_boxes,
             show_labels=show_labels,
             show_conf=show_conf,
+            show_seam=show_seam,
         )
         frame = draw_hud(
             annotated,
@@ -318,6 +432,7 @@ def main():
             show_boxes=show_boxes,
             show_labels=show_labels,
             show_conf=show_conf,
+            show_seam=show_seam,
         )
 
         cv2.imshow(WINDOW_NAME, frame)
@@ -345,6 +460,9 @@ def main():
 
         elif key == ord('c'):                     # C → toggle confidence
             show_conf = not show_conf
+
+        elif key == ord('i'):                     # I → toggle seam intersection
+            show_seam = not show_seam
 
         elif key in (ord('+'), ord('=')):         # + → more opaque
             mask_alpha = min(1.0, mask_alpha + ALPHA_STEP)
