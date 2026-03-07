@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: parol6_vision
+Version: 1.0.0
+Summary: Vision-guided welding path detection for PAROL6 robot
+Maintainer: PAROL6 Team
+Maintainer-email: your.email@example.com
+License: MIT
+Requires-Dist: setuptools
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: requires-dist
+Dynamic: summary
