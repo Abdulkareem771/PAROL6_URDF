@@ -136,16 +136,44 @@ ros2 run parol6_vision red_line_detector
 ros2 topic echo /vision/weld_lines_2d
 ```
 
-### Test 2: Full Vision Pipeline
+### Test 2: Colored Point Cloud (`/points`)
+
+**What it does:** Fuses QHD colour + depth images into a `PointCloud2` message for RViz 3-D visualisation.
+
+> 🔑 **Executable name is `point_cloud_xyzrgb_node`** (with `_node` suffix). This is auto-started by `test_depth_matcher_bag.launch.py`.
+
+**Run manually (bag or live camera):**
+```bash
+source /opt/ros/humble/setup.bash
+ros2 run depth_image_proc point_cloud_xyzrgb_node \
+  --ros-args \
+  -r /rgb/camera_info:=/kinect2/qhd/camera_info \
+  -r /rgb/image_rect_color:=/kinect2/qhd/image_color_rect \
+  -r /depth_registered/image_rect:=/kinect2/qhd/image_depth_rect \
+  -p use_sim_time:=true
+```
+
+**Verify:**
+```bash
+ros2 topic hz /points   # expect ~15 Hz from bag, ~30 Hz from live camera
+```
+
+**RViz display:**
+1. **Add** → `PointCloud2` → topic: `/points`
+2. Color Transformer: **RGB8**, Style: **Points**, Size: **2 px**
+3. Fixed Frame: `base_link`
+
+### Test 3: Full Vision Pipeline (bag-based)
 
 ```bash
-ros2 launch parol6_vision test_integration.launch.py
+ros2 launch parol6_vision test_depth_matcher_bag.launch.py
 ```
 
 **Check these topics are publishing:**
 - `/vision/weld_lines_2d` - Detected red lines (2D)
 - `/vision/weld_lines_3d` - 3D projected lines
-- `/vision/welding_path` - Generated trajectory
+- `/points` - Colored PointCloud2
+- `/depth_matcher/markers` - 3D weld point markers
 
 ---
 
@@ -232,6 +260,27 @@ sudo usermod -a -G dialout $USER
 xhost +local:docker
 ```
 
+### Issue: `No executable found` for `point_cloud_xyzrgb`
+
+**Error:**
+```
+ros2 run depth_image_proc point_cloud_xyzrgb
+No executable found
+```
+
+**Cause:** In `depth_image_proc` ≥ 3.x (ROS Humble), executables have a `_node` suffix.
+
+**Fix:** Use the correct name:
+```bash
+ros2 run depth_image_proc point_cloud_xyzrgb_node ...
+```
+
+Verify all available executables:
+```bash
+source /opt/ros/humble/setup.bash
+ros2 pkg executables depth_image_proc
+```
+
 ---
 
 ## 📊 Expected System Architecture
@@ -290,11 +339,13 @@ Before proceeding with vision development:
 - [ ] Camera frame (TF axes) visible at expected position
 - [ ] Camera panel shows live feed (when Kinect connected)
 - [ ] Joint states publishing at ~10 Hz
+- [ ] `/points` publishing at ~15+ Hz (`ros2 topic hz /points`)
+- [ ] PointCloud2 display visible in RViz with colour
 - [ ] No console errors or warnings
 
 **Once all checked**, you're ready to start vision pipeline development!
 
 ---
 
-**Last Updated:** 2026-01-21  
+**Last Updated:** 2026-02-20  
 **Maintainer:** PAROL6 Vision Team

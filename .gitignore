@@ -42,7 +42,10 @@ logs/*.csv
 # Extracted datasets (RGB and Depth images)
 vision_work/extracted_dataset/*
 vision_work/rosbags/*
-
+vision_work/Checkboards/*
+vision_work/IR_Images_ToCalibrate/*
+vision_work/Sync_Images_ToCalibrate/*
+vision_work/color_calibrate/*
 # Wheel download directory
 wheels_linux_py310/*
 wheels/*
@@ -51,6 +54,7 @@ wheels/*
 # Temporarily container's start code
 #start_container.sh
 
+legacy code open loop/*
 test_data/kinect_snapshot_20260126_231342/*
 
 rosbag2_2026_01_26-23_26_59.zip
@@ -78,3 +82,13 @@ logs/launchers/*
 # Training output images / artifacts that are regenerated each run
 vision_work/resunet_training/test_results/
 vision_work/resunet_training/Tests/
+
+vision_work/YOLO/*
+venv_310/*
+Yolo_data2_model/*
+YOLO dependencies/
+01Yolo_model2_data/
+vision_work/color_calibrate/*
+rosbag2_2026_01_26-23_26_59.zip/*
+vision_work/color images to calibrate/*
+legacy code open loop/*

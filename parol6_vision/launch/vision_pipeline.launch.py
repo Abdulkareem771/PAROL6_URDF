@@ -1,6 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
@@ -57,10 +59,28 @@ def generate_launch_description():
         output='screen'
     )
 
+    # 4. Optional: Camera Setup (TFs, Robot State Publisher)
+    # This solves the "missing TF" issue for depth_matcher
+    launch_setup_arg = DeclareLaunchArgument(
+        'launch_setup',
+        default_value='true',
+        description='Whether to launch the camera/robot setup (TF, Rsp)'
+    )
+    
+    camera_setup_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([pkg_share, 'launch', 'camera_setup.launch.py'])
+        ]),
+        launch_arguments={'use_rviz': LaunchConfiguration('use_rviz')}.items(),
+        condition=IfCondition(LaunchConfiguration('launch_setup'))
+    )
+
     return LaunchDescription([
         use_rviz_arg,
+        launch_setup_arg,
+        camera_setup_launch,
         detector_node,
         matcher_node,
         generator_node,
-        # rviz_node
+        # rviz_node (Handled by camera_setup if launch_setup is true, or you can uncomment this if launch_setup is false)
     ])

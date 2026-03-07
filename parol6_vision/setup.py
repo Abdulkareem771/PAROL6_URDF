@@ -34,6 +34,8 @@ setup(
             'moveit_controller = parol6_vision.moveit_controller:main',
             'dummy_joint_publisher = parol6_vision.dummy_joint_publisher:main',
             'hsv_inspector = parol6_vision.hsv_inspector_node:main',
+            'capture_images = parol6_vision.capture_images_node:main',
+            'read_image = parol6_vision.read_image_node:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],

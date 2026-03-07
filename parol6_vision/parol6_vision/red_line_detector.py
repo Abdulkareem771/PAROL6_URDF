@@ -92,7 +92,7 @@ class RedLineDetector(Node):
     Detects red marker lines indicating welding seams using computer vision.
     
     Subscribed Topics:
-        /kinect2/qhd/image_color_rect (sensor_msgs/Image): Rectified RGB image
+        /vision/captured_image_color (sensor_msgs/Image): Replayed colour image
         
     Published Topics:
         /vision/weld_lines_2d (parol6_msgs/WeldLineArray): Detected weld lines
@@ -142,6 +142,7 @@ class RedLineDetector(Node):
         # Performance
         self.declare_parameter('processing_rate', 10.0)
         self.declare_parameter('publish_debug_images', True)
+        self.declare_parameter('single_frame_mode', False)
         
         # ============================================================
         # GET PARAMETERS
@@ -168,6 +169,7 @@ class RedLineDetector(Node):
         self.max_lines = self.get_parameter('max_lines_per_frame').value
         
         self.publish_debug = self.get_parameter('publish_debug_images').value
+        self.single_frame_mode = self.get_parameter('single_frame_mode').value
         
         # ============================================================
         # INITIALIZE CV BRIDGE
@@ -212,7 +214,7 @@ class RedLineDetector(Node):
         
         self.image_sub = self.create_subscription(
             Image,
-            '/kinect2/qhd/image_color_rect',
+            '/vision/captured_image_color',
             self.image_callback,
             10
         )
@@ -223,11 +225,13 @@ class RedLineDetector(Node):
         
         self.frame_count = 0
         self.detection_count = 0
+        self.single_frame_processed = False
         
         self.get_logger().info('Red Line Detector initialized')
         self.get_logger().info(f'HSV Range 1: {self.hsv_lower_1} to {self.hsv_upper_1}')
         self.get_logger().info(f'HSV Range 2: {self.hsv_lower_2} to {self.hsv_upper_2}')
         self.get_logger().info(f'Min confidence: {self.min_confidence}')
+        self.get_logger().info(f'Single frame mode: {self.single_frame_mode}')
     
     # ================================================================
     # MAIN PROCESSING CALLBACK
@@ -249,6 +253,9 @@ class RedLineDetector(Node):
         Args:
             msg (sensor_msgs/Image): Input RGB image from camera
         """
+        if self.single_frame_mode and self.single_frame_processed:
+            return
+
         self.frame_count += 1
         
         try:
@@ -294,6 +301,16 @@ class RedLineDetector(Node):
             
             markers = self.create_markers(valid_lines, msg.header)
             self.markers_pub.publish(markers)
+
+        if self.single_frame_mode:
+            self.single_frame_processed = True
+            if self.image_sub is not None:
+                self.destroy_subscription(self.image_sub)
+                self.image_sub = None
+            self.get_logger().info(
+                f'Single-frame mode complete after frame {self.frame_count}; '
+                'stopped image subscription.'
+            )
     
     # ================================================================
     # DETECTION PIPELINE
@@ -359,14 +376,16 @@ class RedLineDetector(Node):
             line.id = f"red_line_{idx}"
             line.confidence = float(confidence)
             
-            # Convert to Point32 (ROS message type)
+            # IMPORTANT: Use all ordered skeleton points for pixels, NOT simplified.
+            # The depth_matcher needs dense pixel samples for 3D reconstruction.
+            # simplified_points (Douglas-Peucker) reduces ~85 pts → 2 endpoints for straight lines.
             line.pixels = [
                 Point32(x=float(pt[0]), y=float(pt[1]), z=0.0)
-                for pt in simplified_points
+                for pt in ordered_points
             ]
             
             # Compute bounding box
-            line.bbox_min, line.bbox_max = self.compute_bbox(simplified_points)
+            line.bbox_min, line.bbox_max = self.compute_bbox(ordered_points)
             
             detected_lines.append(line)
         
@@ -692,7 +711,7 @@ class RedLineDetector(Node):
             
             # Set points (convert Point32 → Point for marker)
             marker.points = [
-                Point(x=p.x / 1000.0, y=p.y / 1000.0, z=0.0)  # Convert pixels → meters
+                Point(x=(p.x / 1000.0) * 0.45, y=(p.y / 1000.0) * 0.45, z=0.45)  # Reverted to Z=0.45m
                 for p in line.pixels
             ]
             
