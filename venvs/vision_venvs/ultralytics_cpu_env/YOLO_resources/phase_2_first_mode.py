@@ -44,8 +44,8 @@ MODEL_PATH = project_dir / "yolo_training" / "experiment_12_YOLO_Segmentation" /
 
 # Folder that contains the images to predict on.
 # Change this to any folder with images you want to test.
-IMAGE_FOLDER = project_dir / "data" / "raw_images_for_models"
-
+#IMAGE_FOLDER = project_dir / "data" / "raw_images_for_models"
+IMAGE_FOLDER = project_dir / "data" / "YOLO_Segmentation_data" / "test"
 # If IMAGE_FOLDER does not exist or is empty the script falls back to the
 # YOLO Segmentation test split (used during training validation).
 FALLBACK_IMAGE_FOLDER = project_dir / "data" / "YOLO_Segmentation_data" / "test"
@@ -54,7 +54,7 @@ FALLBACK_IMAGE_FOLDER = project_dir / "data" / "YOLO_Segmentation_data" / "test"
 OUTPUT_FOLDER = project_dir / "data" / "phase2_predictions"
 
 # ---- Prediction settings ----------------------------------------------------
-CONFIDENCE_THRESHOLD = 0.25   # minimum confidence to show a detection
+CONFIDENCE_THRESHOLD = 0.45   # minimum confidence to show a detection
 IOU_THRESHOLD        = 0.45   # NMS IoU threshold
 DEVICE               = "cpu"  # "cpu" or "cuda" (or e.g. "cuda:0")
 
