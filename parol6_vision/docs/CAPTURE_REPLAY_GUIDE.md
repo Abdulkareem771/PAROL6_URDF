@@ -27,14 +27,17 @@ The pipeline is split into two independent stages:
 │                                                                     │
 │  color_<ts>.png ──► /vision/captured_image_color  (bgr8)           │
 │  depth_<ts>.png ──► /vision/captured_image_depth  (16UC1)          │
+│                                                                     │
+│  /kinect2/qhd/camera_info (live) ──► /vision/captured_camera_info  │
+│   (re-stamped to match the replay pair timestamp)                   │
 └─────────────────────────────────────────────────────────────────────┘
                         │
           ┌─────────────┴──────────────┐
           ▼                            ▼
   red_line_detector            depth_matcher
   (subscribes to               (subscribes to
-  /vision/captured_            /vision/captured_
-   image_color)                 image_depth)
+  /vision/captured_            /vision/captured_image_depth
+   image_color)                /vision/captured_camera_info)
 ```
 
 ---
@@ -95,8 +98,8 @@ The node uses `message_filters.ApproximateTimeSynchronizer` with a `slop` of 100
 | | |
 |---|---|
 | **ROS name** | `read_image` |
-| **Subscribed topics** | *(none — reads from disk)* |
-| **Published topics** | `/vision/captured_image_color` (bgr8) · `/vision/captured_image_depth` (16UC1) |
+| **Subscribed topics** | `/kinect2/qhd/camera_info` *(cached for re-stamping)* |
+| **Published topics** | `/vision/captured_image_color` (bgr8) · `/vision/captured_image_depth` (16UC1) · `/vision/captured_camera_info` (CameraInfo) |
 
 #### Parameters
 
@@ -114,6 +117,14 @@ The node uses `message_filters.ApproximateTimeSynchronizer` with a `slop` of 100
 
 This means the node reacts to captures in near-real-time without re-publishing old data after a restart.
 
+#### Why `camera_info` is re-published
+`depth_matcher` uses `ApproximateTimeSynchronizer` to align three streams:
+- `/vision/weld_lines_2d` — timestamped at replay time
+- `/vision/captured_image_depth` — timestamped at replay time
+- `camera_info` — **must also match replay time**
+
+`read_image` subscribes to the live `/kinect2/qhd/camera_info`, copies its intrinsics, and re-publishes them on `/vision/captured_camera_info` with the same `now()` timestamp as the image pair. Without this, the sync never fires because the live `camera_info` timestamps are unrelated to the replayed image timestamps.
+
 ---
 
 ## Topic Wiring Summary
@@ -122,13 +133,15 @@ This means the node reacts to captures in near-real-time without re-publishing o
 |---|---|---|
 | Kinect2 driver | `/kinect2/qhd/image_color_rect` | `capture_images` |
 | Kinect2 driver | `/kinect2/qhd/image_depth_rect` | `capture_images` |
+| Kinect2 driver | `/kinect2/qhd/camera_info` | `read_image` *(cached)* |
 | `read_image` | `/vision/captured_image_color` | `red_line_detector` |
 | `read_image` | `/vision/captured_image_depth` | `depth_matcher` |
+| `read_image` | `/vision/captured_camera_info` | `depth_matcher` |
 | `red_line_detector` | `/vision/weld_lines_2d` | `depth_matcher` |
 | `depth_matcher` | `/vision/weld_lines_3d` | `path_generator` |
 
 > [!NOTE]
-> `red_line_detector` and `depth_matcher` subscribe directly to the `/vision/captured_image_*` topics in their source code. **No `remappings` are needed** in the launch files.
+> `red_line_detector` and `depth_matcher` subscribe directly to the `/vision/captured_image_*` and `/vision/captured_camera_info` topics in their source code. **No `remappings` are needed** in the launch files.
 
 ---
 
@@ -213,12 +226,99 @@ parol6_vision/
 
 ---
 
-## Troubleshooting
+## Known Issues & Fixes
+
+---
+
+### 1. `depth_matcher` silent — never logs any output
+
+**Symptom:** `capture_images` saves files, `read_image` publishes them, `red_line_detector` detects lines — but `depth_matcher` is completely silent.
+
+**Root cause:** `depth_matcher` uses `ApproximateTimeSynchronizer` to align three streams. Originally, the third stream was the **live** `/kinect2/qhd/camera_info` (published at 1 Hz by the Kinect2 driver with hardware timestamps). The replayed images carry fresh `now()` timestamps that never match the live `camera_info` timestamps → the synchronizer never fires.
+
+**Fix applied:**
+- `read_image` now subscribes to `/kinect2/qhd/camera_info`, caches the intrinsics, and re-publishes them on `/vision/captured_camera_info` with the **same `now()` timestamp** as the image pair.
+- `depth_matcher` was updated to subscribe to `/vision/captured_camera_info` instead of the live topic.
+
+All three streams now share an identical timestamp → sync fires every time a pair is published.
+
+> [!NOTE]
+> The Kinect2 driver must still be running so `read_image` can receive the camera intrinsics to cache. The intrinsics are static — only the timestamp is replaced.
+
+---
+
+### 2. `PackageNotFoundError: No package metadata was found for parol6-vision`
+
+**Symptom:** All nodes crash immediately at launch with:
+```
+importlib.metadata.PackageNotFoundError: No package metadata was found for parol6-vision
+```
+
+**Root cause:** `colcon build --symlink-install` installs Python packages using the legacy **editable mode** (`.egg-info` directory). On Python 3.10, `importlib.metadata` — which the ROS 2 entry-point loader uses — **only reads `.dist-info`** directories. It silently ignores `.egg-info`, so no entry points are found.
+
+**Fix:** After every fresh build or `setup.py` change, run this inside the Docker container:
+
+```bash
+cd /workspace/parol6_vision
+pip install --ignore-installed .
+```
+
+This installs a proper wheel that creates a `.dist-info` directory in `/usr/local/lib/python3.10/dist-packages/` with all entry points correctly registered.
+
+> [!IMPORTANT]
+> You must run `pip install --ignore-installed .` **every time** you add a new node to `setup.py`. The colcon build alone is not sufficient.
+
+**Full clean + rebuild sequence:**
+```bash
+# 1. Clean
+rm -rf /workspace/build/parol6_vision /workspace/install/parol6_vision
+
+# 2. Build
+cd /workspace && colcon build --packages-select parol6_vision
+
+# 3. Install metadata
+cd /workspace/parol6_vision && pip install --ignore-installed .
+
+# 4. Source
+source /workspace/install/setup.bash
+```
+
+---
+
+### 3. `UnknownROSArgsError` when passing multiple parameters to `ros2 run`
+
+**Symptom:**
+```
+ros2 run parol6_vision capture_images \
+    --ros-args -p capture_mode:=timed frame_time:=90.0
+# → rclpy._rclpy_pybind11.UnknownROSArgsError: ['frame_time:=90.0']
+```
+
+**Root cause:** The `-p` flag only applies to the **immediately following** `key:=value`. Additional parameters without their own `-p` are treated as unrecognised raw arguments.
+
+**Fix:** Every parameter needs its own `-p` flag:
+
+```bash
+# ❌ WRONG
+ros2 run parol6_vision capture_images \
+    --ros-args -p capture_mode:=timed frame_time:=90.0
+
+# ✅ CORRECT
+ros2 run parol6_vision capture_images \
+    --ros-args -p capture_mode:=timed -p frame_time:=90.0
+```
+
+---
+
+## Troubleshooting Quick-Reference
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| `capture_images` starts but never saves | Colour or depth topic not publishing | Check `ros2 topic hz /kinect2/qhd/image_color_rect` |
-| `read_image` starts but no topics appear | No matched pairs in folder yet | Capture at least one pair with Stage 1 |
-| `red_line_detector` logs nothing after pair is published | RGB image has no red content | Check image quality / lighting |
-| `depth_matcher` logs "0 3D lines" | Depth image all zeros or out of range | Check driver encoding; default range is 300–2000 mm |
-| Build fails after adding files | Stale build cache | `rm -rf build/parol6_vision install/parol6_vision && colcon build --packages-select parol6_vision --symlink-install` |
+| `capture_images` starts but never saves | Colour or depth topic not publishing | `ros2 topic hz /kinect2/qhd/image_color_rect` |
+| `read_image` starts but no topics appear | No matched pairs in folder yet | Capture at least one pair first |
+| `read_image` warns "No camera_info received yet" | Kinect2 driver not running | Start `kinect2_bridge` before the pipeline |
+| `red_line_detector` logs nothing | RGB image has no red content | Check lighting / marker colour |
+| `depth_matcher` completely silent | Timestamp mismatch (see Issue #1 above) | Ensure you're on the latest code; `camera_info` passthrough is required |
+| `depth_matcher` logs "0 3D lines" | Depth all zeros or out of range | Default range 300–2000 mm; check driver encoding |
+| All nodes crash with `PackageNotFoundError` | Missing `.dist-info` metadata (see Issue #2 above) | `cd /workspace/parol6_vision && pip install --ignore-installed .` |
+| `UnknownROSArgsError` on `ros2 run` | Missing `-p` before each parameter (see Issue #3 above) | Add `-p` before every `key:=value` |
