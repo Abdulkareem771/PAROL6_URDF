@@ -61,7 +61,7 @@ DEVICE               = "cpu"  # "cpu" or "cuda" (or e.g. "cuda:0")
 # ---- Display settings -------------------------------------------------------
 MASK_ALPHA_INIT  = 0.45       # initial mask overlay transparency (0.0 – 1.0)
 ALPHA_STEP       = 0.05       # how much + / - changes the alpha
-WINDOW_NAME      = "YOLO Segmentation Viewer  |  ← →:navigate  M:mask  I:seam  S:save  Q:quit"
+WINDOW_NAME      = "YOLO Segmentation Viewer  |  ← →:navigate  M:mask  I:seam  T:seam-mode  S:save  Q:quit"
 WINDOW_WIDTH     = 1280       # initial window width  (resizable)
 WINDOW_HEIGHT    = 720        # initial window height (resizable)
 
@@ -72,9 +72,15 @@ WINDOW_HEIGHT    = 720        # initial window height (resizable)
 CLASS_ID_A  = 0    # e.g. "green block" / first  object class
 CLASS_ID_B  = 1    # e.g. "blue block"  / second object class
 
-# Pixels to dilate each object mask outward before computing the intersection.
+# Pixels to dilate each object mask/bbox outward before computing intersection.
 # Larger values → wider overlap zone captured.
 CEXPAND_PX  = 30
+
+# Seam-intersection mode: how the per-class regions are built.
+#   "mask"  – use the YOLO segmentation polygon masks  (Mode 1 – masking)
+#   "bbox"  – use the YOLO bounding-box rectangles      (Mode 2 – bboxing)
+# Can be toggled at runtime with the T key.
+SEAM_MODE   = "mask"   # default startup mode
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -152,24 +158,22 @@ def compute_seam_intersection(
     class_id_b: int  = CLASS_ID_B,
     expand_px:  int  = CEXPAND_PX,
 ):
-    """Compute the intersection region between the dilated masks of two object
-    classes, exactly mirroring the logic in Image_processing_first_mode.py.
+    """MODE 1 – MASKING: intersection of the dilated segmentation-polygon masks.
 
     Returns
     -------
-    contour_I  : np.ndarray | None
-        The largest contour of the intersection region, ready to be drawn with
-        cv2.drawContours(), or None if either class is absent / no intersection.
-    mask_A     : np.ndarray  – raw binary mask for class A (before dilation)
-    mask_B     : np.ndarray  – raw binary mask for class B (before dilation)
-    mask_A_exp : np.ndarray  – dilated mask for class A
-    mask_B_exp : np.ndarray  – dilated mask for class B
+    contour_I  : largest contour of the intersection region, or None.
+    mask_A     : raw binary mask for class A (before dilation)
+    mask_B     : raw binary mask for class B (before dilation)
+    mask_A_exp : dilated mask for class A
+    mask_B_exp : dilated mask for class B
+    intersection : raw binary intersection mask (0/255)
     """
     # 1. Build per-class binary masks from the YOLO polygon predictions
     mask_A = build_class_mask(result, class_id_a, img_h, img_w)
     mask_B = build_class_mask(result, class_id_b, img_h, img_w)
 
-    # 2. Dilate each mask outward by CEXPAND_PX (same as Image_processing script)
+    # 2. Dilate each mask outward by expand_px
     dil_kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1)
     )
@@ -185,6 +189,78 @@ def compute_seam_intersection(
     return contour_I, mask_A, mask_B, mask_A_exp, mask_B_exp, intersection
 
 
+# =============================================================================
+# SEAM-INTERSECTION MODE 2 – BBOXING
+# =============================================================================
+
+def build_class_mask_from_bbox(
+    result,
+    class_id: int,
+    img_h: int,
+    img_w: int,
+) -> np.ndarray:
+    """Build a binary uint8 mask (0 / 255) by filling the bounding-box rectangle
+    of every detection that belongs to *class_id*.
+
+    This is the bbox equivalent of build_class_mask(); instead of the precise
+    segmentation polygon, it uses the axis-aligned bounding box.
+    """
+    canvas = np.zeros((img_h, img_w), dtype=np.uint8)
+
+    if result.boxes is None:
+        return canvas
+
+    class_ids = result.boxes.cls.cpu().numpy().astype(int)
+    boxes_xyxy = result.boxes.xyxy.cpu().numpy()  # shape (N, 4)
+
+    for box, cid in zip(boxes_xyxy, class_ids):
+        if cid != class_id:
+            continue
+        x1, y1, x2, y2 = map(int, box)
+        # Clamp to image bounds
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(img_w - 1, x2), min(img_h - 1, y2)
+        cv2.rectangle(canvas, (x1, y1), (x2, y2), 255, cv2.FILLED)
+
+    return canvas
+
+
+def compute_seam_intersection_bbox(
+    result,
+    img_h: int,
+    img_w: int,
+    class_id_a: int  = CLASS_ID_A,
+    class_id_b: int  = CLASS_ID_B,
+    expand_px:  int  = CEXPAND_PX,
+):
+    """MODE 2 – BBOXING: intersection of the dilated bounding-box rectangles.
+
+    Identical pipeline to compute_seam_intersection(), but uses filled
+    bounding-box rectangles instead of segmentation polygons as the source
+    masks.  Useful when mask quality is low.
+
+    Returns the same six values as compute_seam_intersection().
+    """
+    # 1. Build per-class rectangle masks from the YOLO bounding boxes
+    mask_A = build_class_mask_from_bbox(result, class_id_a, img_h, img_w)
+    mask_B = build_class_mask_from_bbox(result, class_id_b, img_h, img_w)
+
+    # 2. Dilate each rectangle mask outward by expand_px
+    dil_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * expand_px + 1, 2 * expand_px + 1)
+    )
+    mask_A_exp = cv2.dilate(mask_A, dil_kernel)
+    mask_B_exp = cv2.dilate(mask_B, dil_kernel)
+
+    # 3. Intersection of the two expanded bbox masks
+    intersection = cv2.bitwise_and(mask_A_exp, mask_B_exp)
+
+    # 4. Find the largest contour of the intersection region
+    contour_I = find_largest_contour(intersection)
+
+    return contour_I, mask_A, mask_B, mask_A_exp, mask_B_exp, intersection
+
+
 def draw_predictions(
     image: np.ndarray,
     result,
@@ -194,6 +270,7 @@ def draw_predictions(
     show_labels:   bool  = True,
     show_conf:     bool  = True,
     show_seam:     bool  = True,
+    seam_mode:     str   = "mask",   # "mask" (Mode 1) or "bbox" (Mode 2)
 ) -> tuple[np.ndarray, np.ndarray]:
     """Render YOLO segmentation result onto *image*.
 
@@ -223,7 +300,11 @@ def draw_predictions(
     seam_contour  = None
     seam_path     = np.empty((0, 2), dtype=np.int32)   # Nx2 array of [x, y] coords
     if show_seam:
-        seam_contour, _, _, _, _, seam_mask = compute_seam_intersection(result, h, w)
+        # Dispatch to the correct mode
+        if seam_mode == "bbox":
+            seam_contour, _, _, _, _, seam_mask = compute_seam_intersection_bbox(result, h, w)
+        else:   # default: "mask"
+            seam_contour, _, _, _, _, seam_mask = compute_seam_intersection(result, h, w)
         # seam_path: every pixel inside the intersection region as [x, y] pairs
         ys, xs = np.where(seam_mask > 0)
         seam_path = np.column_stack((xs, ys)).astype(np.int32) if len(xs) > 0 else np.empty((0, 2), dtype=np.int32)
@@ -304,6 +385,7 @@ def draw_hud(
     show_labels: bool,
     show_conf:   bool,
     show_seam:   bool  = True,
+    seam_mode:   str   = "mask",
 ) -> np.ndarray:
     """Overlay a status bar at the bottom of the frame."""
     frame  = annotated.copy()
@@ -323,6 +405,7 @@ def draw_hud(
     flags.append(f"Label:{'ON' if show_labels else 'OFF'}")
     flags.append(f"Conf:{'ON' if show_conf else 'OFF'}")
     flags.append(f"Seam:{'ON' if show_seam else 'OFF'}")
+    flags.append(f"SeamMode:{'BBOX' if seam_mode == 'bbox' else 'MASK'}")
     flags.append(f"α={mask_alpha:.2f}")
 
     left_text  = f"[{idx+1}/{total}]  {image_name}   Detections: {num_det}"
@@ -377,6 +460,7 @@ def main():
     show_labels = True
     show_conf   = True
     show_seam   = True
+    seam_mode   = SEAM_MODE          # "mask" or "bbox" — toggle with T
 
     # Cache: dict[int -> (original_bgr, result)]
     cache: dict[int, tuple[np.ndarray, object]] = {}
@@ -410,6 +494,7 @@ def main():
     print("  L                : toggle class labels")
     print("  C                : toggle confidence scores")
     print("  I                : toggle seam-intersection overlay")
+    print("  T                : toggle seam mode  [MASK = use seg. polygons | BBOX = use bounding boxes]")
     print(f"                     (CLASS_ID_A={CLASS_ID_A}, CLASS_ID_B={CLASS_ID_B}, CEXPAND_PX={CEXPAND_PX})")
     print("  + / -            : adjust mask opacity")
     print("  S                : save current annotated image")
@@ -433,9 +518,10 @@ def main():
             show_labels=show_labels,
             show_conf=show_conf,
             show_seam=show_seam,
+            seam_mode=seam_mode,
         )
         if seam_path.size > 0:
-            print(f"[SEAM] seam_path: {len(seam_path)} pixels  "
+            print(f"[SEAM/{seam_mode.upper()}] seam_path: {len(seam_path)} pixels  "
                   f"| x∈[{seam_path[:,0].min()}, {seam_path[:,0].max()}]  "
                   f"y∈[{seam_path[:,1].min()}, {seam_path[:,1].max()}]")
         frame = draw_hud(
@@ -450,6 +536,7 @@ def main():
             show_labels=show_labels,
             show_conf=show_conf,
             show_seam=show_seam,
+            seam_mode=seam_mode,
         )
 
         cv2.imshow(WINDOW_NAME, frame)
@@ -480,6 +567,10 @@ def main():
 
         elif key == ord('i'):                     # I → toggle seam intersection
             show_seam = not show_seam
+
+        elif key == ord('t'):                     # T → toggle seam mode mask ↔ bbox
+            seam_mode = "bbox" if seam_mode == "mask" else "mask"
+            print(f"[INFO] Seam mode switched to: {seam_mode.upper()}")
 
         elif key in (ord('+'), ord('=')):         # + → more opaque
             mask_alpha = min(1.0, mask_alpha + ALPHA_STEP)
