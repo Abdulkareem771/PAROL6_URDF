@@ -148,7 +148,7 @@ class DepthMatcher(Node):
             self, Image, '/vision/captured_image_depth'
         )
         self.info_sub = message_filters.Subscriber(
-            self, CameraInfo, '/kinect2/qhd/camera_info'
+            self, CameraInfo, '/vision/captured_camera_info'
         )
         
         # Use ApproximateTimeSynchronizer
