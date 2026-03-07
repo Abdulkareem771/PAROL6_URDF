@@ -44,7 +44,7 @@ MODEL_PATH = project_dir / "yolo_training" / "experiment_12_YOLO_Segmentation" /
 
 # Folder that contains the images to predict on.
 # Change this to any folder with images you want to test.
-IMAGE_FOLDER = project_dir / "data" / "YOLO_Segmentation_data" / "test"
+IMAGE_FOLDER = project_dir / "data" / "some_images"
 
 # If IMAGE_FOLDER does not exist or is empty the script falls back to the
 # YOLO Segmentation test split (used during training validation).
