@@ -14,11 +14,8 @@ EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
 CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
 
-current_dir = Path(__file__)
-project_dir = current_dir.parent.parent
-
-print(f"current_dir: {current_dir}")
-print(f"project_dir: {project_dir}")
+current_dir = Path(__file__)                # YOLO_resources/detect_path.py
+project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
 SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
 
