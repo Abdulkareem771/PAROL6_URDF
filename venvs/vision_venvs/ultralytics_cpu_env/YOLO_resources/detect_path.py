@@ -17,13 +17,16 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a7.png"
+print(f"current_dir: {current_dir}")
+print(f"project_dir: {project_dir}")
+
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
 def segment_blocks(image_path):
     # 1. Read the image
-    img = cv2.imread(image_path)
+    img = cv2.imread(str(image_path))
     if img is None:
         print(f"Could not read image: {image_path}")
         return None, None
@@ -178,7 +181,7 @@ def process_folder(folder_path, output_folder):
 
 g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
-
+print(f"g_matrix dtype: {g_matrix.dtype}")
 
 
 
