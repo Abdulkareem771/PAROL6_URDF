@@ -5,14 +5,16 @@ import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-y_min_G, y_max_G = 0, 0
-x_min_G, x_max_G = 0, 0
-y_min_R, y_max_R = 0, 0
-x_min_R, x_max_R = 0, 0
+y_min_Ob1, y_max_Ob1 = 0, 0
+x_min_Ob1, x_max_Ob1 = 0, 0
+y_min_Ob2, y_max_Ob2 = 0, 0
+x_min_Ob2, x_max_Ob2 = 0, 0
 EPSILON_FACTOR = 0.05
 EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
 CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
+# Ob1 == Green
+# Ob2 == Blue
 
 current_dir = Path(__file__)
 project_dir = current_dir.parent.parent
@@ -38,39 +40,26 @@ def segment_blocks(image_path):
     # Note: HSV ranges in OpenCV are H: 0-180, S: 0-255, V: 0-255
     
     # Green range
-    lower_green = np.array([35, 50, 50])
-    upper_green = np.array([85, 255, 255])
+    lower_Ob1 = np.array([35, 50, 50])
+    upper_Ob1 = np.array([85, 255, 255])
     
     # Blue range
-    lower_blue = np.array([100, 50, 50])
-    upper_blue = np.array([140, 255, 255])
+    lower_Ob2 = np.array([100, 50, 50])
+    upper_Ob2 = np.array([140, 255, 255])
 
-    """
-    # Red range (Red wraps around 0 and 180, so we combine two ranges)
-    lower_red1 = np.array([0, 70, 50])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 70, 50])
-    upper_red2 = np.array([180, 255, 255])
-    """
 
     # 4. Create Masks (G and R matrices)
     # G matrix: 255 for green pixels, 0 otherwise
-    G = cv2.inRange(hsv, lower_green, upper_green)
+    Ob1_mask = cv2.inRange(hsv, lower_Ob1, upper_Ob1)
 
     # B matrix: 255 for blue pixels, 0 otherwise
-    B = cv2.inRange(hsv, lower_blue, upper_blue)
+    Ob2_mask = cv2.inRange(hsv, lower_Ob2, upper_Ob2)
 
-    """
-    # R matrix: combine both ends of the red spectrum
-    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    R = cv2.bitwise_or(mask_red1, mask_red2)
-    """
     
     # Optional: Clean up noise with morphological operations
     kernel = np.ones((5, 5), np.uint8)
-    G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
-    B = cv2.morphologyEx(B, cv2.MORPH_OPEN, kernel)
+    Ob1_mask = cv2.morphologyEx(Ob1_mask, cv2.MORPH_OPEN, kernel)
+    Ob2_mask = cv2.morphologyEx(Ob2_mask, cv2.MORPH_OPEN, kernel)
 
     # 5. Compute Bounding Boxes and draw on a copy of img_rgb
     img_annotated = img_rgb.copy()
