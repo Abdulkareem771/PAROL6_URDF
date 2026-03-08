@@ -74,7 +74,7 @@ CLASS_ID_B  = 1    # e.g. "blue block"  / second object class
 
 # Pixels to dilate each object mask/bbox outward before computing intersection.
 # Larger values → wider overlap zone captured.
-CEXPAND_PX  = 30
+CEXPAND_PX  = 50
 
 # Seam-intersection mode: how the per-class regions are built.
 #   "mask"  – use the YOLO segmentation polygon masks  (Mode 1 – masking)
