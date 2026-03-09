@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-CEXPAND_PX = 10
+CEXPAND_PX = 5
 
 # -----------------------------
 # Paths
@@ -110,16 +110,32 @@ def process_image(image_path):
     if contour_obj2_exp is not None:
         cv2.drawContours(annotated, [contour_obj2_exp], -1, (0,255,0), 2)
 
-    intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)
+    #intersection_mask = cv2.bitwise_and(obj_1, obj_2)   # Intersection mask without expand
+    intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)  # Intersection mask with expand
     contour_I = find_contours(intersection_mask)
 
     if contour_I is not None:
         cv2.drawContours(annotated, [contour_I], -1, (0,0,255), -1)
-        cv2.drawContours(annotated, [contour_I], -1, (255,255,0), 3)
+        #cv2.drawContours(annotated, [contour_I], -1, (255,255,0), 3)
 
     return annotated
 
+def resize_to_screen(img, max_w=1400, max_h=900):
+    """
+    Resize image to fit inside the screen while keeping aspect ratio.
+    """
+    h, w = img.shape[:2]
 
+    scale_w = max_w / w
+    scale_h = max_h / h
+    scale = min(scale_w, scale_h, 1.0)   # never upscale
+
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+
+    return cv2.resize(img, (new_w, new_h))
+
+cv2.namedWindow("YOLO Segmentation Viewer", cv2.WINDOW_NORMAL)
 # -----------------------------
 # GUI LOOP
 # -----------------------------
@@ -137,9 +153,10 @@ while True:
     text = f"{index+1}/{total} : {image_path.name}"
     cv2.putText(display, text, (30,40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1,
-                (0,255,255), 2)
+                (0,0,0), 2)
 
-    cv2.imshow("YOLO Segmentation Viewer", display)
+    display_resized = resize_to_screen(display)
+    cv2.imshow("YOLO Segmentation Viewer", display_resized)
 
     key = cv2.waitKey(0) & 0xFF
 
