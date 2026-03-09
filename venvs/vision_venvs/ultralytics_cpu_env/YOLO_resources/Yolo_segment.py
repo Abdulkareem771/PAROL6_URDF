@@ -18,6 +18,10 @@ import os
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+
+CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
+
+
 # --- Configuration ---
 # Adjust these paths to match your project structure
 
@@ -93,6 +97,11 @@ if len(obj_matrices) >= 2:
 #print(f"Shape of coords_obj1: {coords_obj1.shape}")
 #print(f"Shape of coords_obj2: {coords_obj2.shape}")
 
+# Optional: Clean up noise with morphological operations
+kernel = np.ones((5, 5), np.uint8)
+obj_1 = cv2.morphologyEx(obj_1, cv2.MORPH_OPEN, kernel)
+obj_2 = cv2.morphologyEx(obj_2, cv2.MORPH_OPEN, kernel)
+
 
 def find_contours(mask):
         """Return the outermost (external) contour of the largest object in 'mask'.
@@ -114,8 +123,19 @@ if contour_obj1 is not None:
 if contour_obj2 is not None:
     cv2.drawContours(img_annotated, [contour_obj2], -1, (0, 0, 255), 2)   # blue outline (Second object)
 
+# Expand contours outward by CEXPAND_PX using morphological dilation
+dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
+obj_1_exp = cv2.dilate(obj_1, dil_kernel)
+obj_2_exp = cv2.dilate(obj_2, dil_kernel)
 
+contour_obj1_exp = find_contours(obj_1_exp)
+contour_obj2_exp = find_contours(obj_2_exp)
 
+if contour_obj1_exp is not None:
+    cv2.drawContours(img_annotated, [contour_obj1_exp], -1, (0, 255, 0), 2)  # green = expanded object 1 contour
+
+if contour_obj2_exp is not None:
+    cv2.drawContours(img_annotated, [contour_obj2_exp], -1, (255, 0, 0), 2)  # red = expanded object 2 contour
 
 
 
