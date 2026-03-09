@@ -14,12 +14,19 @@ Author: Auto-generated
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import os
+from pathlib import Path
 
-# -----------------------------
-# USER SETTINGS
-# -----------------------------
-MODEL_PATH = "best.pt"
-IMAGE_PATH = "test.jpg"
+# --- Configuration ---
+# Adjust these paths to match your project structure
+
+PROJECT_DIR = Path(__file__).parent.parent
+DATA_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_data"
+OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
+SINGLE_IMAGE = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" / "26.jpg"
+
+# Model paths
+MODEL_PATH = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
 
 # -----------------------------
 # Load Model
