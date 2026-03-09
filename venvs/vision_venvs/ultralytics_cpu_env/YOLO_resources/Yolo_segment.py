@@ -141,11 +141,11 @@ if contour_obj2_exp is not None:
 # Intersection of the two expanded contour regions
 intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)
 contour_I = find_contours(intersection_mask)
-"""
+
 if contour_I is not None:
-    #cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
-    cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region (outline)
-"""
+    cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
+    cv2.drawContours(img_annotated, [contour_I], -1, (255, 255, 0), 3)    # red = intersection region (outline)
+
 
 
 
@@ -161,20 +161,8 @@ if len(obj_matrices) >= 1:
 if len(obj_matrices) >= 2:
     print("obj_2 shape:", obj_2.shape)
 
+
 """
-# Optional: visualize
-if len(obj_matrices) >= 1:
-    cv2.imshow("Object 1 Mask", obj_1)
-
-if len(obj_matrices) >= 2:
-    cv2.imshow("Object 2 Mask", obj_2)
-
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-"""
-
-
-
 plt.figure(figsize=(20, 20))
 
 plt.title("Seam Path")
@@ -214,4 +202,3 @@ plt.axis('off')
 
 plt.tight_layout()
 plt.show()
-"""
