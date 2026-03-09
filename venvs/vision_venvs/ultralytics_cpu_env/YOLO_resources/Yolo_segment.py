@@ -93,6 +93,36 @@ if len(obj_matrices) >= 2:
 #print(f"Shape of coords_obj1: {coords_obj1.shape}")
 #print(f"Shape of coords_obj2: {coords_obj2.shape}")
 
+
+def find_contours(mask):
+        """Return the outermost (external) contour of the largest object in 'mask'.
+        Uses CHAIN_APPROX_NONE to keep every boundary pixel.
+        Returns the contour as an array of shape (N, 1, 2), or None if not found."""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        # Pick the largest contour (the main object)
+        return max(contours, key=cv2.contourArea)
+
+# Find the full external contours from the original masks
+contour_obj1 = find_contours(obj_1)
+contour_obj2 = find_contours(obj_2)
+
+if contour_obj1 is not None:
+    cv2.drawContours(img_annotated, [contour_obj1], -1, (0, 0, 255), 2)   # blue outline (First object)
+
+if contour_obj2 is not None:
+    cv2.drawContours(img_annotated, [contour_obj2], -1, (0, 0, 255), 2)   # blue outline (Second object)
+
+
+
+
+
+
+
+
+
+
 # -----------------------------
 # Example Outputs
 # -----------------------------
@@ -116,8 +146,20 @@ cv2.waitKey(0)
 cv2.destroyAllWindows()
 """
 
+
+
+plt.figure(figsize=(20, 20))
+
+plt.title("Seam Path")
+plt.imshow(img_annotated)
+plt.axis('off')
+plt.tight_layout()
+plt.show()
+
+
+"""
 # 6. GUI Display Section
-plt.figure(figsize=(20, 5))
+plt.figure(figsize=(20, 20))
 
 # Subplot 1: Original Image
 plt.subplot(1, 4, 1)
@@ -145,3 +187,4 @@ plt.axis('off')
 
 plt.tight_layout()
 plt.show()
+"""
