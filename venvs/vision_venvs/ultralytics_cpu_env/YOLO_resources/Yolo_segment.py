@@ -143,7 +143,7 @@ intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)
 contour_I = find_contours(intersection_mask)
 
 if contour_I is not None:
-    #cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
+    cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
     cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region (outline)
 
 
