@@ -10,7 +10,7 @@ CEXPAND_PX = 8
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
-OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
+OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results" / "model_v1"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
