@@ -40,7 +40,7 @@ current_dir   = Path(__file__).resolve().parent
 project_dir   = current_dir.parent                        # ultralytics_cpu_env
 
 # Trained YOLO segmentation model
-MODEL_PATH = project_dir / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
+MODEL_PATH = project_dir / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
 
 # Folder that contains the images to predict on.
 # Change this to any folder with images you want to test.
