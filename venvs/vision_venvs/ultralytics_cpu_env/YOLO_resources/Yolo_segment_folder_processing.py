@@ -12,14 +12,15 @@ PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
 OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
 
-MODEL_PATH = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
+MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
+MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------
 # Load Model
 # -----------------------------
-model = YOLO(MODEL_PATH)
+model = YOLO(MODEL_PATH_v1)
 
 # -----------------------------
 # Collect Images
@@ -113,7 +114,7 @@ def process_image(image_path):
     if contour_obj2_exp is not None:
         cv2.drawContours(annotated, [contour_obj2_exp], -1, (0,255,0), 2)
     """
-    
+
     #intersection_mask = cv2.bitwise_and(obj_1, obj_2)   # Intersection mask without expand
     intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)  # Intersection mask with expand
     contour_I = find_contours(intersection_mask)
