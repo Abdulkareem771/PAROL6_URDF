@@ -55,6 +55,7 @@ img_annotated = img_rgb.copy()
 results = model(img)
 
 result = results[0]
+#print(f"Number of objects detected: {len(result)}")
 
 # -----------------------------
 # Extract Masks
@@ -83,9 +84,14 @@ if masks is not None:
 # -----------------------------
 if len(obj_matrices) >= 1:
     obj_1 = obj_matrices[0]
+    coords_obj1 = np.column_stack(np.where(obj_1 == 255))
 
 if len(obj_matrices) >= 2:
     obj_2 = obj_matrices[1]
+    coords_obj2 = np.column_stack(np.where(obj_2 == 255))
+
+#print(f"Shape of coords_obj1: {coords_obj1.shape}")
+#print(f"Shape of coords_obj2: {coords_obj2.shape}")
 
 # -----------------------------
 # Example Outputs
