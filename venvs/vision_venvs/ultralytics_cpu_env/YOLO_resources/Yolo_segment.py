@@ -26,22 +26,28 @@ model = YOLO(MODEL_PATH)
 results = model(DATA_DIR / "test" / "26.jpg")  # results list
 
 
+
+#print(f"results: {results}")
+
+
+
 """
 for r in results:
     boxes = r.boxes  # Boxes object for detected boxes
-    masks = r.masks  # Masks object for segmentation masks
+    masks = r.masks.numpy()  # Masks object for segmentation masks
     probs = r.probs  # Probs object for classification probabilities
     print(f"boxes: {boxes}")
     print(f"masks: {masks}")
     print(f"probs: {probs}")
 
-
 """
+
 
 # View results
 #for r in results:
 #    print(r.masks.numpy())  # print the Masks object containing the detected instance masks
 
+"""
 
 # Visualize the results
 for i, r in enumerate(results):
@@ -56,4 +62,4 @@ for i, r in enumerate(results):
     r.save(filename=f"results{i}.jpg")
    
 
-
+"""

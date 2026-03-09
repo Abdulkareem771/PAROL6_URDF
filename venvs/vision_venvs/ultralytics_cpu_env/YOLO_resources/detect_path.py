@@ -179,6 +179,8 @@ def process_folder(folder_path, output_folder):
 g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
 print(f"g_matrix dtype: {g_matrix.dtype}")
+print(f"img_annotated dtype: {img_annotated.dtype}")
 
 
-
+print(f"img_annotated shape: {img_annotated.shape}")
+print(f"type(img_annotated): {type(img_annotated)}")
