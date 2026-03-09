@@ -184,3 +184,4 @@ print(f"img_annotated dtype: {img_annotated.dtype}")
 
 print(f"img_annotated shape: {img_annotated.shape}")
 print(f"type(img_annotated): {type(img_annotated)}")
+print(f"type(g_matrix): {type(g_matrix)}")
