@@ -28,7 +28,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_data"
 OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
-SINGLE_IMAGE = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" / "26.jpg"
+SINGLE_IMAGE = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" / "6.jpg"
 
 # Model paths
 MODEL_PATH = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
@@ -116,13 +116,13 @@ def find_contours(mask):
 # Find the full external contours from the original masks
 contour_obj1 = find_contours(obj_1)
 contour_obj2 = find_contours(obj_2)
-"""
+
 if contour_obj1 is not None:
     cv2.drawContours(img_annotated, [contour_obj1], -1, (0, 0, 255), 2)   # blue outline (First object)
 
 if contour_obj2 is not None:
     cv2.drawContours(img_annotated, [contour_obj2], -1, (0, 0, 255), 2)   # blue outline (Second object)
-"""
+
 # Expand contours outward by CEXPAND_PX using morphological dilation
 dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
 obj_1_exp = cv2.dilate(obj_1, dil_kernel)
@@ -131,21 +131,21 @@ obj_2_exp = cv2.dilate(obj_2, dil_kernel)
 contour_obj1_exp = find_contours(obj_1_exp)
 contour_obj2_exp = find_contours(obj_2_exp)
 
-"""
+
 if contour_obj1_exp is not None:
     cv2.drawContours(img_annotated, [contour_obj1_exp], -1, (0, 255, 0), 2)  # green = expanded object 1 contour
 
 if contour_obj2_exp is not None:
-    cv2.drawContours(img_annotated, [contour_obj2_exp], -1, (255, 0, 0), 2)  # red = expanded object 2 contour
-"""
+    cv2.drawContours(img_annotated, [contour_obj2_exp], -1, (0, 255, 0), 2)  # green = expanded object 2 contour
+
 # Intersection of the two expanded contour regions
 intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)
 contour_I = find_contours(intersection_mask)
-
+"""
 if contour_I is not None:
-    cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
+    #cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region (filled)
     cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region (outline)
-
+"""
 
 
 
