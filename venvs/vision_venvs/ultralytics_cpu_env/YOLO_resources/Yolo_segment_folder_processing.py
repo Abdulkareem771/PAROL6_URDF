@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-PROCESS_MODE = "single"     # "single" or "folder"
+PROCESS_MODE = "folder"     # "single" or "folder"
 IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".bmp"]
 CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
@@ -27,7 +27,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 # Adjust these paths to match your project structure
 
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_data"
+DATA_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" 
 OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
 SINGLE_IMAGE = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" / "6.jpg"
 
