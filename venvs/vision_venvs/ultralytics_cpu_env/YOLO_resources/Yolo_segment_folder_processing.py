@@ -20,7 +20,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # -----------------------------
 # Load Model
 # -----------------------------
-model = YOLO(MODEL_PATH_v1)
+model = YOLO(MODEL_PATH_v2)
 
 # -----------------------------
 # Collect Images
