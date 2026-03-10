@@ -29,8 +29,10 @@ static const float HOME_OFFSETS_RAD[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
 #include "transport/SerialTransport.h"
 #include "safety/Supervisor.h"
+#include "safety/HomingFSM.h"
 #include "observer/AlphaBetaFilter.h"
 #include "control/Interpolator.h"
+#include "hal/LimitSwitch.h"
 #if defined(FEATURE_HARDWARE_ENCODER) && FEATURE_HARDWARE_ENCODER == 1
 #include "hal/QuadTimerEncoder.h"
 #else
@@ -53,6 +55,12 @@ static const float HOME_OFFSETS_RAD[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 CircularBuffer<RosCommand, 20> rx_queue;
 SerialTransport transport;
 SafetySupervisor supervisor;
+HomingSequencer homing_seq;
+
+// Limit switch state (updated in main thread, read in ISR)
+LimitSwitch limit_sw[NUM_AXES];
+volatile bool limit_states[NUM_AXES] = {};
+volatile bool homing_active = false;  // True while HomingSequencer is running
 
 // 1 kHz ISR Mathematical Core
 // Observer initialized in setup() with per-joint gains from config.h (AB_ALPHA / AB_BETA).
@@ -240,10 +248,25 @@ void run_control_loop_isr() {
     
     // 2. Safety check uses observer velocities and unified monotonic tick
     system_tick_ms++;
+
+    // Poll limit switches (debounced HAL — only call during normal motion, not homing)
+    for (int i = 0; i < NUM_AXES; i++) {
+        if (LIMIT_ENABLED[i]) {
+            bool triggered = limit_sw[i].update(system_tick_ms);
+            limit_states[i] = triggered;
+            // During normal operation, a triggered limit switch → immediate ESTOP
+            if (triggered && !homing_active) {
+#if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1
+                supervisor.report_limit_switch(i);
+#endif
+            }
+        }
+    }
+
 #if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1    
     supervisor.update(system_tick_ms, current_velocities);
 
-    // 3. Motor Hal Output safely governed by Supervisor
+    // 3. Motor HAL output safely governed by Supervisor
     for(int i = 0; i < NUM_AXES; i++) {
         if (supervisor.is_safe()) {
             set_motor_velocity(i, commanded_velocities[i]);
@@ -285,6 +308,48 @@ void setup() {
     transport.init(115200);
     supervisor.init(0);
     
+    // ── Limit Switch Initialisation ─────────────────────────────────
+    // LIMIT_PULL map: 0=INPUT, 1=INPUT_PULLUP, 2=INPUT_PULLDOWN
+    static const int pull_arduino[] = {INPUT, INPUT_PULLUP, INPUT_PULLDOWN};
+    for (int i = 0; i < NUM_AXES; i++) {
+        int pull_mode = pull_arduino[LIMIT_PULL[i]];
+        limit_sw[i].configure(LIMIT_PINS[i], pull_mode, LIMIT_ACTIVE_HIGH[i], LIMIT_ENABLED[i]);
+        limit_sw[i].init(); // Calls pinMode — must happen before stepper init
+        limit_states[i] = false;
+    }
+    
+    // ── Homing Sequencer ─────────────────────────────────────────────
+    // Convert HOMING_SPEED (steps/s) to approximate rad/s for the FSM velocity callback
+    static float homing_vel_rad_s[NUM_AXES];
+    for (int i = 0; i < NUM_AXES; i++) {
+        homing_vel_rad_s[i] = (float)HOMING_SPEED[i] / 
+                              ((float)(200 * MICROSTEPS[i]) / (2.0f * 3.14159265f) * GEAR_RATIOS[i]);
+        // Clamp to a safe slow speed (max 0.5 rad/s during homing)
+        if (homing_vel_rad_s[i] > 0.5f) homing_vel_rad_s[i] = 0.5f;
+    }
+    static int backoff[NUM_AXES];    // backoff in loop ticks (≈ms)
+    static int max_travel[NUM_AXES];
+    for (int i = 0; i < NUM_AXES; i++) {
+        // Convert abs(HOMED_OFFSET) steps to ms estimate (HOMING_SPEED steps/s → steps/ms)
+        float steps_per_ms = (float)HOMING_SPEED[i] / 1000.0f;
+        backoff[i]    = (int)(abs(HOMED_OFFSET[i]) / steps_per_ms) + 100; // +100ms buffer
+        max_travel[i] = 200000; // 200k ticks = ~200s @ 1kHz; covers full range safely
+    }
+    homing_seq.configure(
+        HOMING_ORDER, NUM_AXES, homing_vel_rad_s, backoff, max_travel,
+        [](int ax, float v){ set_motor_velocity(ax, v); },
+        [](int ax){
+            // Zero encoder, observer, and interpolator for this axis
+            noInterrupts();
+            observer[ax].set_initial_position(0.0f);
+            interpolator[ax].reset(0.0f);
+            telemetry_pos[ax] = 0.0f;
+            telemetry_vel[ax] = 0.0f;
+            limit_sw[ax].reset(); // Unlatch so normal-operation monitoring resumes
+            interrupts();
+        }
+    );
+    
     // Initialize FlexPWM stepper drivers BEFORE encoders to prevent CCM clock gating conflicts
     for (int i = 0; i < NUM_AXES; i++) {
         stepper[i].init();    // Configures STEP pin FlexPWM + DIR pin GPIO
@@ -299,17 +364,11 @@ void setup() {
         float initial_motor_pos = encoder_hal[i].read_angle();
         observer[i].set_initial_position(initial_motor_pos);
         observer[i].set_gains(AB_ALPHA[i], AB_BETA[i]);
-        // Seed interpolator and telemetry in JOINT space, not motor space.
-        // The control law computes error as (cmd_pos - joint_pos) where joint_pos = motor_pos / gear.
-        // If interpolator is seeded with motor_pos, the first ISR tick produces a massive position
-        // error = motor_pos * (1 - 1/gear_ratio), causing a violent startup jerk.
         float initial_joint_pos = initial_motor_pos / GEAR_RATIOS[i];
         interpolator[i].reset(initial_joint_pos);
         telemetry_pos[i] = initial_joint_pos;
         telemetry_vel[i] = 0.0f;
     }
-    
-    // No software interrupts needed for Phase 3! (Zero-CPU QuadTimer capture)
     
     // Control loop rate from GUI config (default 1000µs = 1kHz)
     controlTimer.begin(run_control_loop_isr, CONTROL_LOOP_PERIOD_US);
@@ -345,20 +404,17 @@ void loop() {
         }
 
         if (cmd.is_home_cmd) {
-            // Triggered by the new "HOME ALL" button in the GUI
+            // Real homing: start HomingSequencer FSM
+            // Un-brick robot first so it can move
             noInterrupts();
-            supervisor.init(current_tick); // Un-brick the robot if it was in ESTOP
-            for (int i = 0; i < NUM_AXES; i++) {
-                float offset = HOME_OFFSETS_RAD[i];
-                float motor_space_rad = offset * GEAR_RATIOS[i];
-                observer[i].set_initial_position(motor_space_rad);
-                interpolator[i].reset(offset);
-                integral_error[i] = 0.0f; // Clear I windup on teleport
-                telemetry_pos[i] = offset;
-                telemetry_vel[i] = 0.0f;
-            }
+            supervisor.init(current_tick);
+            // Reset limit latches so homing can observe fresh triggers
+            for (int i = 0; i < NUM_AXES; i++) limit_sw[i].reset();
+            homing_seq.reset();
+            homing_active = true;
             interrupts();
-            continue; // Skip normal positional interpolation
+            homing_seq.begin();
+            continue;
         }
 
         // Dynamically compute the duration since the last valid ROS packet
@@ -386,30 +442,47 @@ void loop() {
         }
     }
 
-    // 3. Provide background status telemetry at FEEDBACK_RATE_HZ
+    // 3. Tick homing sequencer (runs in main thread; calls set_motor_velocity callbacks)
+    if (homing_active) {
+        uint32_t now = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
+        bool lim[NUM_AXES];
+        noInterrupts();
+        for (int i = 0; i < NUM_AXES; i++) lim[i] = limit_states[i];
+        interrupts();
+
+        auto seq_state = homing_seq.tick_1ms(now, lim);
+
+        if (seq_state == HomingSequencer::DONE) {
+            homing_active = false;
+            transport.send_string("HOMING_DONE\n");
+        } else if (seq_state == HomingSequencer::FAULT) {
+            homing_active = false;
+            supervisor.report_homing_fault(0); // axis detail in FSM; report generic fault
+            transport.send_string("HOMING_FAULT\n");
+        }
+    }
+
+    // 4. Provide background status telemetry at FEEDBACK_RATE_HZ
     static const uint32_t FEEDBACK_INTERVAL_MS = 1000 / FEEDBACK_RATE_HZ;
     static uint32_t last_print = 0;
     uint32_t print_tick = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
     if (print_tick - last_print > FEEDBACK_INTERVAL_MS) {
         last_print = print_tick;
-        // Feedback data gathering requires brief interrupt lock to prevent tearing
         float pos[NUM_AXES], vel[NUM_AXES];
+        uint8_t lim_state = 0;
         noInterrupts();
-        for (int i=0; i<NUM_AXES; i++) {
+        for (int i = 0; i < NUM_AXES; i++) {
             pos[i] = telemetry_pos[i];
             vel[i] = telemetry_vel[i];
+            if (limit_states[i]) lim_state |= (1 << i);
         }
         interrupts();
         
-        
         static uint32_t seq = 0;
-        transport.send_feedback(seq++, pos, vel);
+        transport.send_feedback(seq++, pos, vel, lim_state);
         
-        // Print Profiling Stats
-        // Reset max_isr_time occasionally so we can see if spikes happen continuously or just once
         if (seq % 10 == 0) {
-            // Serial.printf("ISR Profiler | Last: %lu us | Max: %lu us\n", last_isr_time_us, max_isr_time_us);
-            max_isr_time_us = 0; // Reset peak tracker
+            max_isr_time_us = 0;
         }
     }
 }

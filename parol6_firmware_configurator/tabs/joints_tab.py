@@ -1,26 +1,69 @@
 """
 joints_tab.py — Per-joint configuration table (pins, gear, limit switches).
+Columns include pull-resistor selection; a suggestion panel at the bottom
+shows wiring guidance based on the sensor type chosen for each joint.
 """
 from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView, QComboBox, QCheckBox,
-    QDoubleSpinBox, QSpinBox, QAbstractItemView
+    QDoubleSpinBox, QSpinBox, QAbstractItemView, QFrame, QGroupBox
 )
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QFont
 from core.config_model import JointConfig, LimitSwitchConfig
 
-# Columns order
+# Columns order — Pull added after Polarity
 COLS = [
     "Enabled", "STEP Pin", "DIR Pin", "Enc Pin",
     "Gear Ratio", "Microstep", "Dir Inv", "ROS Inv",
     "Max Vel\n(rad/s)", "Max Cur\n(mA)", "Kp", "Ki", "Max I\n(windup)",
     "Home\nOffset(rad)",
-    "Limit\nType", "Limit\nPin", "Limit\nPolarity"
+    "Limit\nType", "Limit\nPin", "Limit\nPolarity", "Limit\nPull"
 ]
 
 LIMIT_TYPES    = ["NONE", "MECHANICAL", "INDUCTIVE_NPN", "INDUCTIVE_PNP"]
 LIMIT_POLARITY = ["FALLING", "RISING"]
+LIMIT_PULL     = ["INPUT_PULLUP", "INPUT_PULLDOWN", "INPUT"]
+
+# --- Auto-suggest table for (Type → pull, polarity) ----------------------
+# Inductive NPN sensors have an open-collector output normally pulled HIGH
+# through the optocoupler; the Teensy sees HIGH=inactive, LOW=triggered.
+# Inductive PNP sensors pull HIGH when triggered; Teensy sees LOW=inactive, HIGH=triggered.
+_DEFAULTS = {
+    "NONE":          ("INPUT_PULLUP",   "FALLING"),
+    "MECHANICAL":    ("INPUT_PULLUP",   "FALLING"),   # NC switch ← most common
+    "INDUCTIVE_NPN": ("INPUT_PULLUP",   "FALLING"),   # open-collector, active LOW
+    "INDUCTIVE_PNP": ("INPUT_PULLDOWN", "RISING"),    # totem-pole, active HIGH
+}
+
+_SUGGESTIONS = {
+    "NONE": "",
+    "MECHANICAL": (
+        "🔘 <b>Mechanical switch (NC recommended)</b><br>"
+        "• Wire: COM → Teensy pin, NC → GND<br>"
+        "• Pull: <b>INPUT_PULLUP</b> (internal 47 kΩ keeps pin HIGH when open)<br>"
+        "• Polarity: <b>FALLING</b> — pin drops LOW when switch closes<br>"
+        "• ⚠ Debounce is applied in firmware (3-sample, 3 ms window)<br>"
+        "• Optocoupler variant: connect as NPN below"
+    ),
+    "INDUCTIVE_NPN": (
+        "🔵 <b>Inductive NPN sensor (open-collector)</b> — most common PAROL6 setup<br>"
+        "• Sensor wiring: Brown=VCC (5–24V), Blue=GND, Black=Signal (to optocoupler IN)<br>"
+        "• Optocoupler output (collector): Teensy pin, emitter: GND<br>"
+        "• Pull: <b>INPUT_PULLUP</b> — Teensy pin pulled HIGH (≈3.3V) when sensor is inactive<br>"
+        "• Polarity: <b>FALLING</b> — pin is pulled LOW through optocoupler when triggered<br>"
+        "• ✅ Optocouplers invert AND level-shift; Teensy safe from 24V spikes"
+    ),
+    "INDUCTIVE_PNP": (
+        "🟠 <b>Inductive PNP sensor (totem-pole, sourcing)</b><br>"
+        "• Sensor wiring: Brown=VCC, Blue=GND, Black=Signal → optocoupler LED+<br>"
+        "• Optocoupler output: collector → VCC (3.3V), emitter → Teensy pin<br>"
+        "• Pull: <b>INPUT_PULLDOWN</b> — pin stays LOW when sensor is inactive<br>"
+        "• Polarity: <b>RISING</b> — optocoupler pulls pin HIGH when triggered<br>"
+        "• ⚠ Verify optocoupler CTR and resistor value for reliable switching"
+    ),
+}
 
 
 class JointsTab(QWidget):
@@ -34,6 +77,7 @@ class JointsTab(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(8)
 
         title = QLabel("🔩  Joint Configuration")
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
@@ -58,15 +102,68 @@ class JointsTab(QWidget):
             QTableWidget::item:selected { background: #45475a; }
             QHeaderView::section { background: #313244; color: #cdd6f4; padding: 4px; }
         """)
-        root.addWidget(self.table)
+        # Emit changed + update suggestion when selection changes
+        self.table.currentCellChanged.connect(self._on_selection_changed)
+        root.addWidget(self.table, stretch=1)
 
         # Steps-per-rad info row
         self.steps_label = QLabel()
         self.steps_label.setStyleSheet("color: #6c7086; font-size: 11px;")
         root.addWidget(self.steps_label)
 
+        # ── Limit Switch Suggestion Panel ──────────────────────────────
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #45475a;")
+        root.addWidget(sep)
+
+        hint_group = QGroupBox("💡  Limit Switch Wiring Guide")
+        hint_group.setStyleSheet("""
+            QGroupBox {
+                color: #fab387;
+                font-size: 13px;
+                font-weight: bold;
+                border: 1px solid #45475a;
+                border-radius: 6px;
+                margin-top: 6px;
+                padding: 8px;
+            }
+            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
+        """)
+        hint_lay = QVBoxLayout(hint_group)
+        hint_lay.setContentsMargins(8, 8, 8, 8)
+
+        self._hint_label = QLabel(
+            "<i style='color:#6c7086;'>Click any row to see sensor-specific wiring advice.</i>"
+        )
+        self._hint_label.setTextFormat(Qt.TextFormat.RichText)
+        self._hint_label.setWordWrap(True)
+        self._hint_label.setStyleSheet("font-size: 12px; color: #cdd6f4; line-height: 1.6;")
+        hint_lay.addWidget(self._hint_label)
+
+        # Quick reference table
+        ref_label = QLabel(
+            "<table style='color:#cdd6f4; font-size:11px; border-spacing:4px;'>"
+            "<tr style='color:#cba6f7;'><th align='left'>Sensor Type</th>"
+            "<th align='left'>Suggested Pull</th><th align='left'>Polarity</th>"
+            "<th align='left'>Wiring</th></tr>"
+            "<tr><td>Mechanical (NC)</td><td>INPUT_PULLUP</td><td>FALLING</td>"
+            "<td>COM→Pin, NC→GND</td></tr>"
+            "<tr><td>Inductive NPN</td><td>INPUT_PULLUP</td><td>FALLING</td>"
+            "<td>Signal→optocoupler→Pin, emitter→GND</td></tr>"
+            "<tr><td>Inductive PNP</td><td>INPUT_PULLDOWN</td><td>RISING</td>"
+            "<td>Signal→optocoupler→3.3V, collector→Pin</td></tr>"
+            "</table>"
+        )
+        ref_label.setTextFormat(Qt.TextFormat.RichText)
+        ref_label.setStyleSheet("margin-top: 6px;")
+        hint_lay.addWidget(ref_label)
+
+        root.addWidget(hint_group)
+
         self._widgets: list[dict] = []  # per-row widget refs
 
+    # ------------------------------------------------------------------
     def _make_spin(self, value, lo, hi, step=1, decimals=None):
         if decimals is not None:
             w = QDoubleSpinBox()
@@ -81,12 +178,14 @@ class JointsTab(QWidget):
         w.valueChanged.connect(self._on_cell_changed)
         return w
 
-    def _make_combo(self, items, current):
+    def _make_combo(self, items, current, on_change=None):
         c = QComboBox()
         c.addItems(items)
         c.setCurrentText(current)
         c.setStyleSheet("background:#1e1e2e; color:#cdd6f4; border:none;")
         c.currentTextChanged.connect(self._on_cell_changed)
+        if on_change:
+            c.currentTextChanged.connect(on_change)
         return c
 
     def _make_check(self, value: bool):
@@ -107,6 +206,35 @@ class JointsTab(QWidget):
         if not self._updating:
             self.changed.emit()
 
+    def _on_selection_changed(self, row, *_) -> None:
+        """Update the wiring suggestion when a row is selected."""
+        if row < 0 or row >= len(self._widgets):
+            return
+        sensor_type = self._widgets[row]["lim_type"].currentText()
+        suggestion = _SUGGESTIONS.get(sensor_type, "")
+        if suggestion:
+            self._hint_label.setText(
+                f"<b style='color:#fab387;'>J{row+1} — {sensor_type}</b><br>{suggestion}"
+            )
+        else:
+            self._hint_label.setText(
+                "<i style='color:#6c7086;'>No limit switch configured for this joint.</i>"
+            )
+
+    def _on_type_changed(self, row: int, sensor_type: str) -> None:
+        """Auto-suggest Pull and Polarity when sensor type changes."""
+        if self._updating or row >= len(self._widgets):
+            return
+        pull, polarity = _DEFAULTS.get(sensor_type, ("INPUT_PULLUP", "FALLING"))
+        self._updating = True
+        self._widgets[row]["lim_pull"].setCurrentText(pull)
+        self._widgets[row]["lim_pol"].setCurrentText(polarity)
+        self._updating = False
+        # Update hint
+        self._on_selection_changed(row)
+        self.changed.emit()
+
+    # ------------------------------------------------------------------
     def load(self, joints: list[JointConfig]) -> None:
         self._updating = True
         self.table.clearContents()
@@ -114,7 +242,6 @@ class JointsTab(QWidget):
 
         for row, j in enumerate(joints):
             w = {}
-            # Enabled
             w["enabled"]  = self._make_check(j.enabled)
             w["step_pin"] = self._make_spin(j.step_pin,  0, 55)
             w["dir_pin"]  = self._make_spin(j.dir_pin,   0, 55)
@@ -129,9 +256,16 @@ class JointsTab(QWidget):
             w["ki"]       = self._make_spin(j.ki, 0.0, 50.0, 0.1, 2)
             w["max_i"]    = self._make_spin(j.max_integral, 0.0, 100.0, 1.0, 2)
             w["home"]     = self._make_spin(j.home_offset_rad, -10.0, 10.0, 0.1, 4)
-            w["lim_type"] = self._make_combo(LIMIT_TYPES, j.limit.switch_type)
+
+            # Limit columns — type change auto-suggests pull/polarity
+            _row = row  # capture for lambda
+            w["lim_type"] = self._make_combo(
+                LIMIT_TYPES, j.limit.switch_type,
+                on_change=lambda txt, r=_row: self._on_type_changed(r, txt)
+            )
             w["lim_pin"]  = self._make_spin(j.limit.pin, 0, 55)
             w["lim_pol"]  = self._make_combo(LIMIT_POLARITY, j.limit.polarity)
+            w["lim_pull"] = self._make_combo(LIMIT_PULL, j.limit.pull)
 
             self._widgets.append(w)
             cells = [
@@ -141,7 +275,7 @@ class JointsTab(QWidget):
                 self._center_widget(w["dir_inv"]),
                 self._center_widget(w["ros_inv"]),
                 w["maxvel"], w["maxcur"], w["kp"], w["ki"], w["max_i"], w["home"],
-                w["lim_type"], w["lim_pin"], w["lim_pol"],
+                w["lim_type"], w["lim_pin"], w["lim_pol"], w["lim_pull"],
             ]
             for col, widget in enumerate(cells):
                 self.table.setCellWidget(row, col, widget)
@@ -176,4 +310,5 @@ class JointsTab(QWidget):
             j.limit.switch_type = w["lim_type"].currentText()
             j.limit.pin         = w["lim_pin"].value()
             j.limit.polarity    = w["lim_pol"].currentText()
+            j.limit.pull        = w["lim_pull"].currentText()
             j.limit.enabled     = j.limit.switch_type != "NONE"

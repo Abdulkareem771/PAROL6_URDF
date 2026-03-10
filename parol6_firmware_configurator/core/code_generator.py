@@ -131,6 +131,12 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     # Type: 0=NONE, 1=MECHANICAL, 2=NPN, 3=PNP
     type_map = {"NONE": 0, "MECHANICAL": 1, "INDUCTIVE_NPN": 2, "INDUCTIVE_PNP": 3}
     arr( "LIMIT_TYPE",     [type_map.get(j.limit.switch_type, 0) for j in cfg.joints])
+    # Pull resistor: 0=INPUT, 1=INPUT_PULLUP, 2=INPUT_PULLDOWN (matches Arduino constants in firmware)
+    # For NPN/Mechanical → INPUT_PULLUP; For PNP → INPUT_PULLDOWN; NONE → INPUT_PULLUP (safe default)
+    pull_map = {"INPUT": 0, "INPUT_PULLUP": 1, "INPUT_PULLDOWN": 2}
+    arr( "LIMIT_PULL",     [pull_map.get(j.limit.pull, 1) for j in cfg.joints])
+    # Active-high flag: true when triggered == HIGH (PNP), false when triggered == LOW (NPN/Mechanical)
+    barr("LIMIT_ACTIVE_HIGH", [j.limit.polarity == "RISING" for j in cfg.joints])
     w()
 
     w("// ── Homing Configuration ──────────────────────────────────────")

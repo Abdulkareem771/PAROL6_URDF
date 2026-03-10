@@ -48,8 +48,9 @@ public:
         }
     }
 
-    void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6]) {
-        // Format: <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+    void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6],
+                       uint8_t lim_state = 0) {
+        // Format: <ACK,seq,p1..p6,v1..v6,lim_state>
         SERIAL_DEV.print("<ACK,");
         SERIAL_DEV.print(seq);
         for (int i = 0; i < 6; i++) {
@@ -60,7 +61,14 @@ public:
             SERIAL_DEV.print(",");
             SERIAL_DEV.print(current_vel[i], 4);
         }
+        SERIAL_DEV.print(",");
+        SERIAL_DEV.print(lim_state);  // bitmask: bit0=J1...bit5=J6
         SERIAL_DEV.println(">");
+    }
+
+    /** Send a raw string (e.g., "HOMING_DONE\n"). */
+    void send_string(const char* msg) {
+        SERIAL_DEV.print(msg);
     }
 
 private:
