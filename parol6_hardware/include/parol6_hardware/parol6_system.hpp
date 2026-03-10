@@ -74,6 +74,7 @@ private:
   std::string serial_port_;
   int baud_rate_;
   bool serial_ok_ = false;  // true only when serial port opened successfully
+  bool allow_spoofing_ = false;  // explicit opt-in only; real hardware should fail loudly
   uint32_t seq_counter_ = 0;  // TX sequence counter
   
   // Feedback tracking (RX)

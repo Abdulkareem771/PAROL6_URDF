@@ -16,7 +16,7 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 
-# Regex to parse <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6[,isr_us]>
+# Regex to parse <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6[,lim_state]>
 _ACK_RE = re.compile(
     r"<ACK,(\d+),([\d\.,\-]+)>",
     re.ASCII,
@@ -109,17 +109,21 @@ class SerialWorker(QThread):
                 if len(nums) >= 12:
                     # Backward-compatible packet formats:
                     #   12 fields: pos[0..5] + vel[0..5]
-                    #   13 fields: pos + vel + isr_us
+                    #   13 fields: pos + vel + lim_state          ← current firmware format
                     #   18 fields: pos + vel + pwm[0..5]
-                    #   19 fields: pos + vel + pwm[0..5] + isr_us
-                    has_pwm = len(nums) >= 18
-                    isr_idx = 18 if has_pwm else 12
+                    #   19 fields: pos + vel + pwm[0..5] + lim_state
+                    #   20 fields: pos + vel + pwm + lim_state + isr_us
+                    has_pwm       = len(nums) >= 18
+                    lim_idx       = 18 if has_pwm else 12
+                    has_lim_state = len(nums) > lim_idx           # any extra field = lim_state
+                    isr_idx       = lim_idx + 1                   # isr after lim_state if present
                     pkt = {
-                        "seq":    int(seq_str),
-                        "pos":    nums[0:6],
-                        "vel":    nums[6:12],
-                        "pwm":    nums[12:18] if has_pwm else [0.0] * 6,
-                        "isr_us": nums[isr_idx] if len(nums) > isr_idx else None,
+                        "seq":      int(seq_str),
+                        "pos":      nums[0:6],
+                        "vel":      nums[6:12],
+                        "pwm":      nums[12:18] if has_pwm else [0.0] * 6,
+                        "lim_state": int(nums[lim_idx]) if has_lim_state else None,
+                        "isr_us":   nums[isr_idx] if len(nums) > isr_idx else None,
                     }
                     self.telemetry.emit(pkt)
 

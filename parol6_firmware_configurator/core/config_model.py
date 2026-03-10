@@ -151,7 +151,7 @@ class RobotConfig:
                     microsteps=32, dir_invert=False, ros_dir_invert=False,
                     max_vel_rad_s=6.0, max_current_ma=1700,
                     kp=2.0, homed_position_steps=-10200, standby_position_steps=0,
-                    limit=LimitSwitchConfig(enabled=False, pin=23, switch_type="MECHANICAL", polarity="RISING")),
+                    limit=LimitSwitchConfig(enabled=False, pin=23, switch_type="MECHANICAL", polarity="FALLING")),
 
         JointConfig("J5", step_pin=4,  dir_pin=34, encoder_pin=15, gear_ratio=4.0,
                     microsteps=32, dir_invert=False, ros_dir_invert=False,

@@ -55,12 +55,17 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   try {
     serial_port_ = info_.hardware_parameters.at("serial_port");
     baud_rate_ = std::stoi(info_.hardware_parameters.at("baud_rate"));
+    auto spoof_it = info_.hardware_parameters.find("allow_spoofing");
+    if (spoof_it != info_.hardware_parameters.end()) {
+      allow_spoofing_ = (spoof_it->second == "true" || spoof_it->second == "1");
+    }
   } catch (const std::out_of_range & e) {
     RCLCPP_ERROR(logger_, "❌ Missing required hardware parameter: %s", e.what());
     return CallbackReturn::ERROR;
   }
 
-  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d", serial_port_.c_str(), baud_rate_);
+  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d, allow_spoofing=%s",
+              serial_port_.c_str(), baud_rate_, allow_spoofing_ ? "true" : "false");
 
   // Read joint names from URDF
   joint_names_.clear();
@@ -157,7 +162,12 @@ CallbackReturn PAROL6System::on_configure(
     serial_.SetVMin(0);    // Non-blocking
 
     if (!serial_.IsOpen()) {
-      RCLCPP_WARN(logger_, "⚠️ Serial port %s not open after Open() — running in SPOOF mode",
+      if (!allow_spoofing_) {
+        RCLCPP_ERROR(logger_, "❌ Serial port %s not open after Open() and spoofing is disabled",
+                     serial_port_.c_str());
+        return CallbackReturn::ERROR;
+      }
+      RCLCPP_WARN(logger_, "⚠️ Serial port %s not open after Open() — running in explicit SPOOF mode",
                   serial_port_.c_str());
     } else {
       serial_ok_ = true;
@@ -166,14 +176,16 @@ CallbackReturn PAROL6System::on_configure(
     }
 
   } catch (const std::exception &e) {
-    // Serial unavailable — NOT fatal. Fall through to spoof mode.
-    // Controller_manager and all spawners still come up correctly.
+    if (!allow_spoofing_) {
+      RCLCPP_ERROR(logger_,
+        "❌ Serial port '%s' unavailable (%s) and spoofing is disabled.",
+        serial_port_.c_str(), e.what());
+      return CallbackReturn::ERROR;
+    }
     RCLCPP_WARN(logger_,
-      "⚠️ Serial port '%s' unavailable (%s) — running in SPOOF mode (echoes commands as state)."
-      " Connect Teensy and restart to enable real hardware.",
+      "⚠️ Serial port '%s' unavailable (%s) — running in explicit SPOOF mode.",
       serial_port_.c_str(), e.what());
     serial_ok_ = false;
-    // Return SUCCESS intentionally — do NOT crash the controller_manager
   }
 
   return CallbackReturn::SUCCESS;
@@ -301,6 +313,11 @@ return_type PAROL6System::read(
   
   // If serial port never opened (no Teensy connected), run in pure spoof mode
   if (!serial_ok_) {
+    if (!allow_spoofing_) {
+      RCLCPP_ERROR_THROTTLE(logger_, clock_, 1000,
+        "❌ read() called without an active serial connection and spoofing is disabled");
+      return return_type::ERROR;
+    }
     goto spoof_states;
   }
 
@@ -333,6 +350,9 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '<')");
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
       goto spoof_states;
     }
     
@@ -342,6 +362,9 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '>')");
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
       goto spoof_states;
     }
     
@@ -366,6 +389,9 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected 14-15 tokens, got %zu", tokens.size());
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
       goto spoof_states;
     }
     
@@ -374,6 +400,9 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
       goto spoof_states;
     }
     
@@ -454,6 +483,9 @@ return_type PAROL6System::read(
         }
         return return_type::OK; // Skip spoofing if successfully parsed and valid
       }
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
       // Fall through to spoof if any value was out of range
     }
     
@@ -468,6 +500,9 @@ return_type PAROL6System::read(
     parse_errors_++;
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
       "Error reading feedback: %s", e.what());
+    if (!allow_spoofing_) {
+      return return_type::ERROR;
+    }
   }
 
 spoof_states:
@@ -532,6 +567,14 @@ return_type PAROL6System::write(
   }
 
   try {
+    if (!serial_ok_) {
+      if (allow_spoofing_) {
+        return return_type::OK;
+      }
+      RCLCPP_ERROR_THROTTLE(logger_, clock_, 1000,
+        "❌ write() called without an active serial connection");
+      return return_type::ERROR;
+    }
     serial_.Write(buffer);
   } catch (const std::exception &e) {
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000,

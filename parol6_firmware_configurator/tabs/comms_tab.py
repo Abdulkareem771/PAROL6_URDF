@@ -26,6 +26,14 @@ class CommsTab(QWidget):
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
 
+        support_note = QLabel(
+            "Current firmware transport support: USB_CDC_HS and UART_115200 are implemented. "
+            "ETHERNET remains reserved and is blocked by validation before flash."
+        )
+        support_note.setWordWrap(True)
+        support_note.setStyleSheet("color:#f9e2af; font-size:11px;")
+        root.addWidget(support_note)
+
         # ── Transport ─────────────────────────────────────────────────
         trans_box = QGroupBox("Transport Layer")
         trans_lay = QVBoxLayout(trans_box)

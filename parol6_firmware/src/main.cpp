@@ -92,6 +92,7 @@ volatile float integral_error[NUM_AXES] = {0.0f};
 // Telemetry Export for Main Loop
 volatile float telemetry_pos[NUM_AXES];
 volatile float telemetry_vel[NUM_AXES];
+volatile uint8_t telemetry_mode = 0;  // 0=INIT 1=NOMINAL 2=HOMING 3=FAULT
 
 // Hardware Abstraction (Phase 3: Zero-interrupt QuadTimers)
 #if defined(FEATURE_HARDWARE_ENCODER) && FEATURE_HARDWARE_ENCODER == 1
@@ -175,7 +176,7 @@ void run_control_loop_isr() {
     digitalWriteFast(ISR_PROFILER_PIN, HIGH);
     
     float current_velocities[NUM_AXES]; 
-    float current_positions[NUM_AXES];
+    float joint_velocities[NUM_AXES];
     float commanded_velocities[NUM_AXES];
 
     // Use GUI-configured per-joint gains and limits
@@ -199,7 +200,6 @@ void run_control_loop_isr() {
         float actual_pos = raw_pos;
         float actual_vel = 0.0f; // Can't reliably derive velocity without a filter
 #endif
-        current_positions[i] = actual_pos;
         current_velocities[i] = actual_vel;
         
         // --- Gear ratio scaling: convert motor-shaft angle → joint-space angle ---
@@ -210,6 +210,7 @@ void run_control_loop_isr() {
         // for the control law pos_error to be in the same units as the ROS command.
         float joint_pos = actual_pos / GEAR_RATIOS[i];
         float joint_vel = actual_vel / GEAR_RATIOS[i];
+        joint_velocities[i] = joint_vel;
         // Export JOINT-SPACE values to telemetry buffer
         telemetry_pos[i] = joint_pos;
         telemetry_vel[i] = joint_vel;
@@ -258,7 +259,7 @@ void run_control_loop_isr() {
 #endif
     }
     
-    // 2. Safety check uses observer velocities and unified monotonic tick
+    // 2. Safety check uses joint-space velocities and unified monotonic tick
     system_tick_ms++;
 
     // Poll limit switches (debounced HAL — only call during normal motion, not homing)
@@ -276,22 +277,42 @@ void run_control_loop_isr() {
     }
 
 #if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1    
-    supervisor.update(system_tick_ms, current_velocities);
+    if (!homing_active) {
+        supervisor.update(system_tick_ms, joint_velocities, MAX_VEL_RAD_S);
+    }
 
     // 3. Motor HAL output safely governed by Supervisor
-    for(int i = 0; i < NUM_AXES; i++) {
-        if (supervisor.is_safe()) {
-            set_motor_velocity(i, commanded_velocities[i]);
-        } else {
-            set_motor_velocity(i, 0.0f); // Fast stop on fault
+    if (!homing_active) {
+        for(int i = 0; i < NUM_AXES; i++) {
+            if (supervisor.is_safe()) {
+                set_motor_velocity(i, commanded_velocities[i]);
+            } else {
+                set_motor_velocity(i, 0.0f); // Fast stop on fault
+            }
         }
     }
 #else
     // Supervisor disabled - raw passthrough
-    for(int i = 0; i < NUM_AXES; i++) {
-        set_motor_velocity(i, commanded_velocities[i]);
+    if (!homing_active) {
+        for(int i = 0; i < NUM_AXES; i++) {
+            set_motor_velocity(i, commanded_velocities[i]);
+        }
     }
 #endif
+
+    if (homing_active) {
+        telemetry_mode = 2;
+    } else if (
+#if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1
+        supervisor.is_safe()
+#else
+        true
+#endif
+    ) {
+        telemetry_mode = 1;
+    } else {
+        telemetry_mode = 3;
+    }
     
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
     
@@ -319,6 +340,7 @@ void setup() {
     
     transport.init(115200);
     supervisor.init(0);
+    telemetry_mode = 1;
     
     // ── Limit Switch Initialisation ─────────────────────────────────
     // LIMIT_PULL map: 0=INPUT, 1=INPUT_PULLUP, 2=INPUT_PULLDOWN
@@ -334,6 +356,10 @@ void setup() {
     // Convert HOMING_SPEED (steps/s) to approximate rad/s for the FSM velocity callback
     static float homing_vel_rad_s[NUM_AXES];
     for (int i = 0; i < NUM_AXES; i++) {
+        if (HOMING_SPEED[i] <= 0) {
+            homing_vel_rad_s[i] = 0.0f;
+            continue;
+        }
         homing_vel_rad_s[i] = (float)HOMING_SPEED[i] / 
                               ((float)(200 * MICROSTEPS[i]) / (2.0f * 3.14159265f) * GEAR_RATIOS[i]);
         // Clamp to a safe slow speed (max 0.5 rad/s during homing)
@@ -344,7 +370,11 @@ void setup() {
     for (int i = 0; i < NUM_AXES; i++) {
         // Convert abs(HOMED_OFFSET) steps to ms estimate (HOMING_SPEED steps/s → steps/ms)
         float steps_per_ms = (float)HOMING_SPEED[i] / 1000.0f;
-        backoff[i]    = (int)(abs(HOMED_OFFSET[i]) / steps_per_ms) + 100; // +100ms buffer
+        if (steps_per_ms <= 0.0f) {
+            backoff[i] = 100;
+        } else {
+            backoff[i] = (int)(abs(HOMED_OFFSET[i]) / steps_per_ms) + 100; // +100ms buffer
+        }
         max_travel[i] = 200000; // 200k ticks = ~200s @ 1kHz; covers full range safely
     }
     homing_seq.configure(
@@ -352,11 +382,14 @@ void setup() {
         [](int ax, float v){ set_motor_velocity(ax, v); },
         [](int ax){
             // Zero encoder, observer, and interpolator for this axis
+            float home_joint_pos = HOME_OFFSETS_RAD[ax];
+            float home_motor_pos = home_joint_pos * GEAR_RATIOS[ax];
             noInterrupts();
-            observer[ax].set_initial_position(0.0f);
-            interpolator[ax].reset(0.0f);
-            telemetry_pos[ax] = 0.0f;
+            observer[ax].set_initial_position(home_motor_pos);
+            interpolator[ax].reset(home_joint_pos);
+            telemetry_pos[ax] = home_joint_pos;
             telemetry_vel[ax] = 0.0f;
+            integral_error[ax] = 0.0f;
             limit_sw[ax].reset(); // Unlatch so normal-operation monitoring resumes
             interrupts();
         }
@@ -410,6 +443,7 @@ void loop() {
             supervisor.init(current_tick);
             for (int i = 0; i < NUM_AXES; i++) {
                 interpolator[i].reset(telemetry_pos[i]);
+                integral_error[i] = 0.0f;
             }
             interrupts();
             continue;
@@ -456,21 +490,30 @@ void loop() {
 
     // 3. Tick homing sequencer (runs in main thread; calls set_motor_velocity callbacks)
     if (homing_active) {
+        static uint32_t last_homing_tick = 0;
         uint32_t now = __atomic_load_n(&system_tick_ms, __ATOMIC_RELAXED);
-        bool lim[NUM_AXES];
-        noInterrupts();
-        for (int i = 0; i < NUM_AXES; i++) lim[i] = limit_states[i];
-        interrupts();
+        if (now != last_homing_tick) {
+            last_homing_tick = now;
+#if defined(FEATURE_WATCHDOG) && FEATURE_WATCHDOG == 1
+            supervisor.feed_watchdog(now);
+#endif
+            bool lim[NUM_AXES];
+            noInterrupts();
+            for (int i = 0; i < NUM_AXES; i++) lim[i] = limit_states[i];
+            interrupts();
 
-        auto seq_state = homing_seq.tick_1ms(now, lim);
+            auto seq_state = homing_seq.tick_1ms(now, lim);
 
-        if (seq_state == HomingSequencer::DONE) {
-            homing_active = false;
-            transport.send_string("HOMING_DONE\n");
-        } else if (seq_state == HomingSequencer::FAULT) {
-            homing_active = false;
-            supervisor.report_homing_fault(0); // axis detail in FSM; report generic fault
-            transport.send_string("HOMING_FAULT\n");
+            if (seq_state == HomingSequencer::DONE) {
+                homing_active = false;
+                telemetry_mode = 1;
+                transport.send_string("HOMING_DONE\n");
+            } else if (seq_state == HomingSequencer::FAULT) {
+                homing_active = false;
+                telemetry_mode = 3;
+                supervisor.report_homing_fault(0); // axis detail in FSM; report generic fault
+                transport.send_string("HOMING_FAULT\n");
+            }
         }
     }
 

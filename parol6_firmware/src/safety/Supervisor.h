@@ -21,7 +21,8 @@ public:
         fault_reason_[0] = '\0';
     }
 
-    void update(uint32_t current_time_ms, const float actual_velocities[6]) {
+    void update(uint32_t current_time_ms, const float joint_velocities[6],
+                const float max_safe_joint_velocities[6]) {
         // 1. Check Watchdog (Command Timeout)
         if (current_time_ms - last_cmd_time_ms_ > COMMAND_TIMEOUT_MS) {
             trigger_fault(SOFT_ESTOP, "Command Timeout");
@@ -29,7 +30,7 @@ public:
         
         // 2. Check Kinematic Limits (Runaway Velocity) — per-joint validated limits
         for (int i = 0; i < 6; i++) {
-            if (fabs(actual_velocities[i]) > MAX_SAFE_VELOCITY_PER_JOINT[i]) {
+            if (fabs(joint_velocities[i]) > max_safe_joint_velocities[i]) {
                 trigger_fault(FAULT, "Runaway Velocity");
             }
         }
@@ -75,10 +76,6 @@ private:
     State current_state_;
     uint32_t last_cmd_time_ms_;
     char fault_reason_[48];
-    // Per-joint velocity limits validated from realtime_servo_teensy/config.h
-    // {J1, J2, J3, J4, J5, J6} in rad/s
-    const float MAX_SAFE_VELOCITY_PER_JOINT[6] = {3.0f, 3.0f, 6.0f, 6.0f, 6.0f, 6.0f};
-    
     void trigger_fault(State state, const char* reason) { 
         // Latch hard faults; SOFT_ESTOP can be overridden by a FAULT.
         if (current_state_ != FAULT) { 
@@ -88,4 +85,3 @@ private:
         }
     }
 };
-

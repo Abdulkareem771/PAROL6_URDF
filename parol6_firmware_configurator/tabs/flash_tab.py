@@ -111,6 +111,16 @@ class FlashTab(QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
+        validation_box = QGroupBox("Configuration Validation")
+        validation_lay = QVBoxLayout(validation_box)
+        self.validation = QTextEdit()
+        self.validation.setReadOnly(True)
+        self.validation.setFont(QFont("Monospace", 9))
+        self.validation.setStyleSheet("background:#11111b; color:#f9e2af; border:none;")
+        self.validation.setMaximumHeight(140)
+        validation_lay.addWidget(self.validation)
+        root.addWidget(validation_box)
+
         # ── config.h preview ──────────────────────────────────────────
         prev_box = QGroupBox("Generated config.h Preview")
         prev_lay = QVBoxLayout(prev_box)
@@ -136,6 +146,20 @@ class FlashTab(QWidget):
     def set_preview(self, content: str) -> None:
         self.preview.setPlainText(content)
 
+    def set_validation_report(self, errors: list[str], warnings: list[str]) -> None:
+        lines: list[str] = []
+        if errors:
+            lines.append("Errors:")
+            lines.extend([f"  - {msg}" for msg in errors])
+        if warnings:
+            if lines:
+                lines.append("")
+            lines.append("Warnings:")
+            lines.extend([f"  - {msg}" for msg in warnings])
+        if not lines:
+            lines.append("No validation issues.")
+        self.validation.setPlainText("\n".join(lines))
+
     def set_firmware_path(self, path: str) -> None:
         self.fw_path.setText(path)
 
@@ -152,15 +176,14 @@ class FlashTab(QWidget):
 
     def _run_flash(self) -> None:
         """Generate config.h then flash."""
-        self.generate_requested.emit()   # main window writes config.h first
-        self._start_flash()
+        self.flash_requested.emit()
 
     def _run_flash_only(self) -> None:
         """Flash without generating config.h — for diagnostic/pre-built projects."""
         self.append_log("[FLASH] Skipping config.h generation (Flash Only mode)")
-        self._start_flash()
+        self.start_flash()
 
-    def _start_flash(self) -> None:
+    def start_flash(self) -> None:
         fw_dir = self.fw_path.text().strip()
         if not fw_dir:
             self.append_log("[FLASH] ⚠️  No firmware directory set.")

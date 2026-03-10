@@ -99,6 +99,14 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "allow_spoofing",
+            default_value="false",
+            description="Allow fake state echo if serial hardware is unavailable",
+        )
+    )
+
     # Initialize arguments
     runtime_config_package = LaunchConfiguration("runtime_config_package")
     controllers_file = LaunchConfiguration("controllers_file")
@@ -108,6 +116,7 @@ def generate_launch_description():
     use_ros2_control = LaunchConfiguration("use_ros2_control")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
+    allow_spoofing = LaunchConfiguration("allow_spoofing")
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -126,6 +135,9 @@ def generate_launch_description():
             " ",
             "baud_rate:=",
             baud_rate,
+            " ",
+            "allow_spoofing:=",
+            allow_spoofing,
         ]
     )
     

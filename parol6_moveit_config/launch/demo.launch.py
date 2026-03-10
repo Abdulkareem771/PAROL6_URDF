@@ -47,7 +47,7 @@ def generate_launch_description():
         executable="move_group",
         output="screen",
         parameters=[
-            moveit_config.to_dict(),
+            {**moveit_config.to_dict(), **fake_robot_description},
             {"use_sim_time": use_sim_time},
         ],
     )
@@ -66,7 +66,7 @@ def generate_launch_description():
         output="log",
         arguments=["-d", rviz_config_file],
         parameters=[
-            moveit_config.robot_description,
+            fake_robot_description,
             moveit_config.robot_description_semantic,
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
