@@ -4,7 +4,7 @@ jog_tab.py — Manual jog controls + encoder test mode readout per joint.
 from __future__ import annotations
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QDoubleSpinBox, QGroupBox, QGridLayout, QFrame, QProgressBar
+    QDoubleSpinBox, QGroupBox, QGridLayout, QFrame, QProgressBar, QScrollArea
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 from PyQt6.QtGui import QFont
@@ -119,20 +119,70 @@ class JogTab(QWidget):
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
+        root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
         title = QLabel("🕹  Manual Jog & Encoder Monitor")
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
 
-        info = QLabel(
-            "Hold +/− to move a joint. Releases send zero velocity automatically. "
-            "Encoder readouts update live from serial ACK packets."
+        # ── Instruction panel ─────────────────────────────────────────
+        instr = QFrame()
+        instr.setStyleSheet(
+            "QFrame { background:#1e2a1e; border:1px solid #a6e3a1; "
+            "border-radius:8px; padding:2px; }"
         )
-        info.setWordWrap(True)
-        info.setStyleSheet("color:#a6adc8; font-size:11px;")
-        root.addWidget(info)
+        instr_lay = QVBoxLayout(instr)
+        instr_lay.setSpacing(4)
+        instr_lay.setContentsMargins(12, 8, 12, 8)
+
+        def _lbl(text, color="#cdd6f4", sz=11):
+            l = QLabel(text)
+            l.setTextFormat(Qt.TextFormat.RichText)
+            l.setWordWrap(True)
+            l.setStyleSheet(f"color:{color}; font-size:{sz}px; background:transparent; border:none;")
+            return l
+
+        instr_lay.addWidget(_lbl(
+            "<b>📋 How to use the Jog tab</b>",
+            color="#a6e3a1", sz=12
+        ))
+
+        instr_lay.addWidget(_lbl(
+            "<b>Before jogging:</b> "
+            "Connect to the Teensy first using the toolbar at the top (Port → ⚡ Connect). "
+            "You should see <code>&lt;ACK,...&gt;</code> frames in the 💬 Serial tab. "
+            "If the robot is in FAULT state, click <b>🔓 CLEAR FAULT / ENABLE</b> first."
+        ))
+
+        instr_lay.addWidget(_lbl(
+            "<b>Jogging a joint:</b> "
+            "Set the <b>vel</b> (velocity in rad/s) for that row. "
+            "<b>Hold ◀ −</b> to move negative direction, <b>Hold + ▶</b> for positive. "
+            "Releasing the button <i>automatically sends a stop command</i> — the joint does not coast. "
+            "Start with <b>0.1–0.3 rad/s</b> for safety."
+        ))
+
+        instr_lay.addWidget(_lbl(
+            "<b>Encoder readout:</b> "
+            "Green values show the <b>current joint angle</b> in radians and degrees, "
+            "read from the firmware ACK stream. "
+            "If values don't update, check the serial connection."
+        ))
+
+        row2 = QHBoxLayout()
+        row2.addWidget(_lbl(
+            "<b>🏠 HOME ALL</b> — sends <code>&lt;HOME&gt;</code>: starts the limit-switch homing sequence (all axes).  "
+            "Firmware replies <code>HOMING_DONE</code> or <code>HOMING_FAULT</code> in 💬 Serial."
+        ))
+        row2.addWidget(_lbl(
+            "<b>ISR budget bar</b> — shows how long the 1 kHz control loop takes. "
+            "<span style='color:#f38ba8;'>Red = over 25 µs</span> → loop overrun risk. "
+            "Enable fewer features or reduce CONTROL_LOOP_RATE_HZ if red."
+        ))
+        instr_lay.addLayout(row2)
+
+        root.addWidget(instr)
 
         # Global controls
         glob = QHBoxLayout()
@@ -164,13 +214,30 @@ class JogTab(QWidget):
         self.isr_bar = QProgressBar()
         self.isr_bar.setRange(0, 50)
         self.isr_bar.setValue(0)
-        self.isr_bar.setFormat("%v µs")
+        self.isr_bar.setFormat("%v µs  (warn >25)")
         self.isr_bar.setMaximumHeight(16)
         isr_row.addWidget(self.isr_bar, stretch=1)
         self.isr_label = QLabel("— µs")
         self.isr_label.setStyleSheet("color:#a6adc8; min-width:60px;")
         isr_row.addWidget(self.isr_label)
         root.addLayout(isr_row)
+
+        # Column header
+        hdr = QHBoxLayout()
+        for txt, w, color in [
+            ("Joint", 36, "#a6adc8"),
+            ("Position (enc)", 140, "#a6adc8"),
+            ("Degrees", 80, "#a6adc8"),
+            ("Jog vel", 120, "#a6adc8"),
+            ("◀ −  / + ▶", 130, "#a6adc8"),
+            ("En", 50, "#a6adc8"),
+        ]:
+            lbl = QLabel(txt)
+            lbl.setFixedWidth(w)
+            lbl.setStyleSheet(f"color:{color}; font-size:10px; font-weight:bold;")
+            hdr.addWidget(lbl)
+        hdr.addStretch()
+        root.addLayout(hdr)
 
         # Per-joint rows
         self._jog_widgets: list[JointJogWidget] = []

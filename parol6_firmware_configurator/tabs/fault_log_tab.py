@@ -42,6 +42,22 @@ class FaultLogTab(QWidget):
         hdr.addWidget(export_btn)
         root.addLayout(hdr)
 
+        hint = QLabel(
+            "📋 <b>FAULT</b> (red) = latched — requires firmware restart or reflash to clear.  "
+            "<b>SOFT_ESTOP</b> (yellow) = recoverable — send <code>&lt;ENABLE&gt;</code> in 💬 Serial tab "
+            "or click <b>🔓 CLEAR FAULT / ENABLE</b> in 🕹 Jog tab.  "
+            "Common causes: velocity limit exceeded, command timeout (Teensy stopped getting commands), "
+            "limit switch triggered outside homing.  "
+            "<b>Export CSV</b> saves timestamp, state, and velocities for post-mortem analysis."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "background:#2a0a0a; border:1px solid #f38ba8; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        root.addWidget(hint)
+
         self.table = QTableWidget(0, len(COLS))
         self.table.setHorizontalHeaderLabels(COLS)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)

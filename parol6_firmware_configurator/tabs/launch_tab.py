@@ -101,7 +101,23 @@ class LaunchTab(QWidget):
         title = QLabel("🚀 ROS2 / MoveIt Launcher")
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
-        
+
+        hint = QLabel(
+            "📋 <b>Method 1</b> Gazebo Only — load the 3D simulation world (no robot control).  "
+            "<b>Method 2</b> Gazebo + MoveIt — full simulated robot you can plan and execute on.  "
+            "<b>Method 3</b> Fake Hardware — RViz + fake joint states (no Teensy needed, for path planning).  "
+            "<b>Method 4</b> Real Hardware — MoveIt talks to the physical robot via USB serial. "
+            "<span style='color:#fab387;'>⚠️ Only use after flashing firmware, homing, and testing limit switches.</span>  "
+            "<b>☠️ Kill All</b> forcefully stops all running ROS 2 / Gazebo processes if something hangs."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "background:#1e1a2e; border:1px solid #cba6f7; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        root.addWidget(hint)
+
         if not os.path.exists(self._launchers_dir):
             err = QLabel(f"⚠️ Launchers directory not found at:\n{self._launchers_dir}")
             err.setStyleSheet("color:#f38ba8; font-weight:bold;")
