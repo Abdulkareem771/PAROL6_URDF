@@ -25,6 +25,18 @@ static const float AB_ALPHA[6]         = {0.1f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f};
 static const float AB_BETA[6]          = {0.005f, 0.005f, 0.005f, 0.005f, 0.005f, 0.005f};
 static const bool  JOINT_ENABLED[6]    = {true, true, true, true, true, true};
 static const float HOME_OFFSETS_RAD[6] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+// Limit switch defaults — all disabled, safe pull-up
+static const bool  LIMIT_ENABLED[6]    = {false, false, false, false, false, false};
+static const int   LIMIT_PINS[6]       = {20, 21, 22, 23, 24, 25};
+static const int   LIMIT_POLARITY[6]   = {0, 0, 0, 0, 0, 0};      // 0=FALLING
+static const int   LIMIT_TYPE[6]       = {0, 0, 0, 0, 0, 0};      // 0=NONE
+static const int   LIMIT_PULL[6]       = {1, 1, 1, 1, 1, 1};      // 1=INPUT_PULLUP
+static const bool  LIMIT_ACTIVE_HIGH[6]= {false,false,false,false,false,false};
+// Homing defaults
+static const int   HOMING_ORDER[6]     = {3, 4, 5, 0, 1, 2};
+static const int   HOMING_SPEED[6]     = {500, 500, 500, 500, 500, 500};
+static const int   HOMED_OFFSET[6]     = {13500, 19588, 23020, -10200, 8900, 15900};
+static const int   STANDBY_POS[6]      = {10240, -32000, 57905, 0, 0, 32000};
 #endif
 
 #include "transport/SerialTransport.h"

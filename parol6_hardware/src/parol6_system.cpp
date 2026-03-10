@@ -358,13 +358,14 @@ return_type PAROL6System::read(
     }
     tokens.push_back(content.substr(start));  // Last token
     
-    // Validate: should have ACK + SEQ + 6 positions + 6 velocities = 14 tokens
-    // Firmware format: <ACK, SEQ, p1, p2, p3, p4, p5, p6, v1, v2, v3, v4, v5, v6>
-    // tokens[0]=ACK(str), [1]=SEQ, [2..7]=positions, [8..13]=velocities
-    if (tokens.size() != 14) {
+    // Validate: ACK + SEQ + 6 positions + 6 velocities + lim_state = 15 tokens
+    // Firmware format: <ACK, SEQ, p1..p6, v1..v6, lim_state>
+    // tokens[0]=ACK, [1]=SEQ, [2..7]=positions, [8..13]=velocities, [14]=lim_state
+    // Backward-compat: also accept 14 tokens (firmware without limit switch support)
+    if (tokens.size() < 14 || tokens.size() > 15) {
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
-        "Invalid feedback: expected 14 tokens, got %zu", tokens.size());
+        "Invalid feedback: expected 14-15 tokens, got %zu", tokens.size());
       goto spoof_states;
     }
     
