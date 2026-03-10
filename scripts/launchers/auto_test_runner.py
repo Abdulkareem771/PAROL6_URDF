@@ -15,15 +15,14 @@ class AutoTestRunner(Node):
         self.shape = shape
         self.path_pub = self.create_publisher(Path, '/vision/welding_path', 10)
         self.client = self.create_client(Trigger, '/moveit_controller/execute_welding_path')
+        self.status_client = self.create_client(Trigger, '/moveit_controller/is_execution_idle')
         self.controller_proc = None
 
     def run(self):
         # 1. Start moveit_controller in the background
         self.get_logger().info("Starting moveit_controller in the background...")
         self.controller_proc = subprocess.Popen(
-            ["ros2", "run", "parol6_vision", "moveit_controller"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            ["ros2", "run", "parol6_vision", "moveit_controller"]
         )
 
         # 2. Wait for service to become available
@@ -62,11 +61,37 @@ class AutoTestRunner(Node):
         try:
             res = future.result()
             if res.success:
-                self.get_logger().info(f"✅ Execution Success: {res.message}")
+                self.get_logger().info(f"Execution Successfully Triggered: {res.message}")
             else:
-                self.get_logger().error(f"❌ Execution Failed: {res.message}")
+                self.get_logger().error(f"❌ Execution Failed to trigger: {res.message}")
+                self.cleanup()
+                return
         except Exception as e:
             self.get_logger().error(f"Service call failed with exception: {e}")
+            self.cleanup()
+            return
+            
+        # 5.5 Wait for execution to finish
+        self.get_logger().info("Monitoring path execution progress. Waiting for robot to finish...")
+        time.sleep(1.0) # Give the background thread time to lock the 'execution_in_progress' flag
+        
+        while True:
+            if not self.status_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().warn("Status service disconnected.")
+                break
+                
+            status_req = Trigger.Request()
+            status_future = self.status_client.call_async(status_req)
+            rclpy.spin_until_future_complete(self, status_future)
+            try:
+                status_res = status_future.result()
+                if status_res.success:
+                    self.get_logger().info("✅ Execution Sequence fully completed!")
+                    break
+            except Exception as e:
+                self.get_logger().warn(f"Error checking execution status: {e}")
+            
+            time.sleep(1.0)
 
         # 6. Cleanup
         self.cleanup()
@@ -82,35 +107,36 @@ class AutoTestRunner(Node):
         path.header.frame_id = 'base_link'
         path.header.stamp = self.get_clock().now().to_msg()
         
-        # Center of our reachable test area: 20cm forward, 15cm above the table
-        cx, cy, cz = 0.20, 0.0, 0.15
+        # Center of reachable test area for ZY-plane patterns:
+        # keep X constant and draw larger motions in Y/Z so they are visible.
+        cx, cy, cz = 0.24, 0.0, 0.16
         points = []
 
         if shape == 'Straight':
-            # Straight line forward (+X axis) - 4cm total
-            for i in range(5):
-                points.append((cx + i*0.01, cy, cz))
+            # Straight vertical stroke in ZY plane (6 cm in +Z)
+            for i in range(7):
+                points.append((cx, cy, cz + i * 0.01))
         elif shape == 'Curve':
-            # Arc curving left on the table (XY plane) - 3cm radius
+            # Arc in ZY plane (quarter circle, 3 cm radius)
             r = 0.03
-            for i in range(5):
-                theta = (math.pi / 4.0) * (i / 4.0) # 0 to pi/4
-                points.append((cx + r*math.sin(theta), cy + r*(1 - math.cos(theta)), cz))
+            for i in range(7):
+                theta = (math.pi / 2.0) * (i / 6.0)  # 0 -> pi/2
+                points.append((cx, cy + r * math.sin(theta), cz + r * (1 - math.cos(theta))))
         elif shape == 'Circle':
-            # Full circle on the table (XY plane). 8 segments - 3cm radius
+            # Full circle in ZY plane (6 cm diameter)
             r = 0.03
-            for i in range(9): 
-                theta = (2 * math.pi / 8.0) * i
-                points.append((cx + r - r*math.cos(theta), cy + r*math.sin(theta), cz))
+            for i in range(13):
+                theta = (2 * math.pi / 12.0) * i
+                points.append((cx, cy + r * math.sin(theta), cz + r * math.cos(theta)))
         elif shape == 'ZigZag':
-            # Zig-zag pattern forward along the table - 4cm total
-            for i in range(6):
-                x_val = cx + i*0.008
-                y_val = cy + (0.015 if i % 2 == 1 else -0.015)
-                points.append((x_val, y_val, cz))
+            # Zig-zag in ZY plane: alternate Y while rising Z (6 cm tall)
+            for i in range(7):
+                y_val = cy + (0.02 if i % 2 == 1 else -0.02)
+                z_val = cz + i * 0.01
+                points.append((cx, y_val, z_val))
         else: # default straight
-            for i in range(5):
-                points.append((cx + i*0.01, cy, cz))
+            for i in range(7):
+                points.append((cx, cy, cz + i * 0.01))
 
         for (x, y, z) in points:
             pose = PoseStamped()

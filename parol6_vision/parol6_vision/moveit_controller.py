@@ -106,6 +106,8 @@ class MoveItController(Node):
         self.declare_parameter('auto_execute', False)
         self.declare_parameter('move_group_wait_timeout_sec', 30.0)
         self.declare_parameter('execute_wait_timeout_sec', 20.0)
+        self.declare_parameter('enable_joint_waypoint_fallback', True)
+        self.declare_parameter('joint_waypoint_fallback_count', 8)
 
         # Test mode: clamp incoming path into a conservative reachable workspace.
         # Useful to validate pipeline wiring even when vision points are out of reach.
@@ -124,6 +126,12 @@ class MoveItController(Node):
         self.auto_execute = self.get_parameter('auto_execute').value
         self.move_group_wait_timeout = float(self.get_parameter('move_group_wait_timeout_sec').value)
         self.execute_wait_timeout = float(self.get_parameter('execute_wait_timeout_sec').value)
+        self.enable_joint_waypoint_fallback = bool(
+            self.get_parameter('enable_joint_waypoint_fallback').value
+        )
+        self.joint_waypoint_fallback_count = int(
+            self.get_parameter('joint_waypoint_fallback_count').value
+        )
         self.enforce_reachable_test_path = self.get_parameter('enforce_reachable_test_path').value
         self.workspace_min = self.get_parameter('test_workspace_min').value
         self.workspace_max = self.get_parameter('test_workspace_max').value
@@ -167,6 +175,13 @@ class MoveItController(Node):
             Trigger, 
             '~/execute_welding_path',
             self.trigger_execution
+        )
+        
+        # Status Query
+        self.status_srv = self.create_service(
+            Trigger,
+            '~/is_execution_idle',
+            self.get_execution_status
         )
         
         self.latest_path = None
@@ -222,6 +237,14 @@ class MoveItController(Node):
         response.success = True
         response.message = "Execution started"
         return response
+
+    def get_execution_status(self, request, response):
+        """Service callback to check if execution is idle"""
+        with self._exec_lock:
+            # If idle, return success=True
+            response.success = not self.execution_in_progress
+            response.message = "Idle" if not self.execution_in_progress else "Executing"
+            return response
 
     def _start_execution_async(self, path, source='unknown'):
         with self._exec_lock:
@@ -281,7 +304,13 @@ class MoveItController(Node):
         weld_trajectory = self.plan_cartesian_with_fallback(path)
         
         if not weld_trajectory:
-            self.get_logger().error("All planning attempts failed")
+            self.get_logger().error("All Cartesian planning attempts failed")
+            if self.enable_joint_waypoint_fallback:
+                self.get_logger().warn(
+                    "Falling back to joint-space waypoint execution "
+                    "(coarser motion, but robust for diagnostics)"
+                )
+                return self.execute_waypoint_fallback(path)
             return False
             
         # 4. Execute Weld
@@ -436,6 +465,42 @@ class MoveItController(Node):
             f"(total={total_time:.1f}s, {dt}s/pt)"
         )
 
+    def execute_waypoint_fallback(self, path: Path) -> bool:
+        """
+        Fallback execution path:
+        - Select a coarse subset of waypoints.
+        - Move with joint-space planning to each waypoint.
+        This trades smooth Cartesian motion for robustness.
+        """
+        total = len(path.poses)
+        if total == 0:
+            self.get_logger().error("Waypoint fallback received empty path")
+            return False
+
+        desired = max(2, self.joint_waypoint_fallback_count)
+        if total <= desired:
+            indices = list(range(total))
+        else:
+            indices = sorted({int(i * (total - 1) / (desired - 1)) for i in range(desired)})
+
+        self.get_logger().info(
+            f"Waypoint fallback: executing {len(indices)}/{total} sampled waypoints"
+        )
+        for n, idx in enumerate(indices, start=1):
+            pose_stamped = copy.deepcopy(path.poses[idx])
+            ok = self.move_to_pose(
+                pose_stamped,
+                use_orientation_constraint=False
+            )
+            if not ok:
+                self.get_logger().error(
+                    f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"
+                )
+                return False
+
+        self.get_logger().info("Waypoint fallback execution completed")
+        return True
+
     def move_to_home(self):
         """
         Move arm to home joint state (all joints = 0) using JointConstraints.
@@ -504,7 +569,12 @@ class MoveItController(Node):
             )
         return ok
 
-    def move_to_pose(self, pose_stamped):
+    def move_to_pose(
+        self,
+        pose_stamped,
+        use_orientation_constraint=True,
+        orientation_tolerance_xyz=0.2
+    ):
         """
         Move end-effector to a target pose using MoveGroup joint-space planning.
         Sends a full MotionPlanRequest via the 'move_action' action server.
@@ -535,18 +605,18 @@ class MoveItController(Node):
         pos_con.constraint_region = bv
         pos_con.weight = 1.0
 
-        ori_con = OrientationConstraint()
-        ori_con.header = pose_stamped.header
-        ori_con.link_name = self.ee_link
-        ori_con.orientation = pose_stamped.pose.orientation
-        ori_con.absolute_x_axis_tolerance = 0.2
-        ori_con.absolute_y_axis_tolerance = 0.2
-        ori_con.absolute_z_axis_tolerance = 0.2
-        ori_con.weight = 1.0
-
         goal_constraints = Constraints()
         goal_constraints.position_constraints = [pos_con]
-        goal_constraints.orientation_constraints = [ori_con]
+        if use_orientation_constraint:
+            ori_con = OrientationConstraint()
+            ori_con.header = pose_stamped.header
+            ori_con.link_name = self.ee_link
+            ori_con.orientation = pose_stamped.pose.orientation
+            ori_con.absolute_x_axis_tolerance = orientation_tolerance_xyz
+            ori_con.absolute_y_axis_tolerance = orientation_tolerance_xyz
+            ori_con.absolute_z_axis_tolerance = orientation_tolerance_xyz
+            ori_con.weight = 1.0
+            goal_constraints.orientation_constraints = [ori_con]
 
         # --- Build MoveGroup Goal ---
         goal = MoveGroup.Goal()
