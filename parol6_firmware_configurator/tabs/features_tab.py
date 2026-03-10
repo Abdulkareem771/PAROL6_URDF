@@ -64,6 +64,18 @@ class FeaturesTab(QWidget):
         sub.setStyleSheet("color:#a6adc8; font-size:12px;")
         root.addWidget(sub)
 
+        hint = QLabel(
+            "💡 <b>New to these flags?</b> Open the <b>📖 Docs</b> tab → "
+            "<i>⚙️ Features Tab Guide</i> for a plain-English explanation of every toggle."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "background:#2a2a3e; border:1px solid #45475a; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        root.addWidget(hint)
+
         # ── Interpolator ─────────────────────────────────────────────
         interp_box = QGroupBox("Interpolator Configuration")
         interp_lay = QVBoxLayout(interp_box)

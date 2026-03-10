@@ -30,6 +30,7 @@ from tabs.plot_tab import PlotTab
 from tabs.flash_tab import FlashTab
 from tabs.fault_log_tab import FaultLogTab
 from tabs.launch_tab import LaunchTab
+from tabs.docs_tab import DocsTab
 
 # ---------------------------------------------------------------------------
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -215,6 +216,7 @@ class MainWindow(QMainWindow):
             self._sb_port.setText(ports[0])
 
     def _build_tabs(self) -> None:
+        self._docs_tab  = DocsTab()
         self._proto_tab = TestingProtocolTab(CONFIGS_DIR)
         self._feat_tab  = FeaturesTab()
         self._joints_tab= JointsTab()
@@ -227,6 +229,7 @@ class MainWindow(QMainWindow):
         self._launch_tab= LaunchTab()
 
         self._tabs = QTabWidget()
+        self._tabs.addTab(self._docs_tab,   "📖 Docs")
         self._tabs.addTab(self._proto_tab,  "🔬 Protocol")
         self._tabs.addTab(self._feat_tab,   "⚙️ Features")
         self._tabs.addTab(self._joints_tab, "🔩 Joints")

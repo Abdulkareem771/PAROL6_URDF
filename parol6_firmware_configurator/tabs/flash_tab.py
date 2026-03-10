@@ -36,6 +36,21 @@ class FlashTab(QWidget):
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
 
+        workflow = QLabel(
+            "📋 <b>Workflow:</b> &nbsp;"
+            "1️⃣ Edit settings in <b>Joints / Features / Comms</b> tabs &nbsp;→&nbsp; "
+            "2️⃣ <b>Generate config.h</b> &nbsp;→&nbsp; "
+            "3️⃣ <b>Generate &amp; Flash</b>. &nbsp; "
+            "Full guide in the <b>📖 Docs</b> tab → <i>⚡ Flash Tab Guide</i>."
+        )
+        workflow.setTextFormat(Qt.TextFormat.RichText)
+        workflow.setWordWrap(True)
+        workflow.setStyleSheet(
+            "background:#1a2a1a; border:1px solid #a6e3a1; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        root.addWidget(workflow)
+
         # ── PlatformIO path ───────────────────────────────────────────
         path_box = QGroupBox("PlatformIO Project")
         path_lay = QHBoxLayout(path_box)

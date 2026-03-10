@@ -8,18 +8,19 @@ This tool eliminates the need to manually edit C++ headers (`config.h`), memoriz
 
 ### Features
 
-| Feature | Description |
-|---------|-------------|
-| **Configuration** | Tune PID gains, velocity limits, transport mode (USB/UART), pin assignments — all per joint |
-| **`config.h` Generation** | All settings are exported to a C header that `main.cpp` includes via `#pragma once` |
-| **Compile & Flash** | One-click PlatformIO build + upload to Teensy 4.1 |
-| **Dir Inversion** | Per-joint `Dir Inv` checkbox writes `DIR_INVERT[]` bool array to firmware. J1, J3, J6 are inverted by default (from STM32 legacy `motor_init.cpp`) |
-| **Limit Switches** | Per-joint type (NONE / MECHANICAL / NPN / PNP), pin, and polarity are mapped to firmware arrays |
-| **Homing Params** | Homing offset, standby position, and homing order exported as integer step arrays |
-| **Jog & Oscilloscope** | Real-time slider-based jogging + PyQtGraph position/velocity scope |
-| **ROS 2 Launcher** | Start Fake, Gazebo, or Real Hardware MoveIt from the GUI's Launch tab |
-| **Live Logs** | Launcher output streamed into the GUI terminal panel |
-| **Faults Tab** | E-Stop log from the safety supervisor; exportable to CSV |
+| Tab | Description |
+|-----|-------------|
+| **📖 Docs** | In-app teammate guide — Quick Start, per-tab walkthroughs, limit switch wiring, homing, MoveIt, and troubleshooting. **Start here.** |
+| **🔬 Protocol** | Phase-by-phase testing presets (phase0 → phase10). Load a preset, flash, and validate before advancing. |
+| **⚙️ Features** | Compile-time feature flags — AlphaBeta filter, feedforward, safety supervisor, hardware PWM/Encoder, debug modes. |
+| **🔩 Joints** | Per-joint pin assignments, gear ratios, PID gains, velocity limits, and limit switch config (type/pin/polarity/pull). |
+| **📡 Comms** | Transport mode (USB/UART/Ethernet), ROS command rate, feedback rate, control loop rate. |
+| **🕹 Jog** | Real-time slider-based single-joint jogging over serial. |
+| **💬 Serial** | Raw serial terminal — see ACK frames and send `<HOME>` / `<ENABLE>` commands directly. |
+| **📈 Oscilloscope** | Live position + velocity scope (PyQtGraph). Verify tracking without oscillation before enabling full stack. |
+| **⚡ Flash** | Generate `config.h` → Compile with PlatformIO inside Docker → Flash to Teensy 4.1. |
+| **🚀 ROS2 Launch** | Start Fake / Gazebo / Real Hardware MoveIt stacks. Logs stream into terminal panel below. |
+| **⚠️ Faults** | Safety supervisor ESTOP log with timestamps and fault reasons. Export to CSV. |
 
 ## Setup
 
