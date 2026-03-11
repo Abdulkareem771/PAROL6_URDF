@@ -1,293 +1,179 @@
-# ROS Driver Communication Testing Guide
+# ROS Hardware Interface Testing Guide
 
-**Objective**: Test the complete pipeline: **RViz → MoveIt → ROS Driver → ESP32**
-
-This verifies:
-- ✅ MoveIt plans execute correctly
-- ✅ ROS driver formats commands properly
-- ✅ Serial communication is reliable
-- ✅ ESP32 receives accurate data
-- ✅ End-to-end latency is acceptable
+**Objective**: Verify the `parol6_hardware` ros2_control plugin correctly reads encoder state and writes motor commands through the Teensy firmware.
 
 ---
 
-## 🔧 Setup
+## Overview
 
-### 1. Upload ESP32 Firmware
+The hardware interface (`parol6_system.cpp`) does three things:
+1. **Read** — parses `<ACK,...>` feedback packets from Teensy into `joint_states`
+2. **Write** — encodes `<SEQ,pos,vel>` command packets to Teensy at 25 Hz
+3. **State** — reports hardware state to ros2_control (active / error)
 
-Upload `PAROL6/firmware/benchmark_firmware.ino` to your ESP32 (same as before).
-
-### 2. Update ROS Driver (Already Done!)
-
-The driver now logs all commands to:
-```
-/workspace/logs/driver_commands_YYYYMMDD_HHMMSS.csv
-```
-
-### 3. Connect ESP32
-
-```bash
-# Find port
-ls /dev/ttyUSB* /dev/ttyACM*
-
-# Give permission if needed
-sudo chmod 666 /dev/ttyUSB0
-```
+This guide tests each layer independently.
 
 ---
 
-## 🚀 Running the Test
+## Prerequisites
 
-### Step 1: Start ROS System
+- Firmware flashed and serial communication test passed
+- Docker container running: `docker exec -it parol6_dev bash`
+- Built workspace: `cd /workspace && source install/setup.bash`
+
+---
+
+## Test 1 — Read path: encoder → joint_states
+
+### 1a. Launch hardware interface only (no MoveIt)
 
 ```bash
 # Inside Docker
-docker exec -it parol6_dev bash
-cd /workspace
-
-# Launch robot (enables logging by default)
-ros2 launch parol6_moveit_config unified_bringup.launch.py mode:=real
+ros2 launch parol6_hardware real_robot.launch.py \
+  serial_port:=/dev/ttyACM0 \
+  baud_rate:=115200 \
+  allow_spoofing:=false
 ```
 
-**What happens:**
-- RViz opens
-- Driver connects to ESP32 at `/dev/ttyUSB0` (or `/dev/ttyACM0`)
-- Logging starts automatically → `/workspace/logs/driver_commands_*.csv`
+In a second terminal:
+```bash
+# Watch joint_states with timestamps
+ros2 topic echo /joint_states
+```
 
-### Step 2: Plan and Execute in RViz
+**Expected:**
+```yaml
+header:
+  stamp:
+    sec: 1741653600
+name: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6]
+position: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # ← encoder readings
+velocity: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+```
 
-1. **Drag end-effector** to desired position
-2. Click **"Plan"** → MoveIt generates trajectory
-3. Click **"Execute"** → Sends to real_robot_driver → ESP32
+### 1b. Verify encoder reads change with physical motion
 
-**Watch terminals:**
-- **ROS terminal**: Shows "Executing Trajectory..."
-- **ESP32 Serial Monitor** (if open): Shows `LOG,timestamp,SEQ:X,J:[...]`
+Manually rotate J1's output shaft slightly by hand (robot unpowered is fine).  
+The `position[0]` in `/joint_states` should change in real time.
 
-### Step 3: Stop and Collect Logs
+**Sign convention**: turning in the positive direction (as defined by URDF) should give **positive** position change. If it's negative, `DIR_INVERT[0]` needs toggling.
+
+### 1c. Confirm publish rate
 
 ```bash
-# Stop ROS (Ctrl+C)
-^C
-
-# Logs are in:
-ls /workspace/logs/
-
-# You should see:
-# driver_commands_20260112_194500.csv  (PC side)
-```
-
-### Step 4: Get ESP32 Log
-
-**Option A: Serial Monitor** (if you had it open)
-- Copy all `LOG,` lines to a file
-- Save as `esp32_log.csv`
-
-**Option B: SD Card** (if USE_SD_LOGGING=true)
-- Remove SD card from ESP32
-- Copy `comm_test.log` to PC
-
-**Option C: Request Stats**
-If firmware supports it, you can query stats via serial command.
-
----
-
-## 📊 Analyze Results
-
-### Run Analysis Script
-
-```bash
-# Inside Docker or on host (needs matplotlib)
-pip3 install pandas matplotlib numpy
-
-# Run analysis
-python3 scripts/analyze_communication_logs.py \
-  --pc-log /workspace/logs/driver_commands_20260112_194500.csv \
-  --esp-log /path/to/esp32_log.csv \
-  --output ros_esp_analysis.png
-```
-
-**Output:**
-```
-==================================================
-PACKET LOSS ANALYSIS
-==================================================
-Commands Sent (PC):     245
-Commands Received (ESP): 245
-Packets Lost:            0
-Loss Rate:               0.00%
-
-==================================================
-LATENCY ANALYSIS
-==================================================
-Valid Samples:    245
-Mean Latency:     4.56 ms
-Median Latency:   4.23 ms
-Min Latency:      3.12 ms
-Max Latency:      8.91 ms
-Std Deviation:    1.23 ms
-
-✓ Report saved: ros_esp_analysis.png
-```
-
----
-
-## 📈 What the Report Shows
-
-### Graph 1: Packet Loss Pie Chart
-- **Target**: 100% received, 0% lost
-- **Warning**: If any loss, check USB cable/connection
-
-### Graph 2: Latency Over Time
-- Shows latency for each command
-- **Good**: Flat line ~5ms
-- **Bad**: Spikes > 50ms (indicates system lag)
-
-### Graph 3: Latency Distribution
-- Histogram showing jitter
-- **Good**: Tight peak (consistent timing)
-- **Bad**: Wide spread (unpredictable delays)
-
-### Graph 4: Command Rate
-- How fast MoveIt sends commands
-- **Typical**: 10-20 Hz (every 50-100ms)
-- Shows if trajectory timing is smooth
-
-### Graph 5: Statistics Summary
-- Text summary of all metrics
-
----
-
-## ✅ Success Criteria
-
-| Metric | Good | Acceptable | Problem |
-|--------|------|------------|---------|
-| Packet Loss | 0% | < 0.1% | > 1% |
-| Mean Latency | < 5ms | < 15ms | > 50ms |
-| Max Latency | < 10ms | < 30ms | > 100ms |
-| Jitter (Std Dev) | < 3ms | < 10ms | > 20ms |
-
-**Interpretation:**
-- **< 5ms latency**: Excellent! Motors will track smoothly
-- **< 15ms latency**: Good enough for most applications
-- **> 50ms latency**: Problem! Commands lag behind MoveIt plan
-
----
-
-## 🔍 Troubleshooting
-
-### Issue: High Latency (> 50ms)
-
-**Possible Causes:**
-1. **Other ROS nodes consuming CPU** → Close unnecessary nodes
-2. **Serial Monitor open** → Close Arduino IDE
-3. **Docker resource limits** → Increase Docker CPU allocation
-4. **USB hub lag** → Connect ESP32 directly to laptop
-
-**Fix:**
-```bash
-# Check ROS node performance
 ros2 topic hz /joint_states
-# Should be near 20 Hz
-
-# Check Docker resources
-docker stats parol6_dev
+# Expected: 25 Hz ± 2 Hz
 ```
 
 ---
 
-### Issue: Packet Loss (> 1%)
+## Test 2 — Write path: controller → Teensy command
 
-**Causes:**
-1. Bad USB cable
-2. Serial buffer overflow (commands too fast)
-3. ESP32 crashed/rebooted
+### 2a. Check command is reaching Teensy
 
-**Fix:**
-- Replace USB cable
-- Check ESP32 Serial Monitor for error messages
-- Add delay in driver (increase `time.sleep(0.05)` to `0.1`)
+Enable the arm controller and send a zero-velocity hold command:
+```bash
+# After launching real_robot.launch.py:
+ros2 control switch_controllers \
+  --activate parol6_arm_controller \
+  --deactivate ""
+```
 
----
+Open the Firmware Configurator serial tab and observe — you should see `<ACK,...>` packets arriving continuously, meaning the hardware interface is writing commands and Teensy is responding.
 
-### Issue: Data Mismatch
+### 2b. Verify sign correction applied correctly
 
-If joint values don't match between PC and ESP32:
-
-**Causes:**
-1. Parsing error in ESP32 firmware
-2. Serial corruption
-3. Floating point precision loss
-
-**Fix:**
-- Check ESP32 `parseData()` function
-- Verify format: `<seq,j1,j2,j3,j4,j5,j6>`
-- Use fixed precision (4 decimal places)
-
----
-
-## 📝 Example Test Session
+The hardware interface applies sign correction to J1, J3, J6 (configurable via `DIR_INVERT`).
 
 ```bash
-# 1. Start system
-ros2 launch parol6_moveit_config unified_bringup.launch.py mode:=real
-
-# 2. In RViz: Plan and Execute 5 different trajectories
-#    - Home → Up
-#    - Up → Left
-#    - Left → Right
-#    - Right → Forward
-#    - Forward → Home
-
-# 3. Stop ROS
-^C
-
-# 4. Check logs
-ls -lh /workspace/logs/
-# driver_commands_20260112_194500.csv  (1.2 MB, 245 commands)
-
-# 5. Copy ESP32 log (from Serial Monitor or SD)
-# Save as: /workspace/logs/esp32_log.csv
-
-# 6. Analyze
-python3 scripts/analyze_communication_logs.py \
-  --pc-log /workspace/logs/driver_commands_20260112_194500.csv \
-  --esp-log /workspace/logs/esp32_log.csv
-
-# 7. Review ros_esp_analysis.png
-# Expected: 0% loss, ~5ms latency
+# Check what command the controller is sending vs what ROS reports
+ros2 topic echo /parol6_arm_controller/state --field reference.positions
+# Compare with:
+ros2 topic echo /joint_states --field position
+# They should match (encoder tracks command) for a stationary robot
 ```
 
 ---
 
-## 🎯 Next Steps
+## Test 3 — allow_spoofing=false enforcement
 
-Once verification passes:
-1. ✅ **Update firmware** to real motor control code
-2. ✅ **Connect motors** (one at a time!)
-3. ✅ **Test with low speed** first
-4. ✅ **Gradually increase** trajectory speed
-5. ✅ **Full welding application** integration
+With `allow_spoofing:=false` (the default for real hardware), the hardware interface will return an `ERROR` lifecycle state if:
 
----
+- The serial port is not present
+- The received packet cannot be parsed
+- Position values are out of bounds
 
-## 📞 Expected Results (Benchmark)
+### 3a. Test missing serial port
 
-**System**: ESP32 + USB 2.0 + ROS 2 Humble
+```bash
+ros2 launch parol6_hardware real_robot.launch.py \
+  serial_port:=/dev/nonexistent \
+  baud_rate:=115200 \
+  allow_spoofing:=false
+```
 
-| Component | Latency Contribution |
-|-----------|---------------------|
-| MoveIt Planning | ~10-50ms (one-time) |
-| ROS message passing | ~1-2ms |
-| Serial transmission | ~2-3ms |
-| ESP32 processing | ~1ms |
-| **Total (per waypoint)** | **~5-10ms** |
+Expected: hardware interface logs an error and `list_controllers` shows the controller as **unconfigured** or **inactive** (not active).
 
-**Command Rate**: 
-- MoveIt typically sends waypoints at 10-20 Hz
-- Driver can handle up to 100 Hz if needed
+### 3b. Verify normal operation restores
+
+Reconnect Teensy → relaunch → controllers go **active**.
 
 ---
 
-**Last Updated**: January 2026  
+## Test 4 — Controller response bandwidth
+
+Measure how quickly the arm controller error converges after a step command:
+
+```bash
+# With robot stationary at 0, command 0.2 rad on J1
+ros2 topic pub --once /parol6_arm_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6],
+    points: [{
+      positions: [0.2, 0.0, 0.0, 0.0, 0.0, 0.0],
+      velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      time_from_start: {sec: 3, nanosec: 0}
+    }]
+  }'
+
+# In parallel, log the joint position
+ros2 topic echo /joint_states --field position[0]
+```
+
+**Expected**: Position rises smoothly from 0 to ~0.2 rad within 3 seconds, no oscillation.
+
+| Behaviour | Cause | Fix |
+|-----------|-------|-----|
+| Overshoot + ringing | KP too high | Lower `KP_GAINS[0]` |
+| Slow convergence, doesn't reach goal | KP too low | Raise `KP_GAINS[0]` |
+| Steady-state error stays > 0.05 rad | KI needed | Add small KI (0.01) and MAX_INTEGRAL |
+| Motor stalls, position stuck | Current limit on driver too low | Increase driver current |
+
+---
+
+## Success criteria
+
+| Test | Pass condition |
+|------|---------------|
+| 1. Encoder → joint_states | Publishes at 25 Hz, sign correct, values change with shaft rotation |
+| 2. Write path | `<ACK,...>` visible in serial tab during active control |
+| 3. allow_spoofing enforcement | Missing port → ERROR state, not crash |
+| 4. Step response | 0.2 rad reached within 3 s, no oscillation > 0.02 rad |
+
+---
+
+## Common issues
+
+| Symptom | Fix |
+|---------|-----|
+| Hardware interface in `inactive` immediately | `allow_spoofing:=false` + no Teensy → expected. Connect Teensy. |
+| Position stuck at 0.0 always | Encoder cable not connected or wrong pin in config |
+| Position jumps by large random amounts | Encoder signal interference — use shielded cable, add 100 nF cap at pin |
+| `joint_states` at 10 Hz not 25 | Reflash with `FEEDBACK_RATE_HZ=25` |
+| Arm controller `inactive` after spoofing error | Send `<ENABLE>` in serial tab, then restart controller via `ros2 control switch_controllers` |
+
+---
+
+**Last Updated**: 2026-03-11  
 **Maintained by**: PAROL6 Team

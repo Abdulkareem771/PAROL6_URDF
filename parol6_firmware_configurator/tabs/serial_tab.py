@@ -58,6 +58,25 @@ class SerialTab(QWidget):
 
         root.addLayout(toolbar)
 
+        # ── Instructions banner ───────────────────────────────────────
+        instr = QLabel(
+            "<b>📋 Expected output</b> (firmware running): "
+            "<code style='color:#a6e3a1;'>&lt;ACK,seq,p1..p6,v1..v6,lim_state&gt;</code>  "
+            "— seq increases each frame, positions in rad, lim_state bitmask shows triggered limit switches.  "
+            "<b>Useful commands to send:</b>  "
+            "<code>&lt;HOME&gt;</code> start homing &nbsp;|&nbsp; "
+            "<code>&lt;ENABLE&gt;</code> clear ESTOP &nbsp;|&nbsp; "
+            "<code>&lt;0,0,0,0,0,0,0,0,0,0,0,0,0&gt;</code> send all-zero position.  "
+            "Use the <b>Filter</b> box above to show only FAULT or ACK lines."
+        )
+        instr.setTextFormat(Qt.TextFormat.RichText)
+        instr.setWordWrap(True)
+        instr.setStyleSheet(
+            "background:#2a1e0a; border:1px solid #fab387; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px;"
+        )
+        root.addWidget(instr)
+
         # ── Output ────────────────────────────────────────────────────
         self.output = QTextEdit()
         self.output.setReadOnly(True)
@@ -75,7 +94,7 @@ class SerialTab(QWidget):
         # ── Send row ──────────────────────────────────────────────────
         send_row = QHBoxLayout()
         self.send_edit = QLineEdit()
-        self.send_edit.setPlaceholderText("Send command…  (Enter to send)")
+        self.send_edit.setPlaceholderText("Send command…  e.g. <HOME> or <ENABLE>  (Enter to send)")
         self.send_edit.returnPressed.connect(self._send)
         send_btn = QPushButton("Send")
         send_btn.clicked.connect(self._send)

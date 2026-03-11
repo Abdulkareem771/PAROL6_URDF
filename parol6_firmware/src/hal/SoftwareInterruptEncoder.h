@@ -10,42 +10,42 @@ volatile uint32_t enc_rise_times[6] = {0, 0, 0, 0, 0, 0};
 volatile uint32_t enc_pulse_widths[6] = {0, 0, 0, 0, 0, 0};
 volatile int enc_pins[6] = {-1, -1, -1, -1, -1, -1};
 
-void IRAM_ATTR enc_isr_0() {
+FASTRUN void enc_isr_0() {
     if (digitalRead(enc_pins[0])) {
         enc_rise_times[0] = micros();
     } else {
         enc_pulse_widths[0] = micros() - enc_rise_times[0];
     }
 }
-void IRAM_ATTR enc_isr_1() {
+FASTRUN void enc_isr_1() {
     if (digitalRead(enc_pins[1])) {
         enc_rise_times[1] = micros();
     } else {
         enc_pulse_widths[1] = micros() - enc_rise_times[1];
     }
 }
-void IRAM_ATTR enc_isr_2() {
+FASTRUN void enc_isr_2() {
     if (digitalRead(enc_pins[2])) {
         enc_rise_times[2] = micros();
     } else {
         enc_pulse_widths[2] = micros() - enc_rise_times[2];
     }
 }
-void IRAM_ATTR enc_isr_3() {
+FASTRUN void enc_isr_3() {
     if (digitalRead(enc_pins[3])) {
         enc_rise_times[3] = micros();
     } else {
         enc_pulse_widths[3] = micros() - enc_rise_times[3];
     }
 }
-void IRAM_ATTR enc_isr_4() {
+FASTRUN void enc_isr_4() {
     if (digitalRead(enc_pins[4])) {
         enc_rise_times[4] = micros();
     } else {
         enc_pulse_widths[4] = micros() - enc_rise_times[4];
     }
 }
-void IRAM_ATTR enc_isr_5() {
+FASTRUN void enc_isr_5() {
     if (digitalRead(enc_pins[5])) {
         enc_rise_times[5] = micros();
     } else {

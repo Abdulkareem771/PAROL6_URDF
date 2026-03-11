@@ -17,6 +17,7 @@ class FlashTab(QWidget):
     """Generate config.h, preview, build-check, and flash to Teensy."""
 
     # Emitted so main window can call code_generator before flashing
+    validate_requested = pyqtSignal()
     generate_requested = pyqtSignal()
     build_requested    = pyqtSignal()
     flash_requested    = pyqtSignal()
@@ -35,6 +36,21 @@ class FlashTab(QWidget):
         title = QLabel("⚡  Flash Manager")
         title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
         root.addWidget(title)
+
+        workflow = QLabel(
+            "📋 <b>Workflow:</b> &nbsp;"
+            "1️⃣ Edit settings in <b>Joints / Features / Comms</b> tabs &nbsp;→&nbsp; "
+            "2️⃣ <b>Generate config.h</b> &nbsp;→&nbsp; "
+            "3️⃣ <b>Generate &amp; Flash</b>. &nbsp; "
+            "Full guide in the <b>📖 Docs</b> tab → <i>⚡ Flash Tab Guide</i>."
+        )
+        workflow.setTextFormat(Qt.TextFormat.RichText)
+        workflow.setWordWrap(True)
+        workflow.setStyleSheet(
+            "background:#1a2a1a; border:1px solid #a6e3a1; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        root.addWidget(workflow)
 
         # ── PlatformIO path ───────────────────────────────────────────
         path_box = QGroupBox("PlatformIO Project")
@@ -65,6 +81,10 @@ class FlashTab(QWidget):
         # ── Action buttons ────────────────────────────────────────────
         btn_row = QHBoxLayout()
 
+        val_btn = QPushButton("✅  Validate Only")
+        val_btn.setToolTip("Run safety checks against the current configuration without generating files.")
+        val_btn.clicked.connect(self.validate_requested)
+
         gen_btn = QPushButton("⚙️  Generate config.h")
         gen_btn.setToolTip("Writes generated/config.h from current GUI settings.")
         gen_btn.clicked.connect(self.generate_requested)
@@ -91,10 +111,20 @@ class FlashTab(QWidget):
         self.abort_btn.setEnabled(False)
         self.abort_btn.clicked.connect(self._abort)
 
-        for btn in (gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
+        for btn in (val_btn, gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
             btn_row.addWidget(btn)
         btn_row.addStretch()
         root.addLayout(btn_row)
+
+        validation_box = QGroupBox("Configuration Validation")
+        validation_lay = QVBoxLayout(validation_box)
+        self.validation = QTextEdit()
+        self.validation.setReadOnly(True)
+        self.validation.setFont(QFont("Monospace", 9))
+        self.validation.setStyleSheet("background:#11111b; color:#f9e2af; border:none;")
+        self.validation.setMaximumHeight(140)
+        validation_lay.addWidget(self.validation)
+        root.addWidget(validation_box)
 
         # ── config.h preview ──────────────────────────────────────────
         prev_box = QGroupBox("Generated config.h Preview")
@@ -121,6 +151,20 @@ class FlashTab(QWidget):
     def set_preview(self, content: str) -> None:
         self.preview.setPlainText(content)
 
+    def set_validation_report(self, errors: list[str], warnings: list[str]) -> None:
+        lines: list[str] = []
+        if errors:
+            lines.append("Errors:")
+            lines.extend([f"  - {msg}" for msg in errors])
+        if warnings:
+            if lines:
+                lines.append("")
+            lines.append("Warnings:")
+            lines.extend([f"  - {msg}" for msg in warnings])
+        if not lines:
+            lines.append("No validation issues.")
+        self.validation.setPlainText("\n".join(lines))
+
     def set_firmware_path(self, path: str) -> None:
         self.fw_path.setText(path)
 
@@ -137,15 +181,14 @@ class FlashTab(QWidget):
 
     def _run_flash(self) -> None:
         """Generate config.h then flash."""
-        self.generate_requested.emit()   # main window writes config.h first
-        self._start_flash()
+        self.flash_requested.emit()
 
     def _run_flash_only(self) -> None:
         """Flash without generating config.h — for diagnostic/pre-built projects."""
         self.append_log("[FLASH] Skipping config.h generation (Flash Only mode)")
-        self._start_flash()
+        self.start_flash()
 
-    def _start_flash(self) -> None:
+    def start_flash(self) -> None:
         fw_dir = self.fw_path.text().strip()
         if not fw_dir:
             self.append_log("[FLASH] ⚠️  No firmware directory set.")

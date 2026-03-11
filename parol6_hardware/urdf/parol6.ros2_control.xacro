@@ -16,7 +16,7 @@
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyACM0 baud_rate:=115200">
+  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyACM0 baud_rate:=115200 allow_spoofing:=false">
 
     <!-- ======================================================================
          ros2_control Hardware Interface Configuration
@@ -31,6 +31,7 @@
         <!-- Serial communication parameters -->
         <param name="serial_port">${serial_port}</param>
         <param name="baud_rate">${baud_rate}</param>
+        <param name="allow_spoofing">${allow_spoofing}</param>
         <param name="timeout_ms">5</param>        <!-- Must be << loop period (40ms @ 25Hz) -->
 
         <!-- Logging -->

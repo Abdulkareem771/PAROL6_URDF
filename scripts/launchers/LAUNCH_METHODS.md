@@ -89,26 +89,45 @@ What it starts (two sequential launch files):
 > [!IMPORTANT]
 > **Do not** run `real_robot.launch.py` separately AND then trigger the GUI launcher — the controller spawner runs from `real_robot.launch.py`. Running it twice causes a `Controller already loaded from active state` crash. The launcher handles both launches in the correct order.
 
+The script now actually does this sequence. It starts `real_robot.launch.py` in the background, **polls `/controller_manager/list_controllers`** until it appears (instead of a fixed sleep), waits one extra second for controllers to fully activate, and only then starts MoveIt/RViz.
+
 Prerequisites:
 - Teensy 4.1 connected to host USB
-- Device node allocated as `/dev/ttyACM0` (or configured in `parol6.ros2_control.xacro`)
+- Device node allocated as `/dev/ttyACM0` (or set via env override)
 - Docker container has `/dev/ttyACM0` passed through (`--device` flag in `start_container.sh`)
+
+Optional environment overrides:
+
+```bash
+PAROL6_SERIAL_PORT=/dev/ttyACM1 PAROL6_BAUD_RATE=115200 ./scripts/launchers/launch_moveit_real_hw.sh
+```
 
 ### Hardware Telemetry Protocol
 
 The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates with the Teensy over serial at 115200 baud.
 
-**Command (ROS → Teensy):**
+**Command (ROS → Teensy)** (sent by `parol6_system.cpp` at `ROS_COMMAND_RATE_HZ`):
 ```
-<SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+<SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel>
+```
+Frames with a sequence number not strictly greater than the last accepted frame are rejected with:
+```
+STALE_CMD
 ```
 
-**Feedback (Teensy → ROS):**
+**Feedback (Teensy → ROS)** (sent at `FEEDBACK_RATE_HZ`):
 ```
-<ACK,SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+<ACK,SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel,lim_state>
 ```
+- All position values in radians, velocity in rad/s
+- `lim_state` — bitmask: bit 0=J1 … bit 5=J6 limit switch triggered
+- The hardware interface applies kinematic sign correction for J1, J3, J6 before sending and after receiving
 
-All values in radians (position) and radians/second (velocity). The hardware interface applies kinematic sign correction for J1, J3, J6 before sending commands and after receiving feedback.
+**Special commands:**
+```
+<HOME>      → Start homing sequence (replies HOMING_DONE or HOMING_FAULT)
+<ENABLE>    → Clear SOFT_ESTOP
+```
 
 ## Recommended Startup Order
 

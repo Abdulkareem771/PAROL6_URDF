@@ -16,7 +16,8 @@ from PyQt6.QtGui import QIcon, QFont
 
 # ── Core ──────────────────────────────────────────────────────────────────
 from core.config_model import RobotConfig
-from core.code_generator import generate_config_h
+from core.code_generator import generate_config_h, generate_joint_limits, update_ros_invert_xacro
+from core.config_validator import validate_robot_config
 from core.serial_monitor import SerialWorker, list_serial_ports
 
 # ── Tabs ──────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ from tabs.plot_tab import PlotTab
 from tabs.flash_tab import FlashTab
 from tabs.fault_log_tab import FaultLogTab
 from tabs.launch_tab import LaunchTab
+from tabs.docs_tab import DocsTab
 
 # ---------------------------------------------------------------------------
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
@@ -181,7 +183,7 @@ class MainWindow(QMainWindow):
 
         # Scan button: detects available ports and lets user pick via simple dialog
         scan_btn = QPushButton("🔍 Scan")
-        scan_btn.setFixedWidth(64)
+        scan_btn.setMinimumWidth(90)
         scan_btn.setToolTip("Scan for available serial ports and select one")
         scan_btn.clicked.connect(self._scan_ports)
         tb2.addWidget(scan_btn)
@@ -215,6 +217,7 @@ class MainWindow(QMainWindow):
             self._sb_port.setText(ports[0])
 
     def _build_tabs(self) -> None:
+        self._docs_tab  = DocsTab()
         self._proto_tab = TestingProtocolTab(CONFIGS_DIR)
         self._feat_tab  = FeaturesTab()
         self._joints_tab= JointsTab()
@@ -227,6 +230,7 @@ class MainWindow(QMainWindow):
         self._launch_tab= LaunchTab()
 
         self._tabs = QTabWidget()
+        self._tabs.addTab(self._docs_tab,   "📖 Docs")
         self._tabs.addTab(self._proto_tab,  "🔬 Protocol")
         self._tabs.addTab(self._feat_tab,   "⚙️ Features")
         self._tabs.addTab(self._joints_tab, "🔩 Joints")
@@ -296,7 +300,9 @@ class MainWindow(QMainWindow):
         self._proto_tab.load_preset.connect(self._load_preset_file)
 
         # Flash tab
+        self._flash_tab.validate_requested.connect(self._refresh_validation)
         self._flash_tab.generate_requested.connect(self._generate_config)
+        self._flash_tab.flash_requested.connect(self._generate_and_flash)
         self._serial_tab.connect_requested.connect(self._toggle_serial)
 
         # Jog tab send
@@ -318,6 +324,8 @@ class MainWindow(QMainWindow):
 
     def _on_config_changed(self) -> None:
         self._profile_name.setText(f"  Profile: {self._cfg.name} *")
+        self._read_gui_into_cfg()
+        self._refresh_validation()
 
     def _new_config(self) -> None:
         self._cfg = RobotConfig()
@@ -367,18 +375,43 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Code generation
     # ------------------------------------------------------------------
-    def _generate_config(self) -> None:
+    def _generate_config(self) -> bool:
         self._read_gui_into_cfg()
+        report = self._refresh_validation()
+        if not report.ok:
+            QMessageBox.critical(self, "Configuration Errors", "\n".join(report.errors))
+            return False
         fw_dir = self._flash_tab.fw_path.text().strip()
         if not fw_dir:
             fw_dir = FW_DIR
         out_path = os.path.join(fw_dir, "generated", "config.h")
+        yaml_path = os.path.join(os.path.dirname(os.path.dirname(fw_dir)), "parol6_moveit_config", "config", "joint_limits.yaml")
+        xacro_path = os.path.join(os.path.dirname(os.path.dirname(fw_dir)), "parol6_hardware", "urdf", "parol6.ros2_control.xacro")
         try:
             content = generate_config_h(self._cfg, out_path)
+            generate_joint_limits(self._cfg, yaml_path)
+            update_ros_invert_xacro(self._cfg, xacro_path)
             self._flash_tab.set_preview(content)
             self._sb_cfg.setText(f"config.h generated ✓ ({len(content.splitlines())} lines)")
+            return True
         except Exception as e:
             QMessageBox.critical(self, "Generation Error", str(e))
+            return False
+
+    def _generate_and_flash(self) -> None:
+        self._read_gui_into_cfg()
+        report = self._refresh_validation()
+        if not report.ok:
+            QMessageBox.critical(self, "Configuration Errors", "\n".join(report.errors))
+            return
+        if self._generate_config():
+            self._flash_tab.start_flash()
+
+    def _refresh_validation(self):
+        self._read_gui_into_cfg()
+        report = validate_robot_config(self._cfg)
+        self._flash_tab.set_validation_report(report.errors, report.warnings)
+        return report
 
     # ------------------------------------------------------------------
     # Serial connection
@@ -396,8 +429,14 @@ class MainWindow(QMainWindow):
         trans = self._cfg.comms.transport
 
         if trans == "ETHERNET":
-            port = f"udp://{self._cfg.comms.ethernet_ip}:{self._cfg.comms.ethernet_port}"
-            baud = 0
+            QMessageBox.warning(
+                self,
+                "Unsupported Transport",
+                "Ethernet transport is not implemented in the firmware yet. "
+                "Switch to USB_CDC_HS or UART_115200.",
+            )
+            self._sb_connect_btn.setChecked(False)
+            return
         else:
             # Port: toolbar text field first, fall back to comms tab
             port = self._sb_port.text().strip()
@@ -481,6 +520,7 @@ class MainWindow(QMainWindow):
             self._load_from_path(last)
         else:
             self._push_cfg_to_gui()
+        self._refresh_validation()
 
     def closeEvent(self, event) -> None:
         self._read_gui_into_cfg()

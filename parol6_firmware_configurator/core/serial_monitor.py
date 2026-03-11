@@ -16,7 +16,7 @@ except ImportError:
     SERIAL_AVAILABLE = False
 
 
-# Regex to parse <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6[,isr_us]>
+# Regex to parse <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6[,lim_state]>
 _ACK_RE = re.compile(
     r"<ACK,(\d+),([\d\.,\-]+)>",
     re.ASCII,
@@ -109,18 +109,34 @@ class SerialWorker(QThread):
                 if len(nums) >= 12:
                     # Backward-compatible packet formats:
                     #   12 fields: pos[0..5] + vel[0..5]
-                    #   13 fields: pos + vel + isr_us
+                    #   13 fields: pos + vel + lim_state          ← current firmware format
                     #   18 fields: pos + vel + pwm[0..5]
-                    #   19 fields: pos + vel + pwm[0..5] + isr_us
-                    has_pwm = len(nums) >= 18
-                    isr_idx = 18 if has_pwm else 12
+                    #   19 fields: pos + vel + pwm[0..5] + lim_state
+                    has_pwm       = len(nums) >= 18
+                    lim_idx       = 18 if has_pwm else 12
+                    
+                    # Backward-compatible packet lengths:
+                    # 12 fields: old format (pos+vel)
+                    # 13 fields: pos+vel+lim
+                    # 14 fields: pos+vel+lim+state
+                    # 15+ fields: (with isr_us at the very end in debug builds)
+                    
+                    has_lim_state = len(nums) > lim_idx
+                    has_state_byte= len(nums) > lim_idx + 1
+
                     pkt = {
-                        "seq":    int(seq_str),
-                        "pos":    nums[0:6],
-                        "vel":    nums[6:12],
-                        "pwm":    nums[12:18] if has_pwm else [0.0] * 6,
-                        "isr_us": nums[isr_idx] if len(nums) > isr_idx else None,
+                        "seq":      int(seq_str),
+                        "pos":      nums[0:6],
+                        "vel":      nums[6:12],
+                        "pwm":      nums[12:18] if has_pwm else [0.0] * 6,
+                        "lim_state": int(nums[lim_idx]) if has_lim_state else None,
+                        "state_byte": int(nums[lim_idx+1]) if has_state_byte else None,
                     }
+                    
+                    # isr_us is always appended at the very end by the profiler macro if enabled
+                    if len(nums) > lim_idx + 2:
+                        pkt["isr_us"] = nums[-1]
+
                     self.telemetry.emit(pkt)
 
             # Approximate packet rate every second

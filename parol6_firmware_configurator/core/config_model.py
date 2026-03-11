@@ -93,8 +93,8 @@ class FeatureFlags:
 @dataclass
 class CommsConfig:
     transport: str = "USB_CDC_HS"          # UART_115200 | USB_CDC_HS | ETHERNET
-    ros_command_rate_hz: int = 25
-    feedback_rate_hz: int = 10
+    ros_command_rate_hz: int = 100
+    feedback_rate_hz: int = 25
     control_loop_rate_hz: int = 1000       # 500 | 1000
     command_timeout_ms: int = 200
 
@@ -151,7 +151,7 @@ class RobotConfig:
                     microsteps=32, dir_invert=False, ros_dir_invert=False,
                     max_vel_rad_s=6.0, max_current_ma=1700,
                     kp=2.0, homed_position_steps=-10200, standby_position_steps=0,
-                    limit=LimitSwitchConfig(enabled=False, pin=23, switch_type="MECHANICAL", polarity="RISING")),
+                    limit=LimitSwitchConfig(enabled=False, pin=23, switch_type="MECHANICAL", polarity="FALLING")),
 
         JointConfig("J5", step_pin=4,  dir_pin=34, encoder_pin=15, gear_ratio=4.0,
                     microsteps=32, dir_invert=False, ros_dir_invert=False,

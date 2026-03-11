@@ -101,6 +101,24 @@ class PlotTab(QWidget):
 
         root.addLayout(tb)
 
+        # ── Oscilloscope hint ─────────────────────────────────────────
+        hint = QLabel(
+            "📋 <b>Tip:</b> "
+            "<b>Position</b> = encoder angle (rad).  "
+            "<b>Velocity</b> = alpha-beta estimated speed (rad/s).  "
+            "<b>PWM</b> = stepper step rate (% of max, enable checkbox to show).  "
+            "<b>ISR</b> = control loop execution time — keep below the 25 µs red line.  "
+            "Uncheck joints to declutter. Use <b>Window</b> to zoom time axis.  "
+            "<b>⏸ Pause</b> to freeze and inspect a spike."
+        )
+        hint.setTextFormat(Qt.TextFormat.RichText)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "background:#1a1a2e; border:1px solid #89b4fa; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:5px 10px; margin-bottom:2px;"
+        )
+        root.addWidget(hint)
+
         # ── Plot widgets ───────────────────────────────────────────────
         self._pw_pos = pg.PlotWidget(title="Joint Positions (rad)")
         self._pw_vel = pg.PlotWidget(title="Joint Velocities (rad/s)")

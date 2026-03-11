@@ -6,9 +6,9 @@
 // Select physical transport based on GUI config.h setting.
 // TRANSPORT_MODE: 0 = UART (Serial1 pins 0/1), 1 = USB CDC HS (Native Serial), 2 = Ethernet (UDP)
 #if defined(TRANSPORT_MODE) && TRANSPORT_MODE == 0
-#  define SERIAL_DEV Serial   // Force UART test over USB cable
+#  define SERIAL_DEV Serial1
 #elif defined(TRANSPORT_MODE) && TRANSPORT_MODE == 1
-#  define SERIAL_DEV Serial   // Teensy's Native USB is 'Serial'
+#  define SERIAL_DEV Serial
 #else
 #  define SERIAL_DEV Serial
 #endif
@@ -48,8 +48,9 @@ public:
         }
     }
 
-    void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6]) {
-        // Format: <ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+    void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6],
+                       uint8_t lim_state = 0, uint8_t robot_state = 0) {
+        // Format: <ACK,seq,p1..p6,v1..v6,lim_state,state>
         SERIAL_DEV.print("<ACK,");
         SERIAL_DEV.print(seq);
         for (int i = 0; i < 6; i++) {
@@ -60,7 +61,16 @@ public:
             SERIAL_DEV.print(",");
             SERIAL_DEV.print(current_vel[i], 4);
         }
+        SERIAL_DEV.print(",");
+        SERIAL_DEV.print(lim_state);  // bitmask: bit0=J1...bit5=J6
+        SERIAL_DEV.print(",");
+        SERIAL_DEV.print(robot_state);
         SERIAL_DEV.println(">");
+    }
+
+    /** Send a raw string (e.g., "HOMING_DONE\n"). */
+    void send_string(const char* msg) {
+        SERIAL_DEV.print(msg);
     }
 
 private:
@@ -73,8 +83,13 @@ private:
     bool parse_string(char* str, RosCommand& cmd) {
         if (str[0] != '<' || str[strlen(str) - 1] != '>') return false;
         
+        cmd.seq = 0;
         cmd.is_home_cmd = false;
         cmd.is_enable_cmd = false;
+        for (int i = 0; i < 6; ++i) {
+            cmd.positions[i] = 0.0f;
+            cmd.velocities[i] = 0.0f;
+        }
         
         // Remove brackets
         str[strlen(str) - 1] = '\0';
