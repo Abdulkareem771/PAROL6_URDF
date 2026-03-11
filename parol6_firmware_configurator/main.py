@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
 
         # Scan button: detects available ports and lets user pick via simple dialog
         scan_btn = QPushButton("🔍 Scan")
-        scan_btn.setFixedWidth(64)
+        scan_btn.setMinimumWidth(90)
         scan_btn.setToolTip("Scan for available serial ports and select one")
         scan_btn.clicked.connect(self._scan_ports)
         tb2.addWidget(scan_btn)

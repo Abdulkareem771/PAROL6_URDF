@@ -200,9 +200,9 @@
     "velocity_deadband_rad_s": 0.02
   },
   "comms": {
-    "transport": "UART_115200",
-    "ros_command_rate_hz": 100,
-    "feedback_rate_hz": 100,
+    "transport": "USB_CDC_HS",
+    "ros_command_rate_hz": 25,
+    "feedback_rate_hz": 10,
     "control_loop_rate_hz": 1000,
     "command_timeout_ms": 200,
     "serial_port": "/dev/ttyS31",
