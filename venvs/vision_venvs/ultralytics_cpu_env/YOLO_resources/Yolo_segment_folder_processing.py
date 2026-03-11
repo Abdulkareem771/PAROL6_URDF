@@ -1,3 +1,13 @@
+"""
+Design an interactive GUI with Controls as following:
+→ / D  : Next image
+← / A  : Previous image
+S      : Save current annotated frame
+T      : Auto-save annotated frames for ALL images
+Q / ESC: Quit
+"""
+
+
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -10,7 +20,7 @@ CEXPAND_PX = 8
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
-OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results" / "model_v1"
+OUTPUT_DIR = PROJECT_DIR / "data" / "Phase_2_first_mode" / "model_v2"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
@@ -125,6 +135,28 @@ def process_image(image_path):
 
     return annotated
 
+
+
+def save_all_images(image_paths):
+
+    print("\nStarting automatic saving of all annotated images...\n")
+
+    for i, img_path in enumerate(image_paths):
+
+        annotated = process_image(img_path)
+
+        if annotated is None:
+            continue
+
+        save_path = OUTPUT_DIR / f"{img_path.stem}_annotated.png"
+
+        cv2.imwrite(str(save_path), annotated)
+
+        print(f"[{i+1}/{len(image_paths)}] Saved:", save_path)
+
+    print("\nFinished saving all images.\n")
+
+
 def resize_to_screen(img, max_w=1400, max_h=900):
     """
     Resize image to fit inside the screen while keeping aspect ratio.
@@ -139,6 +171,7 @@ def resize_to_screen(img, max_w=1400, max_h=900):
     new_h = int(h * scale)
 
     return cv2.resize(img, (new_w, new_h))
+
 
 cv2.namedWindow("YOLO Segmentation Viewer", cv2.WINDOW_NORMAL)
 # -----------------------------
@@ -165,6 +198,7 @@ while True:
 
     key = cv2.waitKey(0) & 0xFF
 
+    
     # Next image
     if key in [ord('d'), 83]:
         index = min(index + 1, total-1)
@@ -181,6 +215,14 @@ while True:
 
         print("Saved:", save_path)
 
+    # 🔵 Auto-save ALL images
+    elif key == ord('t'):
+
+        confirm = input("Process ALL images? (y/n): ")
+
+        if confirm.lower() == "y":
+            save_all_images(image_paths)
+    
     # Quit
     elif key in [ord('q'), 27]:
         break
