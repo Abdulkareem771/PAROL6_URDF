@@ -18,10 +18,13 @@ if [ -f /.dockerenv ]; then
 
     trap "echo 'Stopping hardware bringup...'; kill ${HW_PID}; exit" SIGINT SIGTERM
 
-    echo "Waiting 5 seconds for controllers to activate..."
-    sleep 5
-
-    echo "Starting MoveIt + RViz on top of the running hardware controller manager..."
+    echo "Waiting for controller_manager to become available..."
+    until ros2 service list 2>/dev/null | grep -q "/controller_manager/list_controllers"; do
+        sleep 0.5
+    done
+    # Give controllers one extra second to fully activate after the service appears
+    sleep 1
+    echo "Controller manager ready — starting MoveIt + RViz..."
     ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false
 
     kill ${HW_PID} || true

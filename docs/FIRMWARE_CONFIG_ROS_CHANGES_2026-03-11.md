@@ -13,6 +13,7 @@ Date: 2026-03-11
 - Enabled real UART selection by mapping `TRANSPORT_MODE == 0` to `Serial1`.
 - Made velocity deadband honor `FEATURE_VEL_DEADBAND` instead of applying unconditionally.
 - Added stale/out-of-order command rejection in the Teensy command drain path. Rejected frames now emit `STALE_CMD`.
+- Defensive zero-initialisation of `RosCommand` fields before parsing (prevents uninitialized reads on malformed packets).
 
 ## ROS Hardware Interface
 

@@ -126,11 +126,12 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     w("// ── Limit Switches ────────────────────────────────────────────")
     barr("LIMIT_ENABLED",  [j.limit.enabled     for j in cfg.joints])
     arr( "LIMIT_PINS",     [j.limit.pin          for j in cfg.joints])
-    # Polarity: 0=FALLING, 1=RISING
-    arr( "LIMIT_POLARITY", [0 if j.limit.polarity == "FALLING" else 1 for j in cfg.joints])
+    # LIMIT_ACTIVE_HIGH and LIMIT_PULL are consumed by LimitSwitch.configure() in main.cpp setup().
+    # LIMIT_POLARITY and LIMIT_TYPE are generated for future firmware use — not yet consumed at runtime.
+    arr( "LIMIT_POLARITY", [0 if j.limit.polarity == "FALLING" else 1 for j in cfg.joints])  # [reserved]
     # Type: 0=NONE, 1=MECHANICAL, 2=NPN, 3=PNP
     type_map = {"NONE": 0, "MECHANICAL": 1, "INDUCTIVE_NPN": 2, "INDUCTIVE_PNP": 3}
-    arr( "LIMIT_TYPE",     [type_map.get(j.limit.switch_type, 0) for j in cfg.joints])
+    arr( "LIMIT_TYPE",     [type_map.get(j.limit.switch_type, 0) for j in cfg.joints])  # [reserved]
     # Pull resistor: 0=INPUT, 1=INPUT_PULLUP, 2=INPUT_PULLDOWN (matches Arduino constants in firmware)
     # For NPN/Mechanical → INPUT_PULLUP; For PNP → INPUT_PULLDOWN; NONE → INPUT_PULLUP (safe default)
     pull_map = {"INPUT": 0, "INPUT_PULLUP": 1, "INPUT_PULLDOWN": 2}
@@ -144,7 +145,8 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     farr("HOME_OFFSETS_RAD", [j.home_offset_rad for j in cfg.joints])
     arr( "HOMING_SPEED",   [j.homing_speed_steps_s  for j in cfg.joints])
     arr( "HOMED_OFFSET",   [j.homed_position_steps  for j in cfg.joints])
-    arr( "STANDBY_POS",    [j.standby_position_steps for j in cfg.joints])
+    # STANDBY_POS: target position after homing — generated for future use, not yet consumed in firmware.
+    arr( "STANDBY_POS",    [j.standby_position_steps for j in cfg.joints])  # [reserved]
     w()
 
     # Config fingerprint (hash of content so exports can be reproducible)
