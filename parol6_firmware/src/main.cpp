@@ -350,7 +350,7 @@ void setup() {
     ARM_DEMCR |= ARM_DEMCR_TRCENA;
     ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
     
-    transport.init(115200);
+    transport.init(UART_BAUD_RATE);
     supervisor.init(0);
     telemetry_mode = 1;
     

@@ -16,7 +16,7 @@ from PyQt6.QtGui import QIcon, QFont
 
 # ── Core ──────────────────────────────────────────────────────────────────
 from core.config_model import RobotConfig
-from core.code_generator import generate_config_h, generate_joint_limits
+from core.code_generator import generate_config_h, generate_joint_limits, update_ros_invert_xacro
 from core.config_validator import validate_robot_config
 from core.serial_monitor import SerialWorker, list_serial_ports
 
@@ -386,9 +386,11 @@ class MainWindow(QMainWindow):
             fw_dir = FW_DIR
         out_path = os.path.join(fw_dir, "generated", "config.h")
         yaml_path = os.path.join(os.path.dirname(os.path.dirname(fw_dir)), "parol6_moveit_config", "config", "joint_limits.yaml")
+        xacro_path = os.path.join(os.path.dirname(os.path.dirname(fw_dir)), "parol6_hardware", "urdf", "parol6.ros2_control.xacro")
         try:
             content = generate_config_h(self._cfg, out_path)
             generate_joint_limits(self._cfg, yaml_path)
+            update_ros_invert_xacro(self._cfg, xacro_path)
             self._flash_tab.set_preview(content)
             self._sb_cfg.setText(f"config.h generated ✓ ({len(content.splitlines())} lines)")
             return True

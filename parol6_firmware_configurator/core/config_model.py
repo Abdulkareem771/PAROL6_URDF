@@ -93,8 +93,8 @@ class FeatureFlags:
 @dataclass
 class CommsConfig:
     transport: str = "USB_CDC_HS"          # UART_115200 | USB_CDC_HS | ETHERNET
-    ros_command_rate_hz: int = 25
-    feedback_rate_hz: int = 10
+    ros_command_rate_hz: int = 100
+    feedback_rate_hz: int = 25
     control_loop_rate_hz: int = 1000       # 500 | 1000
     command_timeout_ms: int = 200
 

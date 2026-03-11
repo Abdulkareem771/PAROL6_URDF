@@ -5,6 +5,7 @@ No Qt imports — pure Python.
 """
 from __future__ import annotations
 import os
+import re
 import hashlib
 import datetime
 from .config_model import RobotConfig
@@ -57,6 +58,7 @@ def generate_config_h(cfg: RobotConfig, output_path: str) -> str:
     c = cfg.comms
     transport_map = {"UART_115200": 0, "USB_CDC_HS": 1, "ETHERNET": 2}
     w(f"#define TRANSPORT_MODE            {transport_map.get(c.transport, 1)}  // 0=UART 1=USB_HS 2=ETH")
+    w(f"#define UART_BAUD_RATE            {c.baud_rate}")
     w(f"#define ROS_COMMAND_RATE_HZ       {c.ros_command_rate_hz}")
     w(f"#define FEEDBACK_RATE_HZ          {c.feedback_rate_hz}")
     w(f"#define CONTROL_LOOP_RATE_HZ      {c.control_loop_rate_hz}")
@@ -172,10 +174,31 @@ def generate_joint_limits(cfg: RobotConfig, output_path: str) -> None:
         lines.append(f"    has_velocity_limits: true")
         lines.append(f"    max_velocity: {j.max_vel_rad_s}  # Synced from config.h MAX_VEL_RAD_S")
         lines.append(f"    has_acceleration_limits: true")
-        lines.append(f"    max_acceleration: {j.max_accel_rad_s2}  # Synced from config.h MAX_ACCEL_RAD_S2")
+        lines.append(f"    max_acceleration: 5.0  # safe default, configurator only manages vel")
         
     result = "\n".join(lines) + "\n"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w") as fh:
         fh.write(result)
 
+def update_ros_invert_xacro(cfg: RobotConfig, xacro_path: str) -> None:
+    """Updates parol6.ros2_control.xacro with the GUI's ROS_DIR_INVERT settings."""
+    if not os.path.exists(xacro_path):
+        return
+        
+    with open(xacro_path, 'r') as f:
+        content = f.read()
+
+    for i, j in enumerate(cfg.joints):
+        joint_name = f"joint_L{i+1}"
+        parts = content.split(f'<joint name="{joint_name}">')
+        if len(parts) == 2:
+            subparts = parts[1].split('</joint>', 1)
+            if len(subparts) == 2:
+                inner = subparts[0]
+                val = "true" if j.ros_dir_invert else "false"
+                new_inner = re.sub(r'<param name="ros_invert">(true|false)</param>', f'<param name="ros_invert">{val}</param>', inner)
+                content = parts[0] + f'<joint name="{joint_name}">' + new_inner + '</joint>' + subparts[1]
+
+    with open(xacro_path, 'w') as f:
+        f.write(content)
