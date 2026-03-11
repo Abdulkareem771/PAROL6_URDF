@@ -14,15 +14,15 @@ from PyQt6.QtGui import QFont, QDoubleValidator
 N_JOINTS = 6
 JOINT_NAMES = [f"J{i+1}" for i in range(N_JOINTS)]
 
-# Degree range per joint — matches URDF limits (±3.14 rad → ±180°)
-# Customise per joint if your URDF has asymmetric limits.
+# Degree range per joint — real PAROL6 mechanical limits (from source-robotics.com specs)
+# Total travel: J1=250°, J2=141°, J3=180°, J4=212°, J5=180°, J6=unlimited (capped ±180)
 JOINT_DEG_RANGE = [
-    (-180, 180),   # J1
-    (-180, 180),   # J2
-    (-180, 180),   # J3
-    (-180, 180),   # J4
-    (-180, 180),   # J5
-    (-180, 180),   # J6
+    (-123, 123),   # J1  Base rotation       — 250° total (±123°)
+    ( -90, 145),   # J2  Shoulder            — 141° total (-90 to +145)
+    (-108, 108),   # J3  Elbow               — 180° total (symmetric)
+    (-106, 106),   # J4  Wrist 1             — 212° total (±106°)
+    ( -90,  90),   # J5  Wrist 2             — 180° total (±90°)
+    (-180, 180),   # J6  Wrist 3 / Tool roll — unlimited; slider capped ±180°
 ]
 
 # Slider integer resolution: 1 tick = 0.5 °
