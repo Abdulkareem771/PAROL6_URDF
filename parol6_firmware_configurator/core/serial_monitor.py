@@ -112,19 +112,31 @@ class SerialWorker(QThread):
                     #   13 fields: pos + vel + lim_state          ← current firmware format
                     #   18 fields: pos + vel + pwm[0..5]
                     #   19 fields: pos + vel + pwm[0..5] + lim_state
-                    #   20 fields: pos + vel + pwm + lim_state + isr_us
                     has_pwm       = len(nums) >= 18
                     lim_idx       = 18 if has_pwm else 12
-                    has_lim_state = len(nums) > lim_idx           # any extra field = lim_state
-                    isr_idx       = lim_idx + 1                   # isr after lim_state if present
+                    
+                    # Backward-compatible packet lengths:
+                    # 12 fields: old format (pos+vel)
+                    # 13 fields: pos+vel+lim
+                    # 14 fields: pos+vel+lim+state
+                    # 15+ fields: (with isr_us at the very end in debug builds)
+                    
+                    has_lim_state = len(nums) > lim_idx
+                    has_state_byte= len(nums) > lim_idx + 1
+
                     pkt = {
                         "seq":      int(seq_str),
                         "pos":      nums[0:6],
                         "vel":      nums[6:12],
                         "pwm":      nums[12:18] if has_pwm else [0.0] * 6,
                         "lim_state": int(nums[lim_idx]) if has_lim_state else None,
-                        "isr_us":   nums[isr_idx] if len(nums) > isr_idx else None,
+                        "state_byte": int(nums[lim_idx+1]) if has_state_byte else None,
                     }
+                    
+                    # isr_us is always appended at the very end by the profiler macro if enabled
+                    if len(nums) > lim_idx + 2:
+                        pkt["isr_us"] = nums[-1]
+
                     self.telemetry.emit(pkt)
 
             # Approximate packet rate every second

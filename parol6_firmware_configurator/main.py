@@ -16,7 +16,7 @@ from PyQt6.QtGui import QIcon, QFont
 
 # ── Core ──────────────────────────────────────────────────────────────────
 from core.config_model import RobotConfig
-from core.code_generator import generate_config_h
+from core.code_generator import generate_config_h, generate_joint_limits
 from core.config_validator import validate_robot_config
 from core.serial_monitor import SerialWorker, list_serial_ports
 
@@ -300,6 +300,7 @@ class MainWindow(QMainWindow):
         self._proto_tab.load_preset.connect(self._load_preset_file)
 
         # Flash tab
+        self._flash_tab.validate_requested.connect(self._refresh_validation)
         self._flash_tab.generate_requested.connect(self._generate_config)
         self._flash_tab.flash_requested.connect(self._generate_and_flash)
         self._serial_tab.connect_requested.connect(self._toggle_serial)
@@ -384,8 +385,10 @@ class MainWindow(QMainWindow):
         if not fw_dir:
             fw_dir = FW_DIR
         out_path = os.path.join(fw_dir, "generated", "config.h")
+        yaml_path = os.path.join(os.path.dirname(os.path.dirname(fw_dir)), "parol6_moveit_config", "config", "joint_limits.yaml")
         try:
             content = generate_config_h(self._cfg, out_path)
+            generate_joint_limits(self._cfg, yaml_path)
             self._flash_tab.set_preview(content)
             self._sb_cfg.setText(f"config.h generated ✓ ({len(content.splitlines())} lines)")
             return True
@@ -403,6 +406,7 @@ class MainWindow(QMainWindow):
             self._flash_tab.start_flash()
 
     def _refresh_validation(self):
+        self._read_gui_into_cfg()
         report = validate_robot_config(self._cfg)
         self._flash_tab.set_validation_report(report.errors, report.warnings)
         return report

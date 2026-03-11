@@ -284,7 +284,13 @@ void run_control_loop_isr() {
 
 #if defined(FEATURE_SAFETY_SUPERVISOR) && FEATURE_SAFETY_SUPERVISOR == 1    
     if (!homing_active) {
+        SafetySupervisor::State old_state = supervisor.get_state();
         supervisor.update(system_tick_ms, joint_velocities, MAX_VEL_RAD_S);
+        
+        // Anti-windup: zero integral error immediately upon entering any fault state
+        if (supervisor.get_state() != old_state && !supervisor.is_safe()) {
+            for (int i = 0; i < NUM_AXES; i++) integral_error[i] = 0.0f;
+        }
     }
 
     // 3. Motor HAL output safely governed by Supervisor
@@ -555,7 +561,7 @@ void loop() {
         interrupts();
         
         static uint32_t seq = 0;
-        transport.send_feedback(seq++, pos, vel, lim_state);
+        transport.send_feedback(seq++, pos, vel, lim_state, telemetry_mode);
         
         if (seq % 10 == 0) {
             max_isr_time_us = 0;

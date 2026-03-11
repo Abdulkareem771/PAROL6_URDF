@@ -17,6 +17,7 @@ class FlashTab(QWidget):
     """Generate config.h, preview, build-check, and flash to Teensy."""
 
     # Emitted so main window can call code_generator before flashing
+    validate_requested = pyqtSignal()
     generate_requested = pyqtSignal()
     build_requested    = pyqtSignal()
     flash_requested    = pyqtSignal()
@@ -80,6 +81,10 @@ class FlashTab(QWidget):
         # ── Action buttons ────────────────────────────────────────────
         btn_row = QHBoxLayout()
 
+        val_btn = QPushButton("✅  Validate Only")
+        val_btn.setToolTip("Run safety checks against the current configuration without generating files.")
+        val_btn.clicked.connect(self.validate_requested)
+
         gen_btn = QPushButton("⚙️  Generate config.h")
         gen_btn.setToolTip("Writes generated/config.h from current GUI settings.")
         gen_btn.clicked.connect(self.generate_requested)
@@ -106,7 +111,7 @@ class FlashTab(QWidget):
         self.abort_btn.setEnabled(False)
         self.abort_btn.clicked.connect(self._abort)
 
-        for btn in (gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
+        for btn in (val_btn, gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
             btn_row.addWidget(btn)
         btn_row.addStretch()
         root.addLayout(btn_row)

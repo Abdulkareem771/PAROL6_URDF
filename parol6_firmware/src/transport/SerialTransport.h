@@ -49,8 +49,8 @@ public:
     }
 
     void send_feedback(uint32_t seq, const float current_pos[6], const float current_vel[6],
-                       uint8_t lim_state = 0) {
-        // Format: <ACK,seq,p1..p6,v1..v6,lim_state>
+                       uint8_t lim_state = 0, uint8_t robot_state = 0) {
+        // Format: <ACK,seq,p1..p6,v1..v6,lim_state,state>
         SERIAL_DEV.print("<ACK,");
         SERIAL_DEV.print(seq);
         for (int i = 0; i < 6; i++) {
@@ -63,6 +63,8 @@ public:
         }
         SERIAL_DEV.print(",");
         SERIAL_DEV.print(lim_state);  // bitmask: bit0=J1...bit5=J6
+        SERIAL_DEV.print(",");
+        SERIAL_DEV.print(robot_state);
         SERIAL_DEV.println(">");
     }
 

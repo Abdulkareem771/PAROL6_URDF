@@ -67,11 +67,12 @@ STALE_CMD
 
 **Teensy → Host** (sent at `FEEDBACK_RATE_HZ`):
 ```
-<ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6,lim_state>
+<ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6,lim_state,state_byte>
 ```
 - `p1..p6` — joint positions (rad)
 - `v1..v6` — joint velocities (rad/s)
 - `lim_state` — bitmask `uint8_t`: bit 0=J1 triggered … bit 5=J6 triggered
+- `state_byte` — `uint8_t` enum representing `SafetySupervisor` state: `1`=NOMINAL, `2`=HOMING, `3`=FAULT/ESTOP
 
 **Homing completion strings** (sent to Host after homing sequence):
 ```
