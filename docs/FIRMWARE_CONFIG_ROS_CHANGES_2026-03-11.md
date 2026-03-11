@@ -70,3 +70,15 @@ Date: 2026-03-11
 - `parol6_firmware_configurator/tabs/comms_tab.py`
 - `parol6_firmware_configurator/tabs/flash_tab.py`
 - `docs/POST_REAL_ROBOT_GUIDE.md`
+
+## Codex Integration Addendum (Later in the day)
+
+Based on a strict architectural review of the ROS hardware interface, the following 7 integration disconnects were also identified and resolved:
+1. **Telemetry Bounds**: Increased `tokens.size()` limit in `parol6_system.cpp` to correctly accept up to 18 tokens, accommodating the new `state_byte` enum without breaking the read-loop.
+2. **MoveIt Limits Generator Crash**: Fixed `AttributeError` in `code_generator.py` by hardcoding a safe acceleration limit (`max_acceleration: 5.0`) for `joint_limits.yaml` since the config model only manages velocity.
+3. **Command Rate Interpolator Drift**: Updated the default `ros_command_rate_hz` in the configurator to `100` Hz, perfectly matching the default frequency in `ros2_controllers.yaml`.
+4. **GUI Kinematic Inversion Sync**: The configurator now uses regex to directly patch `<param name="ros_invert">` in `parol6.ros2_control.xacro` based on the GUI's `ROS_DIR_INVERT` checkboxes.
+5. **URDF Missing Param**: Added `<xacro:arg name="allow_spoofing" default="false"/>` inside `parol6.urdf.xacro` so that launch-time arguments actually reach the hardware plugin.
+6. **Mismatched Collision Geometry**: Deleted the dummy cylinder primitive links in `parol6.urdf.xacro` and replaced them with `<xacro:include filename="$(find parol6)/urdf/PAROL6.urdf"/>` so that MoveIt and the hardware controller evaluate the exact same full-CAD robot model.
+7. **Baud Rate Macro Hookup**: Changed `transport.init(115200);` in `main.cpp` to use the configurator-generated `UART_BAUD_RATE` macro.
+- `parol6_firmware/docs/CHANGELOG.md` created.
