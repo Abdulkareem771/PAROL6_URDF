@@ -1,0 +1,9 @@
+[console_scripts]
+capture_images = parol6_vision.capture_images_node:main
+depth_matcher = parol6_vision.depth_matcher:main
+dummy_joint_publisher = parol6_vision.dummy_joint_publisher:main
+hsv_inspector = parol6_vision.hsv_inspector_node:main
+moveit_controller = parol6_vision.moveit_controller:main
+path_generator = parol6_vision.path_generator:main
+read_image = parol6_vision.read_image_node:main
+red_line_detector = parol6_vision.red_line_detector:main
