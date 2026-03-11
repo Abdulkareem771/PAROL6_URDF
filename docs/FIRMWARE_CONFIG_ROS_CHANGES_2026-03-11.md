@@ -11,6 +11,8 @@ Date: 2026-03-11
 - Guarded homing setup against zero or invalid homing speeds.
 - Throttled homing sequencer ticking to once per millisecond instead of as fast as `loop()` runs.
 - Enabled real UART selection by mapping `TRANSPORT_MODE == 0` to `Serial1`.
+- Made velocity deadband honor `FEATURE_VEL_DEADBAND` instead of applying unconditionally.
+- Added stale/out-of-order command rejection in the Teensy command drain path. Rejected frames now emit `STALE_CMD`.
 
 ## ROS Hardware Interface
 
@@ -32,12 +34,21 @@ Date: 2026-03-11
 - GUI serial connect now refuses Ethernet mode cleanly because the firmware does not implement it yet.
 - Serial telemetry parsing now exposes `lim_state` when present.
 - Corrected the default J4 mechanical switch polarity to `FALLING` so the stock profile matches the GUI’s recommended NC wiring.
+- Added hard validation for NPN/PNP/mechanical pull and polarity combinations.
+
+## Launcher / Docs
+
+- Fixed `scripts/launchers/launch_moveit_real_hw.sh` so it now really starts `parol6_hardware real_robot.launch.py` first, waits for controllers, and then starts MoveIt/RViz.
+- Added `PAROL6_SERIAL_PORT` and `PAROL6_BAUD_RATE` overrides to the real-hardware launcher.
+- Updated launcher documentation to match the actual grouped command protocol and feedback format with `lim_state`.
 
 ## Key Files Touched
 
 - `parol6_firmware/src/main.cpp`
 - `parol6_firmware/src/safety/Supervisor.h`
 - `parol6_firmware/src/transport/SerialTransport.h`
+- `scripts/launchers/launch_moveit_real_hw.sh`
+- `scripts/launchers/LAUNCH_METHODS.md`
 - `parol6_hardware/src/parol6_system.cpp`
 - `parol6_hardware/include/parol6_hardware/parol6_system.hpp`
 - `parol6_hardware/urdf/parol6.ros2_control.xacro`

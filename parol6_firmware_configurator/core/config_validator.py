@@ -66,6 +66,21 @@ def validate_robot_config(cfg: RobotConfig) -> ValidationReport:
         if joint.limit.enabled and joint.limit.switch_type == "NONE":
             report.errors.append(f"{axis_name} enables a limit switch but type is NONE.")
 
+        if joint.limit.enabled and joint.limit.switch_type == "INDUCTIVE_NPN":
+            if joint.limit.pull != "INPUT_PULLUP":
+                report.errors.append(f"{axis_name} NPN limit switch must use INPUT_PULLUP.")
+            if joint.limit.polarity != "FALLING":
+                report.errors.append(f"{axis_name} NPN limit switch must use FALLING polarity.")
+
+        if joint.limit.enabled and joint.limit.switch_type == "INDUCTIVE_PNP":
+            if joint.limit.pull != "INPUT_PULLDOWN":
+                report.errors.append(f"{axis_name} PNP limit switch must use INPUT_PULLDOWN.")
+            if joint.limit.polarity != "RISING":
+                report.errors.append(f"{axis_name} PNP limit switch must use RISING polarity.")
+
+        if joint.limit.enabled and joint.limit.switch_type == "MECHANICAL" and joint.limit.pull != "INPUT_PULLUP":
+            report.errors.append(f"{axis_name} mechanical limit switch should use INPUT_PULLUP.")
+
         if joint.limit.switch_type == "MECHANICAL" and joint.limit.polarity == "RISING":
             report.warnings.append(
                 f"{axis_name} uses MECHANICAL + RISING. Most NC mechanical switches use FALLING."

@@ -81,8 +81,13 @@ private:
     bool parse_string(char* str, RosCommand& cmd) {
         if (str[0] != '<' || str[strlen(str) - 1] != '>') return false;
         
+        cmd.seq = 0;
         cmd.is_home_cmd = false;
         cmd.is_enable_cmd = false;
+        for (int i = 0; i < 6; ++i) {
+            cmd.positions[i] = 0.0f;
+            cmd.velocities[i] = 0.0f;
+        }
         
         // Remove brackets
         str[strlen(str) - 1] = '\0';

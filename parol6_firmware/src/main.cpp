@@ -168,6 +168,10 @@ void set_motor_velocity(int axis, float velocity_rad_s) {
     }
 }
 
+static bool is_newer_command_seq(uint32_t incoming, uint32_t last_seen) {
+    return (int32_t)(incoming - last_seen) > 0;
+}
+
 // -------------------------------------------------------------------------
 // 1 kHz Hardware Timer ISR (Strict Real-Time Execution)
 // -------------------------------------------------------------------------
@@ -245,7 +249,9 @@ void run_control_loop_isr() {
         if (velocity_command < -MAX_VEL_CMD[i]) velocity_command = -MAX_VEL_CMD[i];
 
         // F. Velocity deadband (configured in GUI or default)
+#if defined(FEATURE_VEL_DEADBAND) && FEATURE_VEL_DEADBAND == 1
         if (fabsf(velocity_command) < VELOCITY_DEADBAND_RAD_S) velocity_command = 0.0f;
+#endif
         
 #if defined(FIXED_STEP_FREQ_HZ) && FIXED_STEP_FREQ_HZ > 0
         float ol_freq = (float)FIXED_STEP_FREQ_HZ;
@@ -425,6 +431,8 @@ void loop() {
     
     // 2. Drain validated commands to interpolators
     while (!rx_queue.isEmpty()) {
+        static bool command_seq_seen = false;
+        static uint32_t last_command_seq = 0;
         RosCommand cmd;
         noInterrupts();
         cmd = rx_queue.shift();
@@ -435,7 +443,9 @@ void loop() {
         // Optionally validate command sequence here if feature added later
 #endif
 #if defined(FEATURE_WATCHDOG) && FEATURE_WATCHDOG == 1        
-        supervisor.feed_watchdog(current_tick);
+        if (cmd.is_enable_cmd || cmd.is_home_cmd) {
+            supervisor.feed_watchdog(current_tick);
+        }
 #endif
 
         if (cmd.is_enable_cmd) {
@@ -462,6 +472,17 @@ void loop() {
             homing_seq.begin();
             continue;
         }
+
+        if (command_seq_seen && !is_newer_command_seq(cmd.seq, last_command_seq)) {
+            transport.send_string("STALE_CMD\n");
+            continue;
+        }
+        command_seq_seen = true;
+        last_command_seq = cmd.seq;
+
+#if defined(FEATURE_WATCHDOG) && FEATURE_WATCHDOG == 1
+        supervisor.feed_watchdog(current_tick);
+#endif
 
         // Dynamically compute the duration since the last valid ROS packet
         static uint32_t last_cmd_ts = 0;

@@ -89,10 +89,18 @@ What it starts (two sequential launch files):
 > [!IMPORTANT]
 > **Do not** run `real_robot.launch.py` separately AND then trigger the GUI launcher — the controller spawner runs from `real_robot.launch.py`. Running it twice causes a `Controller already loaded from active state` crash. The launcher handles both launches in the correct order.
 
+The script now actually does this sequence. It starts `real_robot.launch.py` in the background, waits for the hardware controller manager to come up, and only then starts MoveIt/RViz.
+
 Prerequisites:
 - Teensy 4.1 connected to host USB
 - Device node allocated as `/dev/ttyACM0` (or configured in `parol6.ros2_control.xacro`)
 - Docker container has `/dev/ttyACM0` passed through (`--device` flag in `start_container.sh`)
+
+Optional environment overrides:
+
+```bash
+PAROL6_SERIAL_PORT=/dev/ttyACM1 PAROL6_BAUD_RATE=115200 ./scripts/launchers/launch_moveit_real_hw.sh
+```
 
 ### Hardware Telemetry Protocol
 
@@ -100,12 +108,12 @@ The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates wi
 
 **Command (ROS → Teensy):**
 ```
-<SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+<SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel>
 ```
 
 **Feedback (Teensy → ROS):**
 ```
-<ACK,SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
+<ACK,SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel,lim_state>
 ```
 
 All values in radians (position) and radians/second (velocity). The hardware interface applies kinematic sign correction for J1, J3, J6 before sending commands and after receiving feedback.
