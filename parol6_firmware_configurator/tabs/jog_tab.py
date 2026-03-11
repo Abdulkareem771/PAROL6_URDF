@@ -37,6 +37,11 @@ def _rad_to_deg(r: float) -> float:
     return r * 180.0 / math.pi
 
 
+# Seconds to inhibit feedback-driven slider updates after sending a command.
+# Gives the motor time to start responding before we allow the ACK to re-sync the slider.
+_FEEDBACK_INHIBIT_S = 1.5
+
+
 class JointJogWidget(QFrame):
     """
     Per-joint jog widget — two rows inside a rounded card:
@@ -51,6 +56,8 @@ class JointJogWidget(QFrame):
         super().__init__(parent)
         self._idx = idx
         self._slider_updating = False   # guard against slider↔textbox feedback loops
+        self._cmd_time: float = 0.0     # timestamp of last goto/jog command (monotonic)
+        self._commanded_rad: float | None = None  # last requested position
         self.setObjectName("JogRow")
         self.setStyleSheet("""
             QFrame#JogRow {
@@ -215,11 +222,16 @@ class JointJogWidget(QFrame):
 
     def _on_slider_released(self) -> None:
         """Send goto command when user releases the slider thumb."""
+        import time as _time
         deg = self._slider.value() / _TICKS_PER_DEG
-        self.goto_position.emit(self._idx, _deg_to_rad(deg))
+        rad = _deg_to_rad(deg)
+        self._cmd_time = _time.monotonic()
+        self._commanded_rad = rad
+        self.goto_position.emit(self._idx, rad)
 
     def _on_deg_input_committed(self) -> None:
         """Send goto command from the text box (Enter or Go button)."""
+        import time as _time
         try:
             deg = float(self._deg_input.text())
         except ValueError:
@@ -230,17 +242,33 @@ class JointJogWidget(QFrame):
         self._slider_updating = True
         self._slider.setValue(int(deg * _TICKS_PER_DEG))
         self._slider_updating = False
-        self.goto_position.emit(self._idx, _deg_to_rad(deg))
+        rad = _deg_to_rad(deg)
+        self._cmd_time = _time.monotonic()
+        self._commanded_rad = rad
+        self.goto_position.emit(self._idx, rad)
 
     # ── public API ─────────────────────────────────────────────────────
 
     def update_encoder(self, angle_rad: float) -> None:
+        import time as _time
         deg = _rad_to_deg(angle_rad)
-        self.enc_val.setText(f"enc: {angle_rad:+8.4f} rad")
+        # --  Show commanded vs actual  -----------------------------------------
+        if self._commanded_rad is not None:
+            err_deg = _rad_to_deg(angle_rad - self._commanded_rad)
+            self.enc_val.setText(f"enc: {angle_rad:+8.4f} rad  (err {err_deg:+.2f}°)")
+        else:
+            self.enc_val.setText(f"enc: {angle_rad:+8.4f} rad")
         self.enc_deg.setText(f"{deg:+7.2f}°")
 
-        # Mirror live position into slider and input ONLY when not dragging
-        if not self._slider.isSliderDown() and not self._slider_updating:
+        # Mirror live position into slider and input ONLY when:
+        #  (a) user is not actively dragging the slider, AND
+        #  (b) enough time has elapsed since the last command (motor needs
+        #      at least _FEEDBACK_INHIBIT_S to start responding, otherwise
+        #      the next ACK would snap the slider back to old position)
+        since_cmd = _time.monotonic() - self._cmd_time
+        if (not self._slider.isSliderDown()
+                and not self._slider_updating
+                and since_cmd > _FEEDBACK_INHIBIT_S):
             self._slider_updating = True
             clamped = max(JOINT_DEG_RANGE[self._idx][0],
                          min(JOINT_DEG_RANGE[self._idx][1], deg))
@@ -406,12 +434,15 @@ class JogTab(QWidget):
             self.isr_label.setText(f"{v} µs")
 
     def _on_jog(self, idx: int, vel: float) -> None:
+        import time as _time
         self._target_vel[idx] = vel
         is_moving = any(v != 0.0 for v in self._target_vel)
 
         if is_moving and not self._jog_timer.isActive():
             for i in range(N_JOINTS):
                 self._target_pos[i] = self._last_pos[i]
+            # Inhibit feedback from snapping the slider during continuous jog
+            self._jog_widgets[idx]._cmd_time = _time.monotonic()
             self._jog_timer.start(40)   # 25 Hz stream
         elif not is_moving and self._jog_timer.isActive():
             for i in range(N_JOINTS):
