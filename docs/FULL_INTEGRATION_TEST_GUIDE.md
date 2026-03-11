@@ -1,291 +1,193 @@
-# Full ROS-ESP32 Integration Test Guide
+# Full Integration Test Guide
 
-**Test the Complete Pipeline: RViz → MoveIt → ROS Driver → ESP32**
+**Test the complete pipeline: RViz → MoveIt → ros2_control → Teensy 4.1**
 
-This guide shows you how to manually control the robot in RViz and watch the commands arrive at the ESP32 in real-time with formatted timestamps.
-
----
-
-## 🎯 What You'll See
-
-When you move the robot in RViz, you'll see on the ESP32 monitor:
-- ✅ Exact timestamp when command arrived (microseconds + formatted time)
-- ✅ All 6 joint positions
-- ✅ Sequence numbers (to detect lost packets)
-- ✅ Packet statistics
+This guide runs after `COMMUNICATION_TESTING_GUIDE.md` passes. Motors must be powered.
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
-1. ✅ ESP32 connected via USB
-2. ✅ `parol6_dev` container running
-3. ✅ Updated firmware flashed (with enhanced logging)
+- [ ] Serial communication test passed (0% packet loss, < 15 ms latency)
+- [ ] Direction verification complete (all joints jog in correct direction)
+- [ ] Teensy flashed with production config.h (`FEEDBACK_RATE_HZ=25`, safety limits set)
+- [ ] Real hardware launch stack tested → controllers active
+- [ ] Robot in mid-range pose, workspace clear
 
 ---
 
-## 🚀 Step-by-Step Test Procedure
-
-### Step 1: Reflash Enhanced Firmware (with Better Logging)
+## 🚀 Step 1 — Launch the real hardware stack
 
 ```bash
-# Exit any existing ESP32 monitors first (Ctrl + ])
-
-# Inside Docker container
-docker exec -it parol6_dev bash
-cd /workspace/esp32_benchmark_idf
-. /opt/esp-idf/export.sh
-idf.py build
-idf.py -p /dev/ttyUSB0 flash
+PAROL6_SERIAL_PORT=/dev/ttyACM0 ./scripts/launchers/launch_moveit_real_hw.sh
 ```
 
-**Wait for**: `Hash of data verified.`
+Wait for the terminal to print:
+```
+Controller manager ready — starting MoveIt + RViz...
+```
+
+Verify in a second terminal:
+```bash
+# Inside Docker
+ros2 control list_controllers
+```
+Expected:
+```
+parol6_arm_controller[joint_trajectory_controller/JointTrajectoryController] active
+joint_state_broadcaster[joint_state_broadcaster/JointStateBroadcaster]      active
+```
 
 ---
 
-### Step 2: Start ESP32 Monitor (Terminal 1)
+## 🔍 Step 2 — Confirm live joint state
 
 ```bash
-# Still inside container
-idf.py -p /dev/ttyUSB0 monitor
+ros2 topic hz /joint_states
+# Target: ~25 Hz
+
+ros2 topic echo /joint_states --once
+# Joint positions should match the robot's physical pose
 ```
 
-**Expected output:**
-```
-========================================
-  ESP32 Benchmark Firmware (ESP-IDF)
-========================================
-Ready to receive commands...
-READY: ESP32_BENCHMARK_V2
-```
-
-**Leave this terminal open** - you'll watch commands here!
+Check RViz: the ghost robot should be in the **same pose as the physical robot**.  
+If it shows all zeros but the robot is not at zero → `ROS_DIR_INVERT` or `HOME_OFFSETS_RAD` issue.
 
 ---
 
-### Step 3: Launch ROS with Real Robot Mode (Terminal 2)
+## Step 3 — Test 1: Single joint jog via ROS
+
+Use the **🕹 Jog** tab in the GUI (which sends `<SEQ,pos...>` commands) OR use:
 
 ```bash
-# New terminal - enter container
-docker exec -it parol6_dev bash
-cd /workspace
-
-# Build (will skip esp32_benchmark due to COLCON_IGNORE)
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-
-# Launch real robot mode
-ros2 launch parol6_moveit_config unified_bringup.launch.py mode:=real
+# Jog J1 by 0.1 rad using ros2 control
+ros2 topic pub --once /parol6_arm_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_L1, joint_L2, joint_L3, joint_L4, joint_L5, joint_L6],
+    points: [{
+      positions: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
+      velocities: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      time_from_start: {sec: 2, nanosec: 0}
+    }]
+  }'
 ```
 
-**Wait for**: RViz window opens
+**Expected:**
+- J1 moves 0.1 rad in the correct direction
+- `/joint_states` position updates to ~0.1 rad for J1
+- No `FAULT` or `SOFT_ESTOP` in serial tab
 
 ---
 
-### Step 4: Move Robot in RViz
+## Step 4 — Test 2: MoveIt plan and execute
 
-In RViz:
-1. **Drag the interactive marker** (end-effector sphere)
-2. **Click "Plan"** button
-3. **Click "Execute"** button
+In RViz → **MotionPlanning** panel:
+
+1. **Start State**: Set to `<current>`
+2. **Goal State**: Drag end-effector marker ~5 cm from current position
+3. Click **Plan** — inspect the preview path, confirm it stays within workspace
+4. Click **Execute**
+
+### What to watch
+
+**Serial tab** (Firmware Configurator):
+- Packets should arrive continuously at 25 Hz
+- `STALE_CMD` should NOT appear
+- `lim_state` should stay `0`
+
+**ROS terminal**:
+```bash
+ros2 topic echo /parol6_arm_controller/state --once
+# error field should approach zero as robot reaches target
+```
+
+**Success**: Robot reaches target, no faults, no stalls.
 
 ---
 
-### Step 5: Watch ESP32 Monitor (Terminal 1)
+## Step 5 — Test 3: Roundtrip latency measurement
 
-You'll see output like this for **each waypoint**:
-
-```
-<ACK,0,1234567>
-════════════════════════════════════════════════════════════════
-  COMMAND RECEIVED [SEQ: 0]
-════════════════════════════════════════════════════════════════
-  Timestamp:  1.234 seconds (1.234567 s)
-  Raw µs:     1234567
-────────────────────────────────────────────────────────────────
-  Joint Positions (radians):
-    J1: +0.5234  |  J2: -0.8921  |  J3: +1.2345
-    J4: -0.4567  |  J5: +0.7890  |  J6: -0.3210
-────────────────────────────────────────────────────────────────
-  Statistics:
-    Total Received: 1  |  Packets Lost: 0
-════════════════════════════════════════════════════════════════
-
-<ACK,1,1334567>
-════════════════════════════════════════════════════════════════
-  COMMAND RECEIVED [SEQ: 1]
-════════════════════════════════════════════════════════════════
-  Timestamp:  1.334 seconds (1.334567 s)
-  Raw µs:     1334567
-...
-```
-
-**Each command shows:**
-- ✅ Sequence number increments
-- ✅ Timestamp increases (~50-100ms between commands)
-- ✅ Joint values change smoothly
-- ✅ No packet loss
-
----
-
-## 📊 What to Analyze
-
-### 1. **Command Rate**
-Look at timestamp differences:
-```
-Command 0: 1.234 seconds
-Command 1: 1.334 seconds  → 100ms gap
-Command 2: 1.434 seconds  → 100ms gap
-```
-
-**Good**: Regular intervals (~50-100ms)  
-**Bad**: Irregular gaps or > 200ms
-
-### 2. **Packet Loss**
-Watch the statistics line:
-```
-Total Received: 100  |  Packets Lost: 0
-```
-
-**Good**: 0 packets lost  
-**Bad**: Any lost packets
-
-### 3. **Sequence Numbers**
-```
-SEQ: 0
-SEQ: 1
-SEQ: 2
-...
-```
-
-**Good**: Continuous counting  
-**Bad**: Jumps (e.g., 0, 1, 5 ← lost 2, 3, 4)
-
----
-
-## 🔬 Advanced: Measure End-to-End Latency
-
-### Method 1: Visual Timing
-
-1. **In RViz**: Note the time when you click "Execute"
-2. **In ESP32 Monitor**: Note timestamp of first command
-3. **Calculate**: Latency = (ESP32 time) - (RViz click time)
-
-**Expected**: < 100ms
-
-### Method 2: Use PC Logs
+While a trajectory is executing, measure the command loop:
 
 ```bash
-# Check driver logs (created automatically when mode:=real)
-ls -lh /workspace/logs/driver_commands_*.csv
-
-# View recent commands
-tail -20 /workspace/logs/driver_commands_*.csv
+# In Docker
+ros2 topic hz /joint_states
+ros2 topic hz /parol6_arm_controller/joint_trajectory
 ```
 
-Compare PC log timestamps with ESP32 monitor timestamps.
+| Metric | Target | Acceptable |
+|--------|--------|-----------|
+| `/joint_states` rate | 25 Hz | ≥ 20 Hz |
+| Goal tracking error | < 0.05 rad | < 0.15 rad |
+| Trajectory completion | ≤ goal_time (5 s) | within 2× plan time |
+| SOFT_ESTOP events | 0 | 0 |
+| FAULT events | 0 | 0 |
 
 ---
 
-## 📸 Screenshot & Evidence Collection
+## Step 6 — Test 4: Watchdog / ESTOP test
 
-### Take Screenshots of:
+Simulate a connection drop and verify recovery:
 
-1. **RViz Window** - Showing planned trajectory
-2. **ESP32 Monitor** - Showing formatted command output
-3. **Together** - Both windows visible (for thesis documentation)
+1. With robot stationary, stop sending commands by **disconnecting the GUI serial tab**
+2. Wait 300 ms (> `COMMAND_TIMEOUT_MS=200`)
+3. Check serial tab → `SOFT_ESTOP` should appear in firmware state
+4. Reconnect serial → send `<ENABLE>` → robot should accept commands again
 
-### Save Logs:
+> ✅ This confirms the watchdog protects against silent host crashes.
+
+---
+
+## Step 7 — Test 5: Velocity limit check
+
+> ⚠️ Only if you want to manually confirm the supervisor works. Use with caution.
+
+Send a trajectory with a very high velocity at a single joint that exceeds `MAX_VEL_RAD_S`:
 
 ```bash
-# PC side logs
-cp /workspace/logs/driver_commands_*.csv ~/thesis_evidence/
-
-# ESP32 logs (if using SD card)
-# or copy from monitor output
+# J1 max = 3.0 rad/s — request 5 rad/s briefly
+ros2 topic pub --once /parol6_arm_controller/joint_trajectory \
+  trajectory_msgs/msg/JointTrajectory \
+  '{
+    joint_names: [joint_L1, ...],
+    points: [{
+      positions: [0.5, 0.0, ...],
+      velocities: [5.0, 0.0, ...],
+      time_from_start: {sec: 0, nanosec: 100000000}
+    }]
+  }'
 ```
 
----
-
-## ✅ Success Criteria
-
-**Your test is successful if:**
-- ✅ Every RViz "Execute" creates ESP32 output
-- ✅ Sequence numbers are continuous (no gaps)
-- ✅ Packet loss = 0
-- ✅ Timestamps show regular intervals
-- ✅ Joint values match RViz trajectory
+Expected: `FAULT: Runaway Velocity` in serial tab. Robot stops.  
+Recovery: power cycle or reflash (this is a latched FAULT, not SOFT_ESTOP).
 
 ---
 
-## ⚠️ Troubleshooting
+## ✅ Full integration pass criteria
 
-### Issue: No ESP32 Output When Executing
-
-**Check:**
-```bash
-# Is driver finding the ESP32?
-# Look for this in ROS terminal:
-# [real_robot_driver]: Connected to Microcontroller at /dev/ttyUSB0
-```
-
-**Fix**: Restart ROS launch
+| Test | Pass condition |
+|------|---------------|
+| 1. Single joint jog | Correct direction, correct magnitude |
+| 2. MoveIt plan+execute | Reaches goal, no faults |
+| 3. Latency | joint_states ≥ 20 Hz, tracking error < 0.15 rad |
+| 4. Watchdog | SOFT_ESTOP on dropout, recovery on `<ENABLE>` |
+| 5. Velocity limit | FAULT triggers, prevents runaway |
 
 ---
 
-### Issue: Timestamps Don't Increment
+## Troubleshooting
 
-**Cause**: ESP32 crashed or reset
-
-**Fix**: Press RESET on ESP32, reflash if needed
-
----
-
-### Issue: "esp32_benchmark" Build Error
-
-**Cause**: COLCON_IGNORE not recognized  
-
-**Fix**:
-```bash
-# Verify file exists
-ls /workspace/esp32_benchmark_idf/COLCON_IGNORE
-
-#If missing:
-touch /workspace/esp32_benchmark_idf/COLCON_IGNORE
-
-# Clean and rebuild
-cd /workspace
-rm -rf build install log
-colcon build --symlink-install
-```
+| Symptom | Fix |
+|---------|-----|
+| RViz shows wrong pose | Check `ROS_DIR_INVERT` matches `DIR_INVERT` |
+| Trajectory aborts immediately | `trajectory` constraint = 0.0 is too tight — set 0.05 in `ros2_controllers.yaml` |
+| Goal time exceeded | Increase `goal_time` in `ros2_controllers.yaml` or reduce move distance |
+| Robot overshoots | KP too high for that joint — reduce incrementally |
+| SOFT_ESTOP during fast motion | `COMMAND_TIMEOUT_MS` too short — raise to 400 ms |
+| Controller manager not starting | Check `real_robot.launch.py` for parameter errors; run with `--log-level debug` |
 
 ---
 
-## 📊 Expected Performance
-
-| Metric | Target | Your Result |
-|--------|--------|-------------|
-| Packet Loss | 0% | ___ |
-| Command Rate | 10-20 Hz | ___ Hz |
-| Latency | < 100ms | ___ ms |
-| Jitter | < 10ms | ___ ms |
-
----
-
-## 🎓 For Thesis Documentation
-
-**What to Include:**
-
-1. **Screenshot**: RViz + ESP32 monitor side-by-side
-2. **Table**: Performance metrics (from table above)
-3. **Log Sample**: Copy 5-10 formatted ESP32 messages
-4. **Graph**: Plot timestamps from `driver_commands_*.csv`
-
-**Caption Example:**
-> "Real-time verification of MoveIt trajectory execution. Commands generated by the motion planner (left, RViz) arrive at the ESP32 microcontroller (right) with timestamps showing < 5ms jitter and zero packet loss over 100+ waypoints."
-
----
-
-**Last Updated**: January 2026  
+**Last Updated**: 2026-03-11  
 **Maintained by**: PAROL6 Team

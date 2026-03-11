@@ -221,8 +221,7 @@ The last format is a full position+velocity command.</p>
 <code>HOMING_ORDER</code> (default: J4→J5→J6→J1→J2→J3 — wrist first).</p>
 
 <h3 style='color:#89b4fa;'>Starting homing</h3>
-<p>Send <code>&lt;HOME&gt;</code> from the Serial tab. The GUI's future jog tab
-will have a <b>HOME ALL</b> button. The firmware responds with:</p>
+<p>Click <b>🏠 Home All</b> in the <b>🕹 Jog</b> tab, or send <code>&lt;HOME&gt;</code> from the Serial tab. The firmware responds with:</p>
 <pre style='background:#11111b; padding:8px; border-radius:4px; color:#a6e3a1; font-size:11px;'>HOMING_DONE</pre>
 <p>or <code>HOMING_FAULT</code> if any axis times out before finding its switch.</p>
 
@@ -277,26 +276,32 @@ Watch for unexpected direction — if a joint moves <b>away</b> from the switch,
 
     # ── Testing Protocol ──
     ("🔬  Testing Protocol", """
-<h2 style='color:#cba6f7;'>Testing Protocol — Phase-by-Phase</h2>
-<p>Use the <b>🔬 Protocol</b> tab to load phase-specific presets. Never skip a phase.</p>
+<h2 style='color:#cba6f7;'>Testing Protocol — First Power-On</h2>
+<p>Follow these phases <b>in order</b>. Do not skip. Each phase verifies the next is safe.</p>
 
 <table style='width:100%; border-collapse:collapse; font-size:12px;'>
 <tr style='background:#313244; color:#cba6f7;'>
   <th align='left' style='padding:4px;'>Phase</th>
-  <th align='left' style='padding:4px;'>Preset</th>
-  <th align='left' style='padding:4px;'>What to check</th>
+  <th align='left' style='padding:4px;'>What to do</th>
+  <th align='left' style='padding:4px;'>Pass criterion</th>
 </tr>
-<tr><td style='padding:4px;'>0</td><td>phase0_hardware_check</td><td>Encoder test mode ON. ACK frames arrive at correct rate. No encoder glitch errors.</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>1</td><td>phase1_encoder_interrupt</td><td>Encoder positions change when you move a joint by hand. No missed counts.</td></tr>
-<tr><td style='padding:4px;'>2</td><td>phase2_quadtimer</td><td>Same as Phase 1 but with zero CPU interrupts. Compare positions.</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>3</td><td>phase3_step_dir_test</td><td>Fixed-freq STEP/DIR. Motor turns at constant speed. No judder.</td></tr>
-<tr><td style='padding:4px;'>4</td><td>phase4_open_loop</td><td>All 6 axes move on open-loop command. No oscillation.</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>5</td><td>phase5_closed_loop_j1</td><td>J1 tracks commanded position. Oscilloscope shows tracking without windup.</td></tr>
-<tr><td style='padding:4px;'>6+</td><td>phase6..phase10</td><td>Add filter, feedforward, watchdog, multiaxis, full stack.</td></tr>
+<tr><td style='padding:4px;'>0 — Pre-power</td><td>E-stop test, cables seated, robot at mid-range</td><td>Hardware confirmed safe before power-on</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>1 — Serial link</td><td>Flash → Connect serial → send &lt;ENABLE&gt;</td><td>ACK packets appear at 25 Hz in Serial tab</td></tr>
+<tr><td style='padding:4px;'>2 — Direction check</td><td>Jog each joint 0.1 rad via Jog tab</td><td>Joint moves correct direction, encoder sign matches</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>3 — ROS interface</td><td>Launch real_hw, confirm controllers active, check joint_states</td><td>25 Hz joint_states, pose matches physical robot</td></tr>
+<tr><td style='padding:4px;'>4 — First trajectory</td><td>Plan &lt;5 cm move in RViz → Execute</td><td>Goal reached, no FAULT, no STALE_CMD</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>5 — Homing</td><td>Enable limit switches in config → verify lim_state bit → Home All</td><td>HOMING_DONE, post-home pose matches HOME_OFFSETS_RAD</td></tr>
 </table>
 
-<h3 style='color:#89b4fa;'>After every phase</h3>
-<p>Export the <b>Faults</b> tab CSV and screenshot the oscilloscope. Keep these as your test evidence.</p>
+<h3 style='color:#89b4fa;'>Serial strings to recognise</h3>
+<table style='font-size:12px; border-collapse:collapse;'>
+<tr style='color:#cba6f7;'><th align='left'>String</th><th align='left'>Meaning</th></tr>
+<tr><td><code>HOMING_DONE</code></td><td>All axes found their switch and zeroed.</td></tr>
+<tr style='background:#252535;'><td><code>HOMING_FAULT</code></td><td>An axis timed out — check switch wiring and Dir Inv.</td></tr>
+<tr><td><code>STALE_CMD</code></td><td>Command rejected (seq not newer). Normal after reconnect; send &lt;ENABLE&gt;.</td></tr>
+</table>
+
+<p style='color:#fab387; margin-top:8px;'>📄 Full step-by-step guide: <b>docs/FIRST_POWER_ON_CHECKLIST.md</b></p>
 """),
 
     # ── Troubleshooting ──
@@ -309,14 +314,15 @@ Watch for unexpected direction — if a joint moves <b>away</b> from the switch,
   <th align='left' style='padding:4px;'>Likely cause</th>
   <th align='left' style='padding:4px;'>Fix</th>
 </tr>
-<tr><td style='padding:4px;'>No ACK frames in Serial tab</td><td>Wrong port or baud rate</td><td>Check <code>dmesg | grep tty</code>, set to 115200</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>Robot moves tiny bit then stops</td><td>Controller constraint rejection or ESTOP</td><td>Check Faults tab; verify <code>ros2_controllers.yaml</code> tolerances are 999.0</td></tr>
-<tr><td style='padding:4px;'>Joint position jumps on startup</td><td>Interpolator seeded in motor space not joint space</td><td>Already fixed — flash latest firmware</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>Limit switch always triggered</td><td>Pull resistor wrong or optocoupler wired backwards</td><td>Check sensor type → auto-suggest pull resistor</td></tr>
-<tr><td style='padding:4px;'>HOMING_FAULT</td><td>Limit switch not connected or axis direction wrong</td><td>Enable one joint, check lim_state bits in serial; check Dir Inv</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>MoveIt: goal aborted or timed out</td><td>Hardware interface not publishing states</td><td>Check serial connection; run Fake HW first to isolate</td></tr>
-<tr><td style='padding:4px;'>Encoder position drifts</td><td>Anti-glitch filter disabled or wrong STEPS_PER_RAD</td><td>Reload the correct gear ratio in Joints tab and reflash</td></tr>
-<tr style='background:#252535;'><td style='padding:4px;'>Gazebo white screen / robot not spawning</td><td>URDF includes stale gz plugin</td><td>Use <code>libign_ros2_control-system.so</code> in PAROL6.urdf gazebo plugin</td></tr>
+<tr><td style='padding:4px;'>No ACK frames in Serial tab</td><td>Wrong port or baud rate</td><td>Check <code>dmesg | grep tty</code>, set to 115200; send <code>&lt;ENABLE&gt;</code></td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>Robot moves tiny bit then stops</td><td>JTC constraint violation or FAULT/ESTOP</td><td>Check Faults tab; set <code>trajectory: 0.05</code> in ros2_controllers.yaml</td></tr>
+<tr><td style='padding:4px;'><code>STALE_CMD</code> appears in serial</td><td>ROS seq counter reset (normal after reconnect)</td><td>Send <code>&lt;ENABLE&gt;</code> to resync, then re-launch controller</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>Joint position jumps on startup</td><td>Interpolator seeded in motor space</td><td>Flash latest firmware — already fixed</td></tr>
+<tr><td style='padding:4px;'>Limit switch always triggered</td><td>Pull resistor wrong or optocoupler wired backwards</td><td>Check sensor type → auto-suggest pull resistor; verify lim_state bits</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'><code>HOMING_FAULT</code></td><td>Limit switch not connected or axis direction wrong</td><td>Enable one joint, bridge pin to GND, check lim_state bit is 1; check Dir Inv</td></tr>
+<tr><td style='padding:4px;'>MoveIt: goal aborted or timed out</td><td>Hardware interface not publishing states, or tolerance too tight</td><td>Check serial connection; run Fake HW first; set trajectory: 0.05 in controllers yaml</td></tr>
+<tr style='background:#252535;'><td style='padding:4px;'>Encoder position drifts</td><td>Anti-glitch filter disabled or wrong STEPS_PER_RAD</td><td>Reload correct gear ratio in Joints tab → reflash</td></tr>
+<tr><td style='padding:4px;'>Gazebo white screen / robot not spawning</td><td>URDF includes stale gz plugin</td><td>Use <code>libign_ros2_control-system.so</code> in PAROL6.urdf gazebo plugin</td></tr>
 </table>
 """),
 ]

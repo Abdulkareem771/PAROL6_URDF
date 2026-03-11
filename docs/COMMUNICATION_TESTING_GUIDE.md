@@ -1,274 +1,163 @@
-# ROS-ESP32 Communication Testing Guide
+# Serial Communication Testing Guide
 
-**Purpose**: Verify serial communication integrity BEFORE connecting motors to ensure:
-- Zero packet loss
-- Acceptable latency (< 10ms typical)
-- Proper data format (positions, velocities, accelerations)
-- Timestamp synchronization
+**Purpose**: Verify Teensy 4.1 ↔ host serial link **before** connecting motors, using the Firmware Configurator GUI and raw serial commands.
 
 ---
 
-## 🎯 What We're Testing
+## What we're testing
 
-| Test | Purpose |
-|------|---------|
-| **Latency** | Round-trip time (laptop → ESP32 → laptop) |
-| **Bandwidth** | Max commands/second without loss |
-| **Data Integrity** | Verify all 19 values received correctly |
-| **Packet Loss** | Detect missing commands via sequence numbers |
+| Test | Pass criterion |
+|------|---------------|
+| Link up | Feedback packets appear at ≥ 20 Hz after `<ENABLE>` |
+| Packet loss | 0 lost in 1000 packets at 25 Hz |
+| Latency | < 10 ms round-trip (command sent → ACK observed) |
+| Sequence integrity | `STALE_CMD` never appears during normal operation |
+| Limit state | `lim_state` bit changes correctly when switch is triggered |
+| Jitter | Packet interval std-dev < 2 ms |
 
 ---
 
-## 🔧 Hardware Setup
+## Hardware setup
 
-### Requirements
-- ESP32 DevKit (any variant)
-- USB cable (data, not charge-only!)
-- Laptop with Python 3 + matplotlib
+- Teensy 4.1 plugged into host USB (`/dev/ttyACM0` — check with `ls /dev/ttyACM*`)
+- Firmware flashed with `FEEDBACK_RATE_HZ = 25` and `ROS_COMMAND_RATE_HZ = 25`
+- **No motors need to be powered** for this test
 
-### Wiring
-No wiring needed! Just connect ESP32 via USB.
+---
 
-**Find Port:**
+## Step 1 — Open the serial monitor
+
+Launch the Firmware Configurator:
 ```bash
-# Linux
-ls /dev/ttyUSB* /dev/ttyACM*
-
-# Common: /dev/ttyUSB0 or /dev/ttyACM0
+./scripts/launchers/launch_configurator.sh
 ```
+
+Go to **🔌 Serial** tab → select `/dev/ttyACM0` → **Connect**.
 
 ---
 
-## 📝 Step 1: Upload Benchmark Firmware
+## Step 2 — Trigger feedback
 
-1. **Open Arduino IDE**
-2. **Load**: `PAROL6/firmware/benchmark_firmware.ino`
-3. **Configure**:
-   ```cpp
-   #define USE_SD_LOGGING false  // Set true if SD card attached
-   #define LOG_TO_SERIAL true    // Print received data
-   ```
-4. **Select Board**: ESP32 Dev Module
-5. **Select Port**: Your detected port
-6. **Upload** ✅
+Send in the command box:
+```
+<ENABLE>
+```
 
-### Verify Upload
-Open **Serial Monitor** (115200 baud):
+Feedback packets should appear within 1 second:
 ```
-READY: ESP32_BENCHMARK_V1
-Waiting for commands...
+<ACK,0,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0>
 ```
+
+Format: `<ACK,seq,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6,lim_state>`
+
+**Status bar** (bottom of serial tab) shows **Pkt/s** — should be ~25.
 
 ---
 
-## 🚀 Step 2: Run Communication Test
+## Step 3 — Packet loss test (CLI)
 
-### Install Dependencies
+Run this from inside the Docker container to send 1000 `<ENABLE>` pulses at 25 Hz and count ACK responses:
+
 ```bash
-pip3 install pyserial matplotlib numpy
+python3 - <<'PY'
+import serial, time, re
+
+PORT   = "/dev/ttyACM0"
+BAUD   = 115200
+N      = 1000
+RATE   = 25   # Hz
+PERIOD = 1.0 / RATE
+
+ser = serial.Serial(PORT, BAUD, timeout=0.1)
+time.sleep(0.5)
+
+sent = 0
+received = 0
+latencies = []
+ack_re = re.compile(r"<ACK,(\d+),")
+
+for _ in range(N):
+    t0 = time.monotonic()
+    ser.write(b"<ENABLE>\n")
+    sent += 1
+    deadline = t0 + PERIOD
+    while time.monotonic() < deadline:
+        line = ser.readline().decode(errors="replace").strip()
+        if ack_re.match(line):
+            latencies.append((time.monotonic() - t0) * 1000)
+            received += 1
+            break
+
+import statistics
+loss = (sent - received) / sent * 100
+print(f"\nSent:     {sent}")
+print(f"Received: {received}")
+print(f"Loss:     {loss:.2f}%")
+if latencies:
+    print(f"Avg lat:  {statistics.mean(latencies):.1f} ms")
+    print(f"Std dev:  {statistics.stdev(latencies):.1f} ms")
+    print(f"Max lat:  {max(latencies):.1f} ms")
+ser.close()
+PY
 ```
 
-### Run Test (Basic)
+### Expected results
+
+| Metric | Target | Acceptable | Problem |
+|--------|--------|-----------|---------|
+| Packet loss | 0% | < 0.1% | > 1% |
+| Avg latency | < 5 ms | < 15 ms | > 50 ms |
+| Std dev (jitter) | < 2 ms | < 5 ms | > 10 ms |
+| Max latency | < 10 ms | < 30 ms | > 100 ms |
+
+---
+
+## Step 4 — Stale command test
+
+Send a deliberately out-of-order position command with a regressed sequence number:
+
 ```bash
-cd /path/to/PAROL6_URDF/scripts
-python3 test_driver_communication.py --port /dev/ttyUSB0
+# Normal forward command (seq=100)
+echo -ne "<100,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0>" > /dev/ttyACM0
+
+# Stale command (seq=5, older than 100)
+echo -ne "<5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0>" > /dev/ttyACM0
 ```
 
-**Default Settings:**
-- 100 packets
-- 50ms delay between packets
-- Saves report to `comm_test_report.png`
-
-### Run Test (Custom)
-```bash
-# Stress test: 1000 packets, 10ms delay
-python3 test_driver_communication.py \
-  --port /dev/ttyUSB0 \
-  --packets 1000 \
-  --delay 10 \
-  --output stress_test.png
+Watch the serial tab — the second command should produce:
 ```
+STALE_CMD
+```
+
+✅ Firmware correctly rejects out-of-order commands.
 
 ---
 
-## 📊 Understanding Results
+## Step 5 — Limit state test (if switches wired)
 
-### Good Results ✅
-```
-PERFORMANCE REPORT
-==================================================
-Packets Sent:     100
-ACKs Received:    100
-Packets Lost:     0
-Loss Rate:        0.00%
-Avg Latency:      4.23 ms
-Min Latency:      3.81 ms
-Max Latency:      6.45 ms
-```
+Manually press/trigger a limit switch while watching the serial tab.  
+The `lim_state` field in the feedback packet should change:
 
-### Bad Results ⚠️
-```
-Packets Sent:     100
-ACKs Received:    87
-Packets Lost:     13
-Loss Rate:        13.00%    ← PROBLEM!
-Avg Latency:      45.2 ms   ← TOO HIGH!
-```
+- J1 trigger: last field becomes `1` (binary `000001`)
+- J2 trigger: last field becomes `2` (binary `000010`)
+- J1+J2: last field becomes `3` (binary `000011`)
+- etc.
 
-**If you see bad results:**
-- ❌ Bad USB cable (use data cable, not charge-only)
-- ❌ Port conflict (close Arduino Serial Monitor)
-- ❌ Wrong baud rate (must be 115200)
-- ❌ Slow laptop (close other apps)
+Release switch → field returns to `0`.
 
 ---
 
-## 📈 Generated Report
+## Troubleshooting
 
-The test creates `comm_test_report.png` with 4 graphs:
-
-### Graph 1: Latency Over Time
-- Shows if latency is stable or spiky
-- **Good**: Flat line around 3-5ms
-- **Bad**: Random spikes > 20ms
-
-### Graph 2: Latency Distribution
-- Histogram of latency values
-- **Good**: Tight peak (low jitter)
-- **Bad**: Wide spread (high jitter)
-
-### Graph 3: Packet Success/Loss Pie Chart
-- Visual success rate
-- **Target**: >99% success
-
-### Graph 4: Statistics Summary
-- Text summary of all metrics
+| Symptom | Fix |
+|---------|-----|
+| No feedback packets | Re-send `<ENABLE>`. Check baud (115200). Check port. |
+| Loss > 1% | Replace USB cable. Connect directly (no hub). Close other serial monitors. |
+| Latency > 50 ms | Close other apps on host. Check Docker CPU allocation (`docker stats parol6_dev`). |
+| `STALE_CMD` during normal ROS operation | ROS command sequence reset — send `<ENABLE>` to resync. |
+| `lim_state` stuck at non-zero | Switch wired active-high but config says active-low — correct `LIMIT_ACTIVE_HIGH` and reflash. |
 
 ---
 
-## 🔬 Advanced: Log Analysis
-
-### ESP32 Logs (Serial Monitor)
-You'll see output like:
-```
-LOG,1234567,SEQ:42,J:[0.523,-1.234,0.876,-0.432,1.098,-0.765]
-```
-
-**Fields:**
-- `1234567`: Microsecond timestamp (ESP32 clock)
-- `SEQ:42`: Sequence number
-- `J:[...]`: Joint positions (first 6 values)
-
-### Laptop Logs (CSV)
-Check `comm_test_report.csv`:
-```csv
-seq,latency_ms
-0,4.23
-1,3.98
-2,4.45
-```
-
-Use this for custom analysis in Excel/Python.
-
----
-
-## 🎓 Interpreting for Real Robot
-
-### Acceptable Thresholds
-
-| Metric | Target | Acceptable | Problematic |
-|--------|--------|------------|-------------|
-| Packet Loss | 0% | < 0.1% | > 1% |
-| Avg Latency | < 5ms | < 10ms | > 20ms |
-| Max Latency | < 10ms | < 20ms | > 50ms |
-| Jitter (Std Dev) | < 2ms | < 5ms | > 10ms |
-
-### Why This Matters
-
-**For a 6-DOF robot following a trajectory:**
-- MoveIt sends waypoints every 50ms (20Hz)
-- Each waypoint has 6 positions + velocities + accelerations = 18 values
-- If latency > 50ms, commands pile up → jerky motion
-- If packet loss > 0%, robot misses waypoints → path deviation
-
-**Our Goal**: < 5ms latency, 0% loss
-
----
-
-## 🛠️ Troubleshooting
-
-### Issue: "Failed to connect"
-**Cause**: Wrong port or permissions
-
-**Fix**:
-```bash
-# Add user to dialout group
-sudo usermod -aG dialout $USER
-# Logout and login
-
-# Or manual permission
-sudo chmod 666 /dev/ttyUSB0
-```
-
----
-
-### Issue: High latency (> 20ms)
-**Causes**:
-1. Serial Monitor open (close it!)
-2. Other USB devices on same hub
-3. Slow baud rate (should be 115200)
-
-**Fix**:
-- Use direct USB port (not hub)
-- Close Arduino IDE Serial Monitor
-- Verify baud rate matches in both code
-
----
-
-### Issue: Random packet loss (e.g., 2-5%)
-**Causes**:
-1. USB cable too long (> 2m)
-2. Electromagnetic interference
-3. Buffer overflow (sending too fast)
-
-**Fix**:
-- Use shorter, shielded cable
-- Increase `--delay` parameter (test with 100ms)
-- Move away from power supplies/motors
-
----
-
-## ✅ Next Steps After Passing Tests
-
-Once you achieve:
-- ✅ 0% packet loss
-- ✅ < 5ms average latency
-- ✅ < 2ms jitter
-
-You're ready to:
-1. **Update firmware** to real motor control code
-2. **Integrate with ROS driver** (`real_robot_driver.py`)
-3. **Connect motors** (one at a time for safety)
-4. **Run MoveIt** with real hardware
-
----
-
-## 📞 Support
-
-**If tests consistently fail:**
-1. Share your `comm_test_report.png`
-2. Share terminal output
-3. Check:
-   - ESP32 model
-   - USB cable quality
-   - Laptop OS/version
-
-**Expected Results** (ESP32, 115200 baud, USB 2.0):
-- Latency: 3-5ms average
-- Loss: 0% (for 100-1000 packets)
-- Max latency: < 10ms
-
----
-
-**Last Updated**: January 2026  
+**Last Updated**: 2026-03-11  
 **Maintained by**: PAROL6 Team
