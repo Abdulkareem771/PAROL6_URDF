@@ -119,5 +119,58 @@ class TestMoveItController(unittest.TestCase):
         self.node.plan_cartesian_with_fallback.assert_called_once() # Plan Weld
         self.node.execute_trajectory_action.assert_called_once() # Execute Weld
 
+    def test_make_path_reachable_clamps_to_workspace(self):
+        """Test that points outside workspace bounds are clamped into bounds."""
+        self.node.enforce_reachable_test_path = True
+        self.node.workspace_min = [0.20, -0.35, 0.10]
+        self.node.workspace_max = [0.65,  0.35, 0.55]
+        self.node.min_radius_xy = 0.20
+        self.node.max_radius_xy = 0.70
+
+        path = Path()
+        # Point with x far outside max (1.5 > 0.65)
+        ps_far = PoseStamped()
+        ps_far.pose.position.x = 1.5
+        ps_far.pose.position.y = 0.0
+        ps_far.pose.position.z = 0.30
+        ps_far.pose.orientation.w = 1.0
+        # Point already inside bounds
+        ps_in = PoseStamped()
+        ps_in.pose.position.x = 0.40
+        ps_in.pose.position.y = 0.00
+        ps_in.pose.position.z = 0.30
+        ps_in.pose.orientation.w = 1.0
+        path.poses = [ps_far, ps_in]
+
+        result = self.node._make_path_reachable(path)
+
+        self.assertEqual(len(result.poses), 2)
+        # Far point clamped to within workspace max x
+        self.assertLessEqual(result.poses[0].pose.position.x, 0.65)
+        # Far point also clamped by radial max (radius = x since y=0)
+        self.assertLessEqual(result.poses[0].pose.position.x, 0.70)
+        # In-bounds point unchanged
+        self.assertAlmostEqual(result.poses[1].pose.position.x, 0.40)
+
+    def test_make_path_reachable_enforces_min_radius(self):
+        """Test that points too close to origin are pushed out to min_radius."""
+        self.node.enforce_reachable_test_path = True
+        self.node.workspace_min = [0.20, -0.35, 0.10]
+        self.node.workspace_max = [0.65,  0.35, 0.55]
+        self.node.min_radius_xy = 0.20
+        self.node.max_radius_xy = 0.70
+
+        path = Path()
+        ps = PoseStamped()
+        ps.pose.position.x = 0.05   # inside min_radius
+        ps.pose.position.y = 0.0
+        ps.pose.position.z = 0.30
+        ps.pose.orientation.w = 1.0
+        path.poses = [ps]
+
+        result = self.node._make_path_reachable(path)
+        r = (result.poses[0].pose.position.x ** 2 + result.poses[0].pose.position.y ** 2) ** 0.5
+        self.assertGreaterEqual(r, 0.20 - 1e-6)
+
 if __name__ == '__main__':
     unittest.main()

@@ -28,7 +28,22 @@ const int DIR_PINS[NUM_MOTORS] = {26, 2, 27, 4, 16, 17};     // Configurable dir
 // Motor configuration
 #define STEPS_PER_REV 200
 #define MICROSTEPS 16
-#define MOTOR_STEPS_PER_REV (STEPS_PER_REV * MICROSTEPS)  // 3200
+#define BASE_STEPS_PER_REV (STEPS_PER_REV * MICROSTEPS)  // 3200
+
+// Gearbox ratios (motor revolutions per joint revolution)
+const float GEAR_RATIOS[NUM_MOTORS] = {
+  1.0,   // J1: Direct drive
+  25.0,  // J2: 25:1 gearbox
+  1.0,   // J3: Direct drive
+  1.0,   // J4: Direct drive
+  1.0,   // J5: Direct drive
+  1.0    // J6: Direct drive
+};
+
+// Calculate steps per joint revolution (including gearbox)
+float getStepsPerJointRev(int motor_idx) {
+  return BASE_STEPS_PER_REV * GEAR_RATIOS[motor_idx];
+}
 
 // State for all motors
 float current_positions[NUM_MOTORS] = {0, 0,0,0,0,0};  // Current positions in radians
@@ -105,8 +120,9 @@ void updateMotorPosition(int motor_idx) {
   // Dead zone
   if (abs(error) < 0.001) return;  // ~0.06 degrees
   
-  // Convert error to steps
-  float error_steps = (error * MOTOR_STEPS_PER_REV) / (2.0 * PI);
+  // Convert error to steps (accounting for gearbox)
+  float steps_per_joint_rev = getStepsPerJointRev(motor_idx);
+  float error_steps = (error * steps_per_joint_rev) / (2.0 * PI);
   int steps_needed = (int)abs(error_steps);
   
   if (steps_needed == 0) return;
@@ -130,8 +146,7 @@ void updateMotorPosition(int motor_idx) {
   }
   
   // Update position - TRUST MKS closed-loop to reach commanded position
-  // We report the position we commanded, not encoder feedback
-  float step_size = (2.0 * PI) / MOTOR_STEPS_PER_REV;
+  float step_size = (2.0 * PI) / getStepsPerJointRev(motor_idx);
   float position_increment = step_size * steps_to_send;
   
   if (error > 0) {

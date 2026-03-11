@@ -55,12 +55,17 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   try {
     serial_port_ = info_.hardware_parameters.at("serial_port");
     baud_rate_ = std::stoi(info_.hardware_parameters.at("baud_rate"));
+    auto spoof_it = info_.hardware_parameters.find("allow_spoofing");
+    if (spoof_it != info_.hardware_parameters.end()) {
+      allow_spoofing_ = (spoof_it->second == "true" || spoof_it->second == "1");
+    }
   } catch (const std::out_of_range & e) {
     RCLCPP_ERROR(logger_, "❌ Missing required hardware parameter: %s", e.what());
     return CallbackReturn::ERROR;
   }
 
-  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d", serial_port_.c_str(), baud_rate_);
+  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d, allow_spoofing=%s",
+              serial_port_.c_str(), baud_rate_, allow_spoofing_ ? "true" : "false");
 
   // Read joint names from URDF
   joint_names_.clear();
@@ -78,10 +83,34 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
     return CallbackReturn::ERROR;
   }
 
-  // Allocate state and command storage
+  // Load per-joint kinematic sign correction from xacro <param name="ros_invert"> tags.
+  // Expected values: "true" = invert (-1.0), "false" or absent = normal (+1.0).
+  // Fallback: J1, J3, J6 default to -1.0 (from STM32 legacy motor_init.cpp).
+  //
+  // To change these: edit parol6.ros2_control.xacro OR use the GUI Joints tab "ROS Inv" checkbox,
+  // then update the xacro to match.
+  const bool legacy_invert_fallback[6] = {true, false, true, false, false, true};
+  dir_signs_.resize(num_joints);
+  for (size_t i = 0; i < num_joints; ++i) {
+    auto it = info_.joints[i].parameters.find("ros_invert");
+    bool should_invert;
+    if (it != info_.joints[i].parameters.end()) {
+      should_invert = (it->second == "true" || it->second == "1");
+    } else {
+      should_invert = legacy_invert_fallback[i];
+      RCLCPP_WARN(logger_,
+        "Joint '%s' missing 'ros_invert' xacro param — falling back to legacy default (%s)",
+        info_.joints[i].name.c_str(), should_invert ? "true" : "false");
+    }
+    dir_signs_[i] = should_invert ? -1.0 : 1.0;
+    RCLCPP_INFO(logger_, "  ✓ Joint %s: ros_invert=%s (sign=%.1f)",
+      info_.joints[i].name.c_str(), should_invert ? "true" : "false", dir_signs_[i]);
+  }
+
   hw_state_positions_.resize(num_joints, 0.0);
   hw_state_velocities_.resize(num_joints, 0.0);
   hw_command_positions_.resize(num_joints, 0.0);
+  hw_command_velocities_.resize(num_joints, 0.0);  // NEW: velocity commands
 
   RCLCPP_INFO(logger_, "✅ on_init() complete - %zu joints configured", num_joints);
   
@@ -102,7 +131,8 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
 CallbackReturn PAROL6System::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port...");
+  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port %s...", serial_port_.c_str());
+  serial_ok_ = false;  // Assume no hardware until proven otherwise
 
   try {
     serial_.Open(serial_port_);
@@ -118,7 +148,7 @@ CallbackReturn PAROL6System::on_configure(
       case 115200: baud = BaudRate::BAUD_115200; break;
       default:
         RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
-        serial_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
+        baud = LibSerial::BaudRate::BAUD_115200;
     }
     serial_.SetBaudRate(baud);
     serial_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
@@ -129,19 +159,33 @@ CallbackReturn PAROL6System::on_configure(
     // Non-blocking with timeout protection
     // VTIME is in deciseconds (1 = 100 ms)
     serial_.SetVTime(1);   // 100 ms timeout
-    serial_.SetVMin(0);    // No minimum characters required
+    serial_.SetVMin(0);    // Non-blocking
 
     if (!serial_.IsOpen()) {
-      RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
-      return CallbackReturn::ERROR;
+      if (!allow_spoofing_) {
+        RCLCPP_ERROR(logger_, "❌ Serial port %s not open after Open() and spoofing is disabled",
+                     serial_port_.c_str());
+        return CallbackReturn::ERROR;
+      }
+      RCLCPP_WARN(logger_, "⚠️ Serial port %s not open after Open() — running in explicit SPOOF mode",
+                  serial_port_.c_str());
+    } else {
+      serial_ok_ = true;
+      RCLCPP_INFO(logger_, "✅ Serial opened: %s @ %d baud (100 ms timeout)",
+                  serial_port_.c_str(), baud_rate_);
     }
 
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (100ms timeout, non-blocking)", 
-                serial_port_.c_str(), baud_rate_);
-
   } catch (const std::exception &e) {
-    RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
-    return CallbackReturn::ERROR;
+    if (!allow_spoofing_) {
+      RCLCPP_ERROR(logger_,
+        "❌ Serial port '%s' unavailable (%s) and spoofing is disabled.",
+        serial_port_.c_str(), e.what());
+      return CallbackReturn::ERROR;
+    }
+    RCLCPP_WARN(logger_,
+      "⚠️ Serial port '%s' unavailable (%s) — running in explicit SPOOF mode.",
+      serial_port_.c_str(), e.what());
+    serial_ok_ = false;
   }
 
   return CallbackReturn::SUCCESS;
@@ -237,6 +281,10 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
     // Position command
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
       joint_names_[i], hardware_interface::HW_IF_POSITION, &hw_command_positions_[i]));
+    
+    // Velocity command (NEW)
+    command_interfaces.emplace_back(hardware_interface::CommandInterface(
+      joint_names_[i], hardware_interface::HW_IF_VELOCITY, &hw_command_velocities_[i]));
   }
 
   RCLCPP_INFO(logger_, "📥 Exported %zu command interfaces", command_interfaces.size());
@@ -254,7 +302,7 @@ std::vector<hardware_interface::CommandInterface> PAROL6System::export_command_i
 // ============================================================================
 
 return_type PAROL6System::read(
-  const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
+  const rclcpp::Time & time, const rclcpp::Duration & /*period*/)
 {
   // Vector safety check (prevent segfault on misconfiguration)
   if (hw_state_positions_.size() < 6) {
@@ -263,8 +311,23 @@ return_type PAROL6System::read(
     return return_type::ERROR;
   }
   
+  // If serial port never opened (no Teensy connected), run in pure spoof mode
+  if (!serial_ok_) {
+    if (!allow_spoofing_) {
+      RCLCPP_ERROR_THROTTLE(logger_, clock_, 1000,
+        "❌ read() called without an active serial connection and spoofing is disabled");
+      return return_type::ERROR;
+    }
+    goto spoof_states;
+  }
+
   // Check if data is available (non-blocking)
   if (!serial_.IsDataAvailable()) {
+    // Check if we are starved (e.g. 5 seconds without data) -> assume full HIL spoof mode
+    auto now = time;
+    if (std::abs(now.seconds() - last_rx_time_.seconds()) > 5.0) {
+        goto spoof_states;
+    }
     return return_type::OK;  // No data yet, not an error
   }
   
@@ -287,7 +350,10 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '<')");
-      return return_type::OK;
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
+      goto spoof_states;
     }
     
     // Find closing bracket
@@ -296,7 +362,10 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '>')");
-      return return_type::OK;
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
+      goto spoof_states;
     }
     
     // Extract content between < and >
@@ -312,12 +381,18 @@ return_type PAROL6System::read(
     }
     tokens.push_back(content.substr(start));  // Last token
     
-    // Validate: should have ACK + SEQ + 6 joints = 8 tokens
-    if (tokens.size() != 8) {
+    // Validate: ACK + SEQ + 6 positions + 6 velocities + lim_state + state_byte = 16 tokens
+    // Firmware format: <ACK, SEQ, p1..p6, v1..v6, lim_state, state_byte>
+    // tokens[0]=ACK, [1]=SEQ, [2..7]=positions, [8..13]=velocities, [14]=lim_state, [15]=state_byte
+    // Backward-compat: also accept 14 tokens (firmware without limit switch support)
+    if (tokens.size() < 14 || tokens.size() > 18) {
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
-        "Invalid feedback: expected 8 tokens, got %zu", tokens.size());
-      return return_type::OK;
+        "Invalid feedback: expected 14-18 tokens, got %zu", tokens.size());
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
+      goto spoof_states;
     }
     
     // Validate ACK
@@ -325,7 +400,10 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
-      return return_type::OK;
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
+      goto spoof_states;
     }
     
     // Parse sequence number
@@ -355,23 +433,60 @@ return_type PAROL6System::read(
       }
       
       // Track inter-packet timing (thesis latency evidence)
-      auto now = clock_.now();
-      double dt_ms = (now - last_rx_time_).seconds() * 1000.0;
+      auto now = time;
+      double dt_ms = std::abs(now.seconds() - last_rx_time_.seconds()) * 1000.0;
       max_rx_period_ms_ = std::max(max_rx_period_ms_, dt_ms);
       last_rx_time_ = now;
       
     } else {
       first_feedback_received_ = true;
-      last_rx_time_ = clock_.now();  // Initialize timing
+      last_rx_time_ = time;  // Initialize timing
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
     last_received_seq_ = received_seq;
     packets_received_++;
     
-    // Parse joint positions (tokens 2-7)
-    for (size_t i = 0; i < 6; ++i) {
-      hw_state_positions_[i] = std::stod(tokens[i + 2]);
+    // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
+    const bool USE_REAL_FEEDBACK = true; 
+    if (USE_REAL_FEEDBACK) {
+      // Kinematic sign correction loaded from xacro ros_invert params in on_init()
+
+      // URDF joint position limits — used to reject garbage fake-encoder values
+      const double joint_lower[6] = {-3.14159, -0.98,   -2.0, -3.14159, -3.14159, -3.14159};
+      const double joint_upper[6] = { 3.14159,  1.0,    1.3,  3.14159,  3.14159,  3.14159};
+
+      // Parse and sign-correct all 6 joints
+      // Firmware sends grouped: <ACK, SEQ, p0,p1,p2,p3,p4,p5, v0,v1,v2,v3,v4,v5>
+      // tokens indices:          [0]   [1]  [2][3][4][5][6][7] [8][9][10][11][12][13]
+      double candidate_pos[6], candidate_vel[6];
+      bool all_valid = true;
+      for (size_t i = 0; i < 6; ++i) {
+        candidate_pos[i] = std::stod(tokens[2 + i]) * dir_signs_[i];  // tokens[2..7]
+        candidate_vel[i] = std::stod(tokens[8 + i]) * dir_signs_[i];  // tokens[8..13]
+        // Reject packets where ANY joint is outside its URDF limits + 10% tolerance
+        double range = joint_upper[i] - joint_lower[i];
+        if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||
+            candidate_pos[i] > joint_upper[i] + 0.1 * range) {
+          RCLCPP_WARN_THROTTLE(logger_, clock_, 2000,
+            "Joint J%zu feedback %.4f outside bounds [%.2f, %.2f] — ignoring packet",
+            i + 1, candidate_pos[i], joint_lower[i], joint_upper[i]);
+          all_valid = false;
+          break;
+        }
+      }
+      
+      if (all_valid) {
+        for (size_t i = 0; i < 6; ++i) {
+          hw_state_positions_[i] = candidate_pos[i];
+          hw_state_velocities_[i] = candidate_vel[i];
+        }
+        return return_type::OK; // Skip spoofing if successfully parsed and valid
+      }
+      if (!allow_spoofing_) {
+        return return_type::ERROR;
+      }
+      // Fall through to spoof if any value was out of range
     }
     
     // Log statistics every 5 minutes (thesis validation data)
@@ -380,16 +495,30 @@ return_type PAROL6System::read(
       packets_received_, packets_lost_, parse_errors_,
       packets_received_ > 0 ? (100.0 * packets_lost_ / packets_received_) : 0.0,
       max_rx_period_ms_);
-    
-    // Success!
-    return return_type::OK;
-    
+      
   } catch (const std::exception& e) {
     parse_errors_++;
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
       "Error reading feedback: %s", e.what());
-    return return_type::OK;  // Don't fail the controller
+    if (!allow_spoofing_) {
+      return return_type::ERROR;
+    }
   }
+
+spoof_states:
+  // HIL SPOOFING: Echo outbound commands directly back as current state ALWAYS
+  // This tells MoveIt the robot is perfectly following the trajectory,
+  // preventing "Controller is taking too long... TIMED_OUT" errors.
+  for (size_t i = 0; i < 6; ++i) {
+    if (!std::isnan(hw_command_positions_[i])) {
+      hw_state_positions_[i] = hw_command_positions_[i];
+    }
+    if (!std::isnan(hw_command_velocities_[i])) {
+      hw_state_velocities_[i] = hw_command_velocities_[i];
+    }
+  }
+
+  return return_type::OK;
 }
 
 // ============================================================================
@@ -405,22 +534,32 @@ return_type PAROL6System::read(
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Format: <SEQ,J1,J2,J3,J4,J5,J6>
-  // Precision: %.2f (sufficient for 0.05 rad resolution)
-  char buffer[256];
+  // Format: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+  // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
+  char buffer[512];  // Larger buffer for velocity data
   
   // Use PRIu32 for sequence number portability
   // #include <inttypes.h> -> Already at top
   
+  // Kinematic sign correction from on_init() (xacro ros_invert params)
+  
+  // Format: <SEQ,J1_p,J2_p,J3_p,J4_p,J5_p,J6_p,J1_v,J2_v,J3_v,J4_v,J5_v,J6_v>
+  
   int written = snprintf(buffer, sizeof(buffer),
-           "<%" PRIu32 ",%.2f,%.2f,%.2f,%.2f,%.2f,%.2f>\n",
+           "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
-           hw_command_positions_[0],
-           hw_command_positions_[1],
-           hw_command_positions_[2],
-           hw_command_positions_[3],
-           hw_command_positions_[4],
-           hw_command_positions_[5]);
+           hw_command_positions_[0] * dir_signs_[0],
+           hw_command_positions_[1] * dir_signs_[1],
+           hw_command_positions_[2] * dir_signs_[2],
+           hw_command_positions_[3] * dir_signs_[3],
+           hw_command_positions_[4] * dir_signs_[4],
+           hw_command_positions_[5] * dir_signs_[5],
+           hw_command_velocities_[0] * dir_signs_[0],
+           hw_command_velocities_[1] * dir_signs_[1],
+           hw_command_velocities_[2] * dir_signs_[2],
+           hw_command_velocities_[3] * dir_signs_[3],
+           hw_command_velocities_[4] * dir_signs_[4],
+           hw_command_velocities_[5] * dir_signs_[5]);
 
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
@@ -428,6 +567,14 @@ return_type PAROL6System::write(
   }
 
   try {
+    if (!serial_ok_) {
+      if (allow_spoofing_) {
+        return return_type::OK;
+      }
+      RCLCPP_ERROR_THROTTLE(logger_, clock_, 1000,
+        "❌ write() called without an active serial connection");
+      return return_type::ERROR;
+    }
     serial_.Write(buffer);
   } catch (const std::exception &e) {
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000,

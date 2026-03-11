@@ -86,8 +86,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "serial_port",
-            default_value="/dev/ttyUSB0",
-            description="Serial port for ESP32",
+            default_value="/dev/ttyACM0",
+            description="Serial port for Teensy 4.1 (native USB = /dev/ttyACM0)",
         )
     )
 
@@ -96,6 +96,14 @@ def generate_launch_description():
             "baud_rate",
             default_value="115200",
             description="Baud rate for serial communication",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "allow_spoofing",
+            default_value="false",
+            description="Allow fake state echo if serial hardware is unavailable",
         )
     )
 
@@ -108,6 +116,7 @@ def generate_launch_description():
     use_ros2_control = LaunchConfiguration("use_ros2_control")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
+    allow_spoofing = LaunchConfiguration("allow_spoofing")
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -126,6 +135,9 @@ def generate_launch_description():
             " ",
             "baud_rate:=",
             baud_rate,
+            " ",
+            "allow_spoofing:=",
+            allow_spoofing,
         ]
     )
     
@@ -198,23 +210,6 @@ def generate_launch_description():
     )
 
     # =========================================================================
-    # INCLUDE: MoveIt Demo (RViz + Motion Planning)
-    # =========================================================================
-    
-    moveit_demo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                FindPackageShare("parol6_moveit_config"),
-                "launch",
-                "demo.launch.py"
-            ])
-        ]),
-        launch_arguments={
-            "use_sim_time": "false",
-        }.items(),
-    )
-
-    # =========================================================================
     # LAUNCH DESCRIPTION
     # =========================================================================
     nodes = [
@@ -222,7 +217,6 @@ def generate_launch_description():
         robot_state_pub_node,
         joint_state_broadcaster_spawner,
         delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
-        moveit_demo,
     ]
 
     return LaunchDescription(declared_arguments + nodes)

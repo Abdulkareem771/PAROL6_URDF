@@ -14,16 +14,16 @@ EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
 CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 
 
-current_dir = Path(__file__)
-project_dir = current_dir.parent.parent
+current_dir = Path(__file__)                # YOLO_resources/detect_path.py
+project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_a7.png"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
 def segment_blocks(image_path):
     # 1. Read the image
-    img = cv2.imread(image_path)
+    img = cv2.imread(str(image_path))
     if img is None:
         print(f"Could not read image: {image_path}")
         return None, None
@@ -178,7 +178,10 @@ def process_folder(folder_path, output_folder):
 
 g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
+print(f"g_matrix dtype: {g_matrix.dtype}")
+print(f"img_annotated dtype: {img_annotated.dtype}")
 
 
-
-
+print(f"img_annotated shape: {img_annotated.shape}")
+print(f"type(img_annotated): {type(img_annotated)}")
+print(f"type(g_matrix): {type(g_matrix)}")

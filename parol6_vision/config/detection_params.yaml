@@ -27,6 +27,7 @@ red_line_detector:
     # Performance
     processing_rate: 10.0           # Target Hz
     publish_debug_images: true      # Enable debug visualization
+    single_frame_mode: false        # Process one image only, then unsubscribe
     
     # Quality thresholds
     min_confidence: 0.5             # Minimum confidence to publish
