@@ -45,7 +45,7 @@ import re
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
 import cv2
 
@@ -59,10 +59,15 @@ class ReadImageNode(Node):
     """
     Read_image — publishes new colour + depth pairs found in images_captured/.
 
+    Subscribed Topics
+    -----------------
+    /kinect2/qhd/camera_info : sensor_msgs/CameraInfo   (cached, re-stamped)
+
     Published Topics
     ----------------
-    /vision/captured_image_color : sensor_msgs/Image   (bgr8)
-    /vision/captured_image_depth : sensor_msgs/Image   (16UC1)
+    /vision/captured_image_color  : sensor_msgs/Image      (bgr8)
+    /vision/captured_image_depth  : sensor_msgs/Image      (16UC1)
+    /vision/captured_camera_info  : sensor_msgs/CameraInfo (re-stamped)
     """
 
     def __init__(self):
@@ -87,6 +92,22 @@ class ReadImageNode(Node):
         )
         self._depth_pub = self.create_publisher(
             Image, '/vision/captured_image_depth', 10
+        )
+        self._info_pub = self.create_publisher(
+            CameraInfo, '/vision/captured_camera_info', 10
+        )
+
+        # ── Camera info cache ─────────────────────────────────────────
+        # We subscribe to the live /kinect2/qhd/camera_info, cache the
+        # latest message, and re-publish it with a fresh timestamp that
+        # matches the replayed image pair — this is what lets
+        # depth_matcher's ApproximateTimeSynchronizer fire reliably.
+        self._latest_camera_info: CameraInfo | None = None
+        self._info_sub = self.create_subscription(
+            CameraInfo,
+            '/kinect2/qhd/camera_info',
+            self._camera_info_callback,
+            10
         )
 
         # ── Seed the "seen" set with files already on disk ────────────
@@ -118,6 +139,14 @@ class ReadImageNode(Node):
             if m:
                 tokens.add(m.group(1))
         return tokens
+
+    # ─────────────────────────────────────────────────────────────────
+    # Camera info cache callback
+    # ─────────────────────────────────────────────────────────────────
+
+    def _camera_info_callback(self, msg: CameraInfo):
+        """Cache the latest camera_info for re-stamping at publish time."""
+        self._latest_camera_info = msg
 
     # ─────────────────────────────────────────────────────────────────
     # Polling callback
@@ -197,10 +226,32 @@ class ReadImageNode(Node):
             )
             return
 
+        # ── Camera info (re-stamped) ──────────────────────────────────
+        if self._latest_camera_info is not None:
+            info_msg = CameraInfo()
+            info_msg.header.stamp = now
+            info_msg.header.frame_id = self._frame_id
+            # Copy intrinsics from cached live message
+            info_msg.width    = self._latest_camera_info.width
+            info_msg.height   = self._latest_camera_info.height
+            info_msg.k        = self._latest_camera_info.k
+            info_msg.d        = self._latest_camera_info.d
+            info_msg.r        = self._latest_camera_info.r
+            info_msg.p        = self._latest_camera_info.p
+            info_msg.distortion_model = self._latest_camera_info.distortion_model
+            self._info_pub.publish(info_msg)
+        else:
+            self.get_logger().warn(
+                f'[{token}] No camera_info received yet — '
+                'depth_matcher sync may not fire. '
+                'Ensure /kinect2/qhd/camera_info is publishing.'
+            )
+
         self.get_logger().info(
             f'[PUBLISHED] token={token}\n'
-            f'  color → /vision/captured_image_color\n'
-            f'  depth → /vision/captured_image_depth'
+            f'  color  → /vision/captured_image_color\n'
+            f'  depth  → /vision/captured_image_depth\n'
+            f'  info   → /vision/captured_camera_info'
         )
 
 

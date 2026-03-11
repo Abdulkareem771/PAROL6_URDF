@@ -80,7 +80,7 @@ logs/launchers/*
 
 # ML model weights (large binary files — store on Colab or a model registry instead)
 *.pth
-*.pt
+#*.pt
 *.onnx
 *.h5
 *.weights
@@ -88,6 +88,16 @@ logs/launchers/*
 # Training output images / artifacts that are regenerated each run
 vision_work/resunet_training/test_results/
 vision_work/resunet_training/Tests/
+
+vision_work/YOLO/*
+venv_310/*
+Yolo_data2_model/*
+YOLO dependencies/
+01Yolo_model2_data/
+vision_work/color_calibrate/*
+rosbag2_2026_01_26-23_26_59.zip/*
+vision_work/color images to calibrate/*
+legacy code open loop/*
 
 vision_work/YOLO/*
 venv_310/*
