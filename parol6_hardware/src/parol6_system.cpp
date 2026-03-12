@@ -164,8 +164,27 @@ CallbackReturn PAROL6System::on_activate(
 {
   RCLCPP_INFO(logger_, "⚡ on_activate() - Controllers will now call read()/write()");
   
-  // Initialize command to current state (good practice)
+  // WAIT FOR FIRST FEEDBACK TO SYNCHRONIZE COMMANDS TO ACTUAL POSITIONS
+  // If we don't do this, hw_state_positions_ is entirely 0.0, which means
+  // hw_command_positions_ becomes 0.0, forcing the robot out of its physical position!
+  RCLCPP_INFO(logger_, "⏳ Waiting for initial hardware state to sync controllers...");
+  int retries = 50; // Wait up to 1 second (50 * 20ms)
+  while(retries-- > 0 && rclcpp::ok()) {
+      read(rclcpp::Clock().now(), rclcpp::Duration(0,0));
+      if (first_feedback_received_) {
+         RCLCPP_INFO(logger_, "✅ Hardware state synced successfully!");
+         break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  
+  if (!first_feedback_received_) {
+      RCLCPP_WARN(logger_, "⚠️ Timeout waiting for initial feedback. Robot may jump!");
+  }
+
+  // Initialize command to current state (this is now properly populated!)
   hw_command_positions_ = hw_state_positions_;
+  hw_command_velocities_ = hw_state_velocities_;
   
   RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE");
   return CallbackReturn::SUCCESS;
@@ -274,9 +293,26 @@ return_type PAROL6System::read(
   }
   
   try {
-    // Read line (blocking with 2ms timeout from serial configuration)
+    // Read all available lines to drain the OS serial buffer
+    // and ONLY use the newest one to eliminate accumulated latency.
     std::string response;
-    serial_.ReadLine(response, '\n');
+    std::string latest_valid;
+    
+    // Safety break to prevent infinite loops if data streams too fast
+    int max_reads = 100; 
+    while (serial_.IsDataAvailable() && max_reads-- > 0) {
+      std::string temp;
+      serial_.ReadLine(temp, '\n', 2); // 2ms timeout per line
+      if (!temp.empty() && temp[0] == '<') {
+        latest_valid = temp;
+      }
+    }
+    
+    if (latest_valid.empty()) {
+      return return_type::OK; // No valid new data this cycle
+    }
+    
+    response = latest_valid;
 
     // DEBUG: Log raw feedback for validation (throttled manually to prevent crash)
     static int log_counter = 0;
@@ -368,6 +404,12 @@ return_type PAROL6System::read(
     } else {
       first_feedback_received_ = true;
       last_rx_time_ = clock_.now();  // Initialize timing
+      
+      // Safety snap: Ensure commands perfectly match the first physical reading
+      // just in case on_activate didn't catch it correctly!
+      hw_command_positions_ = hw_state_positions_;
+      hw_command_velocities_ = hw_state_velocities_;
+      
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     

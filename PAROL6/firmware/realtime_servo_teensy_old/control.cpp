@@ -25,28 +25,12 @@
 static volatile uint32_t enc_rise[NUM_MOTORS] = {0};
 static volatile uint32_t enc_pw[NUM_MOTORS]   = {0};
 static volatile bool     enc_new_data[NUM_MOTORS] = {false};
-static volatile bool     enc_got_fall[NUM_MOTORS] = {true}; // lockout until next rise
 
-// Per-motor ISRs with strict hardware period filtering to reject crosstalk!
-// MT6816 period is ~1024us. Step pin crosstalk (30kHz) will trigger false edges.
-#define MAKE_ENC_ISR(N)                                            \
-  void enc_isr_##N() {                                             \
-    uint32_t t = micros();                                         \
-    if (digitalReadFast(ENCODER_PINS[N])) {                        \
-      if (t - enc_rise[N] > 900) { /* Must be >900us since last rise */ \
-        enc_rise[N] = t;                                           \
-        enc_got_fall[N] = false; /* arm falling edge catcher */    \
-      }                                                            \
-    } else {                                                       \
-      if (!enc_got_fall[N]) {                                      \
-        uint32_t pw = t - enc_rise[N];                             \
-        if (pw > 1 && pw < 1050) { /* Valid MT6816 pulse width */  \
-          enc_pw[N] = pw;                                          \
-          enc_new_data[N] = true;                                  \
-          enc_got_fall[N] = true; /* lock out further noise drops */\
-        }                                                          \
-      }                                                            \
-    }                                                              \
+// Per-motor ISRs (minimal work — just capture timing)
+#define MAKE_ENC_ISR(N)                                          \
+  void enc_isr_##N() {                                           \
+    if (digitalReadFast(ENCODER_PINS[N])) enc_rise[N] = micros();\
+    else { enc_pw[N] = micros() - enc_rise[N]; enc_new_data[N] = true; } \
   }
 MAKE_ENC_ISR(0)
 MAKE_ENC_ISR(1)
@@ -161,8 +145,9 @@ static float readEncoder(uint8_t idx) {
 
   // 2. Hardware Sanity Check
   // MT6816 limits: 16 clocks (4us) to 4111 clocks (1027.75us).
-  // Anything outside 2us to 1050us is physically impossible.
+  // Anything outside 2us to 1050us is physically impossible (noise/bounce/preemption glitch).
   if (raw_pw < 2 || raw_pw > 1050) {
+    // Return last known good position; do not corrupt multi-turn tracking!
     #if ENCODER_EMA_ENABLED
       return ema_initialised[idx] ? ema_position[idx] : joints[idx].actual_position;
     #else
@@ -171,6 +156,7 @@ static float readEncoder(uint8_t idx) {
   }
 
   // --- Layer 1: Median-of-3 on raw pulse width ---
+  // Catches single-sample PWM timing glitches with zero lag for consistent readings
   uint32_t pw;
 #if ENCODER_MEDIAN_FILTER
   if (has_new_data) {
@@ -198,57 +184,27 @@ static float readEncoder(uint8_t idx) {
   motor_ang *= ENCODER_DIR_SIGN[idx];
   motor_ang += ENCODER_OFFSETS[idx];
 
-  // Normalise [0, 2π) using fmodf to prevent infinite loops on NaN/huge values
-  if (!isfinite(motor_ang)) motor_ang = 0.0f; // Reject NaN
-  motor_ang = fmodf(motor_ang, 2.0f * PI);
-  if (motor_ang < 0.0f) motor_ang += 2.0f * PI;
-
-  // ---------- INITIALISATION ----------
-  if (joints[idx].last_motor_angle < 0.0f) {
-    // First reading —  record reference flawlessly
-    joints[idx].last_motor_angle = motor_ang;
-  }
-
-  // ---- SAFE ANTI-GLITCH FILTER ----
-  // When rotating quickly, 30kHz MKS driver Step pulses cause electrical crosstalk.
-  // The rising edge is protected by a 900us period filter, but the falling edge can 
-  // be triggered prematurely! If it triggers early, the pulse width shrinks randomly,
-  // causing `motor_ang` to jump massively (e.g., 3.0 radians).
-  // A true physical rotation at MAX speed (60 rad/s) moves at most 0.12 radians in 2ms.
-  // A true wrap-around jumps by exactly ~6.28 radians.
-  // Therefore, any jump between 1.0 rad and 5.2 rad is physically impossible
-  // and MUST be a high-frequency cross-talk artifact! We safely reject it to prevent 
-  // the false "wrap around" from silently destroying the revolution counter!
-  float delta = motor_ang - joints[idx].last_motor_angle;
-  if (fabsf(delta) > 1.0f && fabsf(delta) < 5.2f) {
-    // 100% false reading. Return last valid position natively without updating last_motor_angle!
-    #if ENCODER_EMA_ENABLED
-      return ema_initialised[idx] ? ema_position[idx] : joints[idx].actual_position;
-    #else
-      return joints[idx].actual_position;
-    #endif
-  }
+  // Normalise [0, 2π)
+  while (motor_ang < 0.0f)        motor_ang += 2.0f * PI;
+  while (motor_ang >= 2.0f * PI)  motor_ang -= 2.0f * PI;
 
   // ---------- MULTI-TURN TRACKING ----------
-  // Proceed with safe wrap detection! True wraps (delta > 5.2) will be caught here.
+  if (joints[idx].last_motor_angle < 0.0f) {
+    // First reading —  record reference
+    joints[idx].last_motor_angle = motor_ang;
+    // Don't return 0.0f here, let it pass through to initialize EMA!
+  }
+
+  float delta = motor_ang - joints[idx].last_motor_angle;
   if (delta >  PI) joints[idx].motor_revolutions--;
   if (delta < -PI) joints[idx].motor_revolutions++;
   joints[idx].last_motor_angle = motor_ang;
 
-  // The total angle calculation:
-  // motor_ang is in [0, 2pi), keeping the algebraic sign of position.
-  // motor_revolutions correctly tracks boundary crossings.
   float total = motor_ang + (float)joints[idx].motor_revolutions * 2.0f * PI;
-  
-  // Fix the 0.63 rad limit:
-  // J5 has a GEAR_RATIO of 10.0. 2 * PI / 10.0 = 0.628 rad.
-  // This means the joint maxes out at 0.63 rad for ONE full motor turn.
-  // What caused it to reset to 0 in positive but run to -11 in negative?
-  // It's the interaction between normalisation and the sign!
-  // Wait... the math is actually perfectly sound above. Let's look closely at normalisation:
   float raw_joint_pos = total / GEAR_RATIOS[idx];
 
   // --- Layer 2: EMA on final joint position ---
+  // Smooths encoder quantization noise (4096 steps/rev → 0.088° steps)
 #if ENCODER_EMA_ENABLED
   if (!ema_initialised[idx]) {
     ema_position[idx] = raw_joint_pos;
