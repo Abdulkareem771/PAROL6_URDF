@@ -6,10 +6,11 @@ import os
 import subprocess
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTextEdit, QGroupBox, QComboBox, QMessageBox
+    QTextEdit, QGroupBox, QComboBox, QMessageBox, QLineEdit
 )
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
 from PyQt6.QtGui import QFont
+import serial.tools.list_ports
 
 class LaunchWorker(QThread):
     """Runs a bash script in a background thread and emits its output."""
@@ -32,6 +33,9 @@ class LaunchWorker(QThread):
         
         try:
             env = os.environ.copy()
+            # Inject serial port if provided as a kwarg
+            if hasattr(self, '_env_extras'):
+                env.update(self._env_extras)
             # Ensure standard binary paths are present just in case the GUI was launched strangely
             if "PATH" in env:
                 env["PATH"] += os.pathsep + "/usr/local/bin:/usr/bin:/bin"
@@ -135,6 +139,7 @@ class LaunchTab(QWidget):
         self.mode_combo.addItem("Method 3: MoveIt Fake (Standalone RViz)", "launch_moveit_fake.sh")
         self.mode_combo.addItem("Method 4: MoveIt Real Hardware", "launch_moveit_real_hw.sh")
         self.mode_combo.setMinimumWidth(300)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         cl.addWidget(QLabel("Target:"))
         cl.addWidget(self.mode_combo)
         
@@ -151,6 +156,39 @@ class LaunchTab(QWidget):
         
         cl.addStretch()
         root.addWidget(ctrls)
+
+        # ── Real Hardware Options (Method 4 only) ───────────────────────────
+        self._hw_options = QGroupBox("🔌 Real Hardware Settings")
+        hw_lay = QHBoxLayout(self._hw_options)
+
+        hw_lay.addWidget(QLabel("Serial Port:"))
+        self._port_combo = QComboBox()
+        self._port_combo.setEditable(True)
+        self._port_combo.setMinimumWidth(160)
+        self._refresh_ports()
+        hw_lay.addWidget(self._port_combo)
+
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setFixedWidth(32)
+        refresh_btn.setToolTip("Refresh available serial ports")
+        refresh_btn.clicked.connect(self._refresh_ports)
+        hw_lay.addWidget(refresh_btn)
+
+        hw_lay.addSpacing(16)
+        hw_lay.addWidget(QLabel("Baud:"))
+        self._baud_combo = QComboBox()
+        self._baud_combo.addItems(["115200", "57600", "250000", "500000", "1000000"])
+        self._baud_combo.setCurrentText("115200")
+        hw_lay.addWidget(self._baud_combo)
+
+        hw_lay.addSpacing(16)
+        note = QLabel("⚠️ Disconnect GUI serial before launching!")
+        note.setStyleSheet("color:#fab387; font-size:10px;")
+        hw_lay.addWidget(note)
+        hw_lay.addStretch()
+
+        root.addWidget(self._hw_options)
+        self._on_mode_changed()  # Set initial visibility
 
         # ── Output Logs (Split) ─────────────────────────────────────────────
         logs_layout = QHBoxLayout()
@@ -199,8 +237,18 @@ class LaunchTab(QWidget):
         if not os.path.exists(script_path):
             self.log_rviz.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
             return
-            
+
         self._worker = LaunchWorker(script_path, [])
+        # Pass serial port env vars for Method 4
+        if script_name == "launch_moveit_real_hw.sh":
+            port = self._port_combo.currentText().strip()
+            baud = self._baud_combo.currentText().strip()
+            if port:
+                self._worker._env_extras = {
+                    "PAROL6_SERIAL_PORT": port,
+                    "PAROL6_BAUD_RATE": baud,
+                }
+                self.log_rviz.append(f"[LAUNCH] Using port={port} baud={baud}")
         self._worker.output_rviz.connect(self.log_rviz.append)
         self._worker.output_gazebo.connect(self.log_gazebo.append)
         self._worker.finished_ok.connect(self._on_finished)
@@ -208,6 +256,27 @@ class LaunchTab(QWidget):
         self._worker.start()
         
         self._set_button_state(True)
+
+    def _on_mode_changed(self) -> None:
+        """Show/hide hardware settings depending on selected launch mode."""
+        is_real_hw = self.mode_combo.currentData() == "launch_moveit_real_hw.sh"
+        self._hw_options.setVisible(is_real_hw)
+
+    def _refresh_ports(self) -> None:
+        """Populate the port combo with currently visible serial devices."""
+        try:
+            ports = [p.device for p in serial.tools.list_ports.comports()]
+        except Exception:
+            ports = []
+        # Also add common Linux paths that comports() may miss inside Docker
+        for p in ["/dev/ttyACM0", "/dev/ttyACM1", "/dev/ttyUSB0", "/dev/ttyUSB1"]:
+            if p not in ports and os.path.exists(p):
+                ports.append(p)
+        current = self._port_combo.currentText()
+        self._port_combo.clear()
+        self._port_combo.addItems(ports if ports else ["/dev/ttyACM0"])
+        if current in ports:
+            self._port_combo.setCurrentText(current)
 
     def _set_button_state(self, is_running: bool) -> None:
         if is_running:

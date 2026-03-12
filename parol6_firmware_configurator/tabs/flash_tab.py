@@ -66,7 +66,16 @@ class FlashTab(QWidget):
 
         path_lay.addWidget(QLabel("Env:"))
         self.env_combo = QComboBox()
-        self.env_combo.addItems(["teensy41", "native"])
+        self.env_combo.addItems([
+            "teensy41",
+            "teensy41_j6_test",
+            "debug_stage1",   # Stage 1: USB echo + heartbeat (bare minimum)
+            "debug_stage2",   # Stage 2: Fake ACK packets (no hardware)
+            "debug_stage3",   # Stage 3: Real J6 encoder only
+            "debug_stage4",   # Stage 4: J6 encoder + stepper (full control)
+            "native",
+        ])
+
         path_lay.addWidget(self.env_combo)
 
         path_lay.addWidget(QLabel("Mode:"))
