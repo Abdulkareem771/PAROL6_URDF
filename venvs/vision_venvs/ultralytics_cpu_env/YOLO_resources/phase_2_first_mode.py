@@ -21,17 +21,19 @@ CEXPAND_PX = 8
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
 OUTPUT_DIR = PROJECT_DIR / "data" / "Phase_2_first_mode" / "model_v2"
+SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_1.jpg"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+#OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------
 # Load Model
 # -----------------------------
 model = YOLO(MODEL_PATH_v2)
 
+"""
 # -----------------------------
 # Collect Images
 # -----------------------------
@@ -40,6 +42,7 @@ image_paths = sorted(list(DATA_DIR.rglob("*.jpg")) +
                      list(DATA_DIR.rglob("*.jpeg")))
 
 print("Images found:", len(image_paths))
+"""
 
 # -----------------------------
 # Contour Function
@@ -136,7 +139,7 @@ def process_image(image_path):
     return annotated
 
 
-
+"""
 def save_all_images(image_paths):
 
     print("\nStarting automatic saving of all annotated images...\n")
@@ -155,12 +158,12 @@ def save_all_images(image_paths):
         print(f"[{i+1}/{len(image_paths)}] Saved:", save_path)
 
     print("\nFinished saving all images.\n")
-
-
+"""
+"""
 def resize_to_screen(img, max_w=1400, max_h=900):
-    """
-    Resize image to fit inside the screen while keeping aspect ratio.
-    """
+    
+    #Resize image to fit inside the screen while keeping aspect ratio.
+    
     h, w = img.shape[:2]
 
     scale_w = max_w / w
@@ -171,9 +174,31 @@ def resize_to_screen(img, max_w=1400, max_h=900):
     new_h = int(h * scale)
 
     return cv2.resize(img, (new_w, new_h))
+"""
+
+#cv2.namedWindow("YOLO Segmentation Viewer", cv2.WINDOW_NORMAL)
 
 
-cv2.namedWindow("YOLO Segmentation Viewer", cv2.WINDOW_NORMAL)
+
+
+
+
+
+
+
+
+
+annotated = process_image(SINGLE_IMAGE_PATH)
+
+if annotated is not None:
+    cv2.imshow("YOLO Segmentation Viewer", annotated)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+
+
+"""
 # -----------------------------
 # GUI LOOP
 # -----------------------------
@@ -229,3 +254,5 @@ while True:
 
 
 cv2.destroyAllWindows()
+
+"""
