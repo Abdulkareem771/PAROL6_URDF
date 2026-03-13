@@ -13,15 +13,15 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-CEXPAND_PX = 15
+CEXPAND_PX = 8
 
 # -----------------------------
 # Paths
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_DIR = PROJECT_DIR / "data" / "presentation_samples"
-#DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
-SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
+#DATA_DIR = PROJECT_DIR / "data" / "presentation_samples"
+DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
+#SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
 OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples_Results" / "model_v2"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
