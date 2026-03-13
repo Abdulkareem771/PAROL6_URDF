@@ -220,8 +220,8 @@ plt.axis('off')
 plt.title("Result")
 plt.imshow(img_annotated)
 plt.axis('off')
-
+"""
 plt.tight_layout()
 plt.show()
-"""
+
 
