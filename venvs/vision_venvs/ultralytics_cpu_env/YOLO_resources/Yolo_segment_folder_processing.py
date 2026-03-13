@@ -19,8 +19,8 @@ CEXPAND_PX = 8
 # Paths
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
-OUTPUT_DIR = PROJECT_DIR / "data" / "Phase_2_first_mode" / "model_v2"
+DATA_DIR = PROJECT_DIR / "data" / "Presentation_Samples"
+OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples" / "model_v2"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
@@ -98,13 +98,13 @@ def process_image(image_path):
     contour_obj1 = find_contours(obj_1)
     contour_obj2 = find_contours(obj_2)
     
-    """
+    
     if contour_obj1 is not None:
-        cv2.drawContours(annotated, [contour_obj1], -1, (255,0,0), 2)
+        cv2.drawContours(annotated, [contour_obj1], -1, (255,0,0), 4)
 
     if contour_obj2 is not None:
-        cv2.drawContours(annotated, [contour_obj2], -1, (255,0,0), 2)
-    """
+        cv2.drawContours(annotated, [contour_obj2], -1, (255,0,0), 4)
+    
     
     dil_kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE,
@@ -128,11 +128,11 @@ def process_image(image_path):
     #intersection_mask = cv2.bitwise_and(obj_1, obj_2)   # Intersection mask without expand
     intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)  # Intersection mask with expand
     contour_I = find_contours(intersection_mask)
-
+    """
     if contour_I is not None:
         cv2.drawContours(annotated, [contour_I], -1, (0,0,255), -1)
         #cv2.drawContours(annotated, [contour_I], -1, (255,255,0), 3)
-
+    """
     return annotated
 
 
