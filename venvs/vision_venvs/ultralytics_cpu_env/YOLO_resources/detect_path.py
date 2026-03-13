@@ -188,6 +188,7 @@ print(f"type(img_annotated): {type(img_annotated)}")
 print(f"type(g_matrix): {type(g_matrix)}")
 
 """
+"""
 #plt.figure(figsize=(20, 20))
 
 # Subplot 1: Original Image
@@ -196,27 +197,29 @@ plt.title("Original Image")
 plt.imshow(img_rgb)
 plt.axis('off')
 
-
+"""
 
 """
 # Subplot 2: G Matrix (Green Mask)
-plt.subplot(1, 4, 2)
-plt.title("G Matrix (Green Object)")
-plt.imshow(G, cmap='gray')
+plt.subplot(1, 2, 1)
+plt.title("Green Object")
+plt.imshow(g_matrix, cmap='gray')
 plt.axis('off')
 
 # Subplot 3: R Matrix (Red Object)
-plt.subplot(1, 4, 3)
-plt.title("B Matrix (Blue Object)")
-plt.imshow(B, cmap='gray')
-plt.axis('off')
-
-# Subplot 4: Annotated Image with Bounding Boxes
-plt.subplot(1, 4, 4)
-plt.title("Seam Path")
-plt.imshow(img_annotated)
+plt.subplot(1, 2, 2)
+plt.title("Blue Object")
+plt.imshow(b_matrix, cmap='gray')
 plt.axis('off')
 """
+
+
+# Subplot 4: Annotated Image with Bounding Boxes
+#plt.subplot(1, 4, 4)
+plt.title("Result")
+plt.imshow(img_annotated)
+plt.axis('off')
+
 plt.tight_layout()
 plt.show()
 
