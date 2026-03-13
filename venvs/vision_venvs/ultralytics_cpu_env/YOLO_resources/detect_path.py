@@ -92,10 +92,10 @@ def segment_blocks(image_path):
     contour_B = find_contours(B)
 
     if contour_G is not None:
-        cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
+        cv2.drawContours(img_annotated, [contour_G], -1, (255, 255, 0), 4)   # yellow outline (green object)
 
     if contour_B is not None:
-        cv2.drawContours(img_annotated, [contour_B], -1, (0, 0, 255), 2)   # blue outline (red object)
+        cv2.drawContours(img_annotated, [contour_B], -1, (255, 255, 0), 4)   # yellow outline (red object)
 
     # Expand contours outward by CEXPAND_PX using morphological dilation
     dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
@@ -114,10 +114,10 @@ def segment_blocks(image_path):
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
-
+    """
     if contour_I is not None:
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region
-
+    """
 
     # 6. GUI Display Section
     plt.figure(figsize=(20, 5))
