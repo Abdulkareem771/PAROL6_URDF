@@ -104,20 +104,20 @@ def segment_blocks(image_path):
 
     contour_G_exp = find_contours(G_exp)
     contour_B_exp = find_contours(B_exp)
-    
+    """
     if contour_G_exp is not None:
         cv2.drawContours(img_annotated, [contour_G_exp], -1, (255, 0, 0), 4)  # red = expanded green contour
 
     if contour_B_exp is not None:
         cv2.drawContours(img_annotated, [contour_B_exp], -1, (255, 0, 0), 4)  # red = expanded red contour
-    
+    """
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
-    """
+    
     if contour_I is not None:
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
-    """
+    
 
     """
     # 6. GUI Display Section
