@@ -200,7 +200,7 @@ plt.axis('off')
 
 """
 
-"""
+
 # Subplot 2: G Matrix (Green Mask)
 plt.subplot(1, 2, 1)
 plt.title("Green Object")
@@ -212,9 +212,9 @@ plt.subplot(1, 2, 2)
 plt.title("Blue Object")
 plt.imshow(b_matrix, cmap='gray')
 plt.axis('off')
+
+
 """
-
-
 # Subplot 4: Annotated Image with Bounding Boxes
 #plt.subplot(1, 4, 4)
 plt.title("Result")
@@ -223,5 +223,5 @@ plt.axis('off')
 
 plt.tight_layout()
 plt.show()
-
+"""
 
