@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-CEXPAND_PX = 12
+CEXPAND_PX = 5
 
 # -----------------------------
 # Paths
