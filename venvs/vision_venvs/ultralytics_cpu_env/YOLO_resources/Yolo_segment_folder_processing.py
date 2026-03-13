@@ -100,10 +100,10 @@ def process_image(image_path):
     
     """
     if contour_obj1 is not None:
-        cv2.drawContours(annotated, [contour_obj1], -1, (255,0,0), 2)
+        cv2.drawContours(annotated, [contour_obj1], -1, (0,0,255), 4)
 
     if contour_obj2 is not None:
-        cv2.drawContours(annotated, [contour_obj2], -1, (255,0,0), 2)
+        cv2.drawContours(annotated, [contour_obj2], -1, (0,0,255), 4)
     """
     
     dil_kernel = cv2.getStructuringElement(
