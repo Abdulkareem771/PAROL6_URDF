@@ -11,7 +11,7 @@ y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
 EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
-CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
+CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
 
 
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
@@ -104,20 +104,21 @@ def segment_blocks(image_path):
 
     contour_G_exp = find_contours(G_exp)
     contour_B_exp = find_contours(B_exp)
-
+    
     if contour_G_exp is not None:
         cv2.drawContours(img_annotated, [contour_G_exp], -1, (255, 0, 0), 4)  # red = expanded green contour
 
     if contour_B_exp is not None:
         cv2.drawContours(img_annotated, [contour_B_exp], -1, (255, 0, 0), 4)  # red = expanded red contour
-
+    
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
     """
     if contour_I is not None:
-        cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region
+        cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
     """
+
     """
     # 6. GUI Display Section
     plt.figure(figsize=(20, 5))
