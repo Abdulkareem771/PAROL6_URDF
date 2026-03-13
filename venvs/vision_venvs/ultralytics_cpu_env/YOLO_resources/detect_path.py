@@ -17,7 +17,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -91,11 +91,11 @@ def segment_blocks(image_path):
     contour_G = find_contours(G)
     contour_B = find_contours(B)
 
-    #if contour_G is not None:
-        #cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
+    if contour_G is not None:
+        cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
 
-    #if contour_B is not None:
-        #cv2.drawContours(img_annotated, [contour_B], -1, (0, 0, 255), 2)   # blue outline (red object)
+    if contour_B is not None:
+        cv2.drawContours(img_annotated, [contour_B], -1, (0, 0, 255), 2)   # blue outline (red object)
 
     # Expand contours outward by CEXPAND_PX using morphological dilation
     dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
@@ -178,6 +178,7 @@ def process_folder(folder_path, output_folder):
 
 g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
 
+"""
 print(f"g_matrix dtype: {g_matrix.dtype}")
 print(f"img_annotated dtype: {img_annotated.dtype}")
 
@@ -185,3 +186,5 @@ print(f"img_annotated dtype: {img_annotated.dtype}")
 print(f"img_annotated shape: {img_annotated.shape}")
 print(f"type(img_annotated): {type(img_annotated)}")
 print(f"type(g_matrix): {type(g_matrix)}")
+
+"""
