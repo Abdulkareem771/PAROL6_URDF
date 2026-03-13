@@ -13,14 +13,14 @@ import cv2
 import numpy as np
 from pathlib import Path
 
-CEXPAND_PX = 8
+CEXPAND_PX = 12
 
 # -----------------------------
 # Paths
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
-#DATA_DIR = PROJECT_DIR / "data" / "presentation_samples"
-DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
+DATA_DIR = PROJECT_DIR / "data" / "presentation_samples"
+#DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
 SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
 OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples_Results" / "model_v2"
 
@@ -119,22 +119,22 @@ def process_image(image_path):
     contour_obj1_exp = find_contours(obj_1_exp)
     contour_obj2_exp = find_contours(obj_2_exp)
     
-    
+    """
     if contour_obj1_exp is not None:
         cv2.drawContours(annotated, [contour_obj1_exp], -1, (0, 0, 255), 4)
 
     if contour_obj2_exp is not None:
         cv2.drawContours(annotated, [contour_obj2_exp], -1, (0, 0, 255), 4)
-    
+    """
 
     #intersection_mask = cv2.bitwise_and(obj_1, obj_2)   # Intersection mask without expand
     intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)  # Intersection mask with expand
     contour_I = find_contours(intersection_mask)
-    """
+    
     if contour_I is not None:
         cv2.drawContours(annotated, [contour_I], -1, (0,0,255), -1)
         #cv2.drawContours(annotated, [contour_I], -1, (255,255,0), 3)
-    """
+    
     return annotated
 
 
