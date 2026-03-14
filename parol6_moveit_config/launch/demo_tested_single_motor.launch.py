@@ -78,7 +78,11 @@ def generate_launch_description():
     )
 
     # ros2_control using FakeSystem as hardware
-    ros2_controllers_path = "/workspace/parol6_moveit_config/config/ros2_controllers_tested_single_motor.yaml"
+    ros2_controllers_path = os.path.join(
+        get_package_share_directory("parol6_moveit_config"),
+        "config",
+        "ros2_controllers_tested_single_motor.yaml",
+    )
     
     ros2_control_node = Node(
         package="controller_manager",

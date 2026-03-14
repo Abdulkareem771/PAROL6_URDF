@@ -122,6 +122,15 @@ Behavior:
   - `parol6_moveit_config/config/ros2_controllers_tested_single_motor.yaml`
 - Existing methods (1-4) are unchanged.
 
+If GUI shows:
+```text
+file 'real_robot_tested_single_motor.launch.py' was not found in the share directory
+```
+rebuild in `parol6_dev` so installed launch files are refreshed:
+```bash
+docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6 parol6_hardware parol6_moveit_config"
+```
+
 ### Hardware Telemetry Protocol
 
 The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates with the Teensy over serial at 115200 baud.

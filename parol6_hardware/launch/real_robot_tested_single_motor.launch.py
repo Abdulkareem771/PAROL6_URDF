@@ -202,9 +202,13 @@ def generate_launch_description():
     # =========================================================================
     
     moveit_demo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            "/workspace/parol6_moveit_config/launch/demo_tested_single_motor.launch.py"
-        ),
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare("parol6_moveit_config"),
+                "launch",
+                "demo_tested_single_motor.launch.py"
+            ])
+        ]),
         launch_arguments={
             "use_sim_time": "false",
         }.items(),

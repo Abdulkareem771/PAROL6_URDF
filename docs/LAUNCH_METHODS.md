@@ -89,6 +89,12 @@ Use when you want the branch-locked real-hardware flow copied from `Tested_Worki
 What it starts:
 - `ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py`
 
+If GUI reports the launch file is missing from `install/.../share/...`, rebuild inside `parol6_dev`:
+
+```bash
+docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6 parol6_hardware parol6_moveit_config"
+```
+
 ## Method 5: Vision Bag Pipeline Only
 
 Use when you want vision nodes + rosbag + moveit_controller, while Gazebo/MoveIt are started separately.

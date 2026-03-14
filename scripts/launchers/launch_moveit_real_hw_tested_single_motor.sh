@@ -7,7 +7,7 @@ BAUD_RATE="${PAROL6_BAUD_RATE:-115200}"
 if [ -f /.dockerenv ]; then
     cd /workspace
     source install/setup.bash
-    ros2 launch /workspace/parol6_hardware/launch/real_robot_tested_single_motor.launch.py \
+    ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py \
         serial_port:="${SERIAL_PORT}" \
         baud_rate:="${BAUD_RATE}"
 else
