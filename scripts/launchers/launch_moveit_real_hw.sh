@@ -8,4 +8,5 @@ xhost +local:root >/dev/null 2>&1 || true
 xhost +local:docker >/dev/null 2>&1 || true
 ./start_container.sh
 
-docker exec -it parol6_dev bash -lc "cd /workspace && source install/setup.bash && ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false"
+#docker exec -it parol6_dev bash -lc "cd /workspace && source install/setup.bash && ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false"
+docker exec -it parol6_dev bash -lc "cd /workspace && source install/setup.bash && ros2 launch parol6_hardware real_robot.launch.py"
