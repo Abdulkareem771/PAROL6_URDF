@@ -10,6 +10,7 @@ Defines one launcher per operation mode. Each launcher is **Docker-aware** — i
 | `scripts/launchers/launch_moveit_with_gazebo.sh` | MoveIt planning into a running Gazebo world |
 | `scripts/launchers/launch_moveit_fake.sh` | MoveIt + RViz with fake controllers (no hardware) |
 | `scripts/launchers/launch_moveit_real_hw.sh` | MoveIt + RViz connected to the real Teensy hardware |
+| `scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh` | Legacy tested single-motor real hardware bringup copied from `Tested_Working_SingleMotor_Integration(Day4)` |
 
 ## How Launchers Work
 
@@ -102,6 +103,25 @@ Optional environment overrides:
 PAROL6_SERIAL_PORT=/dev/ttyACM1 PAROL6_BAUD_RATE=115200 ./scripts/launchers/launch_moveit_real_hw.sh
 ```
 
+## Method 5: Real Hardware (Tested Single-Motor Legacy)
+
+Use this if you need the exact launch behavior that was validated on real hardware in branch `Tested_Working_SingleMotor_Integration(Day4)`.
+
+```bash
+./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh
+```
+
+What it starts:
+- `ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py`
+
+Behavior:
+- This launch includes MoveIt/RViz internally, matching the tested branch layout.
+- It uses isolated copies:
+  - `parol6_hardware/launch/real_robot_tested_single_motor.launch.py`
+  - `parol6_moveit_config/launch/demo_tested_single_motor.launch.py`
+  - `parol6_moveit_config/config/ros2_controllers_tested_single_motor.yaml`
+- Existing methods (1-4) are unchanged.
+
 ### Hardware Telemetry Protocol
 
 The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates with the Teensy over serial at 115200 baud.
@@ -142,6 +162,12 @@ STALE_CMD
 
 ```bash
 ./scripts/launchers/launch_moveit_real_hw.sh
+```
+
+### Real Hardware + MoveIt (Tested Single-Motor Legacy)
+
+```bash
+./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh
 ```
 
 ### Fake MoveIt Only

@@ -65,6 +65,7 @@ The **ROS2 Launch** tab calls the `.sh` launcher scripts located in `scripts/lau
 | Fake | `launch_moveit_fake.sh` | RViz + fake controllers (no hardware) |
 | Simulation | `launch_gazebo_only.sh` + `launch_moveit_with_gazebo.sh` | Gazebo + MoveIt |
 | Real Hardware | `launch_moveit_real_hw.sh` | Teensy-in-the-loop via `parol6_hardware` |
+| Real Hardware (Tested Single-Motor Legacy) | `launch_moveit_real_hw_tested_single_motor.sh` | Branch-locked launch flow copied from `Tested_Working_SingleMotor_Integration(Day4)` for behavior comparison |
 
 The scripts are **Docker-aware**: when called from inside the container (as the GUI does), they execute `ros2 launch` natively. When called from the host, they use `docker exec`.
 

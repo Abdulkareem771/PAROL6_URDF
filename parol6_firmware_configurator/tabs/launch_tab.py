@@ -107,8 +107,9 @@ class LaunchTab(QWidget):
             "📋 <b>Method 1</b> Gazebo Only — load the 3D simulation world (no robot control).  "
             "<b>Method 2</b> Gazebo + MoveIt — full simulated robot you can plan and execute on.  "
             "<b>Method 3</b> Fake Hardware — RViz + fake joint states (no Teensy needed, for path planning).  "
-            "<b>Method 4</b> Real Hardware — MoveIt talks to the physical robot via USB serial. "
-            "<span style='color:#fab387;'>⚠️ Only use after flashing firmware, homing, and testing limit switches.</span>  "
+            "<b>Method 4</b> Real Hardware (Current) — hardware bringup first, then MoveIt.  "
+            "<b>Method 5</b> Real Hardware (Tested Single-Motor Legacy) — branch-locked bringup used in the verified single-motor branch.  "
+            "<span style='color:#fab387;'>⚠️ Only use real hardware methods after flashing firmware, homing, and testing limit switches.</span>  "
             "<b>☠️ Kill All</b> forcefully stops all running ROS 2 / Gazebo processes if something hangs."
         )
         hint.setTextFormat(Qt.TextFormat.RichText)
@@ -135,6 +136,7 @@ class LaunchTab(QWidget):
         self.mode_combo.addItem("Method 2: Gazebo AND MoveIt (Simulated)", "launch_moveit_with_gazebo.sh")
         self.mode_combo.addItem("Method 3: MoveIt Fake (Standalone RViz)", "launch_moveit_fake.sh")
         self.mode_combo.addItem("Method 4: MoveIt Real Hardware", "launch_moveit_real_hw.sh")
+        self.mode_combo.addItem("Method 5: MoveIt Real Hardware (Tested Single-Motor Legacy)", "launch_moveit_real_hw_tested_single_motor.sh")
         self.mode_combo.setMinimumWidth(300)
         cl.addWidget(QLabel("Target:"))
         cl.addWidget(self.mode_combo)

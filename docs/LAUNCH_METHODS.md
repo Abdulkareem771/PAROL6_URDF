@@ -8,6 +8,7 @@ This page defines one launcher per operation mode so each method can run alone.
 - `scripts/launchers/launch_moveit_with_gazebo.sh`
 - `scripts/launchers/launch_moveit_fake.sh`
 - `scripts/launchers/launch_moveit_real_hw.sh`
+- `scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh`
 - `scripts/launchers/launch_vision_bag_pipeline.sh`
 - `scripts/launchers/launch_all_vision_gazebo.sh`
 - `scripts/launchers/stop_all_vision_gazebo.sh`
@@ -76,6 +77,17 @@ What it starts:
 
 Prerequisite:
 - real hardware path/controller manager must be launched first (for example `start_real_robot.sh` or your real hardware launch pipeline).
+
+## Method 4B: Real Hardware (Tested Single-Motor Legacy)
+
+Use when you want the branch-locked real-hardware flow copied from `Tested_Working_SingleMotor_Integration(Day4)` for behavior comparison.
+
+```bash
+./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh
+```
+
+What it starts:
+- `ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py`
 
 ## Method 5: Vision Bag Pipeline Only
 
