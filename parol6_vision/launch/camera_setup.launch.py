@@ -83,10 +83,10 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Position: 0.3m forward, 0.45m up
-        # Quaternion: roll=90deg (yaw=0) → camera points forward (+X of base_link)
-        arguments=['--x', '0.3', '--y', '0.0', '--z', '0.45',
-                   '--qx', '0.7071', '--qy', '0.0', '--qz', '0.0', '--qw', '0.7071',
+        # Position: x=1.2m, y=0.0, z=0.65m
+        # Orientation: roll=-π/2, pitch=0, yaw=+π/2 (approx -1.5708, 0.0, 1.5708)
+        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
+                   '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '1.5708',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )

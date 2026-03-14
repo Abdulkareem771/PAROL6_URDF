@@ -1,0 +1,34 @@
+# WeldVision Tool Suite — Python Dependencies
+# ==============================================
+# Install with:
+#   pip install -r requirements.txt
+#
+# NOTE: Run inside the parol6_dev Docker container.
+# Source ROS 2 Humble BEFORE installing if you need ROS features:
+#   source /opt/ros/humble/setup.bash
+
+# ── Core (required by ALL tools) ──────────────────────────────────────────────
+PySide6                  # Next-gen GUI framework for all new tools
+opencv-python            # Image loading, drawing, HSV masking
+# NumPy: pin to <2 to avoid cv_bridge ABI incompatibility
+numpy<2
+
+# ── ML Inference ──────────────────────────────────────────────────────────────
+# YOLO Inspector, Mask Pipeline Tester, Batch YOLO Exporter,
+# Annotation Studio, Pipeline Studio, Pipeline Prototyper
+ultralytics              # YOLO v8/v11 detection + segmentation
+
+# ── ResUNet / Seam Inspector ───────────────────────────────────────────────────
+torch                    # ResUNet model inference
+torchvision              # Dataset transforms (needed by torch ecosystem)
+scikit-image             # skeletonize (optional — tool falls back to OpenCV)
+
+# ── Legacy Tools ──────────────────────────────────────────────────────────────
+matplotlib               # 3-panel export in ResUNet Tester
+
+# ── ROS 2 (optional — tools run offline without this) ─────────────────────────
+# rclpy and cv_bridge come from ROS 2 Humble, not pip.
+# Install via:
+#   sudo apt install ros-humble-cv-bridge
+# Then source:
+#   source /opt/ros/humble/setup.bash

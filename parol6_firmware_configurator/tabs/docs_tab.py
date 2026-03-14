@@ -256,6 +256,7 @@ Watch for unexpected direction — if a joint moves <b>away</b> from the switch,
 <tr><td>Fake Hardware</td><td>launch_moveit_fake.sh</td><td>RViz planning without any robot</td></tr>
 <tr style='background:#252535;'><td>Simulation</td><td>launch_moveit_with_gazebo.sh</td><td>Gazebo physics simulation</td></tr>
 <tr><td>Real Hardware</td><td>launch_moveit_real_hw.sh</td><td>Physical robot via Teensy USB</td></tr>
+<tr style='background:#252535;'><td>Real Hardware (Tested Single-Motor Legacy)</td><td>launch_moveit_real_hw_tested_single_motor.sh</td><td>Branch-locked verified bringup from Tested_Working_SingleMotor_Integration(Day4)</td></tr>
 </table>
 
 <h3 style='color:#89b4fa;'>Before running Real Hardware mode</h3>

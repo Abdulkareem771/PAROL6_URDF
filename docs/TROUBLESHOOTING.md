@@ -158,6 +158,46 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 
 ## ⚙️ Build & Environment Issues
 
+### Issue: `colcon build` Fails With `Permission denied` in `build/`, `install/`, or `log/`
+
+**Symptoms:**
+```bash
+PermissionError: [Errno 13] Permission denied: '/home/.../build/...'
+PermissionError: [Errno 13] Permission denied: '/home/.../install/...'
+```
+
+**Cause:** Generated ROS workspace folders are owned by `root` from a previous sudo/container-side write.
+
+**Fix (host terminal):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+sudo chown -R $USER:$USER build install log
+ls -ld build install log
+```
+
+Expected owner/group should be your user (for example `kareem kareem`).
+
+### Issue: CMake Cache Points to Wrong Workspace Path (`/workspace/...` vs host path)
+
+**Symptoms:**
+```bash
+CMake Error: The current CMakeCache.txt directory ... is different than ...
+The build time path "/workspace/install/..." doesn't exist
+```
+
+**Cause:** Stale CMake cache generated in a different environment (host vs container).
+
+**Safe Fix (generated artifacts only):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+rm -rf build install log
+```
+
+Then rebuild in the environment you actually run in (recommended: inside `parol6_dev`):
+```bash
+docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6 parol6_hardware parol6_moveit_config"
+```
+
 ---
 
 ## 🎯 Gazebo + MoveIt Execution Issues

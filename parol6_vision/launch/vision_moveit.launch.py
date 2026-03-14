@@ -29,8 +29,6 @@ from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
-from ament_index_python.packages import get_package_share_directory
-from moveit_configs_utils import MoveItConfigsBuilder
 
 
 def generate_launch_description():
@@ -47,33 +45,6 @@ def generate_launch_description():
         description='true = process one camera frame then stop detector subscription'
     )
     single_frame_detection = LaunchConfiguration('single_frame_detection')
-
-    # ── MoveIt Config ──────────────────────────────────────────────────
-    pkg_parol6            = get_package_share_directory('parol6')
-    pkg_moveit            = get_package_share_directory('parol6_moveit_config')
-    pkg_vision            = get_package_share_directory('parol6_vision')
-
-    moveit_config = (
-        MoveItConfigsBuilder("parol6")
-        .robot_description(file_path=os.path.join(pkg_parol6, 'urdf', 'PAROL6.urdf'))
-        .robot_description_semantic(file_path=os.path.join(pkg_moveit, 'config', 'parol6.srdf'))
-        .trajectory_execution(file_path=os.path.join(pkg_moveit, 'config', 'moveit_controllers.yaml'))
-        .planning_pipelines(pipelines=['ompl'])
-        .to_moveit_configs()
-    )
-
-    # =========================================================================================
-    # HARDWARE INJECTION: Connect the real PAROL6System plugin to the flashed ESP32.
-    # The PAROL6.urdf hardcodes the IgnitionSystem, which crashes if Gazebo isn't running.
-    # We replace it with PAROL6System, and point it to /dev/ttyUSB0.
-    # =========================================================================================
-    moveit_config.robot_description['robot_description'] = \
-        moveit_config.robot_description['robot_description'].replace(
-            'ign_ros2_control/IgnitionSystem',
-            'parol6_hardware/PAROL6System</plugin>\n      <param name="serial_port">/dev/ttyUSB0</param>\n      <param name="baud_rate">115200</param><plugin>'
-        )
-
-    ros2_controllers_yaml = os.path.join(pkg_moveit, 'config', 'ros2_controllers.yaml')
 
     # ── 1. Bag Player (conditional) ────────────────────────────────────
     bag_path = '/workspace/rosbag2_2026_01_26-23_26_59'

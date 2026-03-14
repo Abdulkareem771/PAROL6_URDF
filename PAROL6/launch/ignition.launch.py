@@ -61,7 +61,7 @@ def generate_launch_description():
         executable='create',
         arguments=[
             '-name', 'parol6',
-            '-topic', 'robot_description',
+            '-file', urdf_path,
             '-z', '0.0',
             '-J', 'joint_L1', '0.0',
             '-J', 'joint_L2', '-1.0',

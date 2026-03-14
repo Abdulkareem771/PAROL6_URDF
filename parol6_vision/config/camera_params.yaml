@@ -24,12 +24,12 @@
     # UPDATE THESE VALUES AFTER CALIBRATION!
     camera_to_base_transform:
       translation:
-        x: 0.3   # meters (Reverted)
+        x: 1.2   # meters
         y: 0.0
-        z: 0.45  # meters
-      rotation:  # Quaternion [x, y, z, w]
-        x: 0.5
-        y: 0.5
+        z: 0.65  # meters
+      rotation:  # Quaternion [x, y, z, w] for roll=-90, pitch=0, yaw=90
+        x: -0.5
+        y: -0.5
         z: 0.5
         w: 0.5
 

@@ -21,7 +21,7 @@ source ultralytics_cpu_env/bin/activate
 1. **Install the CPU-only version of PyTorch**: This step is crucial for preventing the installation of CUDA dependencies. A common command for the CPU-only version is:
 
 ```bash
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip3 install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
 ```
 
 This command directs `pip3` to the PyTorch CPU-only package index.

@@ -116,3 +116,30 @@ For Gazebo validation, MoveIt must run with external controllers:
 ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false
 ```
 Using `use_fake_hardware:=true` creates a separate controller manager and breaks Gazebo execution ownership.
+
+## Log Tailing (One-Liners)
+
+Watch all three logs simultaneously after launching:
+```bash
+LATEST=$(ls -1dt ~/Desktop/PAROL6_URDF/logs/launchers/* | head -n1)
+tail -f "$LATEST/gazebo.log" "$LATEST/moveit.log" "$LATEST/vision.log"
+```
+
+Filter moveit_controller events only:
+```bash
+LATEST=$(ls -1dt ~/Desktop/PAROL6_URDF/logs/launchers/* | head -n1)
+grep -E "STARTING WELDING|Approach|Execution finished|Execution worker exception|MoveIt Error|fraction" "$LATEST/vision.log"
+```
+
+Expected success output:
+```
+STARTING WELDING SEQUENCE
+Phase 1: Approach
+Approach move succeeded
+Phase 2: Planning Weld Trajectory
+Attempt 1: Step=2.0mm, Threshold=95.0%
+Success! Planned fraction: 1.00
+Phase 3: Executing Weld
+Sequence Complete
+Execution finished: success=True
+```
