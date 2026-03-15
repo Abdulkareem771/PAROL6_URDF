@@ -9,15 +9,12 @@ CEXPAND_PX = 8
 # Paths
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
 SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "13.jpg"
-OUTPUT_DIR = PROJECT_DIR / "data" / "Phase_2_first_mode" / "model_v2"
+
 
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
-
-#OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # -----------------------------
 # Load Model
