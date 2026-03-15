@@ -22,7 +22,7 @@ PROJECT_DIR = Path(__file__).parent.parent
 #DATA_DIR = PROJECT_DIR / "data" / "presentation_samples"
 DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
 #SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
-OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples_Results" / "model_v2"
+OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples_Results"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
