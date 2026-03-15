@@ -1,0 +1,78 @@
+{
+  "projects": [
+    {
+      "id": "parol6_firmware",
+      "name": "PAROL6 Main Firmware",
+      "default_serial_port": "/dev/ttyACM0",
+      "default_baud": 115200,
+      "flash": {
+        "project_dir": "parol6_firmware",
+        "environments": ["teensy41", "teensy41_j6_test", "debug_stage1", "debug_stage2", "debug_stage3", "debug_stage4"]
+      },
+      "ros2": {
+        "kill_command": ["bash", "-lc", "pkill -9 -f 'rviz2|ign|gazebo|ruby|move_group|parameter_bridge|ros2|controller_manager'"],
+        "launch_actions": [
+        {
+          "name": "Gazebo Only",
+          "description": "Load the simulation world only.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "./scripts/launchers/launch_gazebo_only.sh"]
+        },
+        {
+          "name": "MoveIt + Gazebo",
+          "description": "Start the simulated robot with Gazebo and MoveIt.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "./scripts/launchers/launch_moveit_with_gazebo.sh"]
+        },
+        {
+          "name": "MoveIt Fake",
+          "description": "Starts the fake-hardware MoveIt stack through the existing launcher.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "./scripts/launchers/launch_moveit_fake.sh"]
+        },
+        {
+          "name": "MoveIt Real",
+          "description": "Starts the real-robot stack through the existing launcher.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "./scripts/launchers/launch_moveit_real_hw.sh"],
+          "requires_serial": true
+        },
+        {
+          "name": "MoveIt Real Legacy",
+          "description": "Runs the tested single-motor legacy real hardware bringup.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh"]
+        },
+        {
+          "name": "Firmware Configurator",
+          "description": "Launches the existing configurator from this workspace if you need the full configuration UI.",
+          "cwd": ".",
+          "command": ["bash", "-lc", "python3 parol6_firmware_configurator/main.py"]
+        }
+        ],
+        "auto_test": {
+          "script": "scripts/launchers/launch_auto_test.sh",
+          "shapes": ["Straight", "Curve", "Circle", "ZigZag", "Live Camera (No Inject)"]
+        }
+      }
+    },
+    {
+      "id": "parol6_experimental_firmware",
+      "name": "PAROL6 Experimental Firmware",
+      "default_serial_port": "/dev/ttyACM0",
+      "default_baud": 115200,
+      "flash": {
+        "project_dir": "parol6_experimental_firmware",
+        "environments": ["teensy41"]
+      },
+      "ros2": {
+        "kill_command": ["bash", "-lc", "pkill -9 -f 'rviz2|ign|gazebo|move_group|ros2'"],
+        "launch_actions": [],
+        "auto_test": {
+          "script": "scripts/launchers/launch_auto_test.sh",
+          "shapes": ["Straight", "Curve", "Circle", "ZigZag", "Live Camera (No Inject)"]
+        }
+      }
+    }
+  ]
+}
