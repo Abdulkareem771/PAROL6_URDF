@@ -146,24 +146,60 @@ class SerialWorker(QThread):
 
         seq_str, data_str = match.group(1), match.group(2)
         nums = [float(x) for x in data_str.split(",") if x]
-        if len(nums) < 12:
+        n = len(nums)
+
+        if n < 12:
             return
 
-        has_pwm = len(nums) >= 18
-        lim_idx = 18 if has_pwm else 12
-        has_lim_state = len(nums) > lim_idx
-        has_state_byte = len(nums) > lim_idx + 1
+        # Detect ACK format:
+        #
+        # FORMAT A — parol6_firmware (flat):
+        #   <ACK,seq, p0,p1,p2,p3,p4,p5, v0,v1,v2,v3,v4,v5, [pwm0..5,] [lim,] [state,] [isr]>
+        #   n >= 12, positions at [0:6], velocities at [6:12]
+        #
+        # FORMAT B — realtime_servo_blackpill (interleaved):
+        #   <ACK,seq, p0,v0, p1,v1, p2,v2, p3,v3, p4,v4, p5,v5>
+        #   Always exactly 12 values, but order is p,v,p,v,...
+        #
+        # Heuristic: if all 12 values arrive and the even[6:12] values look like velocities
+        # (all smaller than the odd[0:6] position spread), both formats look the same with 12 values.
+        # We distinguish by checking if this is the blackpill project via a registry hint —
+        # instead we do it structurally: FORMAT B never has lim_state/state_byte trailing fields,
+        # and its velocity commands (velocity_command in the JointState) are typically small.
+        # Since FORMAT B always has exactly 12 values, and FORMAT A typically has 14 (12+lim+state),
+        # use n == 12 as the interleaved indicator when no extra fields follow.
+        #
+        # In practice: n == 12 → try interleaved first (blackpill) OR flat with no state fields.
+        # n >= 13 → flat (parol6_firmware style).
 
-        pkt = {
-            "seq": int(seq_str),
-            "pos": nums[0:6],
-            "vel": nums[6:12],
-            "pwm": nums[12:18] if has_pwm else [0.0] * 6,
-            "lim_state": int(nums[lim_idx]) if has_lim_state else None,
-            "state_byte": int(nums[lim_idx + 1]) if has_state_byte else None,
-        }
-        if len(nums) > lim_idx + 2:
-            pkt["isr_us"] = nums[-1]
+        if n == 12:
+            # Ambiguous — could be flat (no trailing fields) or interleaved.
+            # Use the interleaved parse which is the more common STM32 case.
+            pos = [nums[i * 2]     for i in range(6)]
+            vel = [nums[i * 2 + 1] for i in range(6)]
+            pkt = {
+                "seq":        int(seq_str),
+                "pos":        pos,
+                "vel":        vel,
+                "pwm":        [0.0] * 6,
+                "lim_state":  None,
+                "state_byte": None,
+            }
+        else:
+            # FORMAT A — flat layout (parol6_firmware)
+            has_pwm     = n >= 18
+            lim_idx     = 18 if has_pwm else 12
+            pkt = {
+                "seq":        int(seq_str),
+                "pos":        nums[0:6],
+                "vel":        nums[6:12],
+                "pwm":        nums[12:18] if has_pwm else [0.0] * 6,
+                "lim_state":  int(nums[lim_idx])     if n > lim_idx     else None,
+                "state_byte": int(nums[lim_idx + 1]) if n > lim_idx + 1 else None,
+            }
+            if n > lim_idx + 2:
+                pkt["isr_us"] = nums[-1]
+
         self.telemetry.emit(pkt)
 
     def send(self, text: str) -> None:
