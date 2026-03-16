@@ -27,8 +27,8 @@
 // We select 6 pins across 6 different submodules:
 const int STEP_PINS[NUM_MOTORS] = {
   2,   // J1 → FlexPWM4.2A
-  6,   // J2 → FlexPWM2.2A
-  4,   // J3 → FlexPWM1.3B
+  4,   // J2 → FlexPWM2.2A
+  6,   // J3 → FlexPWM1.3B
   8,   // J4 → FlexPWM1.3A
   7,   // J5 → FlexPWM2.0A
   5    // J6 → FlexPWM2.1A
@@ -37,7 +37,7 @@ const int STEP_PINS[NUM_MOTORS] = {
 // Direction pins — simple digital outputs
 const int DIR_PINS[NUM_MOTORS] = {
   24,  // J1
-  25,  // J2
+  35,  // J2
   26,  // J3
   27,  // J4
   34,  // J5
@@ -47,7 +47,7 @@ const int DIR_PINS[NUM_MOTORS] = {
 // Encoder PWM input pins (MT6816) — all support interrupts on Teensy
 const int ENCODER_PINS[NUM_MOTORS] = {
   14,  // J1
-  15,  // J2
+  12,  // J2
   16,  // J3
   17,  // J4
   19,  // J5
@@ -57,7 +57,7 @@ const int ENCODER_PINS[NUM_MOTORS] = {
 // Encoder enable flags (set true when encoder is physically connected)
 const bool ENCODER_ENABLED[NUM_MOTORS] = {
   false,   // J1: Encoder connected
-  false,   // J2: Encoder connected
+  true,   // J2: Encoder connected
   false,  // J3: Not connected yet
   false,  // J4: Not connected yet
   true,  // J5: Not connected yet
@@ -98,7 +98,7 @@ const int MICROSTEPS[NUM_MOTORS] = {
 // Gearbox ratios (motor revolutions per joint revolution)
 const float GEAR_RATIOS[NUM_MOTORS] = {
   20.0,  // J1: 20:1 gearbox
-  1.0,   // J2: Direct drive
+  20.0,   // J2: Direct drive
   1.0,   // J3: Direct drive
   1.0,   // J4: Direct drive
   10.0,  // J5: Direct drive
@@ -109,7 +109,7 @@ const float GEAR_RATIOS[NUM_MOTORS] = {
 // If encoder shows position going OPPOSITE to motor step direction, set to -1
 const int MOTOR_DIR_SIGN[NUM_MOTORS] = {
   1,   // J1: Normal
-  -1,  // J2: Inverted (encoder reads opposite to step direction)
+  1,  // J2: Inverted (encoder reads opposite to step direction)
   1,   // J3: TBD
   1,   // J4: TBD
   -1,   // J5: TBD
@@ -168,8 +168,8 @@ const int ENCODER_DIR_SIGN[NUM_MOTORS] = {
 
 // Servo gains (position + velocity feedforward)
 const float Kp[NUM_MOTORS] = {
-  5.0,  // J1: Higher Kp for faster final approach
-  5.0,  // J2: Higher Kp for faster final approach
+  2.0,  // J1: Higher Kp for faster final approach
+  2.0,  // J2: Higher Kp for faster final approach
   2.0,  // J3
   2.0,  // J4
   2.0,  // J5

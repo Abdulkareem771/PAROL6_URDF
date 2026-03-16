@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 #include <cinttypes>
+#include <clocale>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -50,6 +51,12 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   }
 
   RCLCPP_INFO(logger_, "🚀 Day 1: SIL Validation - Initializing PAROL6 Hardware Interface");
+
+  // Force C locale for numeric formatting — prevents commas in %.3f output
+  // on systems with Arabic/Turkish/European locales. This was the communication
+  // bug: commas as decimal separators corrupt the serial protocol since commas
+  // are also field delimiters.
+  std::setlocale(LC_NUMERIC, "C");
 
   // Read parameters
   try {
