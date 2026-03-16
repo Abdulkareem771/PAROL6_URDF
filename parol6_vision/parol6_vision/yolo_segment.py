@@ -8,7 +8,7 @@ to identify two workpiece objects, computes their expanded-mask intersection
 (the weld seam region), and publishes:
 
   * A **debug image** overlaying all intermediate contours on the raw frame.
-  * An **annotated image** showing only the filled intersection contour (rgb8).
+  * An **annotated image** showing only the filled intersection contour (bgr8).
   * The **centroid** of the intersection region as a PointStamped message.
 
 ================================================================================
@@ -50,7 +50,7 @@ SUBSCRIBED TOPICS
 PUBLISHED TOPICS
 ================================================================================
   /yolo_segment/debug_image      (sensor_msgs/Image)         – full debug overlay
-  /yolo_segment/annotated_image  (sensor_msgs/Image, rgb8)   – intersection only
+  /yolo_segment/annotated_image  (sensor_msgs/Image, bgr8)   – intersection only
   /yolo_segment/seam_centroid    (geometry_msgs/PointStamped) – seam centroid px
 
 ================================================================================
@@ -96,7 +96,7 @@ class YoloSegmentNode(Node):
 
     Published Topics:
         /yolo_segment/debug_image      (sensor_msgs/Image): Full debug overlay.
-        /yolo_segment/annotated_image  (sensor_msgs/Image): Intersection-only overlay (rgb8).
+        /yolo_segment/annotated_image  (sensor_msgs/Image): Intersection-only overlay (bgr8).
         /yolo_segment/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
 
     Parameters:
@@ -202,10 +202,14 @@ class YoloSegmentNode(Node):
 
         # Run the segmentation pipeline
         annotated_img, debug_img, centroid_px = self._run_pipeline(img)
-
+        
+        # Publish annotated image (always)
+        ann_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='bgr8')
+        """
         # Publish annotated image (always) – convert BGR→RGB before encoding
         annotated_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
         ann_msg = self.bridge.cv2_to_imgmsg(annotated_rgb, encoding='rgb8')
+        """
         ann_msg.header = msg.header
         self.annotated_pub.publish(ann_msg)
 
@@ -247,7 +251,7 @@ class YoloSegmentNode(Node):
             img: OpenCV BGR image (H×W×3, uint8).
 
         Returns:
-            annotated_img  – BGR image with filled intersection contour only (converted to RGB before publishing).
+            annotated_img  – BGR image with filled intersection contour only.
             debug_img      – BGR image with all intermediate overlays, or None
                              if publish_debug is False.
             centroid_px    – (cx, cy) tuple in pixel coords, or None if not found.
