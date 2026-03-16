@@ -18,8 +18,8 @@ launch:
 
 - arg:
     name: "reg_method"
-    default: "default"
-
+    default: "cpu"
+    
 - node:
     pkg: "kinect2_bridge"
     exec: "kinect2_bridge_node"
