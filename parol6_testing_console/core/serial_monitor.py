@@ -91,7 +91,13 @@ class SerialWorker(QThread):
                 self.error_msg.emit("pyserial not installed — run: pip install pyserial")
                 return
             try:
-                self._ser = serial.Serial(self._port, self._baud, timeout=0.5)
+                self._ser = serial.Serial()
+                self._ser.port = self._port
+                self._ser.baudrate = self._baud
+                self._ser.timeout = 0.5
+                self._ser.dtr = True  # Required for STM32 USB CDC to start transmitting
+                self._ser.rts = True
+                self._ser.open()
                 self.connected.emit(True)
             except Exception as exc:
                 self.error_msg.emit(f"Cannot open {self._port}: {exc}")

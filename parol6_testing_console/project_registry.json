@@ -82,7 +82,7 @@
       "serial": {
         "default_port": "/dev/ttyACM0",
         "default_baud": 115200,
-        "macros": ["<ENABLE>"]
+        "macros": ["<ENABLE>", "<DISABLE>", "<HOME>", "<RESET>"]
       },
       "flash": {
         "project_dir": "../PAROL6/firmware/realtime_servo_blackpill",
@@ -97,7 +97,20 @@
         "supports_dfu_reboot": false
       },
       "ros2": {
-        "launch_actions": []
+        "launch_actions": [
+          {
+            "name": "Launch Fake Hardware (RViz)",
+            "command": "ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=true",
+            "cwd": "../",
+            "requires_serial": false
+          },
+          {
+            "name": "Launch Real Hardware (MoveIt)",
+            "command": "ros2 launch parol6_hardware real_robot.launch.py use_fake_hardware:=false",
+            "cwd": "../",
+            "requires_serial": true
+          }
+        ]
       }
     }
   ]

@@ -5,7 +5,8 @@ from collections import deque
 
 import numpy as np
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QSpinBox, QVBoxLayout, QWidget
+from core.gui_theme import QPushButton
 
 try:
     import pyqtgraph as pg

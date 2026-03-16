@@ -12,44 +12,46 @@
 
 ---
 
-## Hardware Notes
+## ⚡ Quick Reference: Master Pin Map
 
+This consolidated table shows all critical physical connections for the robot. 
+*Note: The teammate's firmware uses hardware PWM Input mode for encoders (zero CPU overhead).*
+
+| Joint | STEP Pin | DIR Pin | PWM Encoder In | Limit Switch | Timer (Encoder) |
+|-------|----------|---------|----------------|--------------|-----------------|
+| **J1**| PA7      | PB10    | PA8            | PA1          | TIM1 (AF1)      |
+| **J2**| PA9      | PB12    | PA15           | PA3          | TIM2 (AF1)      |
+| **J3**| PB0      | PB13    | PA6            | PB4          | TIM3 (AF2)      |
+| **J4**| PB1      | PB14    | PB6            | —            | TIM4 (AF2)      |
+| **J5**| PB8      | PB15    | PA0            | —            | TIM5 (AF2)      |
+| **J6**| PB9      | PA5     | PA2            | —            | TIM9 (AF3)      |
+
+### Critical Hardware Notes
 - **PA10 must NOT be connected** — BlackPill hardware errata. The pull-up on PA10 blocks DFU enumeration if connected.
 - **PC13** = onboard LED (active LOW). Used as boot indicator in firmware.
 - **BOOT0 pin** — needs to be held HIGH at power-on/reset to enter DFU bootloader.
 
-### Encoder Pin Assignments (PWM Input Mode)
+---
 
-The teammate's `realtime_servo_blackpill` firmware uses hardware PWM Input mode — zero CPU overhead for encoder capture.
+## 🧪 Testing Verification Protocol
 
-| Joint | Timer | Pin | Alt Function |
-|-------|-------|-----|-------------|
-| J1 | TIM1 | PA8 | AF1 |
-| J2 | TIM2 | PA15 | AF1 |
-| J3 | TIM3 | PA6 | AF2 |
-| J4 | TIM4 | PB6 | AF2 |
-| J5 | TIM5 | PA0 | AF2 |
-| J6 | TIM9 | PA2 | AF3 |
-| Control ISR | TIM11 | — | 500 Hz |
+When validating a newly flashed board or checking hardware connections, follow these steps using the Console tabs:
 
-### Step / Direction Pins
-
-| Joint | STEP | DIR |
-|-------|------|-----|
-| J1 | PA7 | PB10 |
-| J2 | PA9 | PB12 |
-| J3 | PB0 | PB13 |
-| J4 | PB1 | PB14 |
-| J5 | PB8 | PB15 |
-| J6 | PB9 | PA5 |
-
-### Proximity Sensors (Homing)
-
-| Sensor | Pin |
-|--------|-----|
-| S1 | PA1 |
-| S2 | PA3 |
-| S3 | PB4 |
+1. **Verify Serial Comms (Serial Tab)**
+   - Click `⚡ Connect`. You should immediately see `<ACK,...>` packets streaming.
+   - If you see `ү>`, the flash failed or the float formatter is missing (recompile teammate firmware).
+2. **Verify Encoders (Oscilloscope Tab)**
+   - Manually move the physical robot joints by hand.
+   - Watch the `Joint Positions` plot. The lines should move smoothly. If a line flatlines, check the **PWM Encoder In** pin connection for that joint.
+3. **Verify Motors (Jog Tab)**
+   - Click `ON` to enable the motors.
+   - Set Jog Speed to 10 deg/s.
+   - Click `+ ▶` for Joint 1. The motor should step smoothly. If it vibrates but doesn't rotate, check **DIR Pin**. If it does nothing, check **STEP Pin** or power.
+4. **Serial Macros Available:**
+   - `<ENABLE>`: Energizes the stepper coils.
+   - `<DISABLE>`: Cuts power to steppers (free-drive).
+   - `<HOME>`: Triggers the homing sequence (moves until limits hit).
+   - `<RESET>`: Soft-resets the robot state.
 
 ---
 

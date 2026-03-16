@@ -447,24 +447,53 @@ return_type PAROL6System::read(
     last_received_seq_ = received_seq;
     packets_received_++;
     
-    // REAL FEEDBACK: (Toggle to true when moving to physical Actuators in Phase 4)
+    // REAL FEEDBACK: Dual-format parser
     const bool USE_REAL_FEEDBACK = true; 
     if (USE_REAL_FEEDBACK) {
-      // Kinematic sign correction loaded from xacro ros_invert params in on_init()
-
       // URDF joint position limits — used to reject garbage fake-encoder values
       const double joint_lower[6] = {-3.14159, -0.98,   -2.0, -3.14159, -3.14159, -3.14159};
       const double joint_upper[6] = { 3.14159,  1.0,    1.3,  3.14159,  3.14159,  3.14159};
 
-      // Parse and sign-correct all 6 joints
-      // Firmware sends grouped: <ACK, SEQ, p0,p1,p2,p3,p4,p5, v0,v1,v2,v3,v4,v5>
-      // tokens indices:          [0]   [1]  [2][3][4][5][6][7] [8][9][10][11][12][13]
       double candidate_pos[6], candidate_vel[6];
+
+      // Detect packet format by token count:
+      //
+      //   FORMAT A — realtime_servo_blackpill (interleaved):
+      //     <ACK, SEQ, p0,v0, p1,v1, p2,v2, p3,v3, p4,v4, p5,v5>
+      //     tokens: [0]=ACK [1]=SEQ [2]=p0 [3]=v0 [4]=p1 [5]=v1 ... [12]=p5 [13]=v5   → size == 14
+      //
+      //   FORMAT B — parol6_firmware / Teensy (flat, grouped):
+      //     <ACK, SEQ, p0,p1,p2,p3,p4,p5, v0,v1,v2,v3,v4,v5 [,lim_state [,state_byte]]>
+      //     tokens: [0]=ACK [1]=SEQ [2..7]=pos [8..13]=vel [14]=lim [15]=state  → size >= 14
+      //
+      // Heuristic to distinguish them when both have 14 tokens:
+      //   In Format A (interleaved), tokens[3] is v0 (a velocity, typically small << positions).
+      //   In Format B (flat), tokens[3] is p1 (a position, similar magnitude to tokens[2]).
+      //   We detect Format A when tokens.size() == 14 (BlackPill never sends trailing lim/state).
+      //   We assume Format B when tokens.size() > 14.
+
+      const bool is_interleaved = (tokens.size() == 14);
+
+      if (is_interleaved) {
+        // FORMAT A — interleaved: p0,v0, p1,v1, ...
+        // tokens[2 + i*2] = pos_i,  tokens[3 + i*2] = vel_i
+        for (size_t i = 0; i < 6; ++i) {
+          candidate_pos[i] = std::stod(tokens[2 + i * 2]) * dir_signs_[i];
+          candidate_vel[i] = std::stod(tokens[3 + i * 2]) * dir_signs_[i];
+        }
+        RCLCPP_DEBUG(logger_, "📦 Parsing interleaved BlackPill ACK (14 tokens)");
+      } else {
+        // FORMAT B — flat: p0..p5 then v0..v5
+        // tokens[2 + i] = pos_i,  tokens[8 + i] = vel_i
+        for (size_t i = 0; i < 6; ++i) {
+          candidate_pos[i] = std::stod(tokens[2 + i]) * dir_signs_[i];
+          candidate_vel[i] = std::stod(tokens[8 + i]) * dir_signs_[i];
+        }
+        RCLCPP_DEBUG(logger_, "📦 Parsing flat Teensy ACK (%zu tokens)", tokens.size());
+      }
+
       bool all_valid = true;
       for (size_t i = 0; i < 6; ++i) {
-        candidate_pos[i] = std::stod(tokens[2 + i]) * dir_signs_[i];  // tokens[2..7]
-        candidate_vel[i] = std::stod(tokens[8 + i]) * dir_signs_[i];  // tokens[8..13]
-        // Reject packets where ANY joint is outside its URDF limits + 10% tolerance
         double range = joint_upper[i] - joint_lower[i];
         if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||
             candidate_pos[i] > joint_upper[i] + 0.1 * range) {

@@ -11,7 +11,7 @@ class DocsTab(QWidget):
         self.browser = QTextBrowser()
         self.browser.setOpenExternalLinks(True)
         # Use a distinct background to look like a document viewer
-        self.browser.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4; font-size: 14px; padding: 10px;")
+        self.browser.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4; font-size: 13.5px; padding: 12px;")
         layout.addWidget(self.browser)
         
         self._load_docs()
@@ -24,7 +24,8 @@ class DocsTab(QWidget):
             self.browser.setMarkdown("# Documentation\\n\\nNo `docs_path` provided for this project in the registry.")
             return
             
-        full_path = self._main_window.resolve_path(docs_path)
+        console_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+        full_path = os.path.normpath(os.path.join(console_dir, docs_path))
         
         if not os.path.exists(full_path):
             self.browser.setMarkdown(f"# Documentation Error\\n\\nFile not found: `{full_path}`")

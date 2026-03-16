@@ -63,7 +63,7 @@ static const bool ENCODER_ENABLED[NUM_MOTORS] = {
   false,  // J3
   false,  // J4
   true,   // J5
-  true    // J6
+  false    // J6
 };
 
 // ============================================================================

@@ -2,10 +2,11 @@ import math
 import time
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
-    QPushButton, QCheckBox, QLabel, QGroupBox, QFrame
+    QCheckBox, QLabel, QGroupBox, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QTextCursor, QKeyEvent
+from core.gui_theme import QPushButton
 
 # Known firmware state descriptions
 _STATE_LABELS = {
@@ -179,27 +180,26 @@ class SerialTab(QWidget):
         if filt and filt.lower() not in line.lower():
             return
 
-        # Suppress ACK spam from flooding the terminal if filter is empty
-        if not filt and line.startswith("<ACK,"):
-            return
-
         text = ""
         if self._show_timestamps:
             ms = int((time.time() % 1.0) * 1000)
             t_str = time.strftime(f"%H:%M:%S.{ms:03d}")
             text += f"<span style='color:#6c7086;'>[{t_str}]</span> "
 
+        import html
+        escaped_line = html.escape(line)
+        
         # Colour known firmware messages
         if "FAULT" in line or "ESTOP" in line:
-            text += f"<span style='color:#f38ba8;'>{line}</span>"
+            text += f"<span style='color:#f38ba8;'>{escaped_line}</span>"
         elif "INIT_OK" in line or "HOMING_DONE" in line:
-            text += f"<span style='color:#a6e3a1;'>{line}</span>"
+            text += f"<span style='color:#a6e3a1;'>{escaped_line}</span>"
         elif "HOMING" in line or "REBOOTING" in line:
-            text += f"<span style='color:#89dceb;'>{line}</span>"
+            text += f"<span style='color:#89dceb;'>{escaped_line}</span>"
         elif "STALE" in line or "WARN" in line:
-            text += f"<span style='color:#f9e2af;'>{line}</span>"
+            text += f"<span style='color:#f9e2af;'>{escaped_line}</span>"
         else:
-            text += line
+            text += escaped_line
 
         self._append(text)
 

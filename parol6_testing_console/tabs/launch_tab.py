@@ -5,12 +5,13 @@ Allows launching RViz, Gazebo, or Real Hardware modes directly from the console.
 import os
 import subprocess
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTextEdit, QGroupBox, QComboBox, QMessageBox, QLineEdit, QSlider
 )
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
 from PyQt6.QtGui import QFont
 import serial.tools.list_ports
+from core.gui_theme import QPushButton
 
 class LaunchWorker(QThread):
     """Runs a bash script in a background thread and emits its output."""
@@ -148,13 +149,13 @@ class LaunchTab(QWidget):
         cl.addWidget(self.mode_combo)
         
         self.launch_btn = QPushButton("🚀 Launch")
-        self.launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
-        self.launch_btn.clicked.connect(self._toggle_launch)
+        self.launch_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.launch_btn.clicked.connect(self._toggle_launch) # Changed from _run_launch to _toggle_launch to match original logic
         cl.addWidget(self.launch_btn)
 
         self.kill_btn = QPushButton("☠️ Kill All")
-        self.kill_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
-        self.kill_btn.clicked.connect(self._kill_all_nodes)
+        self.kill_btn.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
+        self.kill_btn.clicked.connect(self._kill_all_nodes) # Changed from _kill_all to _kill_all_nodes to match original logic
         self.kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
         cl.addWidget(self.kill_btn)
         
@@ -167,8 +168,7 @@ class LaunchTab(QWidget):
         cl.addWidget(self.test_shape_combo)
         
         self.test_btn = QPushButton("▶️ Run Auto-Test")
-        self.test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
-        self.test_btn.clicked.connect(self._run_auto_test)
+        self.test_btn.clicked.connect(self._run_auto_test) # Kept original connection
         self.test_btn.setToolTip("Starts the moveit_controller, injects the selected path shape, and executes it.")
         cl.addWidget(self.test_btn)
         
@@ -219,8 +219,8 @@ class LaunchTab(QWidget):
 
         refresh_btn = QPushButton("🔄")
         refresh_btn.setFixedWidth(32)
-        refresh_btn.setToolTip("Refresh available serial ports")
-        refresh_btn.clicked.connect(self._refresh_ports)
+        refresh_btn.setToolTip("Refresh available serial ports") # Changed from "Refresh current states" to match original intent
+        refresh_btn.clicked.connect(self._refresh_ports) # Changed from _request_states to _refresh_ports to match original intent
         hw_lay.addWidget(refresh_btn)
 
         hw_lay.addSpacing(16)

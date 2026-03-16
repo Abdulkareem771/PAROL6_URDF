@@ -4,12 +4,13 @@ jog_tab.py — Manual jog controls + encoder test mode readout per joint.
 from __future__ import annotations
 import math
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QDoubleSpinBox, QGroupBox, QGridLayout, QFrame, QProgressBar,
     QScrollArea, QSlider, QLineEdit, QSizePolicy
 )
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 from PyQt6.QtGui import QFont, QDoubleValidator
+from core.gui_theme import QPushButton
 
 N_JOINTS = 6
 JOINT_NAMES = [f"J{i+1}" for i in range(N_JOINTS)]
@@ -97,11 +98,11 @@ class JointJogWidget(QFrame):
         row1.addWidget(self.vel_spin)
 
         neg_btn = QPushButton("◀  −")
-        neg_btn.setMinimumWidth(76)
+        neg_btn.setMinimumWidth(50)
         neg_btn.pressed.connect(lambda: self._jog(-1))
         neg_btn.released.connect(lambda: self._jog(0))
         pos_btn = QPushButton("+  ▶")
-        pos_btn.setMinimumWidth(76)
+        pos_btn.setMinimumWidth(50)
         pos_btn.pressed.connect(lambda: self._jog(+1))
         pos_btn.released.connect(lambda: self._jog(0))
         row1.addWidget(neg_btn)
@@ -174,14 +175,14 @@ class JointJogWidget(QFrame):
         row2.addWidget(self._deg_input)
 
         go_btn = QPushButton("Go")
-        go_btn.setMinimumWidth(52)
+        go_btn.setMinimumWidth(40)
         go_btn.setToolTip("Move to the degree value entered in the text box")
         go_btn.setStyleSheet("background:#89b4fa; color:#1e1e2e; font-weight:bold; padding:2px 6px;")
         go_btn.clicked.connect(self._on_deg_input_committed)
         row2.addWidget(go_btn)
 
         home_j_btn = QPushButton(f"🏠 J{idx+1}")
-        home_j_btn.setFixedWidth(60)
+        home_j_btn.setMinimumWidth(60)
         home_j_btn.setToolTip(f"Home joint {idx+1} only")
         home_j_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
         home_j_btn.clicked.connect(lambda: self.home_single_joint.emit(self._idx))
@@ -323,12 +324,12 @@ class JogTab(QWidget):
         # Global controls
         glob = QHBoxLayout()
         stop_all = QPushButton("🛑 STOP ALL")
-        stop_all.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold; font-size:13px; padding:6px 18px;")
+        stop_all.setStyleSheet("background-color: #f38ba8; border: 1px solid #1e1e2e; color: #1e1e2e; font-weight: bold;")
         stop_all.clicked.connect(self._stop_all)
         glob.addWidget(stop_all)
 
         enable_btn = QPushButton("🔓 CLEAR FAULT / ENABLE")
-        enable_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold; font-size:13px; padding:6px 18px;")
+        enable_btn.setStyleSheet("background-color: #a6e3a1; border: 1px solid #1e1e2e; color: #1e1e2e; font-weight: bold;")
         enable_btn.clicked.connect(self._send_enable)
         glob.addWidget(enable_btn)
 
@@ -337,7 +338,7 @@ class JogTab(QWidget):
         glob.addWidget(free_btn)
 
         home_btn = QPushButton("🏠 HOME ALL")
-        home_btn.setStyleSheet("background:#89dceb; color:#1e1e2e; font-weight:bold; font-size:13px; padding:6px 18px;")
+        home_btn.setStyleSheet("background-color: #89dceb; border: 1px solid #1e1e2e; color: #1e1e2e; font-weight: bold;")
         home_btn.clicked.connect(self._send_home)
         glob.addWidget(home_btn)
 

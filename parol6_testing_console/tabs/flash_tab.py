@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from core.process_workers import ProcessWorker
 from core.diagnostics import build_diagnostic_report
+from core.gui_theme import QPushButton
 
 class FlashTab(QWidget):
     def __init__(self, main_window):
@@ -58,7 +59,7 @@ class FlashTab(QWidget):
         self.dfu_flash_btn = QPushButton("⚡ Flash via DFU")
         self.dfu_flash_btn.setToolTip("Board is in DFU mode — flash immediately without a serial connection")
         self.dfu_flash_btn.setEnabled(False)
-        self.dfu_flash_btn.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold;")
+        self.dfu_flash_btn.setStyleSheet("background-color: #cba6f7; border: 1px solid #1e1e2e; color: #1e1e2e; font-weight: bold;")
         self.dfu_flash_btn.clicked.connect(self._start_upload)
         dfu_layout.addWidget(self.dfu_flash_btn)
 
@@ -90,7 +91,7 @@ class FlashTab(QWidget):
         ctrl_layout.addWidget(sp)
 
         self.upload_btn = QPushButton("🚀 Build & Upload")
-        self.upload_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.upload_btn.setStyleSheet("background-color: #a6e3a1; border: 1px solid #1e1e2e; color: #1e1e2e; font-weight: bold;")
         self.upload_btn.clicked.connect(self._start_upload)
         ctrl_layout.addWidget(self.upload_btn)
         

@@ -10,69 +10,16 @@ from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QFont
 
 from core.serial_monitor import SerialWorker
+from core.gui_theme import QPushButton, DARK_STYLESHEET
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REGISTRY_PATH = os.path.join(BASE_DIR, "project_registry.json")
-
-DARK_STYLESHEET = """
-QMainWindow, QWidget, QDialog {
-    background-color: #1e1e2e;
-    color: #cdd6f4;
-    font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif;
-    font-size: 13px;
-}
-QTabWidget::pane {
-    border: 1px solid #45475a;
-    border-radius: 0 8px 8px 8px;
-    background: #1e1e2e;
-}
-QTabBar::tab {
-    background: #181825;
-    color: #a6adc8;
-    padding: 7px 16px;
-    border: 1px solid #45475a;
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    margin-right: 2px;
-}
-QTabBar::tab:selected { background: #313244; color: #cba6f7; font-weight: bold; }
-QTabBar::tab:hover    { background: #313244; color: #cdd6f4; }
-QPushButton {
-    background: #313244;
-    border: 1px solid #45475a;
-    border-radius: 6px;
-    padding: 5px 14px;
-    color: #cdd6f4;
-}
-QPushButton:hover   { background: #45475a; border-color: #cba6f7; }
-QPushButton:pressed { background: #585b70; }
-QPushButton:disabled{ color: #585b70; border-color: #313244; }
-QGroupBox {
-    border: 1px solid #45475a;
-    border-radius: 8px;
-    margin-top: 12px;
-    padding-top: 8px;
-    font-weight: bold;
-    color: #a6adc8;
-}
-QGroupBox::title { subcontrol-origin: margin; left: 10px; }
-QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QComboBox {
-    background: #11111b;
-    border: 1px solid #45475a;
-    border-radius: 4px;
-    color: #cdd6f4;
-    padding: 3px 6px;
-}
-QComboBox QAbstractItemView { background: #313244; border: 1px solid #45475a; }
-QStatusBar { background: #181825; color: #a6adc8; border-top: 1px solid #45475a; }
-QToolBar { background: #181825; border-bottom: 1px solid #45475a; spacing: 6px; }
-"""
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PAROL6 Testing Console")
-        self.resize(1280, 820)
+        self.resize(1180, 800)
         self._settings = QSettings("PAROL6", "TestingConsole")
         self._registry = []
         self._current_project = None
@@ -279,11 +226,8 @@ class MainWindow(QMainWindow):
         self._toggle_serial()
 
     def resolve_path(self, rel_path: str) -> str:
-        # Resolve paths relative to the current project_dir
-        proj_dir = self._current_project.get("flash", {}).get("project_dir", ".")
-        # Fallback to the dir where main.py lives if proj_dir is missing
-        base = os.path.abspath(os.path.join(BASE_DIR, proj_dir))
-        return os.path.normpath(os.path.join(base, rel_path))
+        # Resolve all paths strictly relative to the testing console root directory (BASE_DIR)
+        return os.path.normpath(os.path.join(BASE_DIR, rel_path))
 
     def _scan_ports(self):
         from core.serial_monitor import list_serial_ports
@@ -327,8 +271,10 @@ class MainWindow(QMainWindow):
         self._serial_worker.packet_rate.connect(self._on_packet_rate)
         self._serial_worker.data_rate.connect(self._on_data_rate)
         
+        # Connect error reporting before the worker starts
+        self._serial_worker.error_msg.connect(self._on_serial_error)
+        
         if "serial" in self._tabs_dict:
-            self._serial_worker.error_msg.connect(lambda m: self._tabs_dict["serial"]._append(m, "#f38ba8"))
             self._serial_worker.raw_line.connect(self._tabs_dict["serial"]._on_line)
             
         self._serial_worker.start()
@@ -337,6 +283,12 @@ class MainWindow(QMainWindow):
     def _on_serial_connected(self, ok: bool) -> None:
         self._sb_conn.setText("🟢 Connected" if ok else "🔴 Disconnected")
         self._sb_conn.setStyleSheet("color:#a6e3a1;" if ok else "color:#f38ba8;")
+
+    def _on_serial_error(self, err_msg: str) -> None:
+        QMessageBox.critical(self, "Serial Connection Error", err_msg)
+        if "serial" in self._tabs_dict:
+            self._tabs_dict["serial"]._append(f"<span style='color:#f38ba8;'>[SYS] Error: {err_msg}</span>")
+        self._toggle_serial()  # Cleanly disconnect the UI state
 
     def _on_packet_rate(self, rate: float) -> None:
         self._sb_rate.setText(f"{rate:.1f} pkt/s")
