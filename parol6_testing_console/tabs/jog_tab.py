@@ -296,7 +296,7 @@ class JogTab(QWidget):
         ))
         instr_lay.addWidget(_lbl(
             "<b>Before jogging:</b> "
-            "Connect to the Teensy first (Port → ⚡ Connect). "
+            "Connect to the board first (Port → ⚡ Connect). "
             "You should see <code>&lt;ACK,...&gt;</code> frames in 💬 Serial. "
             "If in FAULT state, click <b>🔓 CLEAR FAULT / ENABLE</b> first."
         ))

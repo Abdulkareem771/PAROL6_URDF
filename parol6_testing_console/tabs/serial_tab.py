@@ -1,185 +1,237 @@
-"""
-serial_tab.py — Serial monitor: connect, display, send, filter, timestamps.
-"""
-from __future__ import annotations
+import math
+import time
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
-    QTextEdit, QLabel, QCheckBox, QSplitter, QFrame
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
+    QPushButton, QCheckBox, QLabel, QGroupBox, QFrame
 )
-from PyQt6.QtCore import pyqtSignal, Qt, QDateTime
-from PyQt6.QtGui import QColor, QTextCharFormat, QTextCursor, QFont
-from core.serial_monitor import SerialWorker, list_serial_ports
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QTextCursor, QKeyEvent
+
+# Known firmware state descriptions
+_STATE_LABELS = {
+    0: ("IDLE",     "#a6adc8"),
+    1: ("RUNNING",  "#a6e3a1"),
+    2: ("HOMING",   "#89dceb"),
+    3: ("FAULT",    "#f38ba8"),
+    4: ("ESTOP",    "#f38ba8"),
+    5: ("DISABLED", "#f9e2af"),
+}
+
+
+class _HistoryLineEdit(QLineEdit):
+    """QLineEdit with Up/Down arrow command history."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._history: list[str] = []
+        self._history_idx = -1
+
+    def push_history(self, text: str) -> None:
+        if text and (not self._history or self._history[-1] != text):
+            self._history.append(text)
+        self._history_idx = -1
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Up:
+            if self._history:
+                self._history_idx = max(0, self._history_idx - 1 if self._history_idx >= 0
+                                        else len(self._history) - 1)
+                self.setText(self._history[self._history_idx])
+        elif event.key() == Qt.Key.Key_Down:
+            if self._history_idx >= 0:
+                self._history_idx += 1
+                if self._history_idx >= len(self._history):
+                    self._history_idx = -1
+                    self.clear()
+                else:
+                    self.setText(self._history[self._history_idx])
+        else:
+            super().keyPressEvent(event)
 
 
 class SerialTab(QWidget):
-    """Full serial monitor with connect/disconnect, send, filter, timestamps."""
+    connect_requested = pyqtSignal()
 
-    # Signals for main window's status bar
-    connected_changed = pyqtSignal(bool)
-    packet_rate_changed = pyqtSignal(float)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._worker: SerialWorker | None = None
-        self._t0 = QDateTime.currentMSecsSinceEpoch()
+    def __init__(self, main_window):
+        super().__init__()
+        self._main_window = main_window
+        self._autoscroll = True
+        self._show_timestamps = True
         self._build_ui()
-
+        
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        layout = QVBoxLayout(self)
 
-        # ── Toolbar ───────────────────────────────────────────────────
-        toolbar = QHBoxLayout()
+        # ── Firmware State Badge ─────────────────────────────────────────
+        badge_row = QHBoxLayout()
+        badge_row.addWidget(QLabel("Firmware state:"))
+        self.state_badge = QLabel("—")
+        self.state_badge.setStyleSheet(
+            "background:#313244; border:1px solid #45475a; border-radius:4px; "
+            "color:#a6adc8; font-weight:bold; padding:2px 10px;"
+        )
+        badge_row.addWidget(self.state_badge)
+        badge_row.addStretch()
 
-        self.connect_btn = QPushButton("🔌 Connect")
-        self.connect_btn.setCheckable(True)
-        self.connect_btn.clicked.connect(self._toggle_connection)
-        toolbar.addWidget(self.connect_btn)
+        # ── Macros & Options Row ──
+        opt_layout = QHBoxLayout()
+        
+        self.ts_cb = QCheckBox("Timestamps")
+        self.ts_cb.setChecked(True)
+        self.ts_cb.stateChanged.connect(self._on_ts_toggled)
+        opt_layout.addWidget(self.ts_cb)
 
-        self.ts_check = QCheckBox("Timestamps")
-        self.ts_check.setChecked(True)
-        toolbar.addWidget(self.ts_check)
+        self.scroll_cb = QCheckBox("Autoscroll")
+        self.scroll_cb.setChecked(True)
+        self.scroll_cb.stateChanged.connect(self._on_scroll_toggled)
+        opt_layout.addWidget(self.scroll_cb)
 
+        opt_layout.addWidget(QLabel(" Filter:"))
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Filter (e.g. ACK or FAULT)…")
-        self.filter_edit.setMaximumWidth(200)
-        toolbar.addWidget(QLabel("Show only:"))
-        toolbar.addWidget(self.filter_edit)
+        self.filter_edit.setPlaceholderText("e.g. FAULT")
+        self.filter_edit.setMaximumWidth(150)
+        opt_layout.addWidget(self.filter_edit)
+        
+        opt_layout.addStretch()
+        
+        # Macros based on registry
+        proj = self._main_window.current_project()
+        macros = proj.get("serial", {}).get("macros", [])
+        caps = proj.get("capabilities", {})
+        
+        if macros:
+            macro_box = QGroupBox("Macros")
+            macro_lay = QHBoxLayout(macro_box)
+            macro_lay.setContentsMargins(4, 12, 4, 4)
+            for m in macros:
+                btn = QPushButton(m)
+                # Colour REBOOT_DFU differently so it's obviously destructive
+                if "REBOOT_DFU" in m:
+                    btn.setStyleSheet("background:#cba6f7; color:#1e1e2e; font-weight:bold;")
+                    btn.setToolTip("Send <REBOOT_DFU> — STM32 will reset into DFU bootloader")
+                elif "RESET" in m:
+                    btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
+                btn.clicked.connect(lambda checked, text=m: self._main_window.send_serial_text(text))
+                macro_lay.addWidget(btn)
+            opt_layout.addWidget(macro_box)
+            
+        # DTR Reboot (Capability driven)
+        if caps.get("supports_dtr_reboot", False):
+            self.hw_reboot_btn = QPushButton("💥 HW Reboot (DTR)")
+            self.hw_reboot_btn.setStyleSheet("background-color: #f38ba8; color: #1e1e2e; font-weight: bold;")
+            self.hw_reboot_btn.setToolTip("Pulls the DTR line low briefly to reset the microcontroller")
+            self.hw_reboot_btn.clicked.connect(self._trigger_hw_reboot)
+            opt_layout.addWidget(self.hw_reboot_btn)
 
         clear_btn = QPushButton("🗑 Clear")
         clear_btn.clicked.connect(self._clear)
-        toolbar.addWidget(clear_btn)
+        opt_layout.addWidget(clear_btn)
 
-        self.autoscroll = QCheckBox("Autoscroll")
-        self.autoscroll.setChecked(True)
-        toolbar.addWidget(self.autoscroll)
-        toolbar.addStretch()
+        layout.addLayout(badge_row)
+        layout.addLayout(opt_layout)
 
-        root.addLayout(toolbar)
-
-        # ── Instructions banner ───────────────────────────────────────
-        instr = QLabel(
-            "<b>📋 Expected output</b> (firmware running): "
-            "<code style='color:#a6e3a1;'>&lt;ACK,seq,p1..p6,v1..v6,lim_state&gt;</code>  "
-            "— seq increases each frame, positions in rad, lim_state bitmask shows triggered limit switches.  "
-            "<b>Useful commands to send:</b>  "
-            "<code>&lt;HOME&gt;</code> start homing &nbsp;|&nbsp; "
-            "<code>&lt;ENABLE&gt;</code> clear ESTOP &nbsp;|&nbsp; "
-            "<code>&lt;0,0,0,0,0,0,0,0,0,0,0,0,0&gt;</code> send all-zero position.  "
-            "Use the <b>Filter</b> box above to show only FAULT or ACK lines."
-        )
-        instr.setTextFormat(Qt.TextFormat.RichText)
-        instr.setWordWrap(True)
-        instr.setStyleSheet(
-            "background:#2a1e0a; border:1px solid #fab387; border-radius:6px; "
-            "color:#cdd6f4; font-size:11px; padding:6px 10px;"
-        )
-        root.addWidget(instr)
-
-        # ── Output ────────────────────────────────────────────────────
+        # ── Output Area ──
         self.output = QTextEdit()
         self.output.setReadOnly(True)
-        self.output.setFont(QFont("Monospace", 10))
-        self.output.setStyleSheet("""
-            QTextEdit {
-                background: #11111b;
-                color: #cdd6f4;
-                border: 1px solid #45475a;
-                border-radius: 6px;
-            }
-        """)
-        root.addWidget(self.output, stretch=1)
+        self.output.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.output.setStyleSheet("font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 12px; background: #11111b;")
+        layout.addWidget(self.output, stretch=1)
 
-        # ── Send row ──────────────────────────────────────────────────
-        send_row = QHBoxLayout()
-        self.send_edit = QLineEdit()
-        self.send_edit.setPlaceholderText("Send command…  e.g. <HOME> or <ENABLE>  (Enter to send)")
-        self.send_edit.returnPressed.connect(self._send)
+        # ── Input Row ──
+        in_layout = QHBoxLayout()
+        self.input_field = _HistoryLineEdit()
+        self.input_field.setPlaceholderText("Type command and press Enter (↑↓ = history)...")
+        self.input_field.returnPressed.connect(self._send)
+        in_layout.addWidget(self.input_field)
+
         send_btn = QPushButton("Send")
         send_btn.clicked.connect(self._send)
-        send_row.addWidget(self.send_edit, stretch=1)
-        send_row.addWidget(send_btn)
-        root.addLayout(send_row)
+        in_layout.addWidget(send_btn)
 
-    # ------------------------------------------------------------------
-    def connect_to(self, port: str, baud: int) -> None:
-        """Start the serial worker for the given port/baud."""
-        if self._worker:
-            self._worker.stop()
-            self._worker = None
+        layout.addLayout(in_layout)
 
-        if not port:
-            self._append("[SERIAL] No port selected.", color="#f38ba8")
-            return
+    def _on_ts_toggled(self, state: int) -> None:
+        self._show_timestamps = bool(state)
 
-        self._worker = SerialWorker(port, baud)
-        self._worker.raw_line.connect(self._on_line)
-        self._worker.error_msg.connect(lambda m: self._append(m, "#f38ba8"))
-        self._worker.connected.connect(self._on_connected)
-        self._worker.packet_rate.connect(self.packet_rate_changed)
-        self._worker.start()
-
-    def disconnect(self) -> None:
-        if self._worker:
-            self._worker.stop()
-            self._worker = None
-        self.connect_btn.setChecked(False)
-        self.connect_btn.setText("🔌 Connect")
-
-    def send_raw(self, text: str) -> None:
-        if self._worker:
-            self._worker.send(text)
-
-    # ------------------------------------------------------------------
-    def _toggle_connection(self, checked: bool) -> None:
-        if checked:
-            # Get port/baud from comms tab via main window signal
-            self.connect_btn.setText("⏹ Disconnect")
-            self.connect_requested.emit()  # type: ignore[attr-defined]
-        else:
-            self.disconnect()
-
-    def _send(self) -> None:
-        text = self.send_edit.text().strip()
-        if text and self._worker:
-            self._worker.send(text)
-            self._append(f">> {text}", color="#89b4fa")
-            self.send_edit.clear()
-
-    def _on_connected(self, ok: bool) -> None:
-        self.connected_changed.emit(ok)
-        colour = "#a6e3a1" if ok else "#f38ba8"
-        msg = "Connected" if ok else "Disconnected"
-        self._append(f"[SERIAL] {msg}", color=colour)
-        self.connect_btn.setChecked(ok)
-        self.connect_btn.setText("⏹ Disconnect" if ok else "🔌 Connect")
-
-    def _on_line(self, line: str) -> None:
-        flt = self.filter_edit.text().strip()
-        if flt and flt.lower() not in line.lower():
-            return
-        ts = ""
-        if self.ts_check.isChecked():
-            elapsed = (QDateTime.currentMSecsSinceEpoch() - self._t0) / 1000.0
-            ts = f"[+{elapsed:7.3f}s] "
-        colour = "#f9e2af" if "FAULT" in line or "ERR" in line.upper() else "#cdd6f4"
-        self._append(ts + line, colour)
-
-    def _append(self, text: str, color: str = "#cdd6f4") -> None:
-        cursor = self.output.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        fmt = QTextCharFormat()
-        fmt.setForeground(QColor(color))
-        cursor.setCharFormat(fmt)
-        cursor.insertText(text + "\n")
-        if self.autoscroll.isChecked():
-            self.output.setTextCursor(cursor)
-            self.output.ensureCursorVisible()
+    def _on_scroll_toggled(self, state: int) -> None:
+        self._autoscroll = bool(state)
 
     def _clear(self) -> None:
         self.output.clear()
-        self._t0 = QDateTime.currentMSecsSinceEpoch()
 
-    # Declared so main.py can attach connections:
-    connect_requested = pyqtSignal()
+    def _trigger_hw_reboot(self) -> None:
+        if self._main_window._serial_worker:
+            self.output.append("<span style='color:#f9e2af;'>[GUI] Pulsing DTR line for Hardware Reboot...</span>")
+            self._main_window._serial_worker.pulse_dtr()
+        else:
+            self.output.append("<span style='color:#f38ba8;'>[GUI] Cannot Reboot: Serial disconnected.</span>")
+
+    def _send(self) -> None:
+        text = self.input_field.text()
+        if not text:
+            return
+        self.input_field.push_history(text)
+        self.input_field.clear()
+        self._append(f"> {text}", color="#a6e3a1")
+        self._main_window.send_serial_text(text)
+
+    def _on_line(self, line: str) -> None:
+        filt = self.filter_edit.text()
+        if filt and filt.lower() not in line.lower():
+            return
+
+        # Suppress ACK spam from flooding the terminal if filter is empty
+        if not filt and line.startswith("<ACK,"):
+            return
+
+        text = ""
+        if self._show_timestamps:
+            ms = int((time.time() % 1.0) * 1000)
+            t_str = time.strftime(f"%H:%M:%S.{ms:03d}")
+            text += f"<span style='color:#6c7086;'>[{t_str}]</span> "
+
+        # Colour known firmware messages
+        if "FAULT" in line or "ESTOP" in line:
+            text += f"<span style='color:#f38ba8;'>{line}</span>"
+        elif "INIT_OK" in line or "HOMING_DONE" in line:
+            text += f"<span style='color:#a6e3a1;'>{line}</span>"
+        elif "HOMING" in line or "REBOOTING" in line:
+            text += f"<span style='color:#89dceb;'>{line}</span>"
+        elif "STALE" in line or "WARN" in line:
+            text += f"<span style='color:#f9e2af;'>{line}</span>"
+        else:
+            text += line
+
+        self._append(text)
+
+    def update_state_badge(self, state_byte: int | None) -> None:
+        """Called by main window when a telemetry packet with state_byte arrives."""
+        if state_byte is None:
+            return
+        label, color = _STATE_LABELS.get(state_byte, (f"STATE_{state_byte}", "#a6adc8"))
+        self.state_badge.setText(f" {label} ")
+        self.state_badge.setStyleSheet(
+            f"background:{color}22; border:1px solid {color}; border-radius:4px; "
+            f"color:{color}; font-weight:bold; padding:2px 10px;"
+        )
+
+    def _append(self, html: str, color: str | None = None) -> None:
+        if color:
+            html = f"<span style='color:{color};'>{html}</span>"
+            
+        if self.output.document().blockCount() > 5000:
+            cursor = self.output.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
+            cursor.movePosition(QTextCursor.MoveOperation.Down, QTextCursor.MoveMode.KeepAnchor, 500)
+            cursor.removeSelectedText()
+            
+        self.output.append(html)
+        if self._autoscroll:
+            self.output.moveCursor(QTextCursor.MoveOperation.End)
+
+    def disconnect(self) -> None:
+        self._append("<em>Disconnected.</em>", color="#f38ba8")
+        self.state_badge.setText("—")
+        self.state_badge.setStyleSheet(
+            "background:#313244; border:1px solid #45475a; border-radius:4px; "
+            "color:#a6adc8; font-weight:bold; padding:2px 10px;"
+        )

@@ -20,6 +20,7 @@ struct RosCommand {
     uint32_t timestamp_us;
     bool is_home_cmd;
     bool is_enable_cmd;
+    bool is_dfu_reboot_cmd;
 };
 
 class SerialTransport {
@@ -86,6 +87,7 @@ private:
         cmd.seq = 0;
         cmd.is_home_cmd = false;
         cmd.is_enable_cmd = false;
+        cmd.is_dfu_reboot_cmd = false;
         for (int i = 0; i < 6; ++i) {
             cmd.positions[i] = 0.0f;
             cmd.velocities[i] = 0.0f;
@@ -101,6 +103,10 @@ private:
         }
         if (strcmp(pt, "ENABLE") == 0) {
             cmd.is_enable_cmd = true;
+            return true;
+        }
+        if (strcmp(pt, "REBOOT_DFU") == 0) {
+            cmd.is_dfu_reboot_cmd = true;
             return true;
         }
         

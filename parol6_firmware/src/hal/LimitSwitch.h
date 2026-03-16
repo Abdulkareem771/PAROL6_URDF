@@ -17,6 +17,14 @@
 
 #include <Arduino.h>
 
+#ifndef FAST_READ
+#ifdef ARDUINO_ARCH_STM32
+#define FAST_READ(pin) digitalRead((pin))
+#else
+#define FAST_READ(pin) digitalReadFast((pin))
+#endif
+#endif
+
 class LimitSwitch {
 public:
     /**
@@ -54,7 +62,7 @@ public:
         if (now_ms - _last_sample_ms < 1) return false;
         _last_sample_ms = now_ms;
 
-        bool raw = (digitalReadFast(_pin) == HIGH) == _active_high;
+        bool raw = (FAST_READ(_pin) == HIGH) == _active_high;
 
         if (raw) {
             _sample_count++;

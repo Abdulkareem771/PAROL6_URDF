@@ -39,6 +39,14 @@ static const int   HOMED_OFFSET[6]     = {13500, 19588, 23020, -10200, 8900, 159
 static const int   STANDBY_POS[6]      = {10240, -32000, 57905, 0, 0, 32000};
 #endif
 
+// Graceful fallback for STM32 (does not support Teensy hardware encoder/PWM)
+#ifdef ARDUINO_ARCH_STM32
+#  undef FEATURE_HARDWARE_ENCODER
+#  define FEATURE_HARDWARE_ENCODER 0
+#  undef FEATURE_HARDWARE_PWM
+#  define FEATURE_HARDWARE_PWM 0
+#endif
+
 #include "transport/SerialTransport.h"
 #include "safety/Supervisor.h"
 #include "safety/HomingFSM.h"
@@ -61,7 +69,9 @@ static const int   STANDBY_POS[6]      = {10240, -32000, 57905, 0, 0, 32000};
 // -------------------------------------------------------------------------
 
 
+#ifndef ARDUINO_ARCH_STM32
 #define ISR_PROFILER_PIN 13 // Standard LED Pin on Teensy for oscilloscope hookup
+#endif
 
 // RTOS/Main Loop Transport
 CircularBuffer<RosCommand, 20> rx_queue;
@@ -142,7 +152,11 @@ ActuatorModel actuator[NUM_AXES] = {
     ActuatorModel::create_joint(5),  // J6
 };
 
+#ifdef CORE_TEENSY
 IntervalTimer controlTimer;
+#elif defined(ARDUINO_ARCH_STM32)
+HardwareTimer *controlTimer = NULL;
+#endif
 volatile uint32_t system_tick_ms = 0;
 
 // Software Profiler tracking (Phase 1.5)
@@ -176,8 +190,10 @@ static bool is_newer_command_seq(uint32_t incoming, uint32_t last_seen) {
 // 1 kHz Hardware Timer ISR (Strict Real-Time Execution)
 // -------------------------------------------------------------------------
 void run_control_loop_isr() {
+#ifdef CORE_TEENSY
     uint32_t start_cycles = ARM_DWT_CYCCNT; // Start cycle profiling
     digitalWriteFast(ISR_PROFILER_PIN, HIGH);
+#endif
     
     float current_velocities[NUM_AXES]; 
     float joint_velocities[NUM_AXES];
@@ -326,6 +342,7 @@ void run_control_loop_isr() {
         telemetry_mode = 3;
     }
     
+#ifdef CORE_TEENSY
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
     
     // Calculate profiling metrics
@@ -337,18 +354,21 @@ void run_control_loop_isr() {
     if (time_taken_us > max_isr_time_us) {
         max_isr_time_us = time_taken_us;
     }
+#endif
 }
 
 // -------------------------------------------------------------------------
 // Main Thread 
 // -------------------------------------------------------------------------
 void setup() {
+#ifdef CORE_TEENSY
     pinMode(ISR_PROFILER_PIN, OUTPUT);
     digitalWriteFast(ISR_PROFILER_PIN, LOW);
     
     // Enable ARM Cycle Counter for precise software profiling
     ARM_DEMCR |= ARM_DEMCR_TRCENA;
     ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
+#endif
     
     transport.init(UART_BAUD_RATE);
     supervisor.init(0);
@@ -428,7 +448,15 @@ void setup() {
     }
     
     // Control loop rate from GUI config (default 1000µs = 1kHz)
+#ifdef CORE_TEENSY
     controlTimer.begin(run_control_loop_isr, CONTROL_LOOP_PERIOD_US);
+#elif defined(ARDUINO_ARCH_STM32)
+    TIM_TypeDef *Instance = TIM3;
+    controlTimer = new HardwareTimer(Instance);
+    controlTimer->setOverflow(1000000 / CONTROL_LOOP_PERIOD_US, HERTZ_FORMAT);
+    controlTimer->attachInterrupt(run_control_loop_isr);
+    controlTimer->resume();
+#endif
 }
 
 void loop() {
@@ -477,6 +505,26 @@ void loop() {
             interrupts();
             homing_seq.begin();
             continue;
+        }
+
+        if (cmd.is_dfu_reboot_cmd) {
+            noInterrupts();
+            transport.send_string("REBOOTING_TO_DFU\n");
+            delay(10);
+#ifdef ARDUINO_ARCH_STM32
+            // For STM32: Write a magic value to a backup register so the bootloader
+            // knows to jump to system memory (DFU) on the next reset.
+            // STM32F4 series typically uses RTC backup registers for this.
+            __HAL_RCC_PWR_CLK_ENABLE();
+            HAL_PWR_EnableBkUpAccess();
+            RTC->BKP0R = 0xDEADBEEF;
+            // The user must modify system_stm32f4xx.c or SystemClock_Config
+            // to check this register very early in boot, but even without that
+            // this gives a clean software reboot.
+#endif
+            // Trigger a software reset
+            NVIC_SystemReset();
+            while (1) {}
         }
 
         if (command_seq_seen && !is_newer_command_seq(cmd.seq, last_command_seq)) {

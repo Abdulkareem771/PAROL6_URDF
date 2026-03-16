@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include "EncoderHAL.h"
 
+#ifndef FASTRUN
+#define FASTRUN
+#endif
+
 // -------------------------------------------------------------------------
 // Global ISR state for SoftwareInterruptEncoder
 // -------------------------------------------------------------------------

@@ -46,8 +46,9 @@ class FaultLogTab(QWidget):
             "📋 <b>FAULT</b> (red) = latched — requires firmware restart or reflash to clear.  "
             "<b>SOFT_ESTOP</b> (yellow) = recoverable — send <code>&lt;ENABLE&gt;</code> in 💬 Serial tab "
             "or click <b>🔓 CLEAR FAULT / ENABLE</b> in 🕹 Jog tab.  "
-            "Common causes: velocity limit exceeded, command timeout (Teensy stopped getting commands), "
+            "Common causes: velocity limit exceeded, command timeout (firmware stopped getting commands), "
             "limit switch triggered outside homing.  "
+            "<b>REBOOTING_TO_DFU</b> (blue) = informational — STM32 is entering bootloader for flashing.  "
             "<b>Export CSV</b> saves timestamp, state, and velocities for post-mortem analysis."
         )
         hint.setTextFormat(Qt.TextFormat.RichText)
@@ -78,6 +79,9 @@ class FaultLogTab(QWidget):
 
     def record_serial_fault(self, line: str, pkt: dict | None = None) -> None:
         """Call this when a FAULT line is detected in raw serial."""
+        if "REBOOTING_TO_DFU" in line:
+            # Informational only — DFU reboot triggered; don't log as fault
+            return
         self._record_fault("FAULT", line, pkt or {})
 
     def _record_fault(self, state: str, msg: str, pkt: dict) -> None:

@@ -1,0 +1,79 @@
+{
+  "projects": [
+    {
+      "id": "parol6_teensy_legacy",
+      "name": "PAROL6 Teensy 4.1 (Stable)",
+      "docs_path": "",
+      "serial": {
+        "default_port": "/dev/ttyACM0",
+        "default_baud": 115200,
+        "macros": []
+      },
+      "flash": {
+        "project_dir": "../parol6_firmware",
+        "default_environment": "teensy41",
+        "tooling_hint": "teensy_loader_cli"
+      },
+      "capabilities": {
+        "supports_jog": true,
+        "supports_fault_log": true,
+        "supports_ack_plot": true,
+        "supports_dtr_reboot": false
+      },
+      "ros2": {
+        "launch_actions": [
+          {
+            "name": "Launch Fake Hardware (RViz)",
+            "command": "ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=true",
+            "cwd": "../",
+            "requires_serial": false
+          },
+          {
+            "name": "Launch Real Hardware (MoveIt)",
+            "command": "./scripts/launchers/launch_moveit_real_hw.sh",
+            "cwd": "../",
+            "requires_serial": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "parol6_stm32_bringup",
+      "name": "STM32 Black Pill Bringup (Testing)",
+      "docs_path": "../docs/FIRMWARE_CONFIG_ROS_CHANGES_2026-03-11.md",
+      "serial": {
+        "default_port": "/dev/ttyACM0",
+        "default_baud": 115200,
+        "macros": ["<ENABLE>", "<DISABLE>", "<HOME>", "<RESET>", "<REBOOT_DFU>"]
+      },
+      "flash": {
+        "project_dir": "../parol6_firmware",
+        "default_environment": "blackpill_f411ce",
+        "tooling_hint": "st-link or dfu-util"
+      },
+      "capabilities": {
+        "supports_jog": true,
+        "supports_fault_log": true,
+        "supports_ack_plot": true,
+        "supports_dtr_reboot": true,
+        "supports_dfu_reboot": true
+      },
+      "ros2": {
+        "launch_actions": [
+          {
+            "name": "Launch Fake Hardware (RViz)",
+            "command": "ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=true",
+            "cwd": "../",
+            "requires_serial": false
+          },
+          {
+            "name": "Launch Real Hardware (MoveIt)",
+            "command": "ros2 launch parol6_hardware real_robot.launch.py use_fake_hardware:=false",
+            "cwd": "../",
+            "requires_serial": true
+          }
+        ]
+      }
+    }
+  ]
+}

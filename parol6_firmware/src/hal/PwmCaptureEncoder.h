@@ -3,6 +3,14 @@
 #include "EncoderHAL.h"
 #include <Arduino.h>
 
+#ifndef FAST_READ
+#ifdef ARDUINO_ARCH_STM32
+#define FAST_READ(pin) digitalRead((pin))
+#else
+#define FAST_READ(pin) digitalReadFast((pin))
+#endif
+#endif
+
 /**
  * PWM Capture Encoder HAL (Phase 1.5)
  * 
@@ -23,7 +31,7 @@ public:
     // Called by the external interrupt handlers in main.cpp
     void handle_interrupt() {
         uint32_t now = micros();
-        if (digitalReadFast(pin_) == HIGH) {
+        if (FAST_READ(pin_) == HIGH) {
             // Rising edge: Start timing
             last_rise_time_ = now;
         } else {

@@ -2,6 +2,14 @@
 
 #include <Arduino.h>
 
+#ifndef FAST_WRITE
+#ifdef ARDUINO_ARCH_STM32
+#define FAST_WRITE(pin, val) digitalWrite((pin), (val))
+#else
+#define FAST_WRITE(pin, val) digitalWriteFast((pin), (val))
+#endif
+#endif
+
 /**
  * Fallback Stepper Generator using Arduino's built-in tone() function.
  * Used when FEATURE_HARDWARE_PWM is 0.
@@ -20,7 +28,7 @@ public:
 
     void set_direction(bool forward) {
         // digitalWrite is fast enough on Teensy, but digitalWriteFast removes overhead
-        digitalWriteFast(dir_pin_, forward ? HIGH : LOW);
+        FAST_WRITE(dir_pin_, forward ? HIGH : LOW);
     }
 
     void set_frequency(float hz) {
@@ -38,7 +46,7 @@ public:
 
     void stop() {
         noTone(step_pin_);
-        digitalWriteFast(step_pin_, LOW);
+        FAST_WRITE(step_pin_, LOW);
         current_hz_ = 0.0f;
     }
 

@@ -1,241 +1,343 @@
-"""
-flash_tab.py — Generate config.h, preview it, build, flash via PlatformIO.
-"""
-from __future__ import annotations
 import os
+import re
+import subprocess
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QGroupBox, QLineEdit, QFileDialog, QComboBox
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
+    QPushButton, QLabel, QComboBox, QGroupBox, QSizePolicy,
+    QLineEdit, QFileDialog
 )
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QFont
-
-from core.flash_manager import FlashWorker, BuildWorker
-
+from PyQt6.QtCore import Qt, QTimer
+from core.process_workers import ProcessWorker
+from core.diagnostics import build_diagnostic_report
 
 class FlashTab(QWidget):
-    """Generate config.h, preview, build-check, and flash to Teensy."""
-
-    # Emitted so main window can call code_generator before flashing
-    validate_requested = pyqtSignal()
-    generate_requested = pyqtSignal()
-    build_requested    = pyqtSignal()
-    flash_requested    = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._flash_worker: FlashWorker | None = None
-        self._build_worker: BuildWorker | None = None
+    def __init__(self, main_window):
+        super().__init__()
+        self._main_window = main_window
+        self._build_worker = None
+        self._dfu_poll_timer = QTimer()
+        self._dfu_poll_timer.setInterval(2000)  # Every 2s
+        self._dfu_poll_timer.timeout.connect(self._probe_usb)
         self._build_ui()
+        self._refresh_diagnostics()
+        self._refresh_envs()
+        self._probe_usb()
+        self._dfu_poll_timer.start()
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+        layout = QVBoxLayout(self)
 
-        title = QLabel("⚡  Flash Manager")
-        title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
-        root.addWidget(title)
+        # ── Toolchain Diagnostics ──
+        self.diag_box = QGroupBox("Toolchain Diagnostics")
+        self.diag_box.setStyleSheet("color: #f38ba8;")
+        diag_layout = QVBoxLayout(self.diag_box)
+        self.diag_lbl = QLabel("Checking tools...")
+        self.diag_lbl.setWordWrap(True)
+        diag_layout.addWidget(self.diag_lbl)
+        layout.addWidget(self.diag_box)
 
-        workflow = QLabel(
-            "📋 <b>Workflow:</b> &nbsp;"
-            "1️⃣ Edit settings in <b>Joints / Features / Comms</b> tabs &nbsp;→&nbsp; "
-            "2️⃣ <b>Generate config.h</b> &nbsp;→&nbsp; "
-            "3️⃣ <b>Generate &amp; Flash</b>. &nbsp; "
-            "Full guide in the <b>📖 Docs</b> tab → <i>⚡ Flash Tab Guide</i>."
-        )
-        workflow.setTextFormat(Qt.TextFormat.RichText)
-        workflow.setWordWrap(True)
-        workflow.setStyleSheet(
-            "background:#1a2a1a; border:1px solid #a6e3a1; border-radius:6px; "
-            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
-        )
-        root.addWidget(workflow)
+        # ── USB / DFU Status Panel ──
+        dfu_box = QGroupBox("USB / DFU Device Status")
+        dfu_layout = QHBoxLayout(dfu_box)
 
-        # ── PlatformIO path ───────────────────────────────────────────
-        path_box = QGroupBox("PlatformIO Project")
-        path_lay = QHBoxLayout(path_box)
-        path_lay.addWidget(QLabel("Firmware dir:"))
-        self.fw_path = QLineEdit()
-        self.fw_path.setPlaceholderText("/path/to/parol6_firmware/")
-        path_lay.addWidget(self.fw_path, stretch=1)
+        self.dfu_status_lbl = QLabel("🔍 Scanning...")
+        self.dfu_status_lbl.setWordWrap(True)
+        dfu_layout.addWidget(self.dfu_status_lbl, stretch=1)
+
+        probe_btn = QPushButton("🔍 Probe USB")
+        probe_btn.setToolTip("Scan USB for DFU devices and serial ports")
+        probe_btn.clicked.connect(self._probe_usb)
+        dfu_layout.addWidget(probe_btn)
+
+        self.detach_btn = QPushButton("⏏ Detach DFU")
+        self.detach_btn.setToolTip("Send DFU detach command so the board boots into the new firmware")
+        self.detach_btn.setEnabled(False)
+        self.detach_btn.clicked.connect(self._detach_dfu)
+        dfu_layout.addWidget(self.detach_btn)
+
+        self.dfu_flash_btn = QPushButton("⚡ Flash via DFU")
+        self.dfu_flash_btn.setToolTip("Board is in DFU mode — flash immediately without a serial connection")
+        self.dfu_flash_btn.setEnabled(False)
+        self.dfu_flash_btn.setStyleSheet("background-color: #cba6f7; color: #1e1e2e; font-weight: bold;")
+        self.dfu_flash_btn.clicked.connect(self._start_upload)
+        dfu_layout.addWidget(self.dfu_flash_btn)
+
+        layout.addWidget(dfu_box)
+
+        # ── Flash Control Box ──
+        ctrl_box = QGroupBox("PlatformIO Flash Orchestration")
+        ctrl_layout = QHBoxLayout(ctrl_box)
+
+        ctrl_layout.addWidget(QLabel("Environment:"))
+        self.env_combo = QComboBox()
+        self.env_combo.setMinimumWidth(200)
+        ctrl_layout.addWidget(self.env_combo)
+
+        ctrl_layout.addWidget(QLabel("  Project Dir:"))
+        self.dir_edit = QLineEdit()
+        self.dir_edit.setMinimumWidth(200)
+        self.dir_edit.setStyleSheet("font-family: monospace; color: #a6adc8;")
+        self.dir_edit.textChanged.connect(self._refresh_envs_from_path)
+        ctrl_layout.addWidget(self.dir_edit)
+
         browse_btn = QPushButton("…")
         browse_btn.setFixedWidth(32)
-        browse_btn.clicked.connect(self._browse_fw_path)
-        path_lay.addWidget(browse_btn)
+        browse_btn.clicked.connect(self._browse_dir)
+        ctrl_layout.addWidget(browse_btn)
 
-        path_lay.addWidget(QLabel("Env:"))
-        self.env_combo = QComboBox()
-        self.env_combo.addItems([
-            "teensy41",
-            "teensy41_j6_test",
-            "debug_stage1",   # Stage 1: USB echo + heartbeat (bare minimum)
-            "debug_stage2",   # Stage 2: Fake ACK packets (no hardware)
-            "debug_stage3",   # Stage 3: Real J6 encoder only
-            "debug_stage4",   # Stage 4: J6 encoder + stepper (full control)
-            "native",
-        ])
+        sp = QWidget()
+        sp.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        ctrl_layout.addWidget(sp)
 
-        path_lay.addWidget(self.env_combo)
+        self.upload_btn = QPushButton("🚀 Build & Upload")
+        self.upload_btn.setStyleSheet("background-color: #a6e3a1; color: #1e1e2e; font-weight: bold;")
+        self.upload_btn.clicked.connect(self._start_upload)
+        ctrl_layout.addWidget(self.upload_btn)
+        
+        self.stop_btn = QPushButton("⏹ Stop")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self._stop_worker)
+        ctrl_layout.addWidget(self.stop_btn)
 
-        path_lay.addWidget(QLabel("Mode:"))
-        self.build_mode = QComboBox()
-        self.build_mode.addItems(["debug", "release"])
-        self.build_mode.setToolTip(
-            "debug: ISR profiler ON, verbose serial output.\n"
-            "release: lean build, no profiler overhead.")
-        path_lay.addWidget(self.build_mode)
-        root.addWidget(path_box)
+        layout.addWidget(ctrl_box)
 
-        # ── Action buttons ────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-
-        val_btn = QPushButton("✅  Validate Only")
-        val_btn.setToolTip("Run safety checks against the current configuration without generating files.")
-        val_btn.clicked.connect(self.validate_requested)
-
-        gen_btn = QPushButton("⚙️  Generate config.h")
-        gen_btn.setToolTip("Writes generated/config.h from current GUI settings.")
-        gen_btn.clicked.connect(self.generate_requested)
-
-        build_btn = QPushButton("🔨  Build Only")
-        build_btn.setToolTip("Compile without flashing. Useful for catching errors before connecting Teensy.")
-        build_btn.clicked.connect(self._run_build_only)
-
-        self.flash_btn = QPushButton("⚡  Generate & Flash")
-        self.flash_btn.setStyleSheet("background:#cba6f7; color:#1e1e2e; font-weight:bold; padding:6px 18px;")
-        self.flash_btn.setToolTip("Generates config.h then runs pio run --upload.")
-        self.flash_btn.clicked.connect(self._run_flash)
-
-        self.flash_only_btn = QPushButton("⚡  Flash Only")
-        self.flash_only_btn.setStyleSheet("background:#89dceb; color:#1e1e2e; font-weight:bold; padding:6px 14px;")
-        self.flash_only_btn.setToolTip(
-            "Runs pio run --upload WITHOUT generating config.h.\n"
-            "Use this for the diagnostic sketch or when config.h is already correct."
-        )
-        self.flash_only_btn.clicked.connect(self._run_flash_only)
-
-        self.abort_btn = QPushButton("✖ Abort")
-        self.abort_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e;")
-        self.abort_btn.setEnabled(False)
-        self.abort_btn.clicked.connect(self._abort)
-
-        for btn in (val_btn, gen_btn, build_btn, self.flash_btn, self.flash_only_btn, self.abort_btn):
-            btn_row.addWidget(btn)
-        btn_row.addStretch()
-        root.addLayout(btn_row)
-
-        validation_box = QGroupBox("Configuration Validation")
-        validation_lay = QVBoxLayout(validation_box)
-        self.validation = QTextEdit()
-        self.validation.setReadOnly(True)
-        self.validation.setFont(QFont("Monospace", 9))
-        self.validation.setStyleSheet("background:#11111b; color:#f9e2af; border:none;")
-        self.validation.setMaximumHeight(140)
-        validation_lay.addWidget(self.validation)
-        root.addWidget(validation_box)
-
-        # ── config.h preview ──────────────────────────────────────────
-        prev_box = QGroupBox("Generated config.h Preview")
-        prev_lay = QVBoxLayout(prev_box)
-        self.preview = QTextEdit()
-        self.preview.setReadOnly(True)
-        self.preview.setFont(QFont("Monospace", 9))
-        self.preview.setStyleSheet("background:#11111b; color:#a6e3a1; border:none;")
-        self.preview.setMaximumHeight(220)
-        prev_lay.addWidget(self.preview)
-        root.addWidget(prev_box)
-
-        # ── Build log ─────────────────────────────────────────────────
-        log_box = QGroupBox("Build / Flash Log")
-        log_lay = QVBoxLayout(log_box)
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setFont(QFont("Monospace", 9))
-        self.log.setStyleSheet("background:#11111b; color:#cdd6f4; border:none;")
-        log_lay.addWidget(self.log)
-        root.addWidget(log_box, stretch=1)
+        # ── Logs ──
+        self.log_primary = QTextEdit()
+        self.log_primary.setReadOnly(True)
+        self.log_primary.setStyleSheet("font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 12px; background: #11111b;")
+        layout.addWidget(self.log_primary, stretch=1)
 
     # ------------------------------------------------------------------
-    def set_preview(self, content: str) -> None:
-        self.preview.setPlainText(content)
+    # USB / DFU Probe
+    # ------------------------------------------------------------------
+    def _probe_usb(self) -> None:
+        """Scan USB via dfu-util and /dev/ttyACM* to show board state."""
+        lines = []
+        in_dfu = False
+        in_serial = False
 
-    def set_validation_report(self, errors: list[str], warnings: list[str]) -> None:
-        lines: list[str] = []
-        if errors:
-            lines.append("Errors:")
-            lines.extend([f"  - {msg}" for msg in errors])
-        if warnings:
-            if lines:
-                lines.append("")
-            lines.append("Warnings:")
-            lines.extend([f"  - {msg}" for msg in warnings])
-        if not lines:
-            lines.append("No validation issues.")
-        self.validation.setPlainText("\n".join(lines))
+        # Check DFU
+        try:
+            result = subprocess.run(
+                ["dfu-util", "-l"], capture_output=True, text=True, timeout=3
+            )
+            combined = result.stdout + result.stderr
+            dfu_devices = [l for l in combined.splitlines() if "Found DFU" in l]
+            if dfu_devices:
+                in_dfu = True
+                lines.append(f"<span style='color:#cba6f7;'>⚡ DFU mode detected ({len(dfu_devices)} interface(s)):</span>")
+                for d in dfu_devices[:2]:
+                    # Show just the key parts
+                    m = re.search(r'name="([^"]+)"', d)
+                    name = m.group(1) if m else d[:60]
+                    lines.append(f"&nbsp;&nbsp;• {name}")
+        except Exception:
+            pass
 
-    def set_firmware_path(self, path: str) -> None:
-        self.fw_path.setText(path)
+        # Check serial ACM
+        import glob
+        acm_ports = glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")
+        if acm_ports:
+            in_serial = True
+            lines.append(f"<span style='color:#a6e3a1;'>🟢 Serial port(s): {', '.join(acm_ports)}</span>")
 
-    def append_log(self, line: str) -> None:
-        colour = "#f38ba8" if ("error" in line.lower() or "❌" in line) \
-            else "#a6e3a1" if ("✅" in line) \
-            else "#cdd6f4"
-        self.log.append(f'<span style="color:{colour};">{line}</span>')
+        if not in_dfu and not in_serial:
+            lines.append("<span style='color:#f38ba8;'>🔴 No STM32 device detected on USB</span>")
+            lines.append("<span style='color:#a6adc8;'>&nbsp;&nbsp;→ Press NRST on the board to reboot, or hold BOOT0+NRST for DFU mode</span>")
 
-    def _browse_fw_path(self) -> None:
+        self.dfu_status_lbl.setText("<br>".join(lines))
+        self.detach_btn.setEnabled(in_dfu)
+        self.dfu_flash_btn.setEnabled(in_dfu)
+
+    def _detach_dfu(self) -> None:
+        """Send DFU detach command so the chip reboots into the new firmware."""
+        self.log_primary.append("<span style='color:#f9e2af;'>==> Sending DFU detach (dfu-util -e)...</span>")
+        try:
+            result = subprocess.run(
+                ["dfu-util", "-e"], capture_output=True, text=True, timeout=5
+            )
+            out = result.stdout + result.stderr
+            for line in out.splitlines():
+                self.log_primary.append(line)
+            self.log_primary.append("<span style='color:#a6e3a1;'>==> Detach sent — board should reboot now.</span>")
+        except Exception as e:
+            self.log_primary.append(f"<span style='color:#f38ba8;'>Detach error: {e}</span>")
+        self._probe_usb()
+
+
+    def _refresh_diagnostics(self):
+        project = self._main_window.current_project()
+        report = build_diagnostic_report(project)
+        
+        if report["is_ok"]:
+            self.diag_box.setTitle("Toolchain Diagnostics (OK)")
+            self.diag_box.setStyleSheet("QGroupBox { color: #a6e3a1; }")
+            self.diag_lbl.setText("All probably required toolchains (like pio or related tools) are present on this system.")
+            self.diag_lbl.setStyleSheet("color: #cdd6f4;")
+        else:
+            self.diag_box.setTitle("Toolchain Diagnostics (WARNING)")
+            self.diag_box.setStyleSheet("QGroupBox { color: #f38ba8; }")
+            missing = ", ".join(report["missing_required"])
+            toolhint = project.get("flash", {}).get("tooling_hint", "")
+            msg = f"Missing required tooling from PATH: <b>{missing}</b><br><br>"
+            msg += f"<i>Project Flash Hint:</i> {toolhint}"
+            self.diag_lbl.setText(msg)
+            self.diag_lbl.setStyleSheet("color: #f38ba8;")
+
+    def _refresh_envs(self):
+        self.env_combo.clear()
+        project = self._main_window.current_project()
+        
+        # Check if flashing is supported
+        flash_cfg = project.get("flash", {})
+        if not flash_cfg:
+            self.env_combo.addItem("Flashing not configured for this project")
+            self.env_combo.setEnabled(False)
+            self.upload_btn.setEnabled(False)
+            return
+
+        proj_dir = self._main_window.resolve_path(flash_cfg.get("project_dir", "."))
+        
+        # Unhook temporarily so we don't trigger _refresh_envs_from_path infinitely
+        self.dir_edit.blockSignals(True)
+        self.dir_edit.setText(proj_dir)
+        self.dir_edit.blockSignals(False)
+        
+        self._refresh_envs_from_path(proj_dir)
+        
+        # Select default
+        def_env = flash_cfg.get("default_environment", "")
+        if def_env:
+            idx = self.env_combo.findText(def_env)
+            if idx >= 0:
+                self.env_combo.setCurrentIndex(idx)
+
+
+    def _refresh_envs_from_path(self, proj_dir: str):
+        self.env_combo.clear()
+        
+        ini_path = os.path.join(proj_dir, "platformio.ini")
+        if not os.path.exists(ini_path):
+            self.env_combo.addItem(f"platformio.ini not found")
+            self.env_combo.setEnabled(False)
+            self.upload_btn.setEnabled(False)
+            return
+            
+        # Parse PlatformIO environments
+        envs = []
+        try:
+            with open(ini_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    m = re.match(r'^\[env:([^\]]+)\]', line.strip())
+                    if m:
+                        envs.append(m.group(1))
+        except Exception as e:
+            self.log_primary.append(f"<span style='color:#f38ba8;'>Failed to read platformio.ini: {e}</span>")
+            
+        if not envs:
+            self.env_combo.addItem("No [env:...] found in platformio.ini")
+            self.env_combo.setEnabled(False)
+            self.upload_btn.setEnabled(False)
+            return
+            
+        for env in envs:
+            self.env_combo.addItem(env)
+            
+        self.env_combo.setEnabled(True)
+        self.upload_btn.setEnabled(True)
+
+    def _browse_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Select firmware directory")
         if d:
-            self.fw_path.setText(d)
+            self.dir_edit.setText(d)
 
-    def _run_flash(self) -> None:
-        """Generate config.h then flash."""
-        self.flash_requested.emit()
-
-    def _run_flash_only(self) -> None:
-        """Flash without generating config.h — for diagnostic/pre-built projects."""
-        self.append_log("[FLASH] Skipping config.h generation (Flash Only mode)")
-        self.start_flash()
-
-    def start_flash(self) -> None:
-        fw_dir = self.fw_path.text().strip()
-        if not fw_dir:
-            self.append_log("[FLASH] ⚠️  No firmware directory set.")
+    def _start_upload(self) -> None:
+        env = self.env_combo.currentText()
+        if not env or not self.env_combo.isEnabled():
             return
-        self.flash_btn.setEnabled(False)
-        self.flash_only_btn.setEnabled(False)
-        self.abort_btn.setEnabled(True)
-        self._flash_worker = FlashWorker(fw_dir, self.env_combo.currentText())
-        self._flash_worker.output_line.connect(self.append_log)
-        self._flash_worker.finished_ok.connect(self._on_done_ok)
-        self._flash_worker.finished_err.connect(self._on_done_err)
-        self._flash_worker.start()
+            
+        proj_dir = self.dir_edit.text()
+        project = self._main_window.current_project()
 
-    def _run_build_only(self) -> None:
-        """Build without generating config.h or flashing."""
-        fw_dir = self.fw_path.text().strip()
-        if not fw_dir:
-            self.append_log("[BUILD] ⚠️  No firmware directory set.")
-            return
-        self._build_worker = BuildWorker(fw_dir, self.env_combo.currentText())
-        self._build_worker.output_line.connect(self.append_log)
-        self._build_worker.finished_ok.connect(lambda: self.append_log("[BUILD] ✅ Success"))
-        self._build_worker.finished_err.connect(lambda rc: self.append_log(f"[BUILD] ❌ Failed (rc={rc})"))
+        # Check for Software DFU Reboot capability
+        caps = project.get("capabilities", {})
+        if caps.get("supports_dfu_reboot", False):
+            self.log_primary.append("<span style='color:#f9e2af;'>==> Attempting Software DFU Reboot before upload...</span>")
+            self._main_window.send_serial_text("<REBOOT_DFU>")
+            import time
+            time.sleep(1.0) # Wait longer for STM32 to restart in DFU mode
+
+        # Disconnect GUI serial so Pio can access the port
+        if self._main_window.is_serial_connected():
+            self.log_primary.append("<span style='color:#f9e2af;'>==> Auto-disconnecting serial port for flashing...</span>")
+            self._main_window.toggle_serial_connection()
+            self._auto_reconnect_serial = True
+        else:
+            self._auto_reconnect_serial = False
+
+        self.log_primary.append(f"<span style='color:#89b4fa;'>==> Running: pio run --target upload -e {env}</span>")
+
+        cmd = ["pio", "run", "--target", "upload", "-e", env]
+        self._build_worker = ProcessWorker(cmd=cmd, cwd=proj_dir, env=self._main_window.runtime_env())
+        
+        self._build_worker.stdout_line.connect(self._on_log)
+        self._build_worker.stderr_line.connect(lambda line: self._on_log(line, "#f38ba8"))
+        self._build_worker.finished_ok.connect(self._on_done)
+        self._build_worker.finished_err.connect(self._on_error)
+        
+        self.upload_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         self._build_worker.start()
 
-    def _abort(self) -> None:
-        if self._flash_worker:
-            self._flash_worker.abort()
+    def _stop_worker(self) -> None:
         if self._build_worker:
-            self._build_worker.abort()
-        self._on_done_err(-1)
+            self.log_primary.append("<span style='color:#f9e2af;'>Stopping PlatformIO process...</span>")
+            self._build_worker.stop()
+            self._build_worker = None
+        self._reset_btns()
 
-    def _on_done_ok(self) -> None:
-        self.flash_btn.setEnabled(True)
-        self.flash_only_btn.setEnabled(True)
-        self.abort_btn.setEnabled(False)
+    def _on_log(self, line: str, color: str = "") -> None:
+        if color:
+            self.log_primary.append(f"<span style='color:{color};'>{line}</span>")
+        else:
+            # Colorize PIO output
+            if "SUCCESS" in line:
+                line = f"<span style='color:#a6e3a1;'>{line}</span>"
+            elif "FAILED" in line or "Error" in line:
+                line = f"<span style='color:#f38ba8;'>{line}</span>"
+            elif "Processing" in line:
+                line = f"<span style='color:#89b4fa; font-weight:bold;'>{line}</span>"
+            self.log_primary.append(line)
 
-    def _on_done_err(self, _rc: int) -> None:
-        self.flash_btn.setEnabled(True)
-        self.flash_only_btn.setEnabled(True)
-        self.abort_btn.setEnabled(False)
+    def _on_done(self) -> None:
+        self.log_primary.append("<span style='color:#a6e3a1; font-weight:bold;'>==> Upload Completed Successfully.</span>")
+        # Auto-detach if the board is still in DFU mode so it boots the new firmware
+        try:
+            result = subprocess.run(
+                ["dfu-util", "-e"], capture_output=True, text=True, timeout=5
+            )
+            if "Transitioning" in result.stdout or "Resetting" in result.stdout or result.returncode == 0:
+                self.log_primary.append("<span style='color:#89dceb;'>==> DFU detach sent — board is booting new firmware.</span>")
+            else:
+                # No DFU device found — that's fine, board was already in serial mode
+                pass
+        except Exception:
+            pass
+        self._reset_btns()
+        # Give the board time to enumerate then re-probe
+        QTimer.singleShot(2500, self._probe_usb)
+
+    def _on_error(self, code: int) -> None:
+        self.log_primary.append(f"<span style='color:#f38ba8; font-weight:bold;'>==> Upload Process Failed (Exit logic code {code}).</span>")
+        self._reset_btns()
+
+    def _reset_btns(self) -> None:
+        self.upload_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self._build_worker = None
+        
+        if getattr(self, "_auto_reconnect_serial", False):
+            if not self._main_window.is_serial_connected():
+                self.log_primary.append("<span style='color:#f9e2af;'>==> Auto-reconnecting serial port...</span>")
+                self._main_window.toggle_serial_connection()
+            self._auto_reconnect_serial = False

@@ -1,12 +1,12 @@
 """
 launch_tab.py — GUI wrapper for run_robot.sh.
-Allows launching RViz, Gazebo, or Real Hardware modes directly from the configurator.
+Allows launching RViz, Gazebo, or Real Hardware modes directly from the console.
 """
 import os
 import subprocess
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTextEdit, QGroupBox, QComboBox, QMessageBox, QLineEdit
+    QTextEdit, QGroupBox, QComboBox, QMessageBox, QLineEdit, QSlider
 )
 from PyQt6.QtCore import pyqtSignal, QThread, Qt
 from PyQt6.QtGui import QFont
@@ -87,8 +87,9 @@ class LaunchWorker(QThread):
 
 
 class LaunchTab(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, main_window):
+        super().__init__()
+        self._main_window = main_window
         self._worker: LaunchWorker | None = None
         self._test_worker: LaunchWorker | None = None
         
@@ -174,6 +175,37 @@ class LaunchTab(QWidget):
         cl.addStretch()
         root.addWidget(ctrls)
 
+        # ── Added: Manual Joint Jog (ROS2) ──────────────────────────────────
+        self._jog_box = QGroupBox("Manual Joint Jog (MoveIt Forward Position Controller)")
+        self._jog_box.setVisible(False)
+        jog_layout = QVBoxLayout(self._jog_box)
+        
+        self._jog_sliders = []
+        self._jog_labels = []
+        
+        for i in range(6):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"J{i+1}:"))
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(-314, 314) # -3.14 to 3.14 rad * 100
+            slider.setValue(0)
+            
+            lbl = QLabel("0.00 rad")
+            lbl.setMinimumWidth(60)
+            
+            # Connect slider to update label and publish ROS2 message
+            slider.valueChanged.connect(lambda val, idx=i, label=lbl: self._on_jog_slider_changed(idx, val, label))
+            slider.sliderReleased.connect(self._publish_jog_target)
+            
+            row.addWidget(slider, stretch=1)
+            row.addWidget(lbl)
+            
+            self._jog_sliders.append(slider)
+            self._jog_labels.append(lbl)
+            jog_layout.addLayout(row)
+            
+        root.addWidget(self._jog_box)
+
         # ── Real Hardware Options (Method 4 only) ───────────────────────────
         self._hw_options = QGroupBox("🔌 Real Hardware Settings")
         hw_lay = QHBoxLayout(self._hw_options)
@@ -206,6 +238,15 @@ class LaunchTab(QWidget):
 
         root.addWidget(self._hw_options)
         self._on_mode_changed()  # Set initial visibility
+
+        # ── Added: Description ──────────────────────────────────────────────
+        self.description = QLabel("")
+        self.description.setWordWrap(True)
+        self.description.setStyleSheet(
+            "background:#1f2430; border:1px solid #4c566a; border-radius:6px; padding:6px 10px;"
+        )
+        root.addWidget(self.description)
+        self._sync_description()
 
         # ── Output Logs (Split) ─────────────────────────────────────────────
         logs_layout = QHBoxLayout()
@@ -257,7 +298,7 @@ class LaunchTab(QWidget):
 
         self._worker = LaunchWorker(script_path, [])
         # Pass serial port env vars for Method 4
-        if script_name == "launch_moveit_real_hw.sh":
+        if script_name == "launch_moveit_real_hw.sh" or script_name == "launch_moveit_real_hw_tested_single_motor.sh":
             port = self._port_combo.currentText().strip()
             baud = self._baud_combo.currentText().strip()
             if port:
@@ -276,8 +317,28 @@ class LaunchTab(QWidget):
 
     def _on_mode_changed(self) -> None:
         """Show/hide hardware settings depending on selected launch mode."""
-        is_real_hw = self.mode_combo.currentData() == "launch_moveit_real_hw.sh"
+        data = self.mode_combo.currentData()
+        is_real_hw = data in ("launch_moveit_real_hw.sh", "launch_moveit_real_hw_tested_single_motor.sh")
         self._hw_options.setVisible(is_real_hw)
+        self._sync_description()
+
+    def _sync_description(self) -> None:
+        if not hasattr(self, 'description'):
+            return
+        data = self.mode_combo.currentData()
+        text = "No description available."
+        if data == "launch_gazebo_only.sh":
+            text = "<b>Gazebo Only:</b> Spawns the robot in an empty Gazebo world. The Joint State Broadcaster is active, but MoveIt is NOT running. You cannot plan paths."
+        elif data == "launch_moveit_with_gazebo.sh":
+            text = "<b>Gazebo + MoveIt:</b> Full simulation testing. Spawns the robot in Gazebo and launches MoveIt controllers. The ROS2 Jog sliders will command the simulated robot."
+        elif data == "launch_moveit_fake.sh":
+            text = "<b>Fake Hardware:</b> Launches RViz and MoveIt using fake joint states. Excellent for testing trajectory planning logic without a physics engine overhead."
+        elif data == "launch_moveit_real_hw.sh":
+            text = "<b>Real Hardware:</b> Standard bringup for the PAROL6 using ros2_control to talk to the Teensy. Do not use unless limits are tested and homing is complete."
+        elif data == "launch_moveit_real_hw_tested_single_motor.sh":
+            text = "<b>Real Hardware (Single Motor Test):</b> Uses the isolated verified launch parameters from the previous 1-motor branch."
+        
+        self.description.setText(text)
 
     def _refresh_ports(self) -> None:
         """Populate the port combo with currently visible serial devices."""
@@ -296,14 +357,20 @@ class LaunchTab(QWidget):
             self._port_combo.setCurrentText(current)
 
     def _set_button_state(self, is_running: bool) -> None:
+        script = self.mode_combo.currentData()
+        
         if is_running:
             self.launch_btn.setText("🛑 Stop")
             self.launch_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
             self.mode_combo.setEnabled(False)
+            
+            # Show jog box if we launched moveit (not just gazebo)
+            self._jog_box.setVisible("moveit" in script.lower())
         else:
             self.launch_btn.setText("🚀 Launch")
             self.launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
             self.mode_combo.setEnabled(True)
+            self._jog_box.setVisible(False)
 
     def _on_finished(self) -> None:
         self._worker = None
@@ -327,6 +394,7 @@ class LaunchTab(QWidget):
         except Exception as e:
             if hasattr(self, 'log_rviz'):
                 self.log_rviz.append(f"[LAUNCH] ❌ Error executing kill: {e}")
+
     def _run_auto_test(self) -> None:
         if self._test_worker:
             self.log_rviz.append("[TEST] Stopping currently running test...")
@@ -361,3 +429,30 @@ class LaunchTab(QWidget):
         self._test_worker = None
         self.test_btn.setText("▶️ Run Auto-Test")
         self.test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
+
+    # ── ROS2 Joint Jogging ──────────────────────────────────────────────
+    def _on_jog_slider_changed(self, idx: int, value: int, label: QLabel) -> None:
+        rad = value / 100.0
+        label.setText(f"{rad:.2f} rad")
+
+    def _publish_jog_target(self) -> None:
+        if not self._worker:
+            return
+            
+        pos = [s.value() / 100.0 for s in self._jog_sliders]
+        
+        # We use a pure bash wrapper to avoid depending on rclpy in this basic PyQt console
+        pub_cmd = [
+            "bash", "-lc",
+            f"ros2 topic pub --once /forward_position_controller/commands std_msgs/msg/Float64MultiArray \"{{layout: {{dim: [], data_offset: 0}}, data: {pos}}}\""
+        ]
+        
+        from core.process_workers import ProcessWorker
+        ProcessWorker(
+            cmd=pub_cmd,
+            cwd=self._main_window.resolve_path("."),
+            env=self._main_window.runtime_env()
+        ).start()
+        
+        self.log_rviz.append(f">> manually publishing jog target: {pos}")
+
