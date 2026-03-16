@@ -280,8 +280,7 @@ class FlashTab(QWidget):
         cmd = ["pio", "run", "--target", "upload", "-e", env]
         self._build_worker = ProcessWorker(cmd=cmd, cwd=proj_dir, env=self._main_window.runtime_env())
         
-        self._build_worker.stdout_line.connect(self._on_log)
-        self._build_worker.stderr_line.connect(lambda line: self._on_log(line, "#f38ba8"))
+        self._build_worker.output_line.connect(self._on_log)
         self._build_worker.finished_ok.connect(self._on_done)
         self._build_worker.finished_err.connect(self._on_error)
         
