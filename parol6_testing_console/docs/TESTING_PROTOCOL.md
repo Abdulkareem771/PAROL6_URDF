@@ -3,6 +3,10 @@
 Each phase maps to a **saved config preset** in the GUI. Load the preset, flash, test, save notes.  
 Do **NOT** skip phases. Each one catches a class of bug before it becomes dangerous.
 
+> [!NOTE]
+> This protocol covers both **Teensy 4.1** and **STM32F411CE BlackPill** targets.  
+> STM32-specific steps are marked with 🔵.
+
 ---
 
 ## Equipment Checklist (Before Powering On)
@@ -11,9 +15,10 @@ Do **NOT** skip phases. Each one catches a class of bug before it becomes danger
 |:--|:--|
 | Oscilloscope (2+ channel) | STEP/DIR signal integrity. Not optional. |
 | Bench PSU with current limit | Set to 24 V, limit to 0.5 A initially |
-| USB cable (Teensy) | Flashing and serial monitor |
+| USB cable (board → PC) | Flashing and serial monitor |
 | Multimeter | Continuity, motor coil resistance |
 | Logic analyzer (optional) | Captures all 6 STEP lines simultaneously |
+| 🔵 STM32 only: confirm PA10 disconnected | BlackPill DFU errata — PA10 must float |
 
 **Power-on sequence:**
 1. Flash firmware with current phase config
@@ -211,11 +216,55 @@ All features ON, all joints enabled.
 3. Monitor SEQ gap counter in status bar — should read `0 dropped` at 100 Hz
 
 ### Final Acceptance Criteria
-| Metric | Target |
-|:--|:--|
-| ISR time (max) | < 25 µs |
-| Control jitter (std) | < 50 µs |
-| Tracking error at 25 Hz | < 20 mrad |
-| Tracking error at 100 Hz | < 8 mrad |
-| Dropped packets | 0 |
-| Supervisor faults (idle) | 0 |
+
+| Metric | Teensy 4.1 | BlackPill STM32 |
+|:--|:--|:--|
+| ISR time (max) | < 25 µs | N/A (no profiler) |
+| Control jitter (std) | < 50 µs | — |
+| ACK rate | ~1000 pkts/s | ~50 pkts/s |
+| Tracking error at 25 Hz | < 20 mrad | < 30 mrad |
+| Tracking error at 100 Hz | < 8 mrad | — |
+| Dropped packets | 0 | 0 |
+| Supervisor faults (idle) | 0 | N/A |
+| DFU reboot round-trip | N/A | < 3 s |
+
+---
+
+## 🔵 STM32 BlackPill — Pre-Phase Checklist
+
+Before running the standard phases on a BlackPill target, verify:
+
+- [ ] `lsusb` shows `0483:df11` (DFU) or `0483:5740` (CDC) — board is enumerating
+- [ ] **PA10 not connected** — BlackPill DFU errata (PA10 must float)
+- [ ] Flash tab environment = `blackpill_f411ce`
+- [ ] Initial flash via BOOT0+NRST successful (DFU download 100%)
+- [ ] `INIT_OK` received in Serial tab after board resets
+- [ ] ACK packets visible in Plot tab (interleaved format auto-detected, ~50 pkts/s)
+
+### 🔵 Phase 0.5 — DFU Reboot Round-Trip (STM32 only)
+
+Verify software DFU entry works before running any hardware tests:
+
+1. Board connected via USB-CDC — Serial tab shows `INIT_OK`
+2. Click **`<REBOOT_DFU>`** macro in Serial tab
+3. `lsusb` changes to `0483:df11` within 1–2 s ✅
+4. Flash tab status panel shows `⚡ DFU mode detected` ✅
+5. Click **⏏ Detach DFU** — board reboots back into firmware ✅
+6. `/dev/ttyACM0` reappears and `INIT_OK` is printed again ✅
+
+**Pass criteria:** Full round-trip completes in < 3 seconds without pressing any physical button.  
+Once this passes, every subsequent `🚀 Build & Upload` click is fully automatic.
+
+### 🔵 Phase 1.5 — STM32 Encoder Capture (PWM Input Mode)
+
+The `realtime_servo_blackpill` firmware uses hardware PWM Input mode — no interrupts, just register reads.
+
+1. Connect board and open **Serial** tab
+2. Manually rotate a motor shaft by hand (J5 or J6 — they are enabled in default config)
+3. Watch **Plot** tab — `actual_pos` should change smoothly
+4. ISR bar in Jog tab will read 0 (no profiler in blackpill firmware — this is expected)
+
+**Pass criteria:**
+- Position changes proportionally to shaft rotation
+- No spikes or resets mid-rotation
+- Stationary shaft → stable position ± 0.01 rad
