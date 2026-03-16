@@ -207,30 +207,14 @@ void controlUpdate(void)
 // TIM11 is a simple 16-bit, single-channel timer on APB2.
 // Clock = 96 MHz. PSC=95 → 1 MHz. ARR=1999 → 500 Hz.
 
+#include <HardwareTimer.h>
+
 static void controlTimerInit(void)
 {
-    RCC->APB2ENR |= RCC_APB2ENR_TIM11EN;
-
-    TIM11->CR1  = 0;
-    TIM11->PSC  = 95;       // 96 MHz / 96 = 1 MHz tick
-    TIM11->ARR  = 1999;     // 1 MHz / 2000 = 500 Hz
-    TIM11->DIER = TIM_DIER_UIE;  // Update interrupt enable
-    TIM11->EGR  = TIM_EGR_UG;    // Generate update event (load PSC)
-    TIM11->SR   = 0;              // Clear flags
-    TIM11->CR1  = TIM_CR1_CEN;    // Enable timer
-
-    // Priority 3: lower than encoder capture ISRs (if any), higher than USB
-    NVIC_SetPriority(TIM1_TRG_COM_TIM11_IRQn, 3);
-    NVIC_EnableIRQ(TIM1_TRG_COM_TIM11_IRQn);
-}
-
-// TIM11 shares IRQn with TIM1 trigger/commutation
-extern "C" void TIM1_TRG_COM_TIM11_IRQHandler(void)
-{
-    if (TIM11->SR & TIM_SR_UIF) {
-        TIM11->SR = ~TIM_SR_UIF;  // Clear flag (write 0 to UIF, 1s elsewhere)
-        controlUpdate();
-    }
+    HardwareTimer *tim11 = new HardwareTimer(TIM11);
+    tim11->setOverflow(CONTROL_FREQUENCY_HZ, HERTZ_FORMAT);
+    tim11->attachInterrupt(controlUpdate);
+    tim11->resume();
 }
 
 // ============================================================================

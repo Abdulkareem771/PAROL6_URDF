@@ -74,6 +74,31 @@
           }
         ]
       }
+    },
+    {
+      "id": "realtime_servo_blackpill",
+      "name": "BlackPill — Realtime Servo (Teammate)",
+      "docs_path": "docs/STM32_BRINGUP.md",
+      "serial": {
+        "default_port": "/dev/ttyACM0",
+        "default_baud": 115200,
+        "macros": ["<ENABLE>"]
+      },
+      "flash": {
+        "project_dir": "../PAROL6/firmware/realtime_servo_blackpill",
+        "default_environment": "blackpill_realtime",
+        "tooling_hint": "dfu-util"
+      },
+      "capabilities": {
+        "supports_jog": true,
+        "supports_fault_log": false,
+        "supports_ack_plot": true,
+        "supports_dtr_reboot": false,
+        "supports_dfu_reboot": false
+      },
+      "ros2": {
+        "launch_actions": []
+      }
     }
   ]
 }
