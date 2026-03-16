@@ -3,19 +3,14 @@ import numpy as np
 import os
 import glob
 from pathlib import Path
-import matplotlib.pyplot as plt
 
-EPSILON_FACTOR = 0.05
-EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
+
 CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
-
 
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
 SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.png"
-
-IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
 def segment_blocks(image_path):
     # 1. Read the image
@@ -41,13 +36,6 @@ def segment_blocks(image_path):
     lower_blue = np.array([100, 50, 50])
     upper_blue = np.array([140, 255, 255])
 
-    """
-    # Red range (Red wraps around 0 and 180, so we combine two ranges)
-    lower_red1 = np.array([0, 70, 50])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([170, 70, 50])
-    upper_red2 = np.array([180, 255, 255])
-    """
 
     # 4. Create Masks (G and R matrices)
     # G matrix: 255 for green pixels, 0 otherwise
@@ -55,13 +43,6 @@ def segment_blocks(image_path):
 
     # B matrix: 255 for blue pixels, 0 otherwise
     B = cv2.inRange(hsv, lower_blue, upper_blue)
-
-    """
-    # R matrix: combine both ends of the red spectrum
-    mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    R = cv2.bitwise_or(mask_red1, mask_red2)
-    """
     
     # Optional: Clean up noise with morphological operations
     kernel = np.ones((5, 5), np.uint8)
@@ -114,19 +95,12 @@ def segment_blocks(image_path):
     if contour_I is not None:
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
     
-
-    
     return img_annotated
 
 
 img_annotated = segment_blocks(SINGLE_IMAGE)
 
-
-# Subplot 4: Annotated Image with Seam Path
-plt.figure(figsize=(20, 5))
-plt.title("Seam Path")
-plt.imshow(img_annotated)
-plt.axis('off')
-
-plt.tight_layout()
-plt.show()
+if img_annotated is not None:
+    cv2.imshow("Seam Path", img_annotated)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
