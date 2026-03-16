@@ -47,6 +47,15 @@ public:
 
   std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
+  // Command mode switching (allow multiple command interfaces like pos+vel)
+  hardware_interface::return_type prepare_command_mode_switch(
+    const std::vector<std::string> & start_interfaces,
+    const std::vector<std::string> & stop_interfaces) override;
+
+  hardware_interface::return_type perform_command_mode_switch(
+    const std::vector<std::string> & start_interfaces,
+    const std::vector<std::string> & stop_interfaces) override;
+
   // Communication with hardware
   hardware_interface::return_type read(
     const rclcpp::Time & time, const rclcpp::Duration & period) override;

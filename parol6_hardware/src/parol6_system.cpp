@@ -155,11 +155,17 @@ CallbackReturn PAROL6System::on_configure(
     serial_.SetParity(LibSerial::Parity::PARITY_NONE);
     serial_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
     serial_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
+
+    serial_.SetDTR(true);
+    serial_.SetRTS(true);
     
     // Non-blocking with timeout protection
     // VTIME is in deciseconds (1 = 100 ms)
     serial_.SetVTime(1);   // 100 ms timeout
     serial_.SetVMin(0);    // Non-blocking
+
+    // Flush any stale data
+    serial_.FlushIOBuffers();
 
     if (!serial_.IsOpen()) {
       if (!allow_spoofing_) {
@@ -206,11 +212,16 @@ CallbackReturn PAROL6System::on_activate(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
   RCLCPP_INFO(logger_, "⚡ on_activate() - Controllers will now call read()/write()");
-  
-  // Initialize command to current state (good practice)
-  hw_command_positions_ = hw_state_positions_;
-  
-  RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE");
+
+  // Do NOT initialize commands here — wait until first real feedback arrives in read().
+  // Initializing to zeros now would cause write() to command all joints to position 0,
+  // arming the motors and driving them toward zero before we know where they actually are.
+  // Commands will be properly seeded in read() when first_feedback_received_ is set.
+  // Fill with NaN so any premature write() calls are detectable and safe.
+  std::fill(hw_command_positions_.begin(), hw_command_positions_.end(), std::numeric_limits<double>::quiet_NaN());
+  std::fill(hw_command_velocities_.begin(), hw_command_velocities_.end(), 0.0);
+
+  RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE (waiting for first encoder feedback before sending commands)");
   return CallbackReturn::SUCCESS;
 }
 
@@ -409,6 +420,9 @@ return_type PAROL6System::read(
     // Parse sequence number
     uint32_t received_seq = std::stoul(tokens[1]);
     
+    // Capture state BEFORE we update first_feedback_received_
+    bool is_first_packet = !first_feedback_received_;
+    
     // Wraparound-safe packet loss detection
     if (first_feedback_received_) {
       uint32_t expected_seq = last_received_seq_ + 1;
@@ -444,6 +458,7 @@ return_type PAROL6System::read(
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
+
     last_received_seq_ = received_seq;
     packets_received_++;
     
@@ -492,30 +507,38 @@ return_type PAROL6System::read(
         RCLCPP_DEBUG(logger_, "📦 Parsing flat Teensy ACK (%zu tokens)", tokens.size());
       }
 
-      bool all_valid = true;
+      // Soft bounds: log a warning but ALWAYS apply real encoder feedback.
+      // Hard rejection caused a runaway spiral: reject → spoof → echo commands → MoveIt
+      // sends bigger positions → encoder accumulates → reject again → infinite loop.
       for (size_t i = 0; i < 6; ++i) {
         double range = joint_upper[i] - joint_lower[i];
         if (candidate_pos[i] < joint_lower[i] - 0.1 * range ||
             candidate_pos[i] > joint_upper[i] + 0.1 * range) {
           RCLCPP_WARN_THROTTLE(logger_, clock_, 2000,
-            "Joint J%zu feedback %.4f outside bounds [%.2f, %.2f] — ignoring packet",
+            "⚠️ Joint J%zu position %.4f outside URDF limits [%.2f, %.2f] — clamping to limits",
             i + 1, candidate_pos[i], joint_lower[i], joint_upper[i]);
-          all_valid = false;
-          break;
+          candidate_pos[i] = std::clamp(candidate_pos[i], joint_lower[i], joint_upper[i]);
         }
       }
-      
-      if (all_valid) {
+
+      for (size_t i = 0; i < 6; ++i) {
+        hw_state_positions_[i] = candidate_pos[i];
+        hw_state_velocities_[i] = candidate_vel[i];
+      }
+
+      // On the very first packet: seed command with real encoder positions so
+      // write() sends current state (not zeros/NaN) when the firmware first arms.
+      if (is_first_packet) {
         for (size_t i = 0; i < 6; ++i) {
-          hw_state_positions_[i] = candidate_pos[i];
-          hw_state_velocities_[i] = candidate_vel[i];
+          hw_command_positions_[i] = candidate_pos[i];
+          hw_command_velocities_[i] = 0.0;
         }
-        return return_type::OK; // Skip spoofing if successfully parsed and valid
+        RCLCPP_INFO(logger_, "📌 Commands seeded from first encoder feedback: [ %.3f %.3f %.3f %.3f %.3f %.3f ] — motors safe",
+                    candidate_pos[0], candidate_pos[1], candidate_pos[2], 
+                    candidate_pos[3], candidate_pos[4], candidate_pos[5]);
       }
-      if (!allow_spoofing_) {
-        return return_type::ERROR;
-      }
-      // Fall through to spoof if any value was out of range
+
+      return return_type::OK;
     }
     
     // Log statistics every 5 minutes (thesis validation data)
@@ -563,17 +586,27 @@ spoof_states:
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Format: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
-  // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
-  char buffer[512];  // Larger buffer for velocity data
-  
-  // Use PRIu32 for sequence number portability
-  // #include <inttypes.h> -> Already at top
-  
-  // Kinematic sign correction from on_init() (xacro ros_invert params)
-  
+  // Safety guard: do not send any commands until we have real encoder feedback.
+  // Without this guard, write() would blast position=NaN or position=0 to all
+  // joints immediately on controller activation, arming the motors and driving
+  // them toward zero before we know where they actually are.
+  if (!first_feedback_received_) {
+    RCLCPP_INFO_THROTTLE(logger_, clock_, 2000,
+      "⏳ write() suppressed — waiting for first encoder feedback before commanding motors");
+    return return_type::OK;
+  }
+
   // Format: <SEQ,J1_p,J2_p,J3_p,J4_p,J5_p,J6_p,J1_v,J2_v,J3_v,J4_v,J5_v,J6_v>
+  char buffer[512];
   
+  // Safety: don't write if commands haven't been seeded yet (NaN from on_activate)
+  for (size_t i = 0; i < 6; ++i) {
+    if (std::isnan(hw_command_positions_[i])) {
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, "⚠️ write() skipped — command position NaN for joint %zu", i);
+      return return_type::OK;
+    }
+  }
+
   int written = snprintf(buffer, sizeof(buffer),
            "<%" PRIu32 ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f>\n",
            seq_counter_++,
@@ -612,6 +645,27 @@ return_type PAROL6System::write(
   }
   
   return return_type::OK;
+}
+
+// ============================================================================
+// COMMAND MODE SWITCHING
+// ============================================================================
+// Required by ROS2 Control Humble to allow multiple command interfaces
+// (e.g. position and velocity) per joint.
+// ============================================================================
+
+hardware_interface::return_type PAROL6System::prepare_command_mode_switch(
+  const std::vector<std::string>& /*start_interfaces*/,
+  const std::vector<std::string>& /*stop_interfaces*/)
+{
+  return hardware_interface::return_type::OK;
+}
+
+hardware_interface::return_type PAROL6System::perform_command_mode_switch(
+  const std::vector<std::string>& /*start_interfaces*/,
+  const std::vector<std::string>& /*stop_interfaces*/)
+{
+  return hardware_interface::return_type::OK;
 }
 
 }  // namespace parol6_hardware

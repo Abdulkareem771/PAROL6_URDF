@@ -1,10 +1,8 @@
 import os
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
-from launch.conditions import IfCondition, UnlessCondition
+
 from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
 
 
@@ -68,48 +66,12 @@ def generate_launch_description():
         arguments=["0.0", "0.0", "0.0", "0.0", "0.0", "0.0", "world", "base_link"],
     )
 
-    # Publish TF
-    robot_state_publisher = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        name="robot_state_publisher",
-        output="both",
-        parameters=[moveit_config.robot_description],
-    )
-
-    # ros2_control using FakeSystem as hardware
-    ros2_controllers_path = os.path.join(
-        get_package_share_directory("parol6_moveit_config"),
-        "config",
-        "ros2_controllers_tested_single_motor.yaml",
-    )
-    
-    ros2_control_node = Node(
-        package="controller_manager",
-        executable="ros2_control_node",
-        parameters=[moveit_config.robot_description, ros2_controllers_path],
-        output="both",
-    )
-
-    # Load controllers
-    load_controllers = []
-    for controller in ["parol6_arm_controller", "joint_state_broadcaster"]:
-        load_controllers += [
-            Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=[controller],
-                output="screen",
-            )
-        ]
-
     return LaunchDescription(
         [
             move_group_node,
             rviz_node,
             static_tf_node,
-            robot_state_publisher,
-            ros2_control_node,
+            # The real-hardware parent launch already owns ros2_control,
+            # controller spawners, and robot_state_publisher.
         ]
-        + load_controllers
     )

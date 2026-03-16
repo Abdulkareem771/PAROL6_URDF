@@ -86,8 +86,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "serial_port",
-            default_value="/dev/ttyACM0",
-            description="Serial port for Teensy 4.1 (native USB = /dev/ttyACM0)",
+            default_value="/dev/parol6",
+            description="Serial port for BlackPill (udev symlink = /dev/parol6)",
         )
     )
 

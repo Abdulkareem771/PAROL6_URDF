@@ -42,7 +42,7 @@
       "name": "STM32 Black Pill Bringup (Testing)",
       "docs_path": "../docs/FIRMWARE_CONFIG_ROS_CHANGES_2026-03-11.md",
       "serial": {
-        "default_port": "/dev/ttyACM0",
+        "default_port": "/dev/parol6",
         "default_baud": 115200,
         "macros": ["<ENABLE>", "<DISABLE>", "<HOME>", "<RESET>", "<REBOOT_DFU>"]
       },
@@ -80,7 +80,7 @@
       "name": "BlackPill — Realtime Servo (Teammate)",
       "docs_path": "docs/STM32_BRINGUP.md",
       "serial": {
-        "default_port": "/dev/ttyACM0",
+        "default_port": "/dev/parol6",
         "default_baud": 115200,
         "macros": ["<ENABLE>", "<DISABLE>", "<HOME>", "<RESET>"]
       },
