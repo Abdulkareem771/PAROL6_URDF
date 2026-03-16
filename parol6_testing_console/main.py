@@ -83,7 +83,12 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_tabs()
         self._build_status_bar()
-        self._set_project(self._settings.value("last_project_id", ""))
+        
+        last_pid = self._settings.value("last_project_id", "realtime_servo_blackpill")
+        if last_pid == "parol6_stm32_bringup":
+            # Force transition for the user's current session
+            last_pid = "realtime_servo_blackpill"
+        self._set_project(last_pid)
 
     def _load_registry(self):
         if not os.path.exists(REGISTRY_PATH):
@@ -141,6 +146,25 @@ class MainWindow(QMainWindow):
         # Tabs will be instantiated and added when a project is selected
         # since their visibility depends on the active project's capabilities.
         self._tabs_dict = {}
+        self._tabs.currentChanged.connect(self._animate_tab_change)
+        self._anim = None
+
+    def _animate_tab_change(self, index: int):
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+        widget = self._tabs.widget(index)
+        if not widget:
+            return
+            
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        
+        self._anim = QPropertyAnimation(effect, b"opacity")
+        self._anim.setDuration(250)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.start()
 
     def _build_status_bar(self):
         sb = QStatusBar()

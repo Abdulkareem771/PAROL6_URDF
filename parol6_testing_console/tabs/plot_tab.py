@@ -107,35 +107,44 @@ class PlotTab(QWidget):
             pw.showGrid(x=True, y=True, alpha=0.3)
             pw.setLabel("bottom", "Time (s)")
             pw.addLegend(offset=(10, 10))
+            pw.setDownsampling(auto=True, mode='peak')
+            pw.setClipToView(True)
 
         self._pw_pwm.setYRange(0, 100, padding=0.05)
         self._isr_limit = pg.InfiniteLine(
             pos=25,
             angle=0,
-            pen=pg.mkPen("#f38ba8", width=1, style=Qt.PenStyle.DashLine),
+            pen=pg.mkPen("#f38ba8", width=1.5, style=Qt.PenStyle.DashLine),
             label="25us limit",
             labelOpts={"color": "#f38ba8"},
         )
         self._pw_isr.addItem(self._isr_limit)
 
         self._pos_curves = [
-            self._pw_pos.plot(pen=pg.mkPen(JOINT_COLORS[i], width=2), name=f"J{i+1}") for i in range(N_JOINTS)
+            self._pw_pos.plot(pen=pg.mkPen(JOINT_COLORS[i], width=2.5), name=f"J{i+1}") for i in range(N_JOINTS)
         ]
         self._vel_curves = [
             self._pw_vel.plot(
-                pen=pg.mkPen(JOINT_COLORS[i], width=2, style=Qt.PenStyle.DashLine),
+                pen=pg.mkPen(JOINT_COLORS[i], width=2),
                 name=f"J{i+1}",
             )
             for i in range(N_JOINTS)
         ]
         self._pwm_curves = [
             self._pw_pwm.plot(
-                pen=pg.mkPen(JOINT_COLORS[i], width=2, style=Qt.PenStyle.DotLine),
+                pen=pg.mkPen(JOINT_COLORS[i], width=2),
+                fillLevel=0.0,
+                fillBrush=pg.mkBrush(JOINT_COLORS[i] + "40"),  # 25% opacity
                 name=f"J{i+1}",
             )
             for i in range(N_JOINTS)
         ]
-        self._isr_curve = self._pw_isr.plot(pen=pg.mkPen("#f9e2af", width=2), name="ISR us")
+        self._isr_curve = self._pw_isr.plot(
+            pen=pg.mkPen("#f9e2af", width=2.5),
+            fillLevel=0.0,
+            fillBrush=pg.mkBrush("#f9e2af40"),
+            name="ISR us"
+        )
 
         root.addWidget(self._pw_pos, stretch=3)
         root.addWidget(self._pw_vel, stretch=3)

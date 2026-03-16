@@ -106,25 +106,20 @@ void serialCommProcessIncoming(void)
 
 void serialCommSendFeedback(void)
 {
-    char buf[COMMAND_BUFFER_SIZE];
-    int pos = 0;
-
-    pos += snprintf(buf + pos, sizeof(buf) - pos, "<ACK,%lu",
-                    (unsigned long)tx_seq++);
+    Serial.print("<ACK,");
+    Serial.print((unsigned long)tx_seq++);
 
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
         const JointState *st = controlGetState(i);
         if (st) {
-            pos += snprintf(buf + pos, sizeof(buf) - pos,
-                            ",%.3f,%.3f",
-                            (double)st->actual_position,
-                            (double)st->velocity_command);
+            Serial.print(",");
+            Serial.print(st->actual_position, 3);
+            Serial.print(",");
+            Serial.print(st->velocity_command, 3);
         } else {
-            pos += snprintf(buf + pos, sizeof(buf) - pos, ",0.000,0.000");
+            Serial.print(",0.000,0.000");
         }
     }
 
-    pos += snprintf(buf + pos, sizeof(buf) - pos, ">\n");
-
-    Serial.write(buf, pos);
+    Serial.print(">\n");
 }
