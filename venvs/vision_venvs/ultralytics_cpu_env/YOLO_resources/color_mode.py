@@ -5,10 +5,6 @@ import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-y_min_G, y_max_G = 0, 0
-x_min_G, x_max_G = 0, 0
-y_min_R, y_max_R = 0, 0
-x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
 EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
 CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
@@ -152,77 +148,5 @@ def segment_blocks(image_path):
     """
     return G, B, img_annotated, img_rgb
 
-def process_folder(folder_path, output_folder):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # Supported extensions
-    extensions = ['*.jpg', '*.jpeg', '*.png']
-    image_files = []
-    for ext in extensions:
-        image_files.extend(glob.glob(os.path.join(folder_path, ext)))
-
-    for img_path in image_files:
-        filename = os.path.basename(img_path).split('.')[0]
-        G, B = segment_blocks(img_path)
-
-        if G is not None:
-            # Save the masks as images (or keep as matrices for further ops)
-            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_G.png"), G)
-            cv2.imwrite(os.path.join(output_folder, f"{filename}_mask_B.png"), B)
-            print(f"Processed: {filename}")
-
-
-# --- Execution ---
-#process_folder('input_folder_path', 'output_folder_path')
-# Replace 'image.jpg' with your file or use the folder function
 
 g_matrix, b_matrix, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
-
-"""
-print(f"g_matrix dtype: {g_matrix.dtype}")
-print(f"img_annotated dtype: {img_annotated.dtype}")
-
-
-print(f"img_annotated shape: {img_annotated.shape}")
-print(f"type(img_annotated): {type(img_annotated)}")
-print(f"type(g_matrix): {type(g_matrix)}")
-
-"""
-"""
-#plt.figure(figsize=(20, 20))
-
-# Subplot 1: Original Image
-#plt.subplot(1, 1)
-plt.title("Original Image")
-plt.imshow(img_rgb)
-plt.axis('off')
-
-"""
-
-
-# Subplot 2: G Matrix (Green Mask)
-plt.subplot(1, 2, 1)
-plt.title("Green Object")
-plt.imshow(g_matrix, cmap='gray')
-plt.axis('off')
-
-# Subplot 3: R Matrix (Red Object)
-plt.subplot(1, 2, 2)
-plt.title("Blue Object")
-plt.imshow(b_matrix, cmap='gray')
-plt.axis('off')
-
-
-"""
-# Subplot 4: Annotated Image with Bounding Boxes
-#plt.subplot(1, 4, 4)
-plt.title("Result")
-plt.imshow(img_annotated)
-plt.axis('off')
-"""
-plt.tight_layout()
-plt.show()
-
-
-
