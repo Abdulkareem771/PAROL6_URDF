@@ -37,6 +37,7 @@ setup(
             'capture_images = parol6_vision.capture_images_node:main',
             'read_image = parol6_vision.read_image_node:main',
             'yolo_segment = parol6_vision.yolo_segment:main',
+            'color_mode = parol6_vision.color_mode:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
