@@ -115,38 +115,18 @@ def segment_blocks(image_path):
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
     
 
-    """
-    # 6. GUI Display Section
-    plt.figure(figsize=(20, 5))
-
-    # Subplot 1: Original Image
-    plt.subplot(1, 4, 1)
-    plt.title("Original Image")
-    plt.imshow(img_rgb)
-    plt.axis('off')
-
-    # Subplot 2: G Matrix (Green Mask)
-    plt.subplot(1, 4, 2)
-    plt.title("G Matrix (Green Object)")
-    plt.imshow(G, cmap='gray')
-    plt.axis('off')
-
-    # Subplot 3: R Matrix (Red Object)
-    plt.subplot(1, 4, 3)
-    plt.title("B Matrix (Blue Object)")
-    plt.imshow(B, cmap='gray')
-    plt.axis('off')
-
-    # Subplot 4: Annotated Image with Bounding Boxes
-    plt.subplot(1, 4, 4)
-    plt.title("Seam Path")
-    plt.imshow(img_annotated)
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.show()
-    """
-    return G, B, img_annotated, img_rgb
+    
+    return img_annotated
 
 
-g_matrix, b_matrix, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
+img_annotated = segment_blocks(SINGLE_IMAGE)
+
+
+# Subplot 4: Annotated Image with Seam Path
+plt.figure(figsize=(20, 5))
+plt.title("Seam Path")
+plt.imshow(img_annotated)
+plt.axis('off')
+
+plt.tight_layout()
+plt.show()
