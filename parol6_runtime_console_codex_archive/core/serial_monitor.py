@@ -179,3 +179,9 @@ class SerialWorker(QThread):
     def stop(self) -> None:
         self._running = False
         self.wait(2000)
+
+    def pulse_dtr(self, duration_ms: int = 50) -> None:
+        if self._ser and self._ser.is_open:
+            self._ser.dtr = True
+            time.sleep(duration_ms / 1000.0)
+            self._ser.dtr = False

@@ -11,7 +11,9 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QSlider,
 )
+from PyQt6.QtCore import Qt
 
 from parol6_runtime_console.core.serial_monitor import list_serial_ports
 from parol6_runtime_console.core.process_workers import ProcessWorker
@@ -72,6 +74,37 @@ class Ros2Tab(QWidget):
         test_layout.addStretch()
         root.addWidget(test_box)
 
+        # Added: Manual Joint Jog
+        self._jog_box = QGroupBox("Manual Joint Jog (ROS2)")
+        self._jog_box.setVisible(False)
+        jog_layout = QVBoxLayout(self._jog_box)
+        
+        self._jog_sliders = []
+        self._jog_labels = []
+        
+        for i in range(6):
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"J{i+1}:"))
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(-314, 314) # -3.14 to 3.14 rad * 100
+            slider.setValue(0)
+            
+            lbl = QLabel("0.00 rad")
+            lbl.setMinimumWidth(60)
+            
+            # Connect slider to update label and publish ROS2 message
+            slider.valueChanged.connect(lambda val, idx=i, label=lbl: self._on_jog_slider_changed(idx, val, label))
+            slider.sliderReleased.connect(self._publish_jog_target)
+            
+            row.addWidget(slider, stretch=1)
+            row.addWidget(lbl)
+            
+            self._jog_sliders.append(slider)
+            self._jog_labels.append(lbl)
+            jog_layout.addLayout(row)
+            
+        root.addWidget(self._jog_box)
+
         self._hw_options = QGroupBox("Real Hardware Settings")
         hw_layout = QHBoxLayout(self._hw_options)
         hw_layout.addWidget(QLabel("Serial Port:"))
@@ -120,6 +153,7 @@ class Ros2Tab(QWidget):
         self._set_test_button_state(False)
         self._refresh_ports()
         self._sync_hw_visibility()
+        self._sync_jog_box_visibility(False)
 
     def load_project(self, project: dict | None) -> None:
         self._project = project
@@ -249,15 +283,17 @@ class Ros2Tab(QWidget):
         self._kill_worker.finished_err.connect(self._on_kill_error)
         self._kill_worker.start()
 
-    def _on_launch_done(self) -> None:
-        self.log_primary.append("ROS2 launch finished.")
-        self._launch_worker = None
-        self._set_launch_button_state(False)
-
     def _on_launch_error(self, code: int) -> None:
         self.log_primary.append(f"ROS2 launch stopped with exit code {code}.")
         self._launch_worker = None
         self._set_launch_button_state(False)
+        self._sync_jog_box_visibility(False)
+
+    def _on_launch_done(self) -> None:
+        self.log_primary.append("ROS2 launch finished.")
+        self._launch_worker = None
+        self._set_launch_button_state(False)
+        self._sync_jog_box_visibility(False)
 
     def _on_test_done(self) -> None:
         self.log_primary.append("Auto-test finished.")
@@ -297,6 +333,7 @@ class Ros2Tab(QWidget):
 
     def _set_launch_button_state(self, running: bool) -> None:
         self.launch_combo.setEnabled(not running)
+        self._sync_jog_box_visibility(running)
         if running:
             self.launch_btn.setText("Stop")
             self._launch_anim_phase = False
@@ -328,3 +365,35 @@ class Ros2Tab(QWidget):
         self._test_anim_phase = not self._test_anim_phase
         bg = "#f9e2af" if self._test_anim_phase else "#fab387"
         self.test_btn.setStyleSheet(f"background:{bg}; color:#1e1e2e; font-weight:bold;")
+
+    def _sync_jog_box_visibility(self, is_running: bool) -> None:
+        action = self.current_launch_action()
+        is_real_or_fake = action and "MoveIt" in action.get("name", "")
+        self._jog_box.setVisible(is_running and is_real_or_fake)
+
+    def _on_jog_slider_changed(self, idx: int, value: int, label: QLabel) -> None:
+        rad = value / 100.0
+        label.setText(f"{rad:.2f} rad")
+
+    def _publish_jog_target(self) -> None:
+        if not self._launch_worker:
+            return
+            
+        pos = [s.value() / 100.0 for s in self._jog_sliders]
+        
+        # We use a pure bash wrapper to avoid depending on rclpy in this basic PyQt console
+        # The topic type is likely std_msgs/Float64MultiArray or sensor_msgs/JointState.
+        # Assuming the simplest method for MoveIt is joint_angle_targets via custom service or
+        # using standard CLI pub to a forward_position_controller.
+        pub_cmd = [
+            "bash", "-lc",
+            f"ros2 topic pub --once /forward_position_controller/commands std_msgs/msg/Float64MultiArray \"{{layout: {{dim: [], data_offset: 0}}, data: {pos}}}\""
+        ]
+        
+        ProcessWorker(
+            cmd=pub_cmd,
+            cwd=self._main_window().resolve_path("."),
+            env=self._main_window().runtime_env()
+        ).start()
+        
+        self.log_primary.append(f">> manually publishing jog target: {pos}")

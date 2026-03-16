@@ -65,6 +65,28 @@ class SerialTab(QWidget):
         )
         root.addWidget(hint)
 
+        from PyQt6.QtWidgets import QGroupBox
+        macro_group = QGroupBox("Quick Macros")
+        macro_layout = QHBoxLayout(macro_group)
+        self.btn_reset_faults = QPushButton("RST Faults")
+        self.btn_reset_faults.clicked.connect(lambda: self.window().send_serial_text("<RESET>"))
+        self.btn_enable = QPushButton("Enable")
+        self.btn_enable.clicked.connect(lambda: self.window().send_serial_text("<ENABLE>"))
+        self.btn_disable = QPushButton("Disable")
+        self.btn_disable.clicked.connect(lambda: self.window().send_serial_text("<DISABLE>"))
+        self.btn_home = QPushButton("Home All")
+        self.btn_home.clicked.connect(lambda: self.window().send_serial_text("<HOME>"))
+        
+        self.btn_reboot = QPushButton("HW Reboot (DTR)")
+        self.btn_reboot.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
+        self.btn_reboot.clicked.connect(self._trigger_hw_reboot)
+
+        for btn in (self.btn_reset_faults, self.btn_enable, self.btn_disable, self.btn_home):
+            macro_layout.addWidget(btn)
+        macro_layout.addStretch()
+        macro_layout.addWidget(self.btn_reboot)
+        root.addWidget(macro_group)
+
         self.output = QTextEdit()
         self.output.setReadOnly(True)
         self.output.setFont(QFont("Monospace", 10))
@@ -122,3 +144,11 @@ class SerialTab(QWidget):
         self.window().send_serial_text(text)  # type: ignore[attr-defined]
         self.append_line(f">> {text}", "#89b4fa")
         self.send_edit.clear()
+
+    def _trigger_hw_reboot(self) -> None:
+        mw = self.window()
+        if getattr(mw, "_serial_worker", None):
+            mw._serial_worker.pulse_dtr()
+            self.append_line("--- Triggered Hardware Reset (DTR Pulse) ---", "#f9e2af")
+        else:
+            self.append_line("Error: Not connected to serial port.", "#f38ba8")

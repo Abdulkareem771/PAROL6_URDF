@@ -58,6 +58,11 @@ class PlotTab(QWidget):
         clear_btn = QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
         toolbar.addWidget(clear_btn)
+
+        self.csv_btn = QPushButton("Save CSV")
+        self.csv_btn.clicked.connect(self._export_csv)
+        toolbar.addWidget(self.csv_btn)
+
         toolbar.addStretch()
 
         self._pos_checks = []
@@ -188,3 +193,36 @@ class PlotTab(QWidget):
     def _toggle_pause(self, checked: bool) -> None:
         self._paused = checked
         self.pause_btn.setText("Resume" if checked else "Pause")
+
+    def _export_csv(self) -> None:
+        if not self._t_buf:
+            return
+
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        import csv
+
+        path, _ = QFileDialog.getSaveFileName(self, "Save Telemetry Data", "", "CSV Files (*.csv)")
+        if not path:
+            return
+
+        try:
+            with open(path, "w", newline="") as f:
+                writer = csv.writer(f)
+                header = ["Time_s"]
+                for i in range(N_JOINTS):
+                    header.extend([f"J{i+1}_Pos", f"J{i+1}_Vel", f"J{i+1}_PWM"])
+                header.append("ISR_us")
+                writer.writerow(header)
+
+                for idx in range(len(self._t_buf)):
+                    row = [self._t_buf[idx]]
+                    for j in range(N_JOINTS):
+                        row.append(self._pos_bufs[j][idx] if idx < len(self._pos_bufs[j]) else 0.0)
+                        row.append(self._vel_bufs[j][idx] if idx < len(self._vel_bufs[j]) else 0.0)
+                        row.append(self._pwm_bufs[j][idx] if idx < len(self._pwm_bufs[j]) else 0.0)
+                    row.append(self._isr_buf[idx] if idx < len(self._isr_buf) else 0.0)
+                    writer.writerow(row)
+
+            QMessageBox.information(self, "Export Complete", f"Data saved to {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to save CSV:\n{e}")
