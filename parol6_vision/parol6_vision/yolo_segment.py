@@ -60,6 +60,7 @@ PARAMETERS
   image_topic   (string)  – Input image topic to subscribe to.
   expand_px     (int)     – Pixels to dilate each object mask outward (default 8).
   publish_debug (bool)    – Whether to publish the debug overlay image.
+  mask_conf     (float)   – Minimum confidence threshold for YOLO detections (default 0.5).
 
 ================================================================================
 """
@@ -100,10 +101,11 @@ class YoloSegmentNode(Node):
         /yolo_segment/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
 
     Parameters:
-        model_path    (str):  Absolute path to YOLO weights (best.pt).
-        image_topic   (str):  Camera topic to subscribe to.
-        expand_px     (int):  Dilation radius for mask expansion (default 8).
-        publish_debug (bool): Publish the debug overlay image (default True).
+        model_path    (str):   Absolute path to YOLO weights (best.pt).
+        image_topic   (str):   Camera topic to subscribe to.
+        expand_px     (int):   Dilation radius for mask expansion (default 8).
+        publish_debug (bool):  Publish the debug overlay image (default True).
+        mask_conf     (float): Minimum confidence threshold for YOLO detections (default 0.5).
     """
 
     def __init__(self):
@@ -116,6 +118,7 @@ class YoloSegmentNode(Node):
         self.declare_parameter('image_topic', _DEFAULT_IMAGE_TOPIC)
         self.declare_parameter('expand_px', 8)
         self.declare_parameter('publish_debug', True)
+        self.declare_parameter('mask_conf', 0.5)
 
         # ------------------------------------------------------------------ #
         # READ PARAMETERS                                                      #
@@ -124,6 +127,7 @@ class YoloSegmentNode(Node):
         self.image_topic = self.get_parameter('image_topic').value
         self.expand_px = int(self.get_parameter('expand_px').value)
         self.publish_debug = self.get_parameter('publish_debug').value
+        self.mask_conf = float(self.get_parameter('mask_conf').value)
 
         # ------------------------------------------------------------------ #
         # LOAD YOLO MODEL                                                      #
@@ -182,6 +186,7 @@ class YoloSegmentNode(Node):
             f'Yolo_segment node initialized.\n'
             f'  Subscribed to : {self.image_topic}\n'
             f'  Expand px     : {self.expand_px}\n'
+            f'  Mask conf     : {self.mask_conf}\n'
             f'  Debug images  : {self.publish_debug}'
         )
 
@@ -261,7 +266,7 @@ class YoloSegmentNode(Node):
         debug_img = img.copy() if self.publish_debug else None
 
         # 1 ─ YOLO Inference ------------------------------------------------
-        results = self.model(img, verbose=False)
+        results = self.model(img, verbose=False, conf=self.mask_conf)
         result = results[0]
 
         if result.masks is None or len(result.masks.data) < 2:
@@ -274,7 +279,7 @@ class YoloSegmentNode(Node):
         for mask_tensor in raw_masks[:2]:          # only need first two
             mask_np = mask_tensor.cpu().numpy()
             mask_resized = cv2.resize(mask_np, (w, h))
-            mask_binary = (mask_resized > 0.5).astype(np.uint8) * 255
+            mask_binary = (mask_resized > self.mask_conf).astype(np.uint8) * 255
             obj_matrices.append(mask_binary)
 
         obj_1, obj_2 = obj_matrices
