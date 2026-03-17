@@ -55,7 +55,17 @@ static uint8_t  capture_valid_count[NUM_MOTORS] = {0};
 static JointState joints[NUM_MOTORS];
 static volatile bool armed = false;
 
-void controlArm(void)     { armed = true; }
+void controlArm(void)
+{
+    // Snapshot: set desired = actual for all joints at arm time.
+    // Without this, desired stays at 0 (from memset) while encoder
+    // reads non-zero → huge error → motor runaway on arm.
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        joints[i].desired_position = joints[i].actual_position;
+        joints[i].desired_velocity = 0.0f;
+    }
+    armed = true;
+}
 bool controlIsArmed(void) { return armed; }
 
 void controlSetCommand(uint8_t idx, float pos, float vel)

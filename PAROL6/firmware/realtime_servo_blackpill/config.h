@@ -156,7 +156,7 @@ static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, -1 };
 #define TICKS_TO_US  (1.0f / (float)ENC_TIM_CLOCK_HZ * 1000000.0f)
 
 static const float ENCODER_OFFSETS[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, -1, 1 };
+static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 
 // Encoder smoothing
 #define ENCODER_MEDIAN_FILTER   1
