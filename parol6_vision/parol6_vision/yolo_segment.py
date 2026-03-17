@@ -310,9 +310,16 @@ class YoloSegmentNode(Node):
                 cy = M['m01'] / M['m00']
                 centroid_px = (cx, cy)
                 # Mark centroid with a white crosshair on annotated image
+                """                
                 self._draw_crosshair(
                     annotated_img, int(cx), int(cy), (255, 255, 255)
-                )
+                )"""
+                """
+                # Draw a small white filled circle at the centroid
+                radius = 3
+                cv2.circle(annotated_img, (int(cx), int(cy)), radius, (255, 255, 255), -1)
+                """
+
 
         # 8 ─ Draw on debug_img (all layers) ---------------------------------
         if self.publish_debug and debug_img is not None:
@@ -339,11 +346,17 @@ class YoloSegmentNode(Node):
                 cv2.drawContours(
                     debug_img, [contour_I], -1, (0, 0, 255), -1
                 )
+                """
                 if centroid_px is not None:
                     self._draw_crosshair(
                         debug_img, int(centroid_px[0]), int(centroid_px[1]),
                         (255, 255, 255)
-                    )
+                    )"""
+                """
+                # Draw a small white filled circle at the centroid
+                radius = 3
+                cv2.circle(debug_img, (int(cx), int(cy)), radius, (255, 255, 255), -1)
+                """
 
         return annotated_img, debug_img, centroid_px
 
