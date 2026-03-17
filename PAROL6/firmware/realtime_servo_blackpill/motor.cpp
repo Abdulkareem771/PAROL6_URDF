@@ -126,8 +126,9 @@ void motorsInit(void)
     stepTimer->attachInterrupt(stepTimerISR);
     stepTimer->resume();
 
-    // Set TIM10 ISR priority: lower than control (3), higher than USB (5)
-    HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 4, 0);
+    // TIM10 ISR priority: LOWER than USB (OTG_FS is 5) so step generation
+    // never delays USB packet transmission. This reduces packet loss.
+    HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 6, 0);
 }
 
 // ============================================================================

@@ -18,7 +18,7 @@
 #include <stdio.h>
 
 // *** ENABLE THIS FOR RAW ENCODER REGISTER DEBUG ***
-#define DEBUG_RAW_ENCODER
+// #define DEBUG_RAW_ENCODER  // Disabled — encoder stability confirmed
 
 // ============================================================================
 // STATE

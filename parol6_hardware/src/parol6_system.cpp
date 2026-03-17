@@ -397,9 +397,15 @@ return_type PAROL6System::read(
         }
         
         packets_lost_ += lost_count;
-        RCLCPP_WARN(logger_, 
-          "⚠️ PACKET LOSS DETECTED! Expected seq %u, got %u (lost %u packets)",
-          expected_seq, received_seq, lost_count);
+        
+        // Small seq gaps (< 10) are NORMAL: the read() loop drains the USB
+        // buffer and uses only the latest packet, discarding intermediate ones.
+        // Only warn on large gaps which indicate real serial/USB issues.
+        if (lost_count > 10) {
+          RCLCPP_WARN(logger_, 
+            "⚠️ PACKET LOSS: Expected seq %u, got %u (lost %u packets)",
+            expected_seq, received_seq, lost_count);
+        }
       }
       
       // Track inter-packet timing (thesis latency evidence)

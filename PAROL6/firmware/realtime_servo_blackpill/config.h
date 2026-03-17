@@ -69,7 +69,7 @@ static const bool ENCODER_ENABLED[NUM_MOTORS] = {
   false,  // J1
   false,  // J2
   false,  // J3
-  false,  // J4
+  true,  // J4
   true,   // J5
   false    // J6
 };
@@ -128,7 +128,7 @@ static const float GEAR_RATIOS[NUM_MOTORS] = {
   4.0f   // J6
 };
 
-static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, -1 };
+static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, -1, 1, -1 };
 
 // ============================================================================
 // ENCODER CONFIGURATION
