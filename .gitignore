@@ -96,3 +96,4 @@ legacy code open loop/*
 
 # Captured images
 parol6_vision/data/images_captured/*
+test_yolo_segment_node/*
