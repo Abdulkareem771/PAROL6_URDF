@@ -14,7 +14,7 @@ keyboard  (default)
     one colour/depth pair immediately.  Any other key is ignored.
 
 timed
-    Publishes one pair automatically every ``frame_time`` seconds (default 60 s).
+    Publishes one pair automatically every ``frame_time`` seconds (default 10 s).
 
 =============================================================================
 TOPICS
@@ -35,7 +35,7 @@ PARAMETERS
 =============================================================================
 
     capture_mode    string   keyboard   (keyboard | timed)
-    frame_time      float    60.0       seconds between auto-publishes (timed mode)
+    frame_time      float    10.0       seconds between auto-publishes (timed mode)
 """
 
 import sys
@@ -70,7 +70,7 @@ class CaptureImagesNode(Node):
 
         # ── Parameters ───────────────────────────────────────────────
         self.declare_parameter('capture_mode', 'keyboard')   # keyboard | timed
-        self.declare_parameter('frame_time', 60.0)
+        self.declare_parameter('frame_time', 10.0)
 
         self._capture_mode = self.get_parameter('capture_mode').value
         self._frame_time = self.get_parameter('frame_time').value
