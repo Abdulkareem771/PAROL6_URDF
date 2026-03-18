@@ -212,13 +212,13 @@ class YoloSegmentNode(Node):
 
         # Run the segmentation pipeline
         annotated_img, debug_img, centroid_px, num_detections = self._run_pipeline(img)
-
+        """
         # ── Real-time detection count ──
         if self.print_detections:
             self.get_logger().info(
                 f'Frame {self._frame_count}: YOLO detected {num_detections} object(s)'
             )
-
+        """
         
         # Publish annotated image (always)
         ann_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='bgr8')
@@ -248,12 +248,14 @@ class YoloSegmentNode(Node):
             self.seam_centroid_pub.publish(pt_msg)
             self.get_logger().info(
                 f'Frame {self._frame_count}: seam centroid at '
-                f'({cx:.1f}, {cy:.1f}) px'
+                f'({cx:.1f}, {cy:.1f}) px.  '
+                f'with {num_detections} object(s) detected'
             )
         else:
             self.get_logger().warn(
                 f'Frame {self._frame_count}: no intersection found '
-                f'(need ≥2 detected objects).'
+                f'(need ≥2 detected objects).  '
+                f'with {num_detections} object(s) detected'
             )
 
     # ---------------------------------------------------------------------- #
