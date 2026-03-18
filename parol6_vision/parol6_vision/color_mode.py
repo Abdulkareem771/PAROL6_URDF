@@ -48,9 +48,9 @@ SUBSCRIBED TOPICS
 ================================================================================
 PUBLISHED TOPICS
 ================================================================================
-  /color_mode/annotated_image  (sensor_msgs/Image, bgr8)   – intersection only
-  /color_mode/debug_image      (sensor_msgs/Image, bgr8)   – full debug overlay
-  /color_mode/seam_centroid    (geometry_msgs/PointStamped) – seam centroid (px)
+  /vision/processing_mode/annotated_image  (sensor_msgs/Image, bgr8)   – intersection only
+  /vision/processing_mode/debug_image      (sensor_msgs/Image, bgr8)   – full debug overlay
+  /vision/processing_mode/seam_centroid    (geometry_msgs/PointStamped) – seam centroid (px)
 
 ================================================================================
 PARAMETERS
@@ -86,9 +86,9 @@ class ColorModeNode(Node):
         <image_topic>  (sensor_msgs/Image): Input colour image from camera.
 
     Published Topics:
-        /color_mode/annotated_image  (sensor_msgs/Image): Intersection-only overlay (bgr8).
-        /color_mode/debug_image      (sensor_msgs/Image): Full debug overlay (bgr8).
-        /color_mode/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
+        /vision/processing_mode/annotated_image  (sensor_msgs/Image): Intersection-only overlay (bgr8).
+        /vision/processing_mode/debug_image      (sensor_msgs/Image): Full debug overlay (bgr8).
+        /vision/processing_mode/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
 
     Parameters:
         image_topic   (str):  Camera topic to subscribe to.
@@ -138,14 +138,14 @@ class ColorModeNode(Node):
         # PUBLISHERS                                                           #
         # ------------------------------------------------------------------ #
         self.annotated_pub = self.create_publisher(
-            Image, '/color_mode/annotated_image', 10
+            Image, '/vision/processing_mode/annotated_image', 10
         )
         self.seam_centroid_pub = self.create_publisher(
-            PointStamped, '/color_mode/seam_centroid', 10
+            PointStamped, '/vision/processing_mode/seam_centroid', 10
         )
         if self.publish_debug:
             self.debug_pub = self.create_publisher(
-                Image, '/color_mode/debug_image', 10
+                Image, '/vision/processing_mode/debug_image', 10
             )
 
         # ------------------------------------------------------------------ #
