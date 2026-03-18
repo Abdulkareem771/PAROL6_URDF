@@ -58,9 +58,9 @@ PARAMETERS
 ================================================================================
   model_path    (string)  – Absolute path to YOLO best.pt weights file.
   image_topic   (string)  – Input image topic to subscribe to.
-  expand_px     (int)     – Pixels to dilate each object mask outward (default 8).
+  expand_px     (int)     – Pixels to dilate each object mask outward (default 2).
   publish_debug     (bool)    – Whether to publish the debug overlay image.
-  mask_conf         (float)   – Minimum confidence threshold for YOLO detections (default 0.5).
+  mask_conf         (float)   – Minimum confidence threshold for YOLO detections (default 0.85).
   print_detections  (bool)    – Print the number of detected objects per frame in real time (default True).
 
 ================================================================================
@@ -104,9 +104,9 @@ class YoloSegmentNode(Node):
     Parameters:
         model_path    (str):   Absolute path to YOLO weights (best.pt).
         image_topic   (str):   Camera topic to subscribe to.
-        expand_px         (int):   Dilation radius for mask expansion (default 8).
+        expand_px         (int):   Dilation radius for mask expansion (default 2).
         publish_debug     (bool):  Publish the debug overlay image (default True).
-        mask_conf         (float): Minimum confidence threshold for YOLO detections (default 0.5).
+        mask_conf         (float): Minimum confidence threshold for YOLO detections (default 0.85).
         print_detections  (bool):  Print detected-object count every frame in real time (default True).
     """
 
@@ -118,9 +118,9 @@ class YoloSegmentNode(Node):
         # ------------------------------------------------------------------ #
         self.declare_parameter('model_path', _DEFAULT_MODEL_PATH)
         self.declare_parameter('image_topic', _DEFAULT_IMAGE_TOPIC)
-        self.declare_parameter('expand_px', 8)
+        self.declare_parameter('expand_px', 2)
         self.declare_parameter('publish_debug', True)
-        self.declare_parameter('mask_conf', 0.5)
+        self.declare_parameter('mask_conf', 0.85)
         self.declare_parameter('print_detections', True)
 
         # ------------------------------------------------------------------ #
