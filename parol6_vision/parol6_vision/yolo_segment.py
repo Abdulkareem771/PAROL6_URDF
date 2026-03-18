@@ -218,6 +218,7 @@ class YoloSegmentNode(Node):
             self.get_logger().info(
                 f'Frame {self._frame_count}: YOLO detected {num_detections} object(s)'
             )
+
         
         # Publish annotated image (always)
         ann_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='bgr8')
