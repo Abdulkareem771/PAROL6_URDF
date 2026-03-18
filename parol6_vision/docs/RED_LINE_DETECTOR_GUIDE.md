@@ -61,13 +61,14 @@ Confidence = (Retention Ratio) * (Continuity Score)
 ### Subscribed Topics
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/kinect2/qhd/image_color_rect` | `sensor_msgs/Image` | Rectified RGB input stream |
+| `/vision/processing_mode/annotated_image` | `sensor_msgs/Image` | Annotated image published by the active processing mode node (`color_mode` or `yolo_segment`) |
 
 ### Published Topics
 | Topic | Type | Description |
 |-------|------|-------------|
 | `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` | Semantic weld line detections |
 | `/red_line_detector/debug_image` | `sensor_msgs/Image` | Visualization of detections overlaid on input |
+| `/red_line_detector/markers` | `visualization_msgs/MarkerArray` | RViz LINE_STRIP markers for each detected weld line |
 
 ### Parameters
 | Parameter | Type | Default | Description |
