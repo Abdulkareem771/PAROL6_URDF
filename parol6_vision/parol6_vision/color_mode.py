@@ -277,7 +277,7 @@ class ColorModeNode(Node):
                 cy = M['m01'] / M['m00']
                 centroid_px = (cx, cy)
                 # White crosshair on annotated image
-                self._draw_crosshair(annotated_img, int(cx), int(cy), (255, 255, 255))
+                #self._draw_crosshair(annotated_img, int(cx), int(cy), (255, 255, 255))
 
         # 8 ─ Draw on debug_img (all layers) ---------------------------------
         if self.publish_debug and debug_img is not None:
@@ -294,11 +294,12 @@ class ColorModeNode(Node):
             # Intersection – filled red
             if contour_I is not None:
                 cv2.drawContours(debug_img, [contour_I], -1, (0, 0, 255), -1)
+                """
                 if centroid_px is not None:
                     self._draw_crosshair(
                         debug_img, int(centroid_px[0]), int(centroid_px[1]),
                         (255, 255, 255)
-                    )
+                    )"""
 
         return annotated_img, debug_img, centroid_px
 
