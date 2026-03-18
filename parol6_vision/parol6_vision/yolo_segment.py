@@ -59,8 +59,9 @@ PARAMETERS
   model_path    (string)  – Absolute path to YOLO best.pt weights file.
   image_topic   (string)  – Input image topic to subscribe to.
   expand_px     (int)     – Pixels to dilate each object mask outward (default 8).
-  publish_debug (bool)    – Whether to publish the debug overlay image.
-  mask_conf     (float)   – Minimum confidence threshold for YOLO detections (default 0.5).
+  publish_debug     (bool)    – Whether to publish the debug overlay image.
+  mask_conf         (float)   – Minimum confidence threshold for YOLO detections (default 0.5).
+  print_detections  (bool)    – Print the number of detected objects per frame in real time (default True).
 
 ================================================================================
 """
@@ -103,9 +104,10 @@ class YoloSegmentNode(Node):
     Parameters:
         model_path    (str):   Absolute path to YOLO weights (best.pt).
         image_topic   (str):   Camera topic to subscribe to.
-        expand_px     (int):   Dilation radius for mask expansion (default 8).
-        publish_debug (bool):  Publish the debug overlay image (default True).
-        mask_conf     (float): Minimum confidence threshold for YOLO detections (default 0.5).
+        expand_px         (int):   Dilation radius for mask expansion (default 8).
+        publish_debug     (bool):  Publish the debug overlay image (default True).
+        mask_conf         (float): Minimum confidence threshold for YOLO detections (default 0.5).
+        print_detections  (bool):  Print detected-object count every frame in real time (default True).
     """
 
     def __init__(self):
@@ -119,6 +121,7 @@ class YoloSegmentNode(Node):
         self.declare_parameter('expand_px', 8)
         self.declare_parameter('publish_debug', True)
         self.declare_parameter('mask_conf', 0.5)
+        self.declare_parameter('print_detections', True)
 
         # ------------------------------------------------------------------ #
         # READ PARAMETERS                                                      #
@@ -128,6 +131,7 @@ class YoloSegmentNode(Node):
         self.expand_px = int(self.get_parameter('expand_px').value)
         self.publish_debug = self.get_parameter('publish_debug').value
         self.mask_conf = float(self.get_parameter('mask_conf').value)
+        self.print_detections = self.get_parameter('print_detections').value
 
         # ------------------------------------------------------------------ #
         # LOAD YOLO MODEL                                                      #
@@ -184,10 +188,11 @@ class YoloSegmentNode(Node):
 
         self.get_logger().info(
             f'Yolo_segment node initialized.\n'
-            f'  Subscribed to : {self.image_topic}\n'
-            f'  Expand px     : {self.expand_px}\n'
-            f'  Mask conf     : {self.mask_conf}\n'
-            f'  Debug images  : {self.publish_debug}'
+            f'  Subscribed to    : {self.image_topic}\n'
+            f'  Expand px        : {self.expand_px}\n'
+            f'  Mask conf        : {self.mask_conf}\n'
+            f'  Debug images     : {self.publish_debug}\n'
+            f'  Print detections : {self.print_detections}'
         )
 
     # ---------------------------------------------------------------------- #
@@ -206,7 +211,13 @@ class YoloSegmentNode(Node):
             return
 
         # Run the segmentation pipeline
-        annotated_img, debug_img, centroid_px = self._run_pipeline(img)
+        annotated_img, debug_img, centroid_px, num_detections = self._run_pipeline(img)
+
+        # ── Real-time detection count ──
+        if self.print_detections:
+            self.get_logger().info(
+                f'Frame {self._frame_count}: YOLO detected {num_detections} object(s)'
+            )
         
         # Publish annotated image (always)
         ann_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='bgr8')
@@ -260,6 +271,7 @@ class YoloSegmentNode(Node):
             debug_img      – BGR image with all intermediate overlays, or None
                              if publish_debug is False.
             centroid_px    – (cx, cy) tuple in pixel coords, or None if not found.
+            num_detections – int, number of objects detected by YOLO this frame.
         """
         h, w = img.shape[:2]
         annotated_img = img.copy()
@@ -269,9 +281,12 @@ class YoloSegmentNode(Node):
         results = self.model(img, verbose=False, conf=self.mask_conf)
         result = results[0]
 
+        # Count detections above the confidence threshold
+        num_detections = len(result.boxes) if result.boxes is not None else 0
+
         if result.masks is None or len(result.masks.data) < 2:
             # Not enough objects detected – return unmodified frames
-            return annotated_img, debug_img, None
+            return annotated_img, debug_img, None, num_detections
 
         # 2 ─ Extract & Binarise Masks (take the first two objects) ----------
         raw_masks = result.masks.data
@@ -363,7 +378,7 @@ class YoloSegmentNode(Node):
                 cv2.circle(debug_img, (int(cx), int(cy)), radius, (255, 255, 255), -1)
                 """
 
-        return annotated_img, debug_img, centroid_px
+        return annotated_img, debug_img, centroid_px, num_detections
 
     # ---------------------------------------------------------------------- #
     # HELPERS                                                                  #
