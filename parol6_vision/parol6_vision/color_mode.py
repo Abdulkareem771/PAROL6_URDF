@@ -100,7 +100,7 @@ class ColorModeNode(Node):
     # HSV colour ranges (OpenCV convention: H 0-180, S 0-255, V 0-255)        #
     # ---------------------------------------------------------------------- #
     _LOWER_GREEN = np.array([35,  50,  50])
-    _UPPER_GREEN = np.array([85, 255, 255])
+    _UPPER_GREEN = np.array([100, 255, 255])
 
     _LOWER_BLUE  = np.array([100,  50,  50])
     _UPPER_BLUE  = np.array([140, 255, 255])
