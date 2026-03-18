@@ -49,9 +49,9 @@ SUBSCRIBED TOPICS
 ================================================================================
 PUBLISHED TOPICS
 ================================================================================
-  /yolo_segment/debug_image      (sensor_msgs/Image)         – full debug overlay
-  /yolo_segment/annotated_image  (sensor_msgs/Image, bgr8)   – intersection only
-  /yolo_segment/seam_centroid    (geometry_msgs/PointStamped) – seam centroid px
+  /vision/processing_mode/debug_image      (sensor_msgs/Image)         – full debug overlay
+  /vision/processing_mode/annotated_image  (sensor_msgs/Image, bgr8)   – intersection only
+  /vision/processing_mode/seam_centroid    (geometry_msgs/PointStamped) – seam centroid px
 
 ================================================================================
 PARAMETERS
@@ -97,9 +97,9 @@ class YoloSegmentNode(Node):
         <image_topic>  (sensor_msgs/Image): Input colour image from camera.
 
     Published Topics:
-        /yolo_segment/debug_image      (sensor_msgs/Image): Full debug overlay.
-        /yolo_segment/annotated_image  (sensor_msgs/Image): Intersection-only overlay (bgr8).
-        /yolo_segment/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
+        /vision/processing_mode/debug_image      (sensor_msgs/Image): Full debug overlay.
+        /vision/processing_mode/annotated_image  (sensor_msgs/Image): Intersection-only overlay (bgr8).
+        /vision/processing_mode/seam_centroid    (geometry_msgs/PointStamped): Seam centroid in pixels.
 
     Parameters:
         model_path    (str):   Absolute path to YOLO weights (best.pt).
@@ -160,14 +160,14 @@ class YoloSegmentNode(Node):
         # PUBLISHERS                                                           #
         # ------------------------------------------------------------------ #
         self.annotated_pub = self.create_publisher(
-            Image, '/yolo_segment/annotated_image', 10
+            Image, '/vision/processing_mode/annotated_image', 10
         )
         self.seam_centroid_pub = self.create_publisher(
-            PointStamped, '/yolo_segment/seam_centroid', 10
+            PointStamped, '/vision/processing_mode/seam_centroid', 10
         )
         if self.publish_debug:
             self.debug_pub = self.create_publisher(
-                Image, '/yolo_segment/debug_image', 10
+                Image, '/vision/processing_mode/debug_image', 10
             )
 
         # ------------------------------------------------------------------ #
