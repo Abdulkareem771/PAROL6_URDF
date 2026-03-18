@@ -20,7 +20,7 @@ ALGORITHM OVERVIEW
    - Convert incoming BGR frame to HSV colour space.
 
 2. MASK CREATION
-   - Green mask (G): pixels whose HSV values fall within [35,50,50]–[85,255,255].
+   - Green mask (G): pixels whose HSV values fall within [35,50,50]–[100,255,255].
    - Blue  mask (B): pixels whose HSV values fall within [100,50,50]–[140,255,255].
 
 3. MORPHOLOGICAL CLEANING
@@ -56,7 +56,7 @@ PUBLISHED TOPICS
 PARAMETERS
 ================================================================================
   image_topic   (string)  – Input image topic to subscribe to.
-  expand_px     (int)     – Pixels to dilate each colour mask outward (default 12).
+  expand_px     (int)     – Pixels to dilate each colour mask outward (default 2).
   publish_debug (bool)    – Whether to publish the debug overlay image (default True).
 
 ================================================================================
@@ -92,7 +92,7 @@ class ColorModeNode(Node):
 
     Parameters:
         image_topic   (str):  Camera topic to subscribe to.
-        expand_px     (int):  Dilation radius for mask expansion (default 12).
+        expand_px     (int):  Dilation radius for mask expansion (default 2).
         publish_debug (bool): Publish the debug overlay image (default True).
     """
 
@@ -112,7 +112,7 @@ class ColorModeNode(Node):
         # DECLARE PARAMETERS                                                   #
         # ------------------------------------------------------------------ #
         self.declare_parameter('image_topic',   _DEFAULT_IMAGE_TOPIC)
-        self.declare_parameter('expand_px',     12)
+        self.declare_parameter('expand_px',     2)
         self.declare_parameter('publish_debug', True)
 
         # ------------------------------------------------------------------ #
