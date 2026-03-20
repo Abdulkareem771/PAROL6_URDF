@@ -198,7 +198,33 @@ CallbackReturn PAROL6System::on_activate(
     serial_.Write("<HOME>\n");
     homing_cmd_sent_ = true;
     homing_status_ = 1;  // in progress
-    RCLCPP_INFO(logger_, "🏠 Sent HOME command to firmware — homing sequence started");
+    RCLCPP_INFO(logger_, "🏠 Sent HOME command to firmware — waiting for sequence to finish...");
+    
+    // WAIT UNTIL HOMING IS COMPLETE BEFORE ACTIVATING CONTROLLERS!
+    // If we return before homing finishes, JointTrajectoryController will start,
+    // lock onto the pre-homing physical state as its target, and then violently
+    // yank the arm back when homing changes the state!
+    int homing_retries = 1000; // Wait up to 20 seconds (1000 * 20ms)
+    while(homing_retries-- > 0 && rclcpp::ok()) {
+        read(rclcpp::Clock().now(), rclcpp::Duration(0,0));
+        
+        // Status 2 = Complete, 3 = Error
+        if (homing_status_ == 2 || homing_status_ == 3) {
+            RCLCPP_INFO(logger_, "✅ Homing phase finished during activation.");
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    
+    if (homing_status_ == 1) {
+        RCLCPP_WARN(logger_, "⚠️ Timeout waiting for homing to complete! Controllers might yank arm!");
+    }
+    
+    // Crucial: Set the initial commanded positions to the NEW homed positions
+    // so the controllers initialize perfectly at the homed state.
+    hw_command_positions_ = hw_state_positions_;
+    hw_command_velocities_ = hw_state_velocities_;
+    
   } catch (const std::exception &e) {
     RCLCPP_WARN(logger_, "⚠️ Failed to send HOME command: %s", e.what());
   }
@@ -455,7 +481,13 @@ return_type PAROL6System::read(
         switch (homing_status_) {
           case 0: RCLCPP_INFO(logger_, "🏠 Homing: idle"); break;
           case 1: RCLCPP_INFO(logger_, "🏠 Homing: in progress..."); break;
-          case 2: RCLCPP_INFO(logger_, "✅ Homing: COMPLETE — all joints homed!"); break;
+          case 2: 
+            RCLCPP_INFO(logger_, "✅ Homing: COMPLETE — all joints homed!"); 
+            // CRITICAL: Snap commands to the new homed positions!
+            // Otherwise the next write() will send pre-homing commands and cause a massive jerk
+            hw_command_positions_  = hw_state_positions_;
+            hw_command_velocities_ = hw_state_velocities_;
+            break;
           case 3: RCLCPP_ERROR(logger_, "❌ Homing: ERROR — one or more joints failed!"); break;
         }
       }

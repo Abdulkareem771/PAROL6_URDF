@@ -55,9 +55,10 @@ static void parseCommand(const char *cmd)
 
     // ---- HOME command ----
     if (cmd[0] == 'H' && cmd[1] == 'O' && cmd[2] == 'M' && cmd[3] == 'E') {
-        if (controlIsArmed()) {
-            homingStart();
+        if (!controlIsArmed()) {
+            controlArm();
         }
+        homingStart();
         return;
     }
 

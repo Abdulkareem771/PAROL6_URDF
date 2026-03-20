@@ -310,11 +310,18 @@ void controlResetPosition(uint8_t idx, float new_position)
 
     JointState *j = &joints[idx];
 
+    // Disable interrupts to prevent readEncoder() from running while we update
+    noInterrupts();
+
     // Reset multi-turn tracking: set total angle such that
     // joint position = total_motor_angle / gear_ratio = new_position
     float new_motor_angle = new_position * GEAR_RATIOS[idx];
     j->total_motor_angle = new_motor_angle;
-    j->last_motor_angle = -1.0f;  // force re-init on next readEncoder()
+    
+    // CRITICAL FIX: DO NOT set last_motor_angle = -1.0f!
+    // If we do, the next readEncoder() will simply overwrite our total_motor_angle
+    // with the physical encoder angle, completely erasing the homing offset and 
+    // causing a massive jerk! Leave last_motor_angle alone so tracking continues.
 
     // Reset EMA filter state
 #if ENCODER_EMA_ENABLED
@@ -336,4 +343,6 @@ void controlResetPosition(uint8_t idx, float new_position)
     j->desired_velocity  = 0.0f;
     j->velocity_command  = 0.0f;
     j->position_error    = 0.0f;
+
+    interrupts();
 }

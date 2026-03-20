@@ -153,7 +153,7 @@ static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     0.0f,    // J2
     0.0f,    // J3
     108.0f,  // J4 — homes at ~108° in MoveIt range
-    0.0f,    // J5
+    120.0f,    // J5
     0.0f     // J6
 };
 

@@ -120,16 +120,17 @@ void homingStart(void)
 // ============================================================================
 // DRIVE JOINT (helper — sets velocity & direction for homing)
 // ============================================================================
-// During homing, we bypass the normal controlSetCommand() path and instead
-// set desired_velocity directly so the control loop drives the motor.
+// During homing, we bypass the normal controlSetCommand() path from ROS.
+// Since the motor is physically moving but ROS isn't sending new desired positions,
+// a large position_error would build up. We prevent this by forcing
+// desired_position = actual_position to kill the proportional term.
 
 static void driveJoint(uint8_t idx, float velocity_rad_s)
 {
-    // We use controlSetCommand with:
-    //   position = current actual (no position error)
-    //   velocity = the homing velocity
     const JointState *js = controlGetState(idx);
     if (!js) return;
+    
+    // Force desired_position = actual_position to zero out the P-term
     controlSetCommand(idx, js->actual_position, velocity_rad_s);
 }
 
@@ -137,6 +138,7 @@ static void stopJoint(uint8_t idx)
 {
     const JointState *js = controlGetState(idx);
     if (!js) return;
+    
     controlSetCommand(idx, js->actual_position, 0.0f);
 }
 
