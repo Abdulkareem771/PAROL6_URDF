@@ -66,9 +66,9 @@
 
 // Encoder enable flags
 static const bool ENCODER_ENABLED[NUM_MOTORS] = {
-  false,  // J1
-  false,  // J2
-  false,  // J3
+  true,  // J1
+  true,  // J2
+  true,  // J3
   true,  // J4
   true,   // J5
   false    // J6
@@ -120,15 +120,15 @@ extern const uint32_t DIR_PINS_ARR[NUM_MOTORS];
 static const int MICROSTEPS[NUM_MOTORS] = { 4, 16, 16, 16, 16, 16 };
 
 static const float GEAR_RATIOS[NUM_MOTORS] = {
-  20.0f,  // J1: 20:1 gearbox
+  6.4f,  // J1: 20:1 gearbox
   20.0f,  // J2
-  1.0f,   // J3
+  18.0952381f,   // J3
   4.0f,   // J4
-  10.0f,   // J5
-  4.0f   // J6
+  4.0f,   // J5
+  10.0f   // J6
 };
 
-static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, -1, 1, -1 };
+static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, -1, 1, 1, -1 }; //J1 , J2 , J3 Negative, J4 Positive, J5 Positive, J6 Negative
 
 // ============================================================================
 // ENCODER CONFIGURATION
@@ -155,7 +155,7 @@ static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, -1, 1, -1 };
 // Tick → microseconds conversion
 #define TICKS_TO_US  (1.0f / (float)ENC_TIM_CLOCK_HZ * 1000000.0f)
 
-static const float ENCODER_OFFSETS[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+static const float ENCODER_OFFSETS[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, -1.920f, 1.0f, 0.0f };
 static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 
 // Encoder smoothing
@@ -175,7 +175,7 @@ static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 
 static const float Kp[NUM_MOTORS] = { 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f };
 static const float Kd[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 3.0f, 3.0f, 6.0f, 6.0f, 6.0f, 6.0f };
+static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 3.0f, 3.0f, 1.0f, 6.0f, 6.0f, 6.0f };
 
 #define VELOCITY_DEADBAND       0.02f
 #define POSITION_ERROR_LIMIT    0.5f

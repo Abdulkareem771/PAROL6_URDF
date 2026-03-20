@@ -63,3 +63,4 @@ venvs/*
 #start_container.sh
 >>>>>>> real-robot-integration
 src/kinect2_ros2
+src/kinect2_ros2/color images to calibrate/*
