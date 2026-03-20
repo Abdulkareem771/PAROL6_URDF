@@ -1,0 +1,283 @@
+/*
+ * PAROL6 Homing — State Machine Implementation
+ *
+ * Runs from the main loop (NOT from an ISR).  Each enabled joint goes
+ * through:  IDLE → [BACKING_OFF] → SEEKING → ZEROING → COMPLETE
+ *
+ * Sensor detection uses pin-change interrupts that set a volatile flag.
+ * The state machine polls the flag in homingUpdate().
+ *
+ * After the sensor triggers and the motor settles, the encoder position
+ * is reset to the configured offset (in degrees, converted to radians).
+ */
+
+#include "homing.h"
+#include "control.h"
+#include "motor.h"
+#include <Arduino.h>
+
+// ============================================================================
+// PER-JOINT STATE
+// ============================================================================
+
+static volatile bool sensor_triggered[NUM_MOTORS] = {false};
+static HomingState   joint_state[NUM_MOTORS];
+static uint32_t      state_start_ms[NUM_MOTORS];
+static bool          homing_requested = false;
+
+// ============================================================================
+// SENSOR ISR CALLBACKS (one per joint, sets flag)
+// ============================================================================
+// STM32Duino attachInterrupt() requires a void(void) callback.
+// We use a macro to generate one function per joint.
+
+#define MAKE_SENSOR_ISR(N) \
+    static void sensorISR_J##N(void) { sensor_triggered[N] = true; }
+
+MAKE_SENSOR_ISR(0)
+MAKE_SENSOR_ISR(1)
+MAKE_SENSOR_ISR(2)
+MAKE_SENSOR_ISR(3)
+MAKE_SENSOR_ISR(4)
+MAKE_SENSOR_ISR(5)
+
+typedef void (*ISRFunc)(void);
+static const ISRFunc sensorISRs[NUM_MOTORS] = {
+    sensorISR_J0, sensorISR_J1, sensorISR_J2,
+    sensorISR_J3, sensorISR_J4, sensorISR_J5
+};
+
+// ============================================================================
+// READ SENSOR PIN (direct, non-interrupt)
+// ============================================================================
+
+static bool sensorIsActive(uint8_t idx)
+{
+    if (HOMING_SENSOR_PINS[idx] == 0) return false;
+
+    bool pin_high = (digitalRead(HOMING_SENSOR_PINS[idx]) == HIGH);
+
+    // Inductive prox: active = HIGH (metal detected → optocoupler releases → pullup → HIGH)
+    // Limit switch:   active = LOW  (switch pressed → pulls to GND)
+    if (HOMING_SENSOR_TYPE[idx] == 1) {
+        return pin_high;   // inductive: HIGH = triggered
+    } else {
+        return !pin_high;  // limit switch: LOW = triggered
+    }
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
+
+void homingInit(void)
+{
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        joint_state[i] = HOMING_IDLE;
+        sensor_triggered[i] = false;
+
+        if (!HOMING_ENABLED[i] || HOMING_SENSOR_PINS[i] == 0) continue;
+
+        // Configure pin with internal pull-up
+        pinMode(HOMING_SENSOR_PINS[i], INPUT_PULLUP);
+
+        // Attach interrupt:
+        //   Inductive proximity: RISING edge (pin goes HIGH when metal detected)
+        //   Limit switch:        FALLING edge (pin pulled LOW when pressed)
+        int edge = (HOMING_SENSOR_TYPE[i] == 1) ? RISING : FALLING;
+        attachInterrupt(digitalPinToInterrupt(HOMING_SENSOR_PINS[i]),
+                        sensorISRs[i], edge);
+    }
+}
+
+// ============================================================================
+// START HOMING
+// ============================================================================
+
+void homingStart(void)
+{
+    homing_requested = true;
+
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        if (!HOMING_ENABLED[i]) {
+            joint_state[i] = HOMING_COMPLETE;  // skip disabled joints
+            continue;
+        }
+
+        sensor_triggered[i] = false;
+
+        // Check if sensor is already triggered (e.g. J2 resting on switch)
+        if (sensorIsActive(i)) {
+            joint_state[i] = HOMING_BACKING_OFF;
+        } else {
+            joint_state[i] = HOMING_SEEKING;
+        }
+
+        state_start_ms[i] = millis();
+    }
+}
+
+// ============================================================================
+// DRIVE JOINT (helper — sets velocity & direction for homing)
+// ============================================================================
+// During homing, we bypass the normal controlSetCommand() path and instead
+// set desired_velocity directly so the control loop drives the motor.
+
+static void driveJoint(uint8_t idx, float velocity_rad_s)
+{
+    // We use controlSetCommand with:
+    //   position = current actual (no position error)
+    //   velocity = the homing velocity
+    const JointState *js = controlGetState(idx);
+    if (!js) return;
+    controlSetCommand(idx, js->actual_position, velocity_rad_s);
+}
+
+static void stopJoint(uint8_t idx)
+{
+    const JointState *js = controlGetState(idx);
+    if (!js) return;
+    controlSetCommand(idx, js->actual_position, 0.0f);
+}
+
+// ============================================================================
+// UPDATE (call from main loop — NOT time-critical)
+// ============================================================================
+
+void homingUpdate(void)
+{
+    if (!homing_requested) return;
+
+    uint32_t now = millis();
+
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+
+        switch (joint_state[i]) {
+
+        // ----- IDLE / COMPLETE / ERROR: nothing to do -----
+        case HOMING_IDLE:
+        case HOMING_COMPLETE:
+        case HOMING_ERROR:
+            break;
+
+        // ----- BACKING OFF: sensor was already triggered at start -----
+        case HOMING_BACKING_OFF:
+        {
+            // Timeout check
+            if ((now - state_start_ms[i]) > HOMING_TIMEOUT_MS) {
+                stopJoint(i);
+                joint_state[i] = HOMING_ERROR;
+                break;
+            }
+
+            // Move in the OPPOSITE direction of homing at reduced speed
+            float backoff_vel = -HOMING_DIR[i] * HOMING_SPEED[i] * HOMING_BACKOFF_SPEED_MULT;
+            driveJoint(i, backoff_vel);
+
+            // Check if sensor has been released
+            if (!sensorIsActive(i)) {
+                // Sensor released — now seek toward it
+                stopJoint(i);
+                sensor_triggered[i] = false;  // clear any interrupt flag
+                joint_state[i] = HOMING_SEEKING;
+                state_start_ms[i] = now;      // reset timeout
+            }
+            break;
+        }
+
+        // ----- SEEKING: moving toward home sensor -----
+        case HOMING_SEEKING:
+        {
+            // Timeout check
+            if ((now - state_start_ms[i]) > HOMING_TIMEOUT_MS) {
+                stopJoint(i);
+                joint_state[i] = HOMING_ERROR;
+                break;
+            }
+
+            // Drive in homing direction
+            float seek_vel = HOMING_DIR[i] * HOMING_SPEED[i];
+            driveJoint(i, seek_vel);
+
+            // Check if sensor was triggered (interrupt flag)
+            if (sensor_triggered[i] || sensorIsActive(i)) {
+                stopJoint(i);
+                joint_state[i] = HOMING_ZEROING;
+                state_start_ms[i] = now;
+            }
+            break;
+        }
+
+        // ----- ZEROING: sensor triggered, settling, then reset position -----
+        case HOMING_ZEROING:
+        {
+            stopJoint(i);
+
+            // Wait for settle time
+            if ((now - state_start_ms[i]) >= HOMING_SETTLE_MS) {
+                // Convert degree offset to radians
+                float offset_rad = DEG_TO_RAD(HOMING_OFFSET_DEG[i]);
+
+                // Reset the encoder/position tracking to the offset
+                controlResetPosition(i, offset_rad);
+
+                joint_state[i] = HOMING_COMPLETE;
+            }
+            break;
+        }
+
+        } // switch
+    } // for
+}
+
+// ============================================================================
+// QUERIES
+// ============================================================================
+
+bool homingIsComplete(void)
+{
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        if (HOMING_ENABLED[i] && joint_state[i] != HOMING_COMPLETE) {
+            return false;
+        }
+    }
+    return homing_requested;  // only true if homing was actually started
+}
+
+bool homingIsActive(void)
+{
+    if (!homing_requested) return false;
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        if (joint_state[i] == HOMING_SEEKING ||
+            joint_state[i] == HOMING_BACKING_OFF ||
+            joint_state[i] == HOMING_ZEROING) {
+            return true;
+        }
+    }
+    return false;
+}
+
+HomingState homingGetState(uint8_t idx)
+{
+    if (idx >= NUM_MOTORS) return HOMING_IDLE;
+    return joint_state[idx];
+}
+
+uint8_t homingGetStatus(void)
+{
+    if (!homing_requested) return 0;  // never started
+
+    bool any_error = false;
+    bool any_active = false;
+    for (uint8_t i = 0; i < NUM_MOTORS; i++) {
+        if (!HOMING_ENABLED[i]) continue;
+        if (joint_state[i] == HOMING_ERROR) any_error = true;
+        if (joint_state[i] == HOMING_SEEKING ||
+            joint_state[i] == HOMING_BACKING_OFF ||
+            joint_state[i] == HOMING_ZEROING) any_active = true;
+    }
+
+    if (any_error) return 3;
+    if (any_active) return 1;
+    return 2;  // all complete
+}

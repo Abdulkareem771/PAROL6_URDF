@@ -23,7 +23,7 @@
 // ============================================================================
 
 static uint16_t pw_history[NUM_MOTORS][3];
-static uint8_t  pw_fill[NUM_MOTORS] = {0};
+uint8_t  pw_fill[NUM_MOTORS] = {0};
 
 static uint16_t median3_u16(uint16_t a, uint16_t b, uint16_t c)
 {
@@ -33,8 +33,8 @@ static uint16_t median3_u16(uint16_t a, uint16_t b, uint16_t c)
     return b;
 }
 
-static float ema_position[NUM_MOTORS] = {0};
-static bool  ema_initialised[NUM_MOTORS] = {false};
+float ema_position[NUM_MOTORS] = {0};
+bool  ema_initialised[NUM_MOTORS] = {false};
 
 // Track previous CCR values to detect stale reads
 static uint32_t prev_period[NUM_MOTORS] = {0};
@@ -296,4 +296,44 @@ const JointState* controlGetState(uint8_t idx)
 {
     if (idx >= NUM_MOTORS) return 0;
     return &joints[idx];
+}
+
+// ============================================================================
+// RESET POSITION (called by homing after sensor trigger)
+// ============================================================================
+// Resets all encoder tracking state so the joint position reads as new_position.
+// Must be called when the motor is STOPPED (no motion).
+
+void controlResetPosition(uint8_t idx, float new_position)
+{
+    if (idx >= NUM_MOTORS) return;
+
+    JointState *j = &joints[idx];
+
+    // Reset multi-turn tracking: set total angle such that
+    // joint position = total_motor_angle / gear_ratio = new_position
+    float new_motor_angle = new_position * GEAR_RATIOS[idx];
+    j->total_motor_angle = new_motor_angle;
+    j->last_motor_angle = -1.0f;  // force re-init on next readEncoder()
+
+    // Reset EMA filter state
+#if ENCODER_EMA_ENABLED
+    extern float ema_position[];
+    extern bool  ema_initialised[];
+    ema_position[idx] = new_position;
+    ema_initialised[idx] = true;
+#endif
+
+    // Reset median filter state
+#if ENCODER_MEDIAN_FILTER
+    extern uint8_t pw_fill[];
+    pw_fill[idx] = 0;
+#endif
+
+    // Set current and desired position
+    j->actual_position   = new_position;
+    j->desired_position  = new_position;
+    j->desired_velocity  = 0.0f;
+    j->velocity_command  = 0.0f;
+    j->position_error    = 0.0f;
 }

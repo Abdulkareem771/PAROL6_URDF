@@ -2,16 +2,22 @@
  * PAROL6 Serial Communication — USB CDC (STM32Duino)
  *
  * Uses STM32Duino's Serial interface for USB CDC at 12 Mbps Full Speed.
- * Protocol identical to Teensy/ESP32 version.
+ * Protocol identical to Teensy/ESP32 version, with homing support.
  *
- * RX: <SEQ,p0,v0,p1,v1,...,p5,v5>\n
- * TX: <ACK,seq,p0,v0,p1,v1,...>\n
+ * RX: <SEQ,p0,v0,p1,v1,...,p5,v5>\n   — trajectory command
+ *     <HOME>\n                          — start homing sequence
+ * TX: <ACK,seq,p0,v0,p1,v1,...,H#>\n   — feedback + homing status
  *
- * When DEBUG_RAW_ENCODER is defined, also prints raw CCR1/CCR2 values.
+ * Homing status (H field):
+ *   H0 = idle/not started
+ *   H1 = homing in progress
+ *   H2 = all joints homed successfully
+ *   H3 = homing error
  */
 
 #include "serial_comm.h"
 #include "control.h"
+#include "homing.h"
 #include "encoder_capture.h"
 #include <Arduino.h>
 #include <stdlib.h>
@@ -39,7 +45,7 @@ void serialCommInit(void)
 }
 
 // ============================================================================
-// COMMAND PARSING (identical to Teensy)
+// COMMAND PARSING
 // ============================================================================
 
 static void parseCommand(const char *cmd)
@@ -47,6 +53,15 @@ static void parseCommand(const char *cmd)
     if (cmd[0] != '<') return;
     cmd++;
 
+    // ---- HOME command ----
+    if (cmd[0] == 'H' && cmd[1] == 'O' && cmd[2] == 'M' && cmd[3] == 'E') {
+        if (controlIsArmed()) {
+            homingStart();
+        }
+        return;
+    }
+
+    // ---- Trajectory command: <SEQ,p0,v0,...> ----
     char *end_ptr;
     uint32_t seq = strtoul(cmd, &end_ptr, 10);
     (void)seq;
@@ -63,6 +78,11 @@ static void parseCommand(const char *cmd)
 
     if (arm_grace_remaining > 0) {
         arm_grace_remaining--;
+        return;
+    }
+
+    // Reject trajectory commands while homing is active
+    if (homingIsActive()) {
         return;
     }
 
@@ -137,6 +157,10 @@ void serialCommSendFeedback(void)
         pos += len;
     }
 
+    // Homing status: ,H#
+    pos += snprintf(buf + pos, sizeof(buf) - pos, ",H%u",
+                    (unsigned)homingGetStatus());
+
     // Trailer: >\n
     buf[pos++] = '>';
     buf[pos++] = '\n';
@@ -144,8 +168,6 @@ void serialCommSendFeedback(void)
 
 #ifdef DEBUG_RAW_ENCODER
     // Print raw timer CCR1/CCR2 for encoder-enabled joints.
-    // If CCR2 drifts while motor is stopped → hardware/wiring issue.
-    // If CCR2 is stable but decoded position drifts → firmware bug.
     char dbg[128];
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
         if (!ENCODER_ENABLED[i]) continue;

@@ -193,6 +193,16 @@ CallbackReturn PAROL6System::on_activate(
   hw_command_positions_ = hw_state_positions_;
   hw_command_velocities_ = hw_state_velocities_;
   
+  // Send homing command to firmware
+  try {
+    serial_.Write("<HOME>\n");
+    homing_cmd_sent_ = true;
+    homing_status_ = 1;  // in progress
+    RCLCPP_INFO(logger_, "🏠 Sent HOME command to firmware — homing sequence started");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger_, "⚠️ Failed to send HOME command: %s", e.what());
+  }
+  
   RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE");
   return CallbackReturn::SUCCESS;
 }
@@ -360,11 +370,12 @@ return_type PAROL6System::read(
     }
     tokens.push_back(content.substr(start));  // Last token
     
-    // Validate: should have ACK + SEQ + 12 values (6 joints × 2) = 14 tokens
-    if (tokens.size() != 14) {
+    // Validate: ACK + SEQ + 12 values (6 joints × 2) + H status = 15 tokens
+    // Also accept 14 tokens for backward compatibility (no H field)
+    if (tokens.size() != 15 && tokens.size() != 14) {
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
-        "Invalid feedback: expected 14 tokens, got %zu", tokens.size());
+        "Invalid feedback: expected 14-15 tokens, got %zu", tokens.size());
       return return_type::OK;
     }
     
@@ -436,6 +447,20 @@ return_type PAROL6System::read(
       hw_state_velocities_[i] = std::stod(tokens[3 + i * 2]);
     }
     
+    // Parse homing status (token 14, format "H#")
+    if (tokens.size() >= 15 && tokens[14].size() >= 2 && tokens[14][0] == 'H') {
+      uint8_t new_status = tokens[14][1] - '0';
+      if (new_status != homing_status_) {
+        homing_status_ = new_status;
+        switch (homing_status_) {
+          case 0: RCLCPP_INFO(logger_, "🏠 Homing: idle"); break;
+          case 1: RCLCPP_INFO(logger_, "🏠 Homing: in progress..."); break;
+          case 2: RCLCPP_INFO(logger_, "✅ Homing: COMPLETE — all joints homed!"); break;
+          case 3: RCLCPP_ERROR(logger_, "❌ Homing: ERROR — one or more joints failed!"); break;
+        }
+      }
+    }
+    
     // Log statistics every 5 minutes (thesis validation data)
     RCLCPP_INFO_THROTTLE(logger_, clock_, 300000,
       "📊 Stats: RX=%lu LOST=%lu ERR=%lu Loss%%=%.4f MAX_DT=%.2f ms",
@@ -467,6 +492,11 @@ return_type PAROL6System::read(
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
+  // Block trajectory commands while homing is in progress
+  if (homing_status_ == 1) {
+    return return_type::OK;  // silently skip — firmware ignores commands too
+  }
+  
   // Format: <SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
   // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
   char buffer[512];  // Larger buffer for velocity data

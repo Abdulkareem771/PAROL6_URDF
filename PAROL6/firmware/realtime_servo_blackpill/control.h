@@ -27,5 +27,6 @@ void controlUpdate(void);
 const JointState* controlGetState(uint8_t joint_idx);
 void controlArm(void);
 bool controlIsArmed(void);
+void controlResetPosition(uint8_t joint_idx, float new_position);
 
 #endif // CONTROL_H

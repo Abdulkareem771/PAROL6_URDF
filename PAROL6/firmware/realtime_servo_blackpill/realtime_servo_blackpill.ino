@@ -11,8 +11,10 @@
  *
  * Architecture:
  *   6 timers (TIM1-5, TIM9) in PWM Input mode → encoder capture (ZERO ISR load)
- *   TIM11 update ISR                           → controlUpdate()  @ 500 Hz
- *   Main loop()                                → serial I/O       @ 50 Hz
+ *   TIM10 update ISR                           → step DDS           @ 40 kHz
+ *   TIM11 update ISR                           → controlUpdate()    @ 500 Hz
+ *   Main loop()                                → serial I/O         @ 50 Hz
+ *                                              → homingUpdate()     (when active)
  *
  * PWM Input mode:
  *   For each encoder, the timer hardware does ALL edge timing.
@@ -32,6 +34,7 @@
 #include "config.h"
 #include "control.h"
 #include "serial_comm.h"
+#include "homing.h"
 
 // ============================================================================
 // SETUP
@@ -48,6 +51,9 @@ void setup()
     // Initialize control system (encoders in PWM Input mode, motors, TIM11 ISR)
     controlInit();
 
+    // Initialize homing (configure sensor pins, attach interrupts)
+    homingInit();
+
     // Onboard LED: PC13 (active LOW on Black Pill)
     pinMode(PC13, OUTPUT);
     digitalWrite(PC13, LOW);   // LED ON — boot indicator
@@ -56,7 +62,7 @@ void setup()
 }
 
 // ============================================================================
-// MAIN LOOP — serial I/O at 50 Hz
+// MAIN LOOP — serial I/O at 50 Hz + homing state machine
 // ============================================================================
 
 static uint32_t last_feedback_ms = 0;
@@ -65,6 +71,9 @@ void loop()
 {
     // Process incoming commands (non-blocking)
     serialCommProcessIncoming();
+
+    // Run homing state machine (non-blocking, does nothing if inactive)
+    homingUpdate();
 
     // Send feedback at 50 Hz
     uint32_t now = millis();

@@ -115,10 +115,7 @@ void motorsInit(void)
         dir_mask[i] = (uint16_t)(1U << STM_PIN(pn));
     }
 
-    // Proximity sensor pins
-    pinMode(PROX_PIN_1, INPUT_PULLUP);
-    pinMode(PROX_PIN_2, INPUT_PULLUP);
-    pinMode(PROX_PIN_3, INPUT_PULLUP);
+    // (Homing sensor pins are now initialized in homingInit)
 
     // Start TIM10 at 40 kHz for DDS step generation
     stepTimer = new HardwareTimer(TIM10);

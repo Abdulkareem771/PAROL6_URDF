@@ -22,6 +22,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <Arduino.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -102,14 +103,69 @@ extern const uint32_t STEP_PINS[NUM_MOTORS];
 extern const uint32_t DIR_PINS_ARR[NUM_MOTORS];
 
 // ============================================================================
-// INDUCTIVE PROXIMITY SENSORS (homing)
+// HOMING CONFIGURATION
 // ============================================================================
+// Sensor types: 0 = limit switch (INPUT_PULLUP, FALLING edge)
+//               1 = inductive proximity (INPUT_PULLUP, RISING edge)
+//
+// Homing direction: the direction the motor moves to reach the home sensor.
+//   +1 = positive (encoder readings increasing)
+//   -1 = negative (encoder readings decreasing)
+//
+// Offsets are in DEGREES for easy manual tuning. Converted to radians internally.
+// The offset is the position value assigned to the joint AFTER homing completes.
+// Example: if J4 homes at its max-range end and that corresponds to 108° in
+//          MoveIt, set HOMING_OFFSET_DEG[3] = 108.0f.
 
-#define NUM_PROX_SENSORS 3
+#define DEG_TO_RAD(d) ((d) * (float)M_PI / 180.0f)
 
-#define PROX_PIN_1     PA1
-#define PROX_PIN_2     PA3
-#define PROX_PIN_3     PB4
+// Sensor pin for each joint (0 = no sensor / homing disabled)
+//                                     J1    J2    J3    J4    J5    J6
+static const uint32_t HOMING_SENSOR_PINS[NUM_MOTORS] = {
+    PA1,  PB3,  PB5,  PA3,  PB4,  0
+};
+
+// Sensor type per joint: 0=limit_switch, 1=inductive_prox
+static const uint8_t HOMING_SENSOR_TYPE[NUM_MOTORS] = { 1, 0, 0, 1, 0, 0 };
+
+// Per-joint homing enable
+static const bool HOMING_ENABLED[NUM_MOTORS] = {
+    false,   // J1 — inductive sensor
+    false,   // J2 — limit switch (may be resting on it)
+    false,   // J3 — limit switch
+    false,   // J4 — inductive sensor
+    true,   // J5 — limit switch
+    false   // J6 — no sensor yet
+};
+
+// Homing direction: +1 = increasing, -1 = decreasing
+static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
+
+// Homing speed (rad/s at joint level)
+static const float HOMING_SPEED[NUM_MOTORS] = {
+    0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.0f
+};
+
+// Position offset assigned after homing (DEGREES — easy to tune)
+// This is what the joint position is set to when the sensor is triggered.
+static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
+    0.0f,    // J1
+    0.0f,    // J2
+    0.0f,    // J3
+    108.0f,  // J4 — homes at ~108° in MoveIt range
+    0.0f,    // J5
+    0.0f     // J6
+};
+
+// Homing timeout (ms)
+#define HOMING_TIMEOUT_MS     15000
+
+// Back-off speed: fraction of homing speed when backing away from a
+// sensor that's already triggered at startup (e.g. J2 resting on switch)
+#define HOMING_BACKOFF_SPEED_MULT  0.5f
+
+// Settle time after sensor triggers before zeroing (ms)
+#define HOMING_SETTLE_MS      100
 
 // ============================================================================
 // MOTOR CONFIGURATION
