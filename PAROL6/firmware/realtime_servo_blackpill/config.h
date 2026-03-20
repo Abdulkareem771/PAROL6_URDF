@@ -131,7 +131,7 @@ static const uint8_t HOMING_SENSOR_TYPE[NUM_MOTORS] = { 1, 0, 0, 1, 0, 0 };
 // Per-joint homing enable
 static const bool HOMING_ENABLED[NUM_MOTORS] = {
     false,   // J1 — inductive sensor
-    false,   // J2 — limit switch (may be resting on it)
+    true,   // J2 — limit switch (may be resting on it)
     true,   // J3 — limit switch
     false,   // J4 — inductive sensor
     true,   // J5 — limit switch
@@ -146,18 +146,32 @@ static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
 
 // Homing speed (rad/s at joint level)
 static const float HOMING_SPEED[NUM_MOTORS] = {
-    0.5f, 0.5f, 0.3f, 0.5f, 0.5f, 0.0f
+    0.5f, 0.2f, 0.3f, 0.5f, 0.5f, 0.0f
 };
 
 // Position offset assigned after homing (DEGREES — easy to tune)
 // This is what the joint position is set to when the sensor is triggered.
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     0.0f,    // J1
-    0.0f,    // J2
-    74.0f,    // J3
+    -56.0f,  // J2
+    74.0f,   // J3
     108.0f,  // J4 — homes at ~108° in MoveIt range
-    120.0f,    // J5
+    120.0f,  // J5
     0.0f     // J6
+};
+
+#define HOMING_NO_READY 999.0f
+
+// Optional: Go to a specific angle (DEGREES) after a joint finishes homing.
+// If set to HOMING_NO_READY, the joint stays at its sensor triggered position.
+// Useful for moving a joint out of the way before the next joint homes.
+static const float HOMING_READY_POS_DEG[NUM_MOTORS] = {
+    HOMING_NO_READY, // J1
+    0.0f,            // J2 (moves to 0.0 deg after arriving at -56.0 deg)
+    0.0f, // J3
+    HOMING_NO_READY, // J4
+    0.0f, // J5
+    HOMING_NO_READY  // J6
 };
 
 // Homing timeout (ms)

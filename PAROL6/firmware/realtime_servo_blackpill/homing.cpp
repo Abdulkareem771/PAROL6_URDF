@@ -150,6 +150,27 @@ static void stopJoint(uint8_t idx)
 }
 
 // ============================================================================
+// HELPER: START NEXT PENDING JOINT (SEQUENTIAL HOMING)
+// ============================================================================
+
+static void startNextPendingJoint(uint32_t now)
+{
+    if (!HOMING_SEQUENTIAL) return;
+
+    for (uint8_t j = 0; j < NUM_MOTORS; j++) {
+        if (joint_state[j] == HOMING_PENDING) {
+            if (sensorIsActive(j)) {
+                joint_state[j] = HOMING_BACKING_OFF;
+            } else {
+                joint_state[j] = HOMING_SEEKING;
+            }
+            state_start_ms[j] = now;
+            break; // Only start one at a time
+        }
+    }
+}
+
+// ============================================================================
 // UPDATE (call from main loop — NOT time-critical)
 // ============================================================================
 
@@ -231,22 +252,40 @@ void homingUpdate(void)
                 // Reset the encoder/position tracking to the offset
                 controlResetPosition(i, offset_rad);
 
-                joint_state[i] = HOMING_COMPLETE;
-
-                // Start the next pending joint if sequential homing is enabled
-                if (HOMING_SEQUENTIAL) {
-                    for (uint8_t j = 0; j < NUM_MOTORS; j++) {
-                        if (joint_state[j] == HOMING_PENDING) {
-                            if (sensorIsActive(j)) {
-                                joint_state[j] = HOMING_BACKING_OFF;
-                            } else {
-                                joint_state[j] = HOMING_SEEKING;
-                            }
-                            state_start_ms[j] = now;
-                            break; // Only start one at a time
-                        }
-                    }
+                // Option: Move to ready position before finishing homing
+                if (HOMING_READY_POS_DEG[i] != HOMING_NO_READY) {
+                    joint_state[i] = HOMING_MOVING_TO_READY;
+                    state_start_ms[i] = now;
+                } else {
+                    joint_state[i] = HOMING_COMPLETE;
+                    startNextPendingJoint(now);
                 }
+            }
+            break;
+        }
+
+        // ----- MOVING TO READY: homing finished, now moving to set angle -----
+        case HOMING_MOVING_TO_READY:
+        {
+            const JointState *js = controlGetState(i);
+            if (!js) break;
+
+            float target_rad = DEG_TO_RAD(HOMING_READY_POS_DEG[i]);
+            float error = target_rad - js->actual_position;
+
+            // Stop if within tolerance (~1.1 degrees)
+            if (fabsf(error) < 0.02f) {
+                stopJoint(i);
+                joint_state[i] = HOMING_COMPLETE;
+                startNextPendingJoint(now);
+            } else {
+                // Drive towards target
+                float vel = (error > 0.0f) ? HOMING_SPEED[i] : -HOMING_SPEED[i];
+                
+                // Optional: slow down as we approach to avoid overshoot
+                if (fabsf(error) < 0.1f) vel *= 0.5f; 
+                
+                driveJoint(i, vel);
             }
             break;
         }
@@ -276,6 +315,7 @@ bool homingIsActive(void)
         if (joint_state[i] == HOMING_SEEKING ||
             joint_state[i] == HOMING_BACKING_OFF ||
             joint_state[i] == HOMING_ZEROING ||
+            joint_state[i] == HOMING_MOVING_TO_READY ||
             joint_state[i] == HOMING_PENDING) {
             return true;
         }
@@ -301,6 +341,7 @@ uint8_t homingGetStatus(void)
         if (joint_state[i] == HOMING_SEEKING ||
             joint_state[i] == HOMING_BACKING_OFF ||
             joint_state[i] == HOMING_ZEROING ||
+            joint_state[i] == HOMING_MOVING_TO_READY ||
             joint_state[i] == HOMING_PENDING) any_active = true;
     }
 

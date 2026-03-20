@@ -21,6 +21,7 @@ enum HomingState : uint8_t {
     HOMING_BACKING_OFF,  // Sensor already triggered → move away first
     HOMING_SEEKING,      // Moving toward sensor
     HOMING_ZEROING,      // Sensor hit → settling, about to zero
+    HOMING_MOVING_TO_READY, // Moving to configured ready angle
     HOMING_COMPLETE,     // Homed successfully
     HOMING_ERROR         // Timeout
 };
