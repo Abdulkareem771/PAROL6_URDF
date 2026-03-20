@@ -17,6 +17,7 @@
 
 enum HomingState : uint8_t {
     HOMING_IDLE,         // Not homing
+    HOMING_PENDING,      // Waiting for turn in sequential homing
     HOMING_BACKING_OFF,  // Sensor already triggered → move away first
     HOMING_SEEKING,      // Moving toward sensor
     HOMING_ZEROING,      // Sensor hit → settling, about to zero

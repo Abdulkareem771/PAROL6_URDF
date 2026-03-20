@@ -132,18 +132,21 @@ static const uint8_t HOMING_SENSOR_TYPE[NUM_MOTORS] = { 1, 0, 0, 1, 0, 0 };
 static const bool HOMING_ENABLED[NUM_MOTORS] = {
     false,   // J1 — inductive sensor
     false,   // J2 — limit switch (may be resting on it)
-    false,   // J3 — limit switch
+    true,   // J3 — limit switch
     false,   // J4 — inductive sensor
     true,   // J5 — limit switch
     false   // J6 — no sensor yet
 };
+
+// Homing operation mode: true = one by one, false = all simultaneously
+static const bool HOMING_SEQUENTIAL = true;
 
 // Homing direction: +1 = increasing, -1 = decreasing
 static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
 
 // Homing speed (rad/s at joint level)
 static const float HOMING_SPEED[NUM_MOTORS] = {
-    0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 0.0f
+    0.5f, 0.5f, 0.3f, 0.5f, 0.5f, 0.0f
 };
 
 // Position offset assigned after homing (DEGREES — easy to tune)
@@ -151,7 +154,7 @@ static const float HOMING_SPEED[NUM_MOTORS] = {
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     0.0f,    // J1
     0.0f,    // J2
-    0.0f,    // J3
+    74.0f,    // J3
     108.0f,  // J4 — homes at ~108° in MoveIt range
     120.0f,    // J5
     0.0f     // J6

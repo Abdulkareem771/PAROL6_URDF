@@ -97,6 +97,7 @@ void homingInit(void)
 void homingStart(void)
 {
     homing_requested = true;
+    bool first_started = false;
 
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
         if (!HOMING_ENABLED[i]) {
@@ -106,6 +107,11 @@ void homingStart(void)
 
         sensor_triggered[i] = false;
 
+        if (HOMING_SEQUENTIAL && first_started) {
+            joint_state[i] = HOMING_PENDING;
+            continue; // Wait turn
+        }
+
         // Check if sensor is already triggered (e.g. J2 resting on switch)
         if (sensorIsActive(i)) {
             joint_state[i] = HOMING_BACKING_OFF;
@@ -114,6 +120,7 @@ void homingStart(void)
         }
 
         state_start_ms[i] = millis();
+        first_started = true;
     }
 }
 
@@ -156,10 +163,11 @@ void homingUpdate(void)
 
         switch (joint_state[i]) {
 
-        // ----- IDLE / COMPLETE / ERROR: nothing to do -----
+        // ----- IDLE / COMPLETE / ERROR / PENDING: nothing to do -----
         case HOMING_IDLE:
         case HOMING_COMPLETE:
         case HOMING_ERROR:
+        case HOMING_PENDING:
             break;
 
         // ----- BACKING OFF: sensor was already triggered at start -----
@@ -224,6 +232,21 @@ void homingUpdate(void)
                 controlResetPosition(i, offset_rad);
 
                 joint_state[i] = HOMING_COMPLETE;
+
+                // Start the next pending joint if sequential homing is enabled
+                if (HOMING_SEQUENTIAL) {
+                    for (uint8_t j = 0; j < NUM_MOTORS; j++) {
+                        if (joint_state[j] == HOMING_PENDING) {
+                            if (sensorIsActive(j)) {
+                                joint_state[j] = HOMING_BACKING_OFF;
+                            } else {
+                                joint_state[j] = HOMING_SEEKING;
+                            }
+                            state_start_ms[j] = now;
+                            break; // Only start one at a time
+                        }
+                    }
+                }
             }
             break;
         }
@@ -252,7 +275,8 @@ bool homingIsActive(void)
     for (uint8_t i = 0; i < NUM_MOTORS; i++) {
         if (joint_state[i] == HOMING_SEEKING ||
             joint_state[i] == HOMING_BACKING_OFF ||
-            joint_state[i] == HOMING_ZEROING) {
+            joint_state[i] == HOMING_ZEROING ||
+            joint_state[i] == HOMING_PENDING) {
             return true;
         }
     }
@@ -276,7 +300,8 @@ uint8_t homingGetStatus(void)
         if (joint_state[i] == HOMING_ERROR) any_error = true;
         if (joint_state[i] == HOMING_SEEKING ||
             joint_state[i] == HOMING_BACKING_OFF ||
-            joint_state[i] == HOMING_ZEROING) any_active = true;
+            joint_state[i] == HOMING_ZEROING ||
+            joint_state[i] == HOMING_PENDING) any_active = true;
     }
 
     if (any_error) return 3;
