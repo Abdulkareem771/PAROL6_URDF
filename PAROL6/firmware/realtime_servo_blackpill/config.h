@@ -153,7 +153,7 @@ static const float HOMING_SPEED[NUM_MOTORS] = {
 // This is what the joint position is set to when the sensor is triggered.
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     0.0f,    // J1
-    -56.0f,  // J2
+    -46.0f,  // J2
     74.0f,   // J3
     108.0f,  // J4 — homes at ~108° in MoveIt range
     120.0f,  // J5

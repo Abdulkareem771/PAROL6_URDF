@@ -163,7 +163,7 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-0.98"
+      lower="-0.802444444"
       upper="1"
       effort="300"
       velocity="3" />
