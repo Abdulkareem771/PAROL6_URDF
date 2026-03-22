@@ -6,96 +6,81 @@ from pathlib import Path
 # -----------------------------
 # Configuration
 # -----------------------------
-
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
 SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image.png"
 
 
-
-IMAGE_PATH = SINGLE_IMAGE  # change this
+IMAGE_PATH = SINGLE_IMAGE
 WINDOW_NAME = "HSV Inspector"
 
-# Global variables
+# Global
 img_bgr = None
 img_hsv = None
+current_display = None
 
 # -----------------------------
 # Mouse callback
 # -----------------------------
 def mouse_callback(event, x, y, flags, param):
+    global current_display
+
     if event == cv2.EVENT_MOUSEMOVE:
+        if x >= img_bgr.shape[1] or y >= img_bgr.shape[0]:
+            return
+
         b, g, r = img_bgr[y, x]
         h, s, v = img_hsv[y, x]
 
         display = img_bgr.copy()
 
-        text = f"X:{x}, Y:{y} | BGR:({b},{g},{r}) | HSV:({h},{s},{v})"
+        # -----------------------------
+        # Draw vertical reference line (centered example)
+        # -----------------------------
+        cx = img_bgr.shape[1] // 2
+        cv2.line(display, (cx, 0), (cx, img_bgr.shape[0]), (0, 0, 255), 2)
 
-        cv2.putText(display, text, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                    (255, 255, 255), 2, cv2.LINE_AA)
+        # -----------------------------
+        # Draw small yellow circle at cursor
+        # -----------------------------
+        cv2.circle(display, (x, y), 5, (0, 255, 255), -1)
 
-        # Draw crosshair
-        cv2.line(display, (x, 0), (x, display.shape[0]), (255, 255, 255), 1)
-        cv2.line(display, (0, y), (display.shape[1], y), (255, 255, 255), 1)
+        # -----------------------------
+        # Overlay text (top-left like your screenshot)
+        # -----------------------------
+        cv2.putText(display, f"Pixel: ({x}, {y})", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
-        cv2.imshow(WINDOW_NAME, display)
+        cv2.putText(display, f"HSV: ({h}, {s}, {v})", (20, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
+        cv2.putText(display, f"RGB: ({r}, {g}, {b})", (20, 120),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
 
-# -----------------------------
-# Red mask helper (dual range)
-# -----------------------------
-def get_red_mask(hsv):
-    # Lower red range
-    lower_red1 = np.array([0, 100, 100])
-    upper_red1 = np.array([10, 255, 255])
-
-    # Upper red range
-    lower_red2 = np.array([170, 100, 100])
-    upper_red2 = np.array([180, 255, 255])
-
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-
-    return cv2.bitwise_or(mask1, mask2)
-
+        current_display = display
 
 # -----------------------------
 # Main
 # -----------------------------
 def main():
-    global img_bgr, img_hsv
+    global img_bgr, img_hsv, current_display
 
     img_bgr = cv2.imread(IMAGE_PATH)
     if img_bgr is None:
-        print("Error: Could not load image.")
+        print("Error: Could not load image")
         return
 
     img_hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    current_display = img_bgr.copy()
 
-    cv2.namedWindow(WINDOW_NAME)
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback(WINDOW_NAME, mouse_callback)
 
     while True:
-        display = img_bgr.copy()
-
-        # Show red mask for tuning
-        red_mask = get_red_mask(img_hsv)
-        red_overlay = cv2.bitwise_and(img_bgr, img_bgr, mask=red_mask)
-
-        combined = np.hstack((display, red_overlay))
-
-        cv2.putText(combined, "Original", (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-        cv2.putText(combined, "Red Mask", (img_bgr.shape[1] + 10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-
-        cv2.imshow(WINDOW_NAME, combined)
+        cv2.imshow(WINDOW_NAME, current_display)
 
         key = cv2.waitKey(1) & 0xFF
-
         if key == 27 or key == ord('q'):
             break
 
