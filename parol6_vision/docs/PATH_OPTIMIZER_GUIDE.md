@@ -4,7 +4,7 @@
 
 The `path_optimizer` node is a vision-based ROS 2 node in the PAROL6 robot system. It detects red weld-line markers in camera images and extracts their 2D geometry as a centerline skeleton. It is designed specifically to handle weld lines of **variant lengths** — there is no minimum-length filter, so both short and long lines are detected equally.
 
-The node publishes exactly **one line per frame** — the contour with the highest confidence score — making its output unambiguous for downstream consumers.
+The node publishes exactly **one line per frame** — the contour with the **greatest number of skeleton points** (i.e., the longest detected line) — making its output unambiguous for downstream consumers.
 
 **Node Name:** `path_optimizer`  
 **Package:** `parol6_vision`  
@@ -51,7 +51,7 @@ The detection pipeline executes sequentially on every incoming image frame.
              ▼
   ┌──────────────────────────────────────────────────────────┐
   │  6. Best-Line Selection                                   │
-  │     Pick the single highest-confidence line ≥ threshold  │
+  │     Pick the single contour with the most skeleton pts   │
   └──────────┬───────────────────────────────────────────────┘
              │
        ┌─────┴──────────────────────────┐
@@ -189,7 +189,7 @@ simplified = cv2.approxPolyDP(points_cv, epsilon=dp_epsilon, closed=False)
 - **Low epsilon** → more points retained → more shape detail
 - **High epsilon** → fewer points → smoother approximation
 
-The simplified points are used only for **confidence scoring**. The full dense ordered skeleton points are stored in `WeldLine.pixels` for downstream 3-D reconstruction.
+The simplified points are used only for **confidence scoring** (informational). The full dense ordered skeleton points are stored in `WeldLine.pixels` for downstream 3-D reconstruction.
 
 ---
 
@@ -230,15 +230,20 @@ confidence = retention × continuity
 
 ### Stage 6 — Best-Line Selection
 
-After scoring all contours, the node selects the **single contour with the highest confidence** that meets or exceeds `min_confidence`:
+After processing all contours, the node selects the **single contour with the greatest number of ordered skeleton points**:
 
 ```python
-if confidence >= min_confidence and confidence > best_confidence:
-    best_confidence = confidence
+if n_pts > best_pts:
+    best_pts  = n_pts
     best_line = <WeldLine built from this contour>
 ```
 
-If no contour meets the threshold, an empty `WeldLineArray` (zero lines) is published that frame.
+**Why point count instead of confidence?**
+The `confidence` score (retention × continuity) can be misleadingly low for physically correct but thin lines, because the morphological erosion step reduces the pixel count before the retention ratio is computed. The longest skeleton in the frame reliably corresponds to the dominant physical line regardless of lighting or line thickness.
+
+`confidence` is still computed and stored in `WeldLine.confidence` for observability (visible in `/path_optimizer/debug_image` labels and logs), but it does **not** gate the selection.
+
+A line is always published as long as at least one contour exists in the skeleton — there is no minimum point-count threshold.
 
 ---
 
@@ -317,7 +322,7 @@ The debug image also shows:
 | Node name | `red_line_detector` | `path_optimizer` |
 | Debug topic prefix | `/red_line_detector/` | `/path_optimizer/` |
 | Min line-length filter | Yes — `min_line_length`, `min_contour_area` | **None** |
-| Lines per frame | Up to `max_lines_per_frame` | **Exactly 1** (best confidence) |
+| Lines per frame | Up to `max_lines_per_frame` | **Exactly 1** (most skeleton points) |
 | Intended use | General multi-line detection | Variant-length single-line detection |
 
 ---
@@ -333,12 +338,13 @@ source install/setup.bash
 # Run
 ros2 run parol6_vision path_optimizer
 
-# Run with custom HSV ranges
+# Run with custom HSV ranges and thinner morphology kernel (for thin lines)
 ros2 run parol6_vision path_optimizer \
   --ros-args \
   -p hsv_lower_1:="[0, 120, 80]" \
   -p hsv_upper_1:="[8, 255, 255]" \
-  -p min_confidence:=0.4
+  -p morphology_kernel_size:=3 \
+  -p erosion_iterations:=0
 ```
 
 ---
@@ -351,14 +357,16 @@ ros2 run parol6_vision path_optimizer \
    ```bash
    ros2 run parol6_vision hsv_inspector
    ```
-2. Lower `min_confidence` (e.g., `0.3`) to see if a low-confidence line exists
-3. Monitor `/path_optimizer/debug_image` in RViz — if the mask is empty, it is an HSV tuning issue; if the mask has pixels but no line, it is a confidence issue
+2. Monitor `/path_optimizer/debug_image` in RViz:
+   - **Mask is completely empty** → HSV tuning issue; the red color is not being segmented
+   - **Mask has pixels but skeleton is empty** → morphological erosion is destroying a thin line; reduce `morphology_kernel_size` to `3` or set `erosion_iterations:=0`
+3. Check logs for `After morphology: 0 pixels` — if this appears, the kernel is too large for the line width
 
 ### Detected line is fragmented / wrong
 
 - Increase `dilation_iterations` (e.g., `3`) to connect gap-prone lines
 - Decrease `douglas_peucker_epsilon` (e.g., `1.0`) for more precise polyline tracing
-- Reduce `min_confidence` if continuity scoring is penalizing a genuinely curved line
+- If a noise blob is being selected instead of the real line, it means the noise blob has more skeleton points — reduce its influence by increasing `morphology_kernel_size` slightly to erode it away before skeletonization
 
 ### CV Bridge Error (`bgr8` conversion failed)
 
