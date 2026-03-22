@@ -56,7 +56,7 @@ def segment_blocks(image_path):
 
     #R_2 = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
     R_eroded = cv2.erode(R,  kernel, iterations=1)
-    R_dilated = cv2.dilate(R, kernel, iterations=1)
+    R_dilated = cv2.dilate(R, kernel, iterations=2)
     img_annotated = img_rgb.copy()
 
     return R, R_eroded, R_dilated, img_annotated, img_rgb
