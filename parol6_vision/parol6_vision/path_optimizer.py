@@ -324,26 +324,28 @@ class PathOptimizer(Node):
         if not contours:
             return None
 
-        # Step 5 & 6: Score each contour, keep the best one
-        retention = pixels_after / max(pixels_before, 1)
-        best_line      = None
-        best_confidence = -1.0
+        # Step 5 & 6: Process each contour, then keep the one with the most points
+        retention  = pixels_after / max(pixels_before, 1)
+        best_line  = None
+        best_pts   = -1          # track highest point count seen so far
 
         for idx, contour in enumerate(contours):
-            ordered_pts  = self.order_points_along_line(contour)
-            simplified   = self.simplify_polyline(ordered_pts)
-            continuity   = self.compute_continuity(simplified)
-            confidence   = float(retention * continuity)
+            ordered_pts = self.order_points_along_line(contour)
+            simplified  = self.simplify_polyline(ordered_pts)
+            continuity  = self.compute_continuity(simplified)
+            confidence  = float(retention * continuity)
+            n_pts       = len(ordered_pts)
 
             self.get_logger().info(
-                f'  Contour {idx}: pts={len(contour)}  '
+                f'  Contour {idx}: pts={n_pts}  '
                 f'continuity={continuity:.2f}  conf={confidence:.2f}'
             )
 
-            if confidence >= self.min_confidence and confidence > best_confidence:
-                best_confidence = confidence
+            # Select the contour with the most skeleton points
+            if n_pts > best_pts:
+                best_pts = n_pts
 
-                line = WeldLine()
+                line            = WeldLine()
                 line.id         = 'path_optimizer_line'
                 line.confidence = confidence
 
