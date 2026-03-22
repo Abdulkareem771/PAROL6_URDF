@@ -72,7 +72,7 @@ static const bool ENCODER_ENABLED[NUM_MOTORS] = {
   true,  // J3
   true,  // J4
   true,   // J5
-  false    // J6
+  true    // J6
 };
 
 // ============================================================================
@@ -131,10 +131,10 @@ static const uint8_t HOMING_SENSOR_TYPE[NUM_MOTORS] = { 1, 0, 0, 1, 0, 0 };
 // Per-joint homing enable
 static const bool HOMING_ENABLED[NUM_MOTORS] = {
     false,   // J1 — inductive sensor
-    true,   // J2 — limit switch (may be resting on it)
-    true,   // J3 — limit switch
-    false,   // J4 — inductive sensor
-    true,   // J5 — limit switch
+    false,   // J2 — limit switch (may be resting on it)
+    false,   // J3 — limit switch
+    true,   // J4 — inductive sensor
+    false,   // J5 — limit switch
     false   // J6 — no sensor yet
 };
 
@@ -146,7 +146,7 @@ static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
 
 // Homing speed (rad/s at joint level)
 static const float HOMING_SPEED[NUM_MOTORS] = {
-    0.5f, 0.2f, 0.3f, 0.5f, 0.5f, 0.0f
+    0.3f, 0.2f, 0.3f, 0.3f, 0.3f, 0.0f
 };
 
 // Position offset assigned after homing (DEGREES — easy to tune)
@@ -154,7 +154,7 @@ static const float HOMING_SPEED[NUM_MOTORS] = {
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     0.0f,    // J1
     -46.0f,  // J2
-    74.0f,   // J3
+    68.0f,   // J3
     108.0f,  // J4 — homes at ~108° in MoveIt range
     120.0f,  // J5
     0.0f     // J6
@@ -201,7 +201,7 @@ static const float GEAR_RATIOS[NUM_MOTORS] = {
   10.0f   // J6
 };
 
-static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, -1, 1, 1, -1 }; //J1 , J2 , J3 Negative, J4 Positive, J5 Positive, J6 Negative
+static const int MOTOR_DIR_SIGN[NUM_MOTORS] = { 1, 1, -1, 1, 1, 1 }; //J1 , J2 , J3 Negative, J4 Positive, J5 Positive, J6 Negative
 
 // ============================================================================
 // ENCODER CONFIGURATION
