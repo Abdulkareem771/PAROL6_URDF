@@ -17,7 +17,7 @@ CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image_3.png"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -50,13 +50,21 @@ def segment_blocks(image_path):
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     R = cv2.bitwise_or(mask_red1, mask_red2)
+    px_num = np.where((R < 255) & (R > 0))
+    px_num_y = px_num[0]
+    print(f"px_num: {px_num}")
+    #px_num_255 = np.where(R == 255)
+    #print(f"px_num_255: {px_num_255}")
     
+
     # Optional: Clean up noise with morphological operations
     kernel = np.ones((3, 3), np.uint8)
 
     #R_2 = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
     R_eroded = cv2.erode(R,  kernel, iterations=1)
     R_dilated = cv2.dilate(R, kernel, iterations=2)
+    
+    
     img_annotated = img_rgb.copy()
 
     return R, R_eroded, R_dilated, img_annotated, img_rgb
@@ -66,14 +74,15 @@ def segment_blocks(image_path):
 r_mask, r_eroded, r_dilated, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
 
 
+
 #plt.figure(figsize=(20, 20))
-"""
+
 # Subplot 1: Original Image
-plt.subplot(1, 3, 1)
+plt.subplot(1, 2, 1)
 plt.title("Original Image")
 plt.imshow(img_rgb)
 plt.axis('off')
-"""
+
 
 """
 # Subplot 2: G Matrix (Green Mask)
@@ -90,11 +99,12 @@ plt.axis('off')
 """
 
 # Subplot 1: R Matrix (Red Object)
-plt.subplot(1, 3, 1)
+plt.subplot(1, 2, 2)
 plt.title("Red Object")
 plt.imshow(r_mask, cmap='gray')
 plt.axis('off')
 
+"""
 # Subplot 2: R eroded
 plt.subplot(1, 3, 2)
 plt.title("Red Object Eroded")
@@ -107,7 +117,7 @@ plt.subplot(1, 3, 3)
 plt.title("Red Object Dilated")
 plt.imshow(r_dilated)
 plt.axis('off')
-
+"""
 plt.tight_layout()
 plt.show()
 
