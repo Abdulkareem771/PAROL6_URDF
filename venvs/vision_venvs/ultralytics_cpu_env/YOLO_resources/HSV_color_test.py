@@ -118,10 +118,10 @@ def segment_blocks(image_path):
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
-    
+    """
     if contour_I is not None:
         cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
-    
+    """
 
     """
     # 6. GUI Display Section
@@ -154,7 +154,7 @@ def segment_blocks(image_path):
     plt.tight_layout()
     plt.show()
     """
-    return G, B, img_annotated, img_rgb
+    return G, B, R, img_annotated, img_rgb
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -181,7 +181,7 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, b_matrix, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
+g_matrix, b_matrix, r_matrix, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
 
 """
 print(f"g_matrix dtype: {g_matrix.dtype}")
@@ -204,19 +204,24 @@ plt.axis('off')
 
 """
 
-
+"""
 # Subplot 2: G Matrix (Green Mask)
 plt.subplot(1, 2, 1)
 plt.title("Green Object")
 plt.imshow(g_matrix, cmap='gray')
 plt.axis('off')
 
-# Subplot 3: R Matrix (Red Object)
+# Subplot 3: B Matrix (Blue Object)
 plt.subplot(1, 2, 2)
 plt.title("Blue Object")
 plt.imshow(b_matrix, cmap='gray')
 plt.axis('off')
-
+"""
+# Subplot 3: R Matrix (Red Object)
+plt.subplot(1, 1, 1)
+plt.title("Red Object")
+plt.imshow(r_matrix, cmap='gray')
+plt.axis('off')
 
 """
 # Subplot 4: Annotated Image with Bounding Boxes
