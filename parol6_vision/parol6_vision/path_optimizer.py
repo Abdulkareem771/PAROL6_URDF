@@ -98,11 +98,11 @@ class PathOptimizer(Node):
 
         # HSV Color Ranges — red wraps around in HSV, so two ranges are used
         # Range 1: Low red (0–10 Hue degrees)
-        self.declare_parameter('hsv_lower_1', [0, 100, 100])
+        self.declare_parameter('hsv_lower_1', [0, 70, 50])
         self.declare_parameter('hsv_upper_1', [10, 255, 255])
 
         # Range 2: High red (160–180 Hue degrees)
-        self.declare_parameter('hsv_lower_2', [160, 50, 0])
+        self.declare_parameter('hsv_lower_2', [170, 70, 50])
         self.declare_parameter('hsv_upper_2', [180, 255, 255])
 
         # Morphological Operations
