@@ -107,7 +107,7 @@ class PathOptimizer(Node):
 
         # Morphological Operations
         self.declare_parameter('morphology_kernel_size', 3)
-        self.declare_parameter('erosion_iterations', 1)
+        self.declare_parameter('erosion_iterations', 0)
         self.declare_parameter('dilation_iterations', 2)
 
         # Line Extraction
