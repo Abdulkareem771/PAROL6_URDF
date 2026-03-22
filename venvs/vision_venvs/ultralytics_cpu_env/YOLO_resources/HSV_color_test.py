@@ -53,25 +53,27 @@ def segment_blocks(image_path):
     
     # Optional: Clean up noise with morphological operations
     kernel = np.ones((3, 3), np.uint8)
-    R_2 = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
 
+    #R_2 = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
+    R_eroded = cv2.erode(R,  kernel, iterations=1)
+    R_dilated = cv2.dilate(R, kernel, iterations=1)
     img_annotated = img_rgb.copy()
 
-    return R, R_2, img_annotated, img_rgb
+    return R, R_eroded, R_dilated, img_annotated, img_rgb
 
 
 # --- Execution ---
-r_matrix, r_matrix_2, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
+r_mask, r_eroded, r_dilated, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
 
 
 #plt.figure(figsize=(20, 20))
-
+"""
 # Subplot 1: Original Image
 plt.subplot(1, 3, 1)
 plt.title("Original Image")
 plt.imshow(img_rgb)
 plt.axis('off')
-
+"""
 
 """
 # Subplot 2: G Matrix (Green Mask)
@@ -86,17 +88,24 @@ plt.title("Blue Object")
 plt.imshow(b_matrix, cmap='gray')
 plt.axis('off')
 """
-# Subplot 3: R Matrix (Red Object)
-plt.subplot(1, 3, 2)
+
+# Subplot 1: R Matrix (Red Object)
+plt.subplot(1, 3, 1)
 plt.title("Red Object")
-plt.imshow(r_matrix, cmap='gray')
+plt.imshow(r_mask, cmap='gray')
+plt.axis('off')
+
+# Subplot 2: R eroded
+plt.subplot(1, 3, 2)
+plt.title("Red Object Eroded")
+plt.imshow(r_eroded, cmap='gray')
 plt.axis('off')
 
 
-# Subplot 4: Annotated Image with Bounding Boxes
+# Subplot 3: R dilated
 plt.subplot(1, 3, 3)
-plt.title("Result")
-plt.imshow(r_matrix_2)
+plt.title("Red Object Dilated")
+plt.imshow(r_dilated)
 plt.axis('off')
 
 plt.tight_layout()
