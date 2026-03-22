@@ -106,7 +106,7 @@ class PathOptimizer(Node):
         self.declare_parameter('hsv_upper_2', [180, 255, 255])
 
         # Morphological Operations
-        self.declare_parameter('morphology_kernel_size', 5)
+        self.declare_parameter('morphology_kernel_size', 3)
         self.declare_parameter('erosion_iterations', 1)
         self.declare_parameter('dilation_iterations', 2)
 
