@@ -33,7 +33,7 @@ def segment_blocks(image_path):
 
     # 2. Convert BGR (OpenCV default) to HSV
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
+    """
     # 3. Define color ranges in HSV
     # Note: HSV ranges in OpenCV are H: 0-180, S: 0-255, V: 0-255
     
@@ -44,33 +44,37 @@ def segment_blocks(image_path):
     # Blue range
     lower_blue = np.array([100, 50, 50])
     upper_blue = np.array([140, 255, 255])
-
     """
+    
     # Red range (Red wraps around 0 and 180, so we combine two ranges)
     lower_red1 = np.array([0, 70, 50])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([170, 70, 50])
     upper_red2 = np.array([180, 255, 255])
-    """
+    
 
     # 4. Create Masks (G and R matrices)
+    """
     # G matrix: 255 for green pixels, 0 otherwise
     G = cv2.inRange(hsv, lower_green, upper_green)
 
     # B matrix: 255 for blue pixels, 0 otherwise
     B = cv2.inRange(hsv, lower_blue, upper_blue)
-
     """
+    
     # R matrix: combine both ends of the red spectrum
     mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
     R = cv2.bitwise_or(mask_red1, mask_red2)
-    """
+    
     
     # Optional: Clean up noise with morphological operations
-    kernel = np.ones((5, 5), np.uint8)
+    kernel = np.ones((3, 3), np.uint8)
+    """
     G = cv2.morphologyEx(G, cv2.MORPH_OPEN, kernel)
     B = cv2.morphologyEx(B, cv2.MORPH_OPEN, kernel)
+    """
+    R = cv2.morphologyEx(R, cv2.MORPH_OPEN, kernel)
 
     # 5. Compute Bounding Boxes and draw on a copy of img_rgb
     img_annotated = img_rgb.copy()
