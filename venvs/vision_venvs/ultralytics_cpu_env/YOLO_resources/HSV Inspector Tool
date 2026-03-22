@@ -1,10 +1,20 @@
 import cv2
 import numpy as np
+import os
+from pathlib import Path
 
 # -----------------------------
 # Configuration
 # -----------------------------
-IMAGE_PATH = "input.jpg"  # change this
+
+current_dir = Path(__file__)                # YOLO_resources/detect_path.py
+project_dir = current_dir.parent.parent     # ultralytics_cpu_env
+
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image.png"
+
+
+
+IMAGE_PATH = SINGLE_IMAGE  # change this
 WINDOW_NAME = "HSV Inspector"
 
 # Global variables
