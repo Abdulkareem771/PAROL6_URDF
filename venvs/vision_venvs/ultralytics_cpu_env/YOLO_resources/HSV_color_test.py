@@ -17,7 +17,7 @@ CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image.png"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "annotated_image_3.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -67,7 +67,7 @@ r_matrix, r_matrix_2, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
 #plt.figure(figsize=(20, 20))
 
 # Subplot 1: Original Image
-plt.subplot(1, 2, 1)
+plt.subplot(1, 3, 1)
 plt.title("Original Image")
 plt.imshow(img_rgb)
 plt.axis('off')
@@ -87,18 +87,18 @@ plt.imshow(b_matrix, cmap='gray')
 plt.axis('off')
 """
 # Subplot 3: R Matrix (Red Object)
-plt.subplot(1, 2, 2)
+plt.subplot(1, 3, 2)
 plt.title("Red Object")
 plt.imshow(r_matrix, cmap='gray')
 plt.axis('off')
 
-"""
+
 # Subplot 4: Annotated Image with Bounding Boxes
-#plt.subplot(1, 4, 4)
+plt.subplot(1, 3, 3)
 plt.title("Result")
-plt.imshow(img_annotated)
+plt.imshow(r_matrix_2)
 plt.axis('off')
-"""
+
 plt.tight_layout()
 plt.show()
 
