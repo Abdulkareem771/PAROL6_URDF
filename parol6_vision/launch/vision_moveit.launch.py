@@ -85,8 +85,8 @@ def generate_launch_description():
         # Camera is 1.2 m in front of robot base, 1.0 m up, looking back+down
         # yaw=pi  → faces toward -X (toward robot)
         # pitch=+0.52 rad (+30° = tilts DOWN after yaw=π flip) → tilts down toward workspace
-        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
-                   '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
+        arguments=['--x', '0.2', '--y', '0.0', '--z', '1.0',
+                   '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
