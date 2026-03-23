@@ -5,7 +5,7 @@ Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz
 
 Combines:
   - ros2 bag play  (replays Kinect data — set use_bag:=false for live camera)
-  - red_line_detector  →  /vision/weld_lines_2d
+  - path_optimizer     →  /vision/weld_lines_2d
   - depth_matcher      →  /vision/weld_lines_3d
   - path_generator     →  /vision/welding_path
   - move_group         (fake hardware — robot model + motion planning panel)
@@ -40,11 +40,7 @@ def generate_launch_description():
     )
     use_bag = LaunchConfiguration('use_bag')
 
-    single_frame_detection_arg = DeclareLaunchArgument(
-        'single_frame_detection', default_value='true',
-        description='true = process one camera frame then stop detector subscription'
-    )
-    single_frame_detection = LaunchConfiguration('single_frame_detection')
+
 
     # ── MoveIt Config ──────────────────────────────────────────────────
     pkg_parol6            = get_package_share_directory('parol6')
@@ -106,14 +102,13 @@ def generate_launch_description():
     )
 
     # ── 3. Vision Nodes ────────────────────────────────────────────────
-    red_line_detector = Node(
+    path_optimizer = Node(
         package='parol6_vision',
-        executable='red_line_detector',
-        name='red_line_detector',
+        executable='path_optimizer',
+        name='path_optimizer',
         output='screen',
         parameters=[{
             'publish_debug_images': True,
-            'single_frame_mode': ParameterValue(single_frame_detection, value_type=bool),
             'use_sim_time': True,
         }]
     )
@@ -220,7 +215,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         use_bag_arg,
-        single_frame_detection_arg,
         # Bag
         play_bag,
         # TFs
@@ -228,7 +222,7 @@ def generate_launch_description():
         static_tf_camera,
         static_tf_optical,
         # Vision pipeline
-        red_line_detector,
+        path_optimizer,
         depth_matcher,
         path_generator,
         point_cloud_xyzrgb,

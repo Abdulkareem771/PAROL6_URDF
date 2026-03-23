@@ -9,25 +9,35 @@ if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; t
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
     
     # Add optional GPU/CUDA mounts if they exist
+    # Note: resolve symlinks so Docker gets real files, not dangling symlinks.
+    # Skip paths where host type (file) would conflict with container type (dir) or vice versa.
     for path in /etc/OpenCL/vendors \
                 /usr/bin/nvidia-smi \
                 /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1 \
                 /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1 \
-                /usr/bin/nvcc \
                 /usr/lib/nvidia-cuda-toolkit \
                 /usr/lib/nvidia \
                 /usr/lib/cuda \
                 /usr/share/cmake-3.22/Modules; do
         if [ -e "$path" ]; then
-            GPU_ARGS+=("-v" "$path:$path:ro")
+            real_path=$(realpath "$path")
+            GPU_ARGS+=("-v" "$real_path:$path:ro")
         fi
     done
-    
+
+    # /usr/bin/nvcc is a file on host but a directory in the image — skip direct mount,
+    # the container's own nvcc is sufficient since nvidia-cuda-toolkit is mounted above.
+
     for path in /usr/lib/x86_64-linux-gnu/libcudart.so \
                 /usr/lib/x86_64-linux-gnu/libcudart.so.11.0 \
                 /usr/lib/x86_64-linux-gnu/libcudadevrt.a; do
         if [ -e "$path" ]; then
-            GPU_ARGS+=("-v" "$path:/host-cuda-libs/$(basename $path):ro")
+            # Resolve symlinks — Docker cannot bind-mount a symlink as a file.
+            # The container image has /host-cuda-libs/<name>/ as a directory,
+            # so we mount the real file *inside* that directory.
+            real_path=$(realpath "$path")
+            dest_dir="/host-cuda-libs/$(basename $path)"
+            GPU_ARGS+=("-v" "$real_path:$dest_dir/$(basename $real_path):ro")
         fi
     done
 else
@@ -87,6 +97,7 @@ else
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
+    -e XDG_RUNTIME_DIR=/tmp/runtime-root \
     -v $(pwd):/workspace \
     -v $HOME:/host_home:ro \
     -v /dev:/dev \
