@@ -67,7 +67,19 @@ echo ""
 
 # Install ROS 2 controllers (required for ros2_control)
 echo -e "${BLUE}[3/4]${NC} Installing ROS 2 controllers..."
-docker exec $CONTAINER_NAME bash -c "apt-get install -y ros-humble-ros2-controllers ros-humble-ros2-control ros-humble-ros2controlcli > /dev/null 2>&1 || exit 0"
+docker exec $CONTAINER_NAME bash -c "
+  # Skip if already installed to avoid network hang
+  if dpkg -l ros-humble-ros2-controllers 2>/dev/null | grep -q '^ii'; then
+    echo 'Already installed, skipping.'
+  else
+    apt-get install -y \
+      -o Acquire::ForceIPv4=true \
+      -o Acquire::http::Timeout=15 \
+      -o Acquire::Retries=2 \
+      ros-humble-ros2-controllers ros-humble-ros2-control ros-humble-ros2controlcli \
+      > /dev/null 2>&1 || true
+  fi
+"
 echo -e "${GREEN}✓ Controllers installed${NC}"
 echo ""
 
