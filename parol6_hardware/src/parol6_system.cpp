@@ -474,7 +474,6 @@ return_type PAROL6System::read(
       }
       goto spoof_states;
     }
-    }
     
     // Validate ACK
     if (tokens[0] != "ACK") {
