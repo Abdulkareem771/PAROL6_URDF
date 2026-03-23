@@ -80,13 +80,13 @@ launch:
     remap:
     -
       from: "rgb/camera_info"
-      to: "/$(var base_name)/qhd/camera_info"
+      to: "/$(var base_name)/sd/camera_info"
     -
       from: "rgb/image_rect_color"
-      to: "/$(var base_name)/qhd/image_color_rect"
+      to: "/$(var base_name)/sd/image_color_rect"
     -
       from: "depth_registered/image_rect"
-      to: "/$(var base_name)/qhd/image_depth_rect"
+      to: "/$(var base_name)/sd/image_depth_rect"
     -
       from: "points"
-      to: "/$(var base_name)/qhd/points"
+      to: "/$(var base_name)/sd/points"
