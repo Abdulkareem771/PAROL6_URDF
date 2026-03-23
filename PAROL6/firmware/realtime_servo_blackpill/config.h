@@ -147,7 +147,7 @@ static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
 
 // Homing speed (rad/s at joint level)
 static const float HOMING_SPEED[NUM_MOTORS] = {
-    0.3f, 0.2f, 0.3f, 0.4f, 0.3f, 0.0f
+    1.0f, 0.2f, 0.3f, 0.4f, 0.3f, 0.0f
 };
 
 // Position offset assigned after homing (DEGREES — easy to tune)
