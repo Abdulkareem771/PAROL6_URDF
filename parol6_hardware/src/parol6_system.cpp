@@ -204,7 +204,8 @@ CallbackReturn PAROL6System::on_activate(
     // If we return before homing finishes, JointTrajectoryController will start,
     // lock onto the pre-homing physical state as its target, and then violently
     // yank the arm back when homing changes the state!
-    int homing_retries = 1000; // Wait up to 20 seconds (1000 * 20ms)
+    // Firmware homing takes up to 15s PER JOINT. Need a much longer timeout!
+    int homing_retries = 4500; // Wait up to 90 seconds (4500 * 20ms)
     while(homing_retries-- > 0 && rclcpp::ok()) {
         read(rclcpp::Clock().now(), rclcpp::Duration(0,0));
         

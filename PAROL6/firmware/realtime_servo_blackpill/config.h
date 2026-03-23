@@ -81,6 +81,7 @@ static const bool ENCODER_ENABLED[NUM_MOTORS] = {
 
 #define STEP_PIN_J1    PA7
 #define STEP_PIN_J2    PA9
+
 #define STEP_PIN_J3    PB0
 #define STEP_PIN_J4    PB1
 #define STEP_PIN_J5    PB8
@@ -130,11 +131,11 @@ static const uint8_t HOMING_SENSOR_TYPE[NUM_MOTORS] = { 1, 0, 0, 1, 0, 0 };
 
 // Per-joint homing enable
 static const bool HOMING_ENABLED[NUM_MOTORS] = {
-    false,   // J1 — inductive sensor
-    false,   // J2 — limit switch (may be resting on it)
-    false,   // J3 — limit switch
+    true,   // J1 — inductive sensor
+    true,   // J2 — limit switch (may be resting on it)
+    true,   // J3 — limit switch
     true,   // J4 — inductive sensor
-    false,   // J5 — limit switch
+    true,   // J5 — limit switch
     false   // J6 — no sensor yet
 };
 
@@ -152,7 +153,7 @@ static const float HOMING_SPEED[NUM_MOTORS] = {
 // Position offset assigned after homing (DEGREES — easy to tune)
 // This is what the joint position is set to when the sensor is triggered.
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
-    0.0f,    // J1
+    -97.0f,    // J1
     -46.0f,  // J2
     68.0f,   // J3
     -143.0f,  // J4 — homes at ~108° in MoveIt range
@@ -169,7 +170,7 @@ static const float HOMING_READY_POS_DEG[NUM_MOTORS] = {
     HOMING_NO_READY, // J1
     0.0f,            // J2 (moves to 0.0 deg after arriving at -56.0 deg)
     0.0f, // J3
-    HOMING_NO_READY, // J4
+    0.0f, // J4
     0.0f, // J5
     HOMING_NO_READY  // J6
 };
@@ -248,7 +249,7 @@ static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 
 static const float Kp[NUM_MOTORS] = { 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f };
 static const float Kd[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 3.0f, 3.0f, 1.0f, 6.0f, 6.0f, 6.0f };
+static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 3.0f, 0.5f, 0.5f, 1.5f, 1.5f, 1.5f };
 
 #define VELOCITY_DEADBAND       0.02f
 #define POSITION_ERROR_LIMIT    0.5f
