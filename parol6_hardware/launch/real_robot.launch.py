@@ -59,11 +59,6 @@ def generate_launch_description():
     )
 
     # Initialize arguments
-    runtime_config_package = LaunchConfiguration("runtime_config_package")
-    controllers_file = LaunchConfiguration("controllers_file")
-    description_package = LaunchConfiguration("description_package")
-    description_file = LaunchConfiguration("description_file")
-    use_sim_time = LaunchConfiguration("use_sim_time")
     use_ros2_control = LaunchConfiguration("use_ros2_control")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
