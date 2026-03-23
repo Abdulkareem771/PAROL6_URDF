@@ -42,27 +42,8 @@ def generate_launch_description():
                               description="Baud rate for serial communication"),
     ]
 
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "use_ros2_control",
-            default_value="true",
-            description="Enable ros2_control",
-        )
-    )
-
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "allow_spoofing",
-            default_value="false",
-            description="Allow fake state echo if serial hardware is unavailable",
-        )
-    )
-
-    # Initialize arguments
-    use_ros2_control = LaunchConfiguration("use_ros2_control")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
-    allow_spoofing = LaunchConfiguration("allow_spoofing")
 
     # =====================================================================
     # ROBOT DESCRIPTION (xacro → URDF with ros2_control tags)
@@ -71,14 +52,9 @@ def generate_launch_description():
         PathJoinSubstitution([FindExecutable(name="xacro")]),
         " ",
         PathJoinSubstitution([FindPackageShare("parol6_hardware"), "urdf", "parol6.urdf.xacro"]),
-        " ",
-        "use_ros2_control:=", use_ros2_control,
-        " ",
-        "serial_port:=", serial_port,
-        " ",
-        "baud_rate:=", baud_rate,
-        " ",
-        "allow_spoofing:=", allow_spoofing,
+        " use_ros2_control:=true",
+        " serial_port:=", serial_port,
+        " baud_rate:=", baud_rate,
     ])
     robot_description = {
         "robot_description": ParameterValue(robot_description_content, value_type=str)
