@@ -32,7 +32,7 @@ struct JointState {
   float velocity_command;     // rad/s
 
   // Multi-turn tracking (for all encoder-enabled motors)
-  float total_motor_angle;    // rad (continuously integrated angle)
+  int motor_revolutions;
   float last_motor_angle;
 };
 
@@ -43,6 +43,10 @@ struct JointState {
 // Initialize control system (encoder ISRs, state zeroing)
 void controlInit();
 
+// ARM the system — motors stay stopped until this is called.
+void controlArm();
+bool controlIsArmed();
+
 // Update command from ROS (called from main loop)
 void controlSetCommand(uint8_t joint_idx, float position, float velocity);
 
@@ -51,11 +55,5 @@ void controlUpdate();
 
 // Get joint state (for feedback)
 const JointState* controlGetState(uint8_t joint_idx);
-
-// Arm the controller (stops ignoring commands)
-void controlArm();
-
-// Check if armed
-bool controlIsArmed();
 
 #endif // CONTROL_H

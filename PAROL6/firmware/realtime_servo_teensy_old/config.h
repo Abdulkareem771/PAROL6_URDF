@@ -28,27 +28,27 @@
 const int STEP_PINS[NUM_MOTORS] = {
   2,   // J1 → FlexPWM4.2A
   4,   // J2 → FlexPWM2.2A
-  6,   // J3 → FlexPWM1.3B
+  5,   // J3 → FlexPWM1.3B
   8,   // J4 → FlexPWM1.3A
   7,   // J5 → FlexPWM2.0A
-  5    // J6 → FlexPWM2.1A
+  6    // J6 → FlexPWM2.1A
 };
 
 // Direction pins — simple digital outputs
 const int DIR_PINS[NUM_MOTORS] = {
   24,  // J1
   35,  // J2
-  26,  // J3
+  40,  // J3
   27,  // J4
   34,  // J5
-  29   // J6
+  28   // J6
 };
 
 // Encoder PWM input pins (MT6816) — all support interrupts on Teensy
 const int ENCODER_PINS[NUM_MOTORS] = {
   14,  // J1
   12,  // J2
-  16,  // J3
+  11,  // J3
   17,  // J4
   19,  // J5
   18   // J6
@@ -57,11 +57,11 @@ const int ENCODER_PINS[NUM_MOTORS] = {
 // Encoder enable flags (set true when encoder is physically connected)
 const bool ENCODER_ENABLED[NUM_MOTORS] = {
   false,   // J1: Encoder connected
-  true,   // J2: Encoder connected
+  false,   // J2: Encoder connected
   false,  // J3: Not connected yet
   false,  // J4: Not connected yet
   true,  // J5: Not connected yet
-  false   // J6: Not connected yet
+  false   // J6: Not connected yetparol6-ultimate.tar
 };
 
 // ============================================================================
@@ -97,20 +97,20 @@ const int MICROSTEPS[NUM_MOTORS] = {
 
 // Gearbox ratios (motor revolutions per joint revolution)
 const float GEAR_RATIOS[NUM_MOTORS] = {
-  20.0,  // J1: 20:1 gearbox
-  20.0,   // J2: Direct drive
-  1.0,   // J3: Direct drive
-  1.0,   // J4: Direct drive
-  10.0,  // J5: Direct drive
-  1.0    // J6: Direct drive
+  1.0,      // J1: 20:1 gearbox
+  20.0,     // J2: Direct drive
+  16.5,  // J3: Direct drive
+  4.0,      // J4: Direct drive
+  10.0,      // J5: Direct drive
+  10.0      // J6: Direct drive
 };
 
 // Motor direction sign (+1 or -1)
 // If encoder shows position going OPPOSITE to motor step direction, set to -1
 const int MOTOR_DIR_SIGN[NUM_MOTORS] = {
   1,   // J1: Normal
-  1,  // J2: Inverted (encoder reads opposite to step direction)
-  1,   // J3: TBD
+  -1,  // J2: Inverted (encoder reads opposite to step direction)
+  -1,   // J3: TBD
   1,   // J4: TBD
   -1,   // J5: TBD
   1    // J6: TBD
@@ -168,9 +168,9 @@ const int ENCODER_DIR_SIGN[NUM_MOTORS] = {
 
 // Servo gains (position + velocity feedforward)
 const float Kp[NUM_MOTORS] = {
-  2.0,  // J1: Higher Kp for faster final approach
-  2.0,  // J2: Higher Kp for faster final approach
-  2.0,  // J3
+  1.0,  // J1: Low Kp to prevent overshoot/stall
+  1.0,  // J2: Low Kp to prevent overshoot/stall
+  1.0,  // J3
   2.0,  // J4
   2.0,  // J5
   2.0   // J6
@@ -181,12 +181,12 @@ const float Kd[NUM_MOTORS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
 // Maximum joint velocities (rad/s) - from joint_limits.yaml
 const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = {
-  3.0,  // J1: Conservative for geared joint
-  3.0,  // J2
-  6.0,  // J3
-  6.0,  // J4
-  6.0,  // J5
-  6.0   // J6
+  0.5,  // J1: Conservative — keeps motor below stall speed
+  0.5,  // J2: 0.5 rad/s × 20 gear = 10 rad/s motor = ~5000 Hz steps
+  0.5,  // J3: Conservative
+  1.0,  // J4
+  1.2,  // J5
+  1.0   // J6
 };
 
 // Velocity deadband — suppress encoder noise jitter near target

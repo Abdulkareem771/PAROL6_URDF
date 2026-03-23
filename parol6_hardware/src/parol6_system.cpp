@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 #include <cinttypes>
+#include <clocale>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -50,6 +51,12 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   }
 
   RCLCPP_INFO(logger_, "🚀 Day 1: SIL Validation - Initializing PAROL6 Hardware Interface");
+
+  // Force C locale for numeric formatting — prevents commas in %.3f output
+  // on systems with Arabic/Turkish/European locales. This was the communication
+  // bug: commas as decimal separators corrupt the serial protocol since commas
+  // are also field delimiters.
+  std::setlocale(LC_NUMERIC, "C");
 
   // Read parameters
   try {
@@ -207,8 +214,64 @@ CallbackReturn PAROL6System::on_activate(
 {
   RCLCPP_INFO(logger_, "⚡ on_activate() - Controllers will now call read()/write()");
   
-  // Initialize command to current state (good practice)
+  // WAIT FOR FIRST FEEDBACK TO SYNCHRONIZE COMMANDS TO ACTUAL POSITIONS
+  // If we don't do this, hw_state_positions_ is entirely 0.0, which means
+  // hw_command_positions_ becomes 0.0, forcing the robot out of its physical position!
+  RCLCPP_INFO(logger_, "⏳ Waiting for initial hardware state to sync controllers...");
+  int retries = 50; // Wait up to 1 second (50 * 20ms)
+  while(retries-- > 0 && rclcpp::ok()) {
+      read(rclcpp::Clock().now(), rclcpp::Duration(0,0));
+      if (first_feedback_received_) {
+         RCLCPP_INFO(logger_, "✅ Hardware state synced successfully!");
+         break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  
+  if (!first_feedback_received_) {
+      RCLCPP_WARN(logger_, "⚠️ Timeout waiting for initial feedback. Robot may jump!");
+  }
+
+  // Initialize command to current state (this is now properly populated!)
   hw_command_positions_ = hw_state_positions_;
+  hw_command_velocities_ = hw_state_velocities_;
+  
+  // Send homing command to firmware
+  try {
+    serial_.Write("<HOME>\n");
+    homing_cmd_sent_ = true;
+    homing_status_ = 1;  // in progress
+    RCLCPP_INFO(logger_, "🏠 Sent HOME command to firmware — waiting for sequence to finish...");
+    
+    // WAIT UNTIL HOMING IS COMPLETE BEFORE ACTIVATING CONTROLLERS!
+    // If we return before homing finishes, JointTrajectoryController will start,
+    // lock onto the pre-homing physical state as its target, and then violently
+    // yank the arm back when homing changes the state!
+    // Firmware homing takes up to 15s PER JOINT. Need a much longer timeout!
+    int homing_retries = 4500; // Wait up to 90 seconds (4500 * 20ms)
+    while(homing_retries-- > 0 && rclcpp::ok()) {
+        read(rclcpp::Clock().now(), rclcpp::Duration(0,0));
+        
+        // Status 2 = Complete, 3 = Error
+        if (homing_status_ == 2 || homing_status_ == 3) {
+            RCLCPP_INFO(logger_, "✅ Homing phase finished during activation.");
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    
+    if (homing_status_ == 1) {
+        RCLCPP_WARN(logger_, "⚠️ Timeout waiting for homing to complete! Controllers might yank arm!");
+    }
+    
+    // Crucial: Set the initial commanded positions to the NEW homed positions
+    // so the controllers initialize perfectly at the homed state.
+    hw_command_positions_ = hw_state_positions_;
+    hw_command_velocities_ = hw_state_velocities_;
+    
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger_, "⚠️ Failed to send HOME command: %s", e.what());
+  }
   
   RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE");
   return CallbackReturn::SUCCESS;
@@ -332,9 +395,26 @@ return_type PAROL6System::read(
   }
   
   try {
-    // Read line (blocking with 2ms timeout from serial configuration)
+    // Read all available lines to drain the OS serial buffer
+    // and ONLY use the newest one to eliminate accumulated latency.
     std::string response;
-    serial_.ReadLine(response, '\n');
+    std::string latest_valid;
+    
+    // Safety break to prevent infinite loops if data streams too fast
+    int max_reads = 100; 
+    while (serial_.IsDataAvailable() && max_reads-- > 0) {
+      std::string temp;
+      serial_.ReadLine(temp, '\n', 2); // 2ms timeout per line
+      if (!temp.empty() && temp[0] == '<') {
+        latest_valid = temp;
+      }
+    }
+    
+    if (latest_valid.empty()) {
+      return return_type::OK; // No valid new data this cycle
+    }
+    
+    response = latest_valid;
 
     // DEBUG: Log raw feedback for validation (throttled manually to prevent crash)
     static int log_counter = 0;
@@ -394,6 +474,7 @@ return_type PAROL6System::read(
       }
       goto spoof_states;
     }
+    }
     
     // Validate ACK
     if (tokens[0] != "ACK") {
@@ -427,9 +508,15 @@ return_type PAROL6System::read(
         }
         
         packets_lost_ += lost_count;
-        RCLCPP_WARN(logger_, 
-          "⚠️ PACKET LOSS DETECTED! Expected seq %u, got %u (lost %u packets)",
-          expected_seq, received_seq, lost_count);
+        
+        // Small seq gaps (< 10) are NORMAL: the read() loop drains the USB
+        // buffer and uses only the latest packet, discarding intermediate ones.
+        // Only warn on large gaps which indicate real serial/USB issues.
+        if (lost_count > 10) {
+          RCLCPP_WARN(logger_, 
+            "⚠️ PACKET LOSS: Expected seq %u, got %u (lost %u packets)",
+            expected_seq, received_seq, lost_count);
+        }
       }
       
       // Track inter-packet timing (thesis latency evidence)
@@ -441,6 +528,12 @@ return_type PAROL6System::read(
     } else {
       first_feedback_received_ = true;
       last_rx_time_ = time;  // Initialize timing
+      
+      // Safety snap: Ensure commands perfectly match the first physical reading
+      // just in case on_activate didn't catch it correctly!
+      hw_command_positions_ = hw_state_positions_;
+      hw_command_velocities_ = hw_state_velocities_;
+      
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
@@ -489,6 +582,26 @@ return_type PAROL6System::read(
       // Fall through to spoof if any value was out of range
     }
     
+    // Parse homing status (token 14, format "H#")
+    if (tokens.size() >= 15 && tokens[14].size() >= 2 && tokens[14][0] == 'H') {
+      uint8_t new_status = tokens[14][1] - '0';
+      if (new_status != homing_status_) {
+        homing_status_ = new_status;
+        switch (homing_status_) {
+          case 0: RCLCPP_INFO(logger_, "🏠 Homing: idle"); break;
+          case 1: RCLCPP_INFO(logger_, "🏠 Homing: in progress..."); break;
+          case 2: 
+            RCLCPP_INFO(logger_, "✅ Homing: COMPLETE — all joints homed!"); 
+            // CRITICAL: Snap commands to the new homed positions!
+            // Otherwise the next write() will send pre-homing commands and cause a massive jerk
+            hw_command_positions_  = hw_state_positions_;
+            hw_command_velocities_ = hw_state_velocities_;
+            break;
+          case 3: RCLCPP_ERROR(logger_, "❌ Homing: ERROR — one or more joints failed!"); break;
+        }
+      }
+    }
+    
     // Log statistics every 5 minutes (thesis validation data)
     RCLCPP_INFO_THROTTLE(logger_, clock_, 300000,
       "📊 Stats: RX=%lu LOST=%lu ERR=%lu Loss%%=%.4f MAX_DT=%.2f ms",
@@ -534,7 +647,12 @@ spoof_states:
 return_type PAROL6System::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-  // Format: <SEQ,p1,p2,p3,p4,p5,p6,v1,v2,v3,v4,v5,v6>
+  // Block trajectory commands while homing is in progress
+  if (homing_status_ == 1) {
+    return return_type::OK;  // silently skip — firmware ignores commands too
+  }
+  
+  // Format: <SEQ,J1_pos,J1_vel,J2_pos,J2_vel,J3_pos,J3_vel,J4_pos,J4_vel,J5_pos,J5_vel,J6_pos,J6_vel>
   // Total: 1 (seq) + 12 (6 joints × 2 values) = 13 values
   char buffer[512];  // Larger buffer for velocity data
   

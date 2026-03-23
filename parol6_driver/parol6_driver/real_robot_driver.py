@@ -2,6 +2,8 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from control_msgs.action import FollowJointTrajectory
 from sensor_msgs.msg import JointState
 from trajectory_msgs.msg import JointTrajectoryPoint
@@ -24,6 +26,10 @@ class RealRobotDriver(Node):
         self.enable_logging = self.get_parameter('enable_logging').value
         self.log_dir = self.get_parameter('log_dir').value
         
+        # Callback Groups to isolate action server execution from timers
+        self.action_cb_group = MutuallyExclusiveCallbackGroup()
+        self.timer_cb_group = MutuallyExclusiveCallbackGroup()
+        
         # Setup logging
         if self.enable_logging:
             os.makedirs(self.log_dir, exist_ok=True)
@@ -43,8 +49,14 @@ class RealRobotDriver(Node):
         else:
             self.get_logger().info('Logging disabled')
         
+        self.current_joints = [0.0] * 6
+        self.latest_commanded_joints = [0.0] * 6  # Thread-safe storage for active trajectory
+        self.joint_names = ['joint_L1', 'joint_L2', 'joint_L3', 'joint_L4', 'joint_L5', 'joint_L6']
+        self.data_lock = threading.Lock()
+        
         # 1. Serial Connection - Auto-detect
         self.ser = None
+        self.running = True
         ports_to_try = ['/dev/ttyACM0', '/dev/ttyUSB0', '/dev/ttyUSB1', '/dev/pts/8']
         
         for port in ports_to_try:
@@ -58,36 +70,49 @@ class RealRobotDriver(Node):
         
         if self.ser is None:
              self.get_logger().warn("Could not connect to any Serial Port! Mode: SIMULATION")
+        else:
+            # Start background serial read thread
+            self.read_thread = threading.Thread(target=self.serial_read_loop, daemon=True)
+            self.read_thread.start()
 
-        # 2. Homing Wait
-        # self.wait_for_homing()
-
-        # 3. Action Server
+        # 3. Action Server (Isolated Callback Group)
         self._action_server = ActionServer(
             self,
             FollowJointTrajectory,
             '/parol6_arm_controller/follow_joint_trajectory',
             execute_callback=self.execute_callback,
             goal_callback=self.goal_callback,
-            cancel_callback=self.cancel_callback)
+            cancel_callback=self.cancel_callback,
+            callback_group=self.action_cb_group)
 
         # 4. Joint State Publisher (Feedback)
         self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
-        self.timer = self.create_timer(0.05, self.publish_fake_feedback) # 20Hz
-        
-        self.current_joints = [0.0] * 6
-        self.joint_names = ['joint_L1', 'joint_L2', 'joint_L3', 'joint_L4', 'joint_L5', 'joint_L6']
+        self.timer = self.create_timer(0.05, self.publish_actual_feedback, callback_group=self.timer_cb_group) # 20Hz
+
+    def serial_read_loop(self):
+        """Continuously reads incoming feedback from the microcontroller without blocking ROS."""
+        while self.running and self.ser and self.ser.is_open:
+            try:
+                if self.ser.in_waiting:
+                    line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line.startswith('<ACK') and line.endswith('>'):
+                        # Parse <ACK,seq,p0,v0,p1,v1,...>
+                        content = line[1:-1]
+                        parts = content.split(',')
+                        if len(parts) >= 14:  # ACK + seq + (6 * 2 values)
+                            with self.data_lock:
+                                # Update current_joints directly from Teensy feedback
+                                self.current_joints = [
+                                    float(parts[2]), float(parts[4]), float(parts[6]),
+                                    float(parts[8]), float(parts[10]), float(parts[12])
+                                ]
+            except Exception as e:
+                self.get_logger().error(f"Serial Read Error: {e}")
+            time.sleep(0.005)  # Yield thread (5ms) to prevent maxing CPU
 
     def wait_for_homing(self):
-        if not self.ser: return
-        self.get_logger().info("Waiting for Robot Homing...")
-        while True:
-            if self.ser.in_waiting:
-                line = self.ser.readline().decode().strip()
-                if "READY" in line:
-                    self.get_logger().info("Robot Homing Complete!")
-                    break
-            time.sleep(0.1)
+        # We handle homing manually or ignore for now
+        pass
 
     def goal_callback(self, goal_request):
         self.get_logger().info('Received Goal Request')
@@ -104,34 +129,35 @@ class RealRobotDriver(Node):
         traj = goal_handle.request.trajectory
         points = traj.points
         
-        # Simple Execution Loop
+        # Non-blocking Execution Loop via timing sync
         start_time = time.time()
+        
         for point in points:
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
                 self.get_logger().info('Goal Canceled')
                 return FollowJointTrajectory.Result()
 
-            # 1. Update Internal State
-            self.current_joints = list(point.positions)
+            # Wait exactly 50ms per trajectory point (20Hz) cleanly without freezing the whole node
+            # (MultiThreadedExecutor ensures this only blocks the Action thread)
+            point_time_from_start = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9
             
-            # 2. Format & Send (with sequence number for ESP32)
+            # 1. Update Commanded State
+            with self.data_lock:
+                self.latest_commanded_joints = list(point.positions)
+            
+            # 2. Format & Send (with sequence number for Teensy)
             if self.enable_logging:
                 seq = self.seq_counter
-                cmd_str = f"<{seq},{','.join([f'{p:.4f}' for p in self.current_joints])}>\n"
+                cmd_str = f"<{seq},{','.join([f'{p:.4f}' for p in self.latest_commanded_joints])}>\n"
             else:
-                # If logging disabled, still need sequence for ESP32
-                cmd_str = f"<0,{','.join([f'{p:.4f}' for p in self.current_joints])}>\n"
+                cmd_str = f"<0,{','.join([f'{p:.4f}' for p in self.latest_commanded_joints])}>\n"
             
             if self.ser:
-                self.ser.write(cmd_str.encode())
-                
-                if self.ser.in_waiting:
-                    resp = self.ser.readline().decode()
-                    if "ERROR" in resp:
-                        self.get_logger().fatal("ROBOT STALL DETECTED!")
-                        goal_handle.abort()
-                        return FollowJointTrajectory.Result()
+                try:
+                    self.ser.write(cmd_str.encode())
+                except Exception as e:
+                    self.get_logger().error(f"Failed to write to serial: {e}")
             
             # 3. Log command
             if self.enable_logging:
@@ -146,7 +172,7 @@ class RealRobotDriver(Node):
                     seq,
                     timestamp_us,
                     timestamp_iso,
-                    *self.current_joints,
+                    *self.latest_commanded_joints,
                     *velocities,
                     *accelerations,
                     cmd_str.strip()
@@ -154,9 +180,9 @@ class RealRobotDriver(Node):
                 self.log_file.flush()
                 self.seq_counter += 1
 
-            # 4. Timing (Based on trajectory timestamps)
-            target_time = start_time + point.time_from_start.sec + (point.time_from_start.nanosec / 1e9)
-            sleep_time = target_time - time.time()
+            # Sleep precisely enough to match the trajectory timing
+            elapsed = time.time() - start_time
+            sleep_time = point_time_from_start - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
@@ -164,15 +190,26 @@ class RealRobotDriver(Node):
         result = FollowJointTrajectory.Result()
         return result
 
-    def publish_fake_feedback(self):
+    def publish_actual_feedback(self):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = self.joint_names
-        msg.position = self.current_joints
+        
+        with self.data_lock:
+            # We now publish the ACTUAL encoder positions safely read by the background thread.
+            msg.position = list(self.current_joints)
+            
         self.joint_pub.publish(msg)
     
     def __del__(self):
-        """Cleanup logging on shutdown"""
+        """Cleanup on shutdown"""
+        self.running = False
+        if hasattr(self, 'read_thread') and self.read_thread.is_alive():
+            self.read_thread.join(timeout=1.0)
+            
+        if hasattr(self, 'ser') and self.ser:
+            self.ser.close()
+            
         if hasattr(self, 'log_file') and self.log_file:
             self.log_file.close()
             self.get_logger().info('Log file closed')
@@ -180,8 +217,17 @@ class RealRobotDriver(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = RealRobotDriver()
-    rclpy.spin(node)
-    rclpy.shutdown()
+    
+    # Use MultiThreadedExecutor to allow Actions, Timers, and Subscriptions to run in parallel
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+    
+    try:
+        executor.spin()
+    finally:
+        executor.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

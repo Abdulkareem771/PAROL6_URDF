@@ -118,3 +118,5 @@ vision_work/resunet_training/best_resunet_seam.pth
 parol6_vision/data/images_captured/*
 
 vision_work/resunet_training/best_resunet_seam.pth
+src/kinect2_ros2
+src/kinect2_ros2/color images to calibrate/*

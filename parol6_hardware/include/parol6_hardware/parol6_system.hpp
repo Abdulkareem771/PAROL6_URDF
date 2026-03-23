@@ -96,6 +96,10 @@ private:
   
   // Clock for throttling logs
   rclcpp::Clock clock_;
+  
+  // Homing state tracking
+  uint8_t homing_status_ = 0;  // 0=idle, 1=in progress, 2=complete, 3=error
+  bool homing_cmd_sent_ = false;
 };
 
 }  // namespace parol6_hardware

@@ -15,8 +15,6 @@
 
 // Track running state so we don't call analogWrite(0) every control cycle
 static bool motor_running[NUM_MOTORS];
-// Track frequency to avoid reloading hardware PWM timers constantly
-static float current_frequency[NUM_MOTORS];
 
 // ============================================================================
 // INIT
@@ -25,7 +23,6 @@ static float current_frequency[NUM_MOTORS];
 void motorsInit() {
   for (uint8_t i = 0; i < NUM_MOTORS; i++) {
     motor_running[i] = false;
-    current_frequency[i] = 1000.0f; // matches init value below
 
     // Direction pin
     pinMode(DIR_PINS[i], OUTPUT);
@@ -65,12 +62,8 @@ void motorSetFrequency(uint8_t motor_idx, float frequency_hz) {
   if (frequency_hz > (float)MAX_STEP_FREQUENCY_HZ)
     frequency_hz = (float)MAX_STEP_FREQUENCY_HZ;
 
-  // Change frequency ONLY if it has drifted by > 1.0 Hz
-  // Spamming analogWriteFrequency forces timer reload mid-cycle, creating phantom steps!
-  if (fabsf(frequency_hz - current_frequency[motor_idx]) > 1.0f) {
-    analogWriteFrequency(STEP_PINS[motor_idx], frequency_hz);
-    current_frequency[motor_idx] = frequency_hz;
-  }
+  // Change frequency (only affects this pin's FlexPWM submodule)
+  analogWriteFrequency(STEP_PINS[motor_idx], frequency_hz);
 
   if (!motor_running[motor_idx]) {
     analogWrite(STEP_PINS[motor_idx], PWM_DUTY_50);  // 50% duty → pulses
