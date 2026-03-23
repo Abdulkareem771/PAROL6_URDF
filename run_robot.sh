@@ -43,7 +43,7 @@ echo -e "${BLUE}[INFO]${NC} Launching robot in ${GREEN}$MODE${NC} mode..."
 # Execute appropriate launch command
 case "$MODE" in
     sim|simulation)
-        docker exec -it $CONTAINER_NAME bash -c "
+        docker exec -i $CONTAINER_NAME bash -c "
             cd /workspace &&
             source /opt/ros/humble/setup.bash &&
             colcon build --symlink-install &&
@@ -53,7 +53,7 @@ case "$MODE" in
         ;;
     
     real|hardware)
-        docker exec -it $CONTAINER_NAME bash -c "
+        docker exec -i $CONTAINER_NAME bash -c "
             cd /workspace &&
             source /opt/ros/humble/setup.bash &&
             colcon build --symlink-install &&
@@ -63,7 +63,7 @@ case "$MODE" in
         ;;
     
     fake)
-        docker exec -it $CONTAINER_NAME bash -c "
+        docker exec -i $CONTAINER_NAME bash -c "
             cd /workspace &&
             source /opt/ros/humble/setup.bash &&
             colcon build --symlink-install &&

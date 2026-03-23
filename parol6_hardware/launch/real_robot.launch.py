@@ -1,228 +1,192 @@
 #!/usr/bin/env python3
 """
-Launch file for PAROL6 with ros2_control
-Day 1: SIL (Software-in-the-Loop) Validation
+Launch file for PAROL6 with ros2_control + MoveIt + RViz
+Connects to real hardware via parol6_hardware plugin.
 
-Purpose:
-- Load robot description with ros2_control tags
-- Start controller_manager
-- Load and activate controllers
-- Validate ROS plumbing without hardware
+This launch file starts EXACTLY ONE of each node:
+  - ros2_control_node (PAROL6Hardware plugin)
+  - robot_state_publisher
+  - joint_state_broadcaster (spawner)
+  - parol6_arm_controller (spawner, chained after JSB)
+  - move_group (MoveIt)
+  - rviz2
+  - static_transform_publisher (world → base_link)
 
 Usage:
   ros2 launch parol6_hardware real_robot.launch.py
-
-Expected outcome (Day 1):
-- Controllers activate successfully
-- /joint_states publishes at 25Hz (with zeros)
-- No crashes or errors
-- Clean shutdown with Ctrl+C
 """
 
+import os
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
 
+from ament_index_python.packages import get_package_share_directory
+from moveit_configs_utils import MoveItConfigsBuilder
+
 
 def generate_launch_description():
-    # Declare launch arguments
-    declared_arguments = []
-    
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "runtime_config_package",
-            default_value="parol6_hardware",
-            description="Package with controller configuration",
-        )
-    )
-    
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "controllers_file",
-            default_value="parol6_controllers.yaml",
-            description="Controller configuration file",
-        )
-    )
-    
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "description_package",
-            default_value="parol6_hardware",
-            description="Package with robot URDF/xacro",
-        )
-    )
-    
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "description_file",
-            default_value="parol6.urdf.xacro",
-            description="URDF/xacro description file",
-        )
-    )
-    
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "use_sim_time",
-            default_value="false",
-            description="Use simulation time",
-        )
-    )
+    # =====================================================================
+    # LAUNCH ARGUMENTS
+    # =====================================================================
+    declared_arguments = [
+        DeclareLaunchArgument("serial_port", default_value="/dev/ttyACM0",
+                              description="Serial port for STM32 Black Pill"),
+        DeclareLaunchArgument("baud_rate", default_value="115200",
+                              description="Baud rate for serial communication"),
+    ]
 
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "use_ros2_control",
-            default_value="true",
-            description="Enable ros2_control",
-        )
-    )
-
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "serial_port",
-            default_value="/dev/ttyUSB0",
-            description="Serial port for ESP32",
-        )
-    )
-
-    declared_arguments.append(
-        DeclareLaunchArgument(
-            "baud_rate",
-            default_value="115200",
-            description="Baud rate for serial communication",
-        )
-    )
-
-    # Initialize arguments
-    runtime_config_package = LaunchConfiguration("runtime_config_package")
-    controllers_file = LaunchConfiguration("controllers_file")
-    description_package = LaunchConfiguration("description_package")
-    description_file = LaunchConfiguration("description_file")
-    use_sim_time = LaunchConfiguration("use_sim_time")
-    use_ros2_control = LaunchConfiguration("use_ros2_control")
     serial_port = LaunchConfiguration("serial_port")
     baud_rate = LaunchConfiguration("baud_rate")
 
-    # Get URDF via xacro
-    robot_description_content = Command(
-        [
-            PathJoinSubstitution([FindExecutable(name="xacro")]),
-            " ",
-            PathJoinSubstitution(
-                [FindPackageShare("parol6_hardware"), "urdf", "parol6.urdf.xacro"]
-            ),
-            " ",
-            "use_ros2_control:=",
-            use_ros2_control,
-            " ",
-            "serial_port:=",
-            serial_port,
-            " ",
-            "baud_rate:=",
-            baud_rate,
-        ]
-    )
-    
-    # Wrap in ParameterValue to avoid YAML parsing error
-    robot_description = {"robot_description": ParameterValue(robot_description_content, value_type=str)}
+    # =====================================================================
+    # ROBOT DESCRIPTION (xacro → URDF with ros2_control tags)
+    # =====================================================================
+    robot_description_content = Command([
+        PathJoinSubstitution([FindExecutable(name="xacro")]),
+        " ",
+        PathJoinSubstitution([FindPackageShare("parol6_hardware"), "urdf", "parol6.urdf.xacro"]),
+        " use_ros2_control:=true",
+        " serial_port:=", serial_port,
+        " baud_rate:=", baud_rate,
+    ])
+    robot_description = {
+        "robot_description": ParameterValue(robot_description_content, value_type=str)
+    }
 
-    # Controller configuration file path
-    robot_controllers = PathJoinSubstitution(
-        [
-            FindPackageShare(runtime_config_package),
-            "config",
-            controllers_file,
-        ]
+    # =====================================================================
+    # MOVEIT CONFIG (for move_group + rviz)
+    # =====================================================================
+    moveit_config = (
+        MoveItConfigsBuilder("parol6")
+        .robot_description(file_path=os.path.join(
+            get_package_share_directory("parol6"),
+            "urdf", "PAROL6.urdf"
+        ))
+        .robot_description_semantic(file_path=os.path.join(
+            get_package_share_directory("parol6_moveit_config"),
+            "config", "parol6.srdf"
+        ))
+        .trajectory_execution(file_path=os.path.join(
+            get_package_share_directory("parol6_moveit_config"),
+            "config", "moveit_controllers.yaml"
+        ))
+        .planning_pipelines(pipelines=["ompl"])
+        .to_moveit_configs()
     )
 
-    # =========================================================================
-    # NODE 1: Controller Manager
-    # =========================================================================
-    # Manages hardware interface lifecycle and controllers
-    # Reads robot_description to find <ros2_control> tags
-    # Loads hardware plugin (parol6_hardware/PAROL6System)
-    
+    # Controller configuration
+    robot_controllers = PathJoinSubstitution([
+        FindPackageShare("parol6_hardware"), "config", "parol6_controllers.yaml",
+    ])
+
+    # =====================================================================
+    # NODE 1: ros2_control_node (ONE instance — real hardware)
+    # =====================================================================
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
         parameters=[robot_description, robot_controllers],
         output="both",
-        emulate_tty=True,  # Better log formatting
+        emulate_tty=True,
     )
 
-    # =========================================================================
-    # NODE 2: Robot State Publisher
-    # =========================================================================
-    # Publishes robot transforms (/tf) based on joint states
-    # Subscribes to /joint_states (from joint_state_broadcaster)
-    
+    # =====================================================================
+    # NODE 2: robot_state_publisher (ONE instance)
+    # =====================================================================
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="both",
-        parameters=[robot_description, {"use_sim_time": use_sim_time}],
+        parameters=[robot_description],
     )
 
-    # =========================================================================
-    # SPAWNER 1: Joint State Broadcaster
-    # =========================================================================
-    
+    # =====================================================================
+    # NODE 3: static_transform_publisher (world → base_link)
+    # =====================================================================
+    static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        output="log",
+        arguments=["0.0", "0.0", "0.0", "0.0", "0.0", "0.0", "world", "base_link"],
+    )
+
+    # =====================================================================
+    # SPAWNER: joint_state_broadcaster (ONE spawner)
+    # =====================================================================
     joint_state_broadcaster_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+        arguments=["joint_state_broadcaster",
+                    "--controller-manager", "/controller_manager"],
     )
 
-    # =========================================================================
-    # SPAWNER 2: Joint Trajectory Controller  
-    # =========================================================================
-    
+    # =====================================================================
+    # SPAWNER: parol6_arm_controller (ONE spawner, after JSB)
+    # =====================================================================
     robot_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["parol6_arm_controller", "--controller-manager", "/controller_manager"],
+        arguments=["parol6_arm_controller",
+                    "--controller-manager", "/controller_manager"],
     )
 
-    # Delay starting trajectory controller until joint_state_broadcaster has started
-    delay_robot_controller_spawner_after_joint_state_broadcaster_spawner = RegisterEventHandler(
+    # Chain: arm_controller starts AFTER joint_state_broadcaster exits
+    delay_controller = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=joint_state_broadcaster_spawner,
             on_exit=[robot_controller_spawner],
         )
     )
 
-    # =========================================================================
-    # INCLUDE: MoveIt Demo (RViz + Motion Planning)
-    # =========================================================================
-    
-    moveit_demo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                FindPackageShare("parol6_moveit_config"),
-                "launch",
-                "demo.launch.py"
-            ])
-        ]),
-        launch_arguments={
-            "use_sim_time": "false",
-        }.items(),
+    # =====================================================================
+    # NODE 4: move_group (MoveIt motion planning)
+    # =====================================================================
+    move_group_node = Node(
+        package="moveit_ros_move_group",
+        executable="move_group",
+        output="screen",
+        parameters=[moveit_config.to_dict()],
     )
 
-    # =========================================================================
-    # LAUNCH DESCRIPTION
-    # =========================================================================
-    nodes = [
-        control_node,
-        robot_state_pub_node,
-        joint_state_broadcaster_spawner,
-        delay_robot_controller_spawner_after_joint_state_broadcaster_spawner,
-        moveit_demo,
-    ]
+    # =====================================================================
+    # NODE 5: rviz2
+    # =====================================================================
+    rviz_config_file = os.path.join(
+        get_package_share_directory("parol6_moveit_config"),
+        "rviz", "moveit.rviz"
+    )
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        output="log",
+        arguments=["-d", rviz_config_file],
+        parameters=[
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.planning_pipelines,
+            moveit_config.robot_description_kinematics,
+        ],
+    )
 
-    return LaunchDescription(declared_arguments + nodes)
+    # =====================================================================
+    # LAUNCH
+    # =====================================================================
+    return LaunchDescription(
+        declared_arguments + [
+            control_node,
+            robot_state_pub_node,
+            static_tf_node,
+            joint_state_broadcaster_spawner,
+            delay_controller,
+            move_group_node,
+            rviz_node,
+        ]
+    )
