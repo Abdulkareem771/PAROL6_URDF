@@ -147,6 +147,14 @@
     </visual>
   </link>
 
+  <!-- Dummy link representing the Tool Center Point (TCP) / Gripper Tip -->
+  <link name="tcp_link"/>
+  <joint name="tcp_joint" type="fixed">
+    <origin xyz="0 0 0.1" rpy="0 0 0" />
+    <parent link="link6"/>
+    <child link="tcp_link"/>
+  </joint>
+
   <!-- ========================================================================
        ros2_control HARDWARE INTERFACE (Real robot only)
        ======================================================================== -->
