@@ -1,13 +1,14 @@
 """
 vision_moveit.launch.py
 =======================
-Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz
+Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz + MoveIt Controller
 
 Combines:
   - ros2 bag play  (replays Kinect data — set use_bag:=false for live camera)
   - path_optimizer     →  /vision/weld_lines_2d
   - depth_matcher      →  /vision/weld_lines_3d
   - path_generator     →  /vision/welding_path
+  - moveit_controller  (consumes /vision/welding_path and calls MoveIt services/actions)
   - move_group         (fake hardware — robot model + motion planning panel)
   - ros2_control_node  (FakeSystem — no ESP32 needed)
   - RViz with vision_debug.rviz  (all overlays + MotionPlanning panel)
@@ -144,6 +145,28 @@ def generate_launch_description():
         }]
     )
 
+    # ── 3b. MoveIt Controller (path follower) ──────────────────────────
+    moveit_controller = Node(
+        package='parol6_vision',
+        executable='moveit_controller',
+        name='moveit_controller',
+        output='screen',
+        parameters=[{
+            'planning_group': 'parol6_arm',
+            'base_frame': 'base_link',
+            'end_effector_link': 'L6',
+            'approach_distance': 0.05,
+            'weld_velocity': 0.01,
+            'auto_execute': True,
+            'use_sim_time': True,
+            'enforce_reachable_test_path': True,
+            'test_workspace_min': [0.20, -0.35, 0.10],
+            'test_workspace_max': [0.65, 0.35, 0.55],
+            'test_min_radius_xy': 0.20,
+            'test_max_radius_xy': 0.70,
+        }],
+    )
+
     # ── 4. Point Cloud (RViz 3D view) ──────────────────────────────────
     point_cloud_xyzrgb = Node(
         package='depth_image_proc',
@@ -225,6 +248,7 @@ def generate_launch_description():
         path_optimizer,
         depth_matcher,
         path_generator,
+        moveit_controller,
         point_cloud_xyzrgb,
         # MoveIt
         move_group_node,

@@ -40,9 +40,11 @@ Use when you want physics simulation and robot visualization without MoveIt.
 ```
 
 What it starts:
+
 - `ros2 launch parol6 ignition.launch.py`
 
 What it does **not** start:
+
 - MoveIt / RViz
 
 ## Method 2: Gazebo AND MoveIt (Simulated)
@@ -54,6 +56,7 @@ Use when you want to run the full simulated software stack (Physics + Motion Pla
 ```
 
 What it starts:
+
 1. `ros2 launch parol6 ignition.launch.py` (in background)
 2. `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false` (in foreground, after 5s delay)
 
@@ -68,9 +71,11 @@ Use for motion planning validation, URDF checking, and UI testing without any ha
 ```
 
 What it starts:
+
 - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=true`
 
 Behavior:
+
 - Spawns `mock_components/GenericSystem` (the Ignition plugin is automatically swapped out at launch time)
 - Robot state echoes commands instantly (perfect tracking)
 - Good for checking joint limits, collision geometry, and path planning
@@ -84,6 +89,7 @@ Use when the Teensy 4.1 is physically connected via USB.
 ```
 
 What it starts (two sequential launch files):
+
 1. `ros2 launch parol6_hardware real_robot.launch.py` — hardware driver + controller manager + joint_state_broadcaster + parol6_arm_controller
 2. `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false` — MoveIt + RViz connected to the running controller manager
 
@@ -93,6 +99,7 @@ What it starts (two sequential launch files):
 The script now actually does this sequence. It starts `real_robot.launch.py` in the background, **polls `/controller_manager/list_controllers`** until it appears (instead of a fixed sleep), waits one extra second for controllers to fully activate, and only then starts MoveIt/RViz.
 
 Prerequisites:
+
 - Teensy 4.1 connected to host USB
 - Device node allocated as `/dev/ttyACM0` (or set via env override)
 - Docker container has `/dev/ttyACM0` passed through (`--device` flag in `start_container.sh`)
@@ -112,9 +119,11 @@ Use this if you need the exact launch behavior that was validated on real hardwa
 ```
 
 What it starts:
+
 - `ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py`
 
 Behavior:
+
 - This launch includes MoveIt/RViz internally, matching the tested branch layout.
 - It uses isolated copies:
   - `parol6_hardware/launch/real_robot_tested_single_motor.launch.py`
@@ -123,10 +132,13 @@ Behavior:
 - Existing methods (1-4) are unchanged.
 
 If GUI shows:
+
 ```text
 file 'real_robot_tested_single_motor.launch.py' was not found in the share directory
 ```
+
 rebuild in `parol6_dev` so installed launch files are refreshed:
+
 ```bash
 docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6 parol6_hardware parol6_moveit_config"
 ```
@@ -136,23 +148,29 @@ docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setu
 The hardware interface (`parol6_hardware/src/parol6_system.cpp`) communicates with the Teensy over serial at 115200 baud.
 
 **Command (ROS → Teensy)** (sent by `parol6_system.cpp` at `ROS_COMMAND_RATE_HZ`):
+
 ```
 <SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel>
 ```
+
 Frames with a sequence number not strictly greater than the last accepted frame are rejected with:
+
 ```
 STALE_CMD
 ```
 
 **Feedback (Teensy → ROS)** (sent at `FEEDBACK_RATE_HZ`):
+
 ```
 <ACK,SEQ,J1_pos,J2_pos,J3_pos,J4_pos,J5_pos,J6_pos,J1_vel,J2_vel,J3_vel,J4_vel,J5_vel,J6_vel,lim_state>
 ```
+
 - All position values in radians, velocity in rad/s
 - `lim_state` — bitmask: bit 0=J1 … bit 5=J6 limit switch triggered
 - The hardware interface applies kinematic sign correction for J1, J3, J6 before sending and after receiving
 
 **Special commands:**
+
 ```
 <HOME>      → Start homing sequence (replies HOMING_DONE or HOMING_FAULT)
 <ENABLE>    → Clear SOFT_ESTOP
@@ -191,6 +209,7 @@ STALE_CMD
 2. If running scripts manually, press `Ctrl+C` in the launcher terminal.
 3. All child processes (MoveIt, RViz, controller manager) are terminated by the launch system automatically.
 4. Optional hard stop:
+
 ```bash
 docker stop parol6_dev
 ```
