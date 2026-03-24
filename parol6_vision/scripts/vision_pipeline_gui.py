@@ -23,6 +23,7 @@ stdout/stderr to the log pane, and supports SIGINT abort.
 from __future__ import annotations
 import os
 import sys
+import shlex
 import signal
 import subprocess
 from pathlib import Path
@@ -60,9 +61,39 @@ except ImportError:
     CV2_OK = False
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-WORKSPACE_DIR = Path("/home/osama/Desktop/PAROL6_URDF")
+WORKSPACE_DIR = Path(__file__).resolve().parents[2]
 VISION_WORK   = WORKSPACE_DIR / "vision_work"
 VISION_PKG    = "parol6_vision"
+FALLBACK_INSTALL_DIR = Path("/tmp/parol6_install")
+ROS_LOG_DIR = Path("/tmp/parol6_ros_logs")
+
+
+def _wrap_ros_command(cmd: list[str]) -> list[str]:
+    """
+    Ensure every ROS 2 subprocess runs in a shell with the required setup files
+    sourced, even when this GUI itself was launched from plain Python.
+    """
+    if not cmd or cmd[0] != "ros2":
+        return cmd
+
+    quoted_cmd = " ".join(shlex.quote(part) for part in cmd)
+    workspace_setup = shlex.quote(str(WORKSPACE_DIR / "install" / "setup.bash"))
+    fallback_setup = shlex.quote(str(FALLBACK_INSTALL_DIR / "setup.bash"))
+    setup_cmd = (
+        "source /opt/ros/humble/setup.bash && "
+        "if [ -f /opt/kinect_ws/install/setup.bash ]; then "
+        "source /opt/kinect_ws/install/setup.bash; "
+        "fi && "
+        f"if [ -f {workspace_setup} ]; then "
+        f"source {workspace_setup}; "
+        "fi && "
+        f"if [ -f {fallback_setup} ]; then "
+        f"source {fallback_setup}; "
+        "fi && "
+        f"cd {shlex.quote(str(WORKSPACE_DIR))} && "
+        f"{quoted_cmd}"
+    )
+    return ["bash", "-lc", setup_cmd]
 
 # ─── Color Palette (matches firmware configurator dark theme) ─────────────────
 C = {
@@ -161,20 +192,25 @@ class NodeWorker(QThread):
 
     def __init__(self, cmd: list[str], env: Optional[dict] = None, parent=None):
         super().__init__(parent)
-        self._cmd  = cmd
+        self._display_cmd = cmd
+        self._cmd  = _wrap_ros_command(cmd)
         self._env  = env or os.environ.copy()
+        self._env.setdefault("ROS_LOG_DIR", str(ROS_LOG_DIR))
         self._proc: Optional[subprocess.Popen] = None
 
     def run(self) -> None:
-        self.line_out.emit(f"[RUN] $ {' '.join(self._cmd)}")
+        self.line_out.emit(f"[RUN] $ {' '.join(self._display_cmd)}")
         try:
+            ROS_LOG_DIR.mkdir(parents=True, exist_ok=True)
             self._proc = subprocess.Popen(
                 self._cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 env=self._env,
+                cwd=str(WORKSPACE_DIR),
             )
             for line in self._proc.stdout:
                 self.line_out.emit(line.rstrip())
@@ -393,6 +429,9 @@ class NodeButton(QWidget):
         cmd_fn,          # callable() → list[str]
         log_widget: QTextEdit,
         accent_color: str = "#a6e3a1",
+        on_started=None,
+        status_check_cmd: Optional[list[str]] = None,
+        external_stop_cmd: Optional[list[str]] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -400,6 +439,9 @@ class NodeButton(QWidget):
         self._cmd_fn   = cmd_fn
         self._log      = log_widget
         self._accent   = accent_color
+        self._on_started = on_started
+        self._status_check_cmd = status_check_cmd
+        self._external_stop_cmd = external_stop_cmd
         self._worker: Optional[NodeWorker] = None
 
         lay = QHBoxLayout(self)
@@ -432,13 +474,31 @@ class NodeButton(QWidget):
         self._btn.clicked.connect(self._toggle)
         lay.addWidget(self._btn)
 
+        self._status_timer = None
+        if self._status_check_cmd:
+            self._status_timer = QTimer(self)
+            self._status_timer.timeout.connect(self._sync_external_state)
+            self._status_timer.start(1500)
+            self._sync_external_state()
+
     def is_running(self) -> bool:
-        return self._worker is not None and self._worker.isRunning()
+        return (
+            (self._worker is not None and self._worker.isRunning())
+            or self._check_external_running()
+        )
 
     def stop(self) -> None:
         if self._worker:
             self._worker.abort()
             self._worker = None
+        elif self._check_external_running() and self._external_stop_cmd:
+            subprocess.run(
+                self._external_stop_cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(WORKSPACE_DIR),
+            )
         self._set_stopped()
 
     def _toggle(self) -> None:
@@ -448,6 +508,12 @@ class NodeButton(QWidget):
             self._start()
 
     def _start(self) -> None:
+        if self._check_external_running():
+            self._set_running()
+            self._log.append(
+                f'<span style="color:{self._accent}">[{self._label}] Already running.</span>'
+            )
+            return
         cmd = self._cmd_fn()
         if not cmd:
             return
@@ -462,6 +528,26 @@ class NodeButton(QWidget):
         self._worker.line_out.connect(_handle_log)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
+        self._set_running()
+        if self._on_started:
+            self._on_started()
+
+    def _on_finished(self, rc: int) -> None:
+        self._worker = None
+        if self._check_external_running():
+            self._set_running()
+        else:
+            self._set_stopped()
+
+    def _set_stopped(self) -> None:
+        self._btn.setText("▶  Start")
+        self._btn.setStyleSheet(
+            f"background:{C['panel']}; color:{C['text']};"
+            " border:1px solid #585b70; border-radius:5px; padding:4px 8px;"
+        )
+        self._status_dot.setStyleSheet(f"color:{C['border']}; font-size:14px;")
+
+    def _set_running(self) -> None:
         self._btn.setText("■  Stop")
         self._btn.setStyleSheet(
             f"background:{C['red']}; color:{C['bg']};"
@@ -471,17 +557,28 @@ class NodeButton(QWidget):
             f"color:{self._accent}; font-size:14px;"
         )
 
-    def _on_finished(self, rc: int) -> None:
-        self._worker = None
-        self._set_stopped()
+    def _check_external_running(self) -> bool:
+        if not self._status_check_cmd:
+            return False
+        try:
+            result = subprocess.run(
+                self._status_check_cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(WORKSPACE_DIR),
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
 
-    def _set_stopped(self) -> None:
-        self._btn.setText("▶  Start")
-        self._btn.setStyleSheet(
-            f"background:{C['panel']}; color:{C['text']};"
-            " border:1px solid #585b70; border-radius:5px; padding:4px 8px;"
-        )
-        self._status_dot.setStyleSheet(f"color:{C['border']}; font-size:14px;")
+    def _sync_external_state(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._set_running()
+        elif self._check_external_running():
+            self._set_running()
+        else:
+            self._set_stopped()
 
 
 
@@ -737,6 +834,7 @@ class VisionPipelineGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
         self.resize(1100, 680)
+        self._latest_cropped_rgb: Optional[np.ndarray] = None
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -757,6 +855,13 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_timer = QTimer(self)
             self._ros_timer.timeout.connect(_spin_once_safe)
             self._ros_timer.start(10)
+            if CV2_OK:
+                self._ros_node.create_subscription(
+                    ROSImage,
+                    "/vision/captured_image_color",
+                    self._manual_topic_image_cb,
+                    1,
+                )
 
         self._build_ui()
 
@@ -842,7 +947,16 @@ class VisionPipelineGUI(QMainWindow):
                 "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
                 "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
             ],
-            self._log, C["blue"]
+            self._log,
+            C["blue"],
+            status_check_cmd=[
+                "bash", "-lc",
+                "pgrep -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml' >/dev/null",
+            ],
+            external_stop_cmd=[
+                "bash", "-lc",
+                "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml'",
+            ],
         )
         cg_lay.addWidget(self._btn_live_cam)
 
@@ -863,7 +977,9 @@ class VisionPipelineGUI(QMainWindow):
                 "-p", f"capture_mode:={self._capture_mode_combo.currentData()}",
                 "-p", "output_topic:=/vision/captured_image_raw",
             ],
-            self._log, C["green"],
+            self._log,
+            C["green"],
+            on_started=self._ensure_crop_node_running,
         )
         cg_lay.addWidget(self._btn_capture)
 
@@ -897,7 +1013,16 @@ class VisionPipelineGUI(QMainWindow):
         self._btn_crop_node = NodeButton(
             "Crop Image Node",
             lambda: ["ros2", "run", "parol6_vision", "crop_image"],
-            self._log, "#74c7ec",
+            self._log,
+            "#74c7ec",
+            status_check_cmd=[
+                "bash", "-lc",
+                "pgrep -f 'ros2 run parol6_vision crop_image|/crop_image' >/dev/null",
+            ],
+            external_stop_cmd=[
+                "bash", "-lc",
+                "pkill -INT -f 'ros2 run parol6_vision crop_image|/crop_image'",
+            ],
         )
         mg_lay.addWidget(self._btn_crop_node)
 
@@ -1039,7 +1164,7 @@ class VisionPipelineGUI(QMainWindow):
 
         previews = [
             ("/kinect2/qhd/image_color_rect",           "📷 Live Camera"),
-            ("/vision/captured_image_color",            "📸 Captured Frame"),
+            ("/vision/captured_image_raw",              "📸 Captured Frame"),
             ("/vision/processing_mode/annotated_image", "🔍 Processing Output"),
             ("/path_optimizer/debug_image",             "📊 Path Optimizer Debug"),
         ]
@@ -1081,6 +1206,10 @@ class VisionPipelineGUI(QMainWindow):
         load_btn = QPushButton("📂  Load Image")
         load_btn.clicked.connect(self._manual_load_image)
         ctrl_row.addWidget(load_btn)
+
+        use_topic_btn = QPushButton("📥  Use Latest Cropped Frame")
+        use_topic_btn.clicked.connect(self._manual_use_latest_cropped)
+        ctrl_row.addWidget(use_topic_btn)
 
         ctrl_row.addWidget(QLabel("Brush (px):"))
         self._brush_spin = QSpinBox()
@@ -1274,6 +1403,7 @@ class VisionPipelineGUI(QMainWindow):
             f"background:{C['panel']}; border:1px solid {C['accent']};"
             f" border-radius:6px; color:{C['text2']}; font-size:11px; padding:8px;"
         )
+        info.setMaximumHeight(62)
         root_lay.addWidget(info)
 
         # ── Dual preview ──────────────────────────────────────────────────
@@ -1326,8 +1456,11 @@ class VisionPipelineGUI(QMainWindow):
             )
         rf_lay.addWidget(self._crop_output_preview)
         preview_row.addWidget(right_frame)
+        preview_row.setStretch(0, 3)
+        preview_row.setStretch(1, 2)
 
         root_lay.addLayout(preview_row)
+        root_lay.setStretch(1, 1)
 
         # ── Bottom control bar ────────────────────────────────────────────
         ctrl_bar = QHBoxLayout()
@@ -1419,6 +1552,10 @@ class VisionPipelineGUI(QMainWindow):
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
         )
 
+    def _ensure_crop_node_running(self) -> None:
+        if hasattr(self, "_btn_crop_node") and not self._btn_crop_node.is_running():
+            self._btn_crop_node._start()
+
     def _crop_apply_save(self) -> None:
         """Save the current ROI to config and call the crop_image node's param."""
         import json
@@ -1438,6 +1575,7 @@ class VisionPipelineGUI(QMainWindow):
             json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
 
         # Push ROI to running crop_image node via ros2 param set + reload_roi service
+        self._ensure_crop_node_running()
         if not hasattr(self, '_crop_workers'):
             self._crop_workers = []
             
@@ -1468,6 +1606,7 @@ class VisionPipelineGUI(QMainWindow):
 
     def _crop_reset(self) -> None:
         """Disable crop (pass-through) — call ~/clear_roi service and update config."""
+        self._ensure_crop_node_running()
         if not hasattr(self, '_crop_workers'):
             self._crop_workers = []
             
@@ -1580,6 +1719,7 @@ class VisionPipelineGUI(QMainWindow):
         self._btn_stop_mode.setEnabled(False)
 
     def _launch_full_pipeline(self) -> None:
+        self._ensure_crop_node_running()
         self._btn_capture.stop()
         QTimer.singleShot(200, self._btn_capture._toggle)
         QTimer.singleShot(600, self._start_mode_node)
@@ -1589,6 +1729,7 @@ class VisionPipelineGUI(QMainWindow):
 
     def _stop_all(self) -> None:
         for btn in (self._btn_live_cam, self._btn_capture,
+                    self._btn_crop_node,
                     self._btn_optimizer, self._btn_depth,
                     self._btn_pathgen, self._btn_moveit):
             btn.stop()
@@ -1723,6 +1864,33 @@ poses:
                 return
             rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             self._canvas.load_image(rgb)
+
+    def _manual_topic_image_cb(self, msg: "ROSImage") -> None:
+        if not (CV2_OK and self._bridge):
+            return
+        try:
+            frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
+            self._latest_cropped_rgb = frame.copy()
+            if hasattr(self, "_canvas") and getattr(self._canvas, "_base_img", None) is None:
+                self._canvas.load_image(self._latest_cropped_rgb.copy())
+        except Exception:
+            pass
+
+    def _manual_use_latest_cropped(self) -> None:
+        if not CV2_OK:
+            QMessageBox.warning(self, "cv2 Missing", "OpenCV (cv2) is required.")
+            return
+        if self._latest_cropped_rgb is None:
+            QMessageBox.warning(
+                self,
+                "No Cropped Frame",
+                "No image has been received yet on /vision/captured_image_color.",
+            )
+            return
+        self._canvas.load_image(self._latest_cropped_rgb.copy())
+        self._log.append(
+            f'<span style="color:{C["green"]}">[Manual] Loaded latest cropped frame from /vision/captured_image_color.</span>'
+        )
 
     def _manual_save(self) -> None:
         if not CV2_OK:
