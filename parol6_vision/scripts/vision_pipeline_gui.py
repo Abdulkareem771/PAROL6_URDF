@@ -415,6 +415,14 @@ class NodeButton(QWidget):
         self._lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay.addWidget(self._lbl)
 
+        # Create a dedicated log tab for this node
+        self._node_log = QTextEdit()
+        self._node_log.setReadOnly(True)
+        self._node_log.setFont(QFont("Monospace", 9))
+        self._log_tabs = getattr(self._log, "parent_tabs", None)
+        if self._log_tabs is not None:
+            self._log_tabs.addTab(self._node_log, label)
+
         self._btn = QPushButton("▶  Start")
         self._btn.setFixedWidth(90)
         self._btn.setStyleSheet(
@@ -444,9 +452,14 @@ class NodeButton(QWidget):
         if not cmd:
             return
         self._worker = NodeWorker(cmd)
-        self._worker.line_out.connect(lambda s: self._log.append(
-            f'<span style="color:{C["text2"]}">[{self._label}] {s}</span>'
-        ))
+        
+        def _handle_log(s):
+            formatted = f'<span style="color:{C["text2"]}">[{self._label}] {s}</span>'
+            self._log.append(formatted) # Write to the main "All Nodes" log
+            if hasattr(self, '_node_log'):
+                self._node_log.append(formatted) # Write to the dedicated tab
+                
+        self._worker.line_out.connect(_handle_log)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
         self._btn.setText("■  Stop")
@@ -471,6 +484,250 @@ class NodeButton(QWidget):
         self._status_dot.setStyleSheet(f"color:{C['border']}; font-size:14px;")
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CropROIView — interactive image panel for the Crop Image tab
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CropROIView(QLabel):
+    """
+    Displays the live image from /vision/captured_image_raw and lets the user
+    drag a yellow selection rectangle to define the crop ROI.
+
+    Signals:
+        roi_changed(tuple)   emitted when user releases mouse with (x,y,w,h) in
+                             image pixel coordinates.
+    """
+    roi_changed = Signal(tuple)
+
+    def __init__(self, ros_node=None, bridge=None, parent=None):
+        super().__init__(parent)
+        self._ros_node = ros_node
+        self._bridge   = bridge
+
+        self.setAlignment(Qt.AlignCenter)
+        self.setStyleSheet(
+            f"background:{C['panel']}; border:none;"
+        )
+        self.setText("⌛  Waiting for /vision/captured_image_raw …")
+        self.setMinimumSize(320, 240)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.CrossCursor)
+
+        # Latest frame stored as QPixmap (scaled) and original (for coordinate mapping)
+        self._pix:       Optional[QPixmap]   = None   # displayed pixmap
+        self._img_size:  Optional[tuple]     = None   # (orig_w, orig_h)
+
+        # ROI Selection (Polygon mode)
+        self._poly_pts: list[QPointF] = []            # list of clicked points in label coords
+        self._current_mouse: Optional[QPointF] = None # for drawing the line to the cursor
+        self._roi_px: Optional[tuple] = None          # (x,y,w,h) in image coords bounding box
+        self._saved_roi: Optional[tuple] = None       # loaded from config
+
+        # Make sure the widget can receive keyboard focus for Escape key
+        self.setFocusPolicy(Qt.StrongFocus)
+        
+        # ROS subscription
+        if ROS2_OK and CV2_OK and ros_node:
+            ros_node.create_subscription(
+                ROSImage, "/vision/captured_image_raw", self._ros_cb, 1
+            )
+            self._refresh_timer = QTimer(self)
+            self._refresh_timer.timeout.connect(self._repaint)
+            self._refresh_timer.start(100)
+
+        self._latest_frame: Optional[np.ndarray] = None    # RGB numpy
+
+    # ── ROS callback ─────────────────────────────────────────────────
+
+    def _ros_cb(self, msg: "ROSImage") -> None:
+        if not (CV2_OK and self._bridge):
+            return
+        try:
+            frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
+            self._latest_frame = frame
+            self._img_size = (frame.shape[1], frame.shape[0])
+        except Exception:
+            pass
+
+    def _repaint(self) -> None:
+        if self._latest_frame is None:
+            return
+        frame = self._latest_frame
+        h, w, ch = frame.shape
+        lw, lh = self.width(), self.height()
+        if lw < 4 or lh < 4:
+            return
+        scale = min(lw / w, lh / h)
+        nw = max(1, int(w * scale))
+        nh = max(1, int(h * scale))
+        small = cv2.resize(frame, (nw, nh))
+        qimg = QImage(small.data, nw, nh, ch * nw, QImage.Format_RGB888)
+        self._pix = QPixmap.fromImage(qimg)
+        self.update()
+
+    # ── Painting ──────────────────────────────────────────────────────
+
+    def paintEvent(self, ev) -> None:
+        super().paintEvent(ev)
+        if self._pix is None:
+            return
+
+        painter = QPainter(self)
+
+        # Draw the image centred
+        pw, ph = self._pix.width(), self._pix.height()
+        ox = (self.width()  - pw) // 2
+        oy = (self.height() - ph) // 2
+        painter.drawPixmap(ox, oy, self._pix)
+
+        # Draw saved ROI (blue, dashed)
+        if self._saved_roi and self._img_size:
+            rx, ry, rw, rh = self._label_rect(self._saved_roi, ox, oy, pw, ph)
+            pen = QPen(QColor("#89b4fa"), 1, Qt.DashLine)
+            painter.setPen(pen)
+            painter.drawRect(int(rx), int(ry), int(rw), int(rh))
+
+        # Draw current polygon (yellow)
+        if self._poly_pts:
+            pen = QPen(QColor("#f9e2af"), 2, Qt.SolidLine)
+            painter.setPen(pen)
+            
+            # Draw existing lines
+            for i in range(1, len(self._poly_pts)):
+                painter.drawLine(self._poly_pts[i-1], self._poly_pts[i])
+                
+            # Draw line to current mouse position if not closed
+            if self._current_mouse is not None and not self._roi_px:
+                painter.drawLine(self._poly_pts[-1], self._current_mouse)
+                
+            # Draw points
+            painter.setBrush(QColor("#f9e2af"))
+            for pt in self._poly_pts:
+                painter.drawEllipse(pt, 3, 3)
+                
+            # If closed or calculated, draw bounding box preview (dashed)
+            if self._roi_px is not None:
+                # Draw closing line
+                if len(self._poly_pts) > 2:
+                    painter.drawLine(self._poly_pts[-1], self._poly_pts[0])
+                    
+                rx, ry, rw, rh = self._label_rect(self._roi_px, ox, oy, pw, ph)
+                box_pen = QPen(QColor("#f9e2af"), 1, Qt.DashLine)
+                painter.setBrush(Qt.NoBrush)
+                painter.setPen(box_pen)
+                painter.drawRect(int(rx), int(ry), int(rw), int(rh))
+
+        painter.end()
+
+    def _label_rect(self, roi_px, ox, oy, pw, ph):
+        """Convert image-coordinate roi tuple to label-coordinate box."""
+        if self._img_size is None:
+            return (0, 0, 0, 0)
+        iw, ih = self._img_size
+        sx, sy = pw / iw, ph / ih
+        x, y, w, h = roi_px
+        return (ox + x * sx, oy + y * sy, w * sx, h * sy)
+
+    def _drag_rect_label(self) -> QRectF:
+        x0, y0 = self._drag_start.x(), self._drag_start.y()
+        x1, y1 = self._drag_end.x(),   self._drag_end.y()
+        return QRectF(min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0))
+
+    # ── Mouse events ──────────────────────────────────────────────────
+
+    def _label_to_image(self, lx: float, ly: float) -> tuple[int, int]:
+        """Map label pixel → image pixel."""
+        if self._pix is None or self._img_size is None:
+            return (0, 0)
+        pw, ph = self._pix.width(), self._pix.height()
+        ox = (self.width()  - pw) // 2
+        oy = (self.height() - ph) // 2
+        iw, ih = self._img_size
+        ix = int((lx - ox) / pw * iw)
+        iy = int((ly - oy) / ph * ih)
+        return (max(0, min(ix, iw)), max(0, min(iy, ih)))
+
+    def mousePressEvent(self, ev) -> None:
+        self.setFocus() # ensure we get keyboard events
+        if ev.button() == Qt.LeftButton and self._pix is not None:
+            # If we already have a calculated ROI, start a new one
+            if self._roi_px is not None:
+                self._poly_pts.clear()
+                self._roi_px = None
+                
+            pt = QPointF(ev.pos())
+            
+            # Auto-close if clicked near the first point (and we have at least 3 points)
+            if len(self._poly_pts) >= 3 and (pt - self._poly_pts[0]).manhattanLength() < 15:
+                self._calculate_bounding_roi()
+            else:
+                self._poly_pts.append(pt)
+                
+            self.update()
+            
+        elif ev.button() == Qt.RightButton and self._poly_pts:
+            # Right click finishes the polygon immediately
+            if len(self._poly_pts) >= 2:
+                self._calculate_bounding_roi()
+            else:
+                self._poly_pts.clear()
+            self.update()
+
+    def mouseMoveEvent(self, ev) -> None:
+        if self._poly_pts and self._roi_px is None:
+            self._current_mouse = QPointF(ev.pos())
+            self.update()
+
+    def keyPressEvent(self, ev) -> None:
+        if ev.key() == Qt.Key_Escape:
+            self.clear_roi()
+        else:
+            super().keyPressEvent(ev)
+            
+    def _calculate_bounding_roi(self) -> None:
+        """Calculate the tightest bounding box around the polygon in image coordinates."""
+        if len(self._poly_pts) < 2:
+            return
+            
+        min_x, min_y = float('inf'), float('inf')
+        max_x, max_y = float('-inf'), float('-inf')
+        
+        for pt in self._poly_pts:
+            img_x, img_y = self._label_to_image(pt.x(), pt.y())
+            min_x = min(min_x, img_x)
+            min_y = min(min_y, img_y)
+            max_x = max(max_x, img_x)
+            max_y = max(max_y, img_y)
+            
+        w, h = max_x - min_x, max_y - min_y
+        
+        if w > 4 and h > 4:
+            self._roi_px = (min_x, min_y, w, h)
+            self._current_mouse = None
+            self.roi_changed.emit(self._roi_px)
+        else:
+            self.clear_roi()
+
+    # ── Public API ────────────────────────────────────────────────────
+
+    def current_roi(self) -> Optional[tuple]:
+        return self._roi_px
+
+    def set_saved_roi(self, roi: tuple) -> None:
+        """Display the previously saved ROI (loaded from config on startup)."""
+        self._saved_roi = roi
+        self._roi_px    = roi
+        self.update()
+
+    def clear_roi(self) -> None:
+        self._poly_pts.clear()
+        self._current_mouse = None
+        self._roi_px     = None
+        self._saved_roi  = None
+        self.update()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main Window
 # ─────────────────────────────────────────────────────────────────────────────
@@ -490,11 +747,15 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_node = rclpy.create_node("vision_pipeline_gui")
             if CV2_OK:
                 self._bridge = CvBridge()
-            # Spin ROS in background
+            # Spin ROS in background — guard against context teardown errors
+            def _spin_once_safe():
+                try:
+                    if rclpy.ok():
+                        rclpy.spin_once(self._ros_node, timeout_sec=0.005)
+                except Exception:
+                    pass
             self._ros_timer = QTimer(self)
-            self._ros_timer.timeout.connect(
-                lambda: rclpy.spin_once(self._ros_node, timeout_sec=0.005)
-            )
+            self._ros_timer.timeout.connect(_spin_once_safe)
             self._ros_timer.start(10)
 
         self._build_ui()
@@ -562,6 +823,7 @@ class VisionPipelineGUI(QMainWindow):
         lay.setSpacing(8)
 
         # ── log widget (shared across all NodeButtons) ─────────────────
+        # We assign an attribute `parent_tabs` later when the Log Tab is built
         self._log = QTextEdit()
         self._log.setReadOnly(True)
         self._log.setFixedHeight(160)
@@ -571,16 +833,30 @@ class VisionPipelineGUI(QMainWindow):
         cam_grp = QGroupBox("Stage 1 — Camera")
         cg_lay  = QVBoxLayout(cam_grp)
 
-        self._btn_live_cam = NodeButton(
-            "Live Kinect Camera",
-            lambda: ["ros2", "launch", "kinect2_bridge", "kinect2_bridge.launch"],
-            self._log, C["blue"],
+        self._btn_live_cam = QPushButton("Live Kinect Camera")
+        self._btn_live_cam.setStyleSheet(
+            f"background:{C['blue']}; color:{C['bg']}; font-weight:bold; border-radius:6px; padding:6px;"
         )
+        self._btn_live_cam.clicked.connect(self._start_live_cam)
         cg_lay.addWidget(self._btn_live_cam)
+
+        # Capture mode selector
+        capture_mode_row = QHBoxLayout()
+        capture_mode_row.addWidget(QLabel("Capture mode:"))
+        self._capture_mode_combo = QComboBox()
+        self._capture_mode_combo.addItem("keyboard (press 's')", "keyboard")
+        self._capture_mode_combo.addItem("timed (auto)",        "timed")
+        capture_mode_row.addWidget(self._capture_mode_combo)
+        cg_lay.addLayout(capture_mode_row)
 
         self._btn_capture = NodeButton(
             "Capture Images Node",
-            lambda: ["ros2", "run", "parol6_vision", "capture_images"],
+            lambda: [
+                "ros2", "run", "parol6_vision", "capture_images",
+                "--ros-args",
+                "-p", f"capture_mode:={self._capture_mode_combo.currentData()}",
+                "-p", "output_topic:=/vision/captured_image_raw",
+            ],
             self._log, C["green"],
         )
         cg_lay.addWidget(self._btn_capture)
@@ -610,6 +886,14 @@ class VisionPipelineGUI(QMainWindow):
             self._mode_buttons.addButton(rb)
             mg_lay.addWidget(rb)
         self._mode_buttons.buttons()[0].setChecked(True)
+
+        # Capture-mode start button note: also launch crop_image node
+        self._btn_crop_node = NodeButton(
+            "Crop Image Node",
+            lambda: ["ros2", "run", "parol6_vision", "crop_image"],
+            self._log, "#74c7ec",
+        )
+        mg_lay.addWidget(self._btn_crop_node)
 
         self._btn_start_mode = QPushButton("▶  Start Selected Mode Node")
         self._btn_start_mode.setStyleSheet(
@@ -851,8 +1135,9 @@ class VisionPipelineGUI(QMainWindow):
         ctrls_row = QHBoxLayout()
 
         self._ros_method = QComboBox()
-        self._ros_method.addItem("Method 3: MoveIt Fake Hardware", "fake")
-        self._ros_method.addItem("Method 4: Real Hardware (MoveIt)", "real")
+        self._ros_method.addItem("Live Pipeline (no bag)",               "live")
+        self._ros_method.addItem("Method 3: MoveIt Fake Hardware",        "fake")
+        self._ros_method.addItem("Method 4: Real Hardware (MoveIt)",      "real")
         self._ros_method.addItem("Vision + MoveIt (vision_moveit.launch.py)", "vision_moveit")
         ctrls_row.addWidget(QLabel("Method:"))
         ctrls_row.addWidget(self._ros_method)
@@ -906,28 +1191,330 @@ class VisionPipelineGUI(QMainWindow):
         self._ros_worker: Optional[NodeWorker] = None
         tabs.addTab(ros_tab, "🚀  ROS Launch")
 
-        # ── Tab 4: Console Log ────────────────────────────────────────────
+        # ── Tab 4: Crop Image ─────────────────────────────────────────────
+        crop_tab = self._build_crop_tab()
+        tabs.addTab(crop_tab, "✂️  Crop Image")
+
+        # ── Tab 5: Console Log ────────────────────────────────────────────
         log_tab = QWidget()
         ll_lay = QVBoxLayout(log_tab)
         ll_lay.setContentsMargins(8, 8, 8, 8)
-        clear_log_btn = QPushButton("🗑  Clear Log")
-        clear_log_btn.clicked.connect(self._log.clear)
+        
+        # Upper area: clear button
+        ctrl_ll = QHBoxLayout()
+        clear_log_btn = QPushButton("🗑  Clear All Logs")
+        
+        def _clear_all_logs():
+            self._log.clear()
+            # Clear all node-specific logs
+            for i in range(1, self._log_tabs_widget.count()):
+                widget = self._log_tabs_widget.widget(i)
+                if isinstance(widget, QTextEdit):
+                    widget.clear()
+                    
+        clear_log_btn.clicked.connect(_clear_all_logs)
         clear_log_btn.setFixedWidth(120)
-        ll_lay.addWidget(clear_log_btn, alignment=Qt.AlignRight)
-        ll_lay.addWidget(self._log)
-        tabs.addTab(log_tab, "📋  Console Log")
+        ctrl_ll.addStretch()
+        ctrl_ll.addWidget(clear_log_btn)
+        ll_lay.addLayout(ctrl_ll)
+        
+        # Main area: The tab widget for logs
+        self._log_tabs_widget = QTabWidget()
+        
+        # Disconnect any strict height constraints on the shared log
+        self._log.setMaximumHeight(16777215) 
+        self._log.setMinimumHeight(400)
+        self._log_tabs_widget.addTab(self._log, "All Nodes")
+        
+        # Link the tabs widget so NodeButtons can add their tabs
+        self._log.parent_tabs = self._log_tabs_widget
+        
+        ll_lay.addWidget(self._log_tabs_widget)
+        tabs.addTab(log_tab, "📋  Console Logs")
 
         return tabs
 
+    # ── Crop Image Tab ────────────────────────────────────────────────────────
+
+    def _build_crop_tab(self) -> QWidget:
+        """
+        ✂️ Crop Image Tab
+        ─────────────────
+        Left panel: live full frame from /vision/captured_image_raw + ROI overlay.
+        Right panel: live cropped output from /vision/captured_image_color.
+        Bottom bar: status + Apply/Save/Reset buttons + config info.
+        """
+        tab = QWidget()
+        root_lay = QVBoxLayout(tab)
+        root_lay.setContentsMargins(8, 8, 8, 8)
+        root_lay.setSpacing(6)
+
+        # ── Top info bar ──────────────────────────────────────────────────
+        info = QLabel(
+            "📌 <b>Draw a rectangle</b> on the full-frame image (left) to select the crop region. "
+            "Click <b>Apply & Save</b> to activate — every future captured image will be cropped "
+            "automatically using the saved config. <b>Reset</b> restores pass-through."
+        )
+        info.setTextFormat(Qt.RichText)
+        info.setWordWrap(True)
+        info.setStyleSheet(
+            f"background:{C['panel']}; border:1px solid {C['accent']};"
+            f" border-radius:6px; color:{C['text2']}; font-size:11px; padding:8px;"
+        )
+        root_lay.addWidget(info)
+
+        # ── Dual preview ──────────────────────────────────────────────────
+        preview_row = QHBoxLayout()
+
+        # Left: full frame + ROI overlay
+        left_frame = QWidget()
+        left_frame.setStyleSheet(
+            f"background:{C['bg']}; border:1px solid {C['border']}; border-radius:4px;"
+        )
+        lf_lay = QVBoxLayout(left_frame)
+        lf_lay.setContentsMargins(0, 0, 0, 0)
+        lf_lay.setSpacing(2)
+        lhdr = QLabel("  📷  Full Frame — /vision/captured_image_raw")
+        lhdr.setStyleSheet(
+            f"color:{C['text2']}; font-size:10px; font-weight:bold;"
+            f" background:{C['panel']}; padding:3px;"
+        )
+        lf_lay.addWidget(lhdr)
+
+        # CropROIView: shows ROS image with draggable ROI rectangle
+        self._crop_view = CropROIView(self._ros_node, self._bridge)
+        lf_lay.addWidget(self._crop_view)
+        preview_row.addWidget(left_frame)
+
+        # Right: cropped output
+        right_frame = QWidget()
+        right_frame.setStyleSheet(
+            f"background:{C['bg']}; border:1px solid {C['border']}; border-radius:4px;"
+        )
+        rf_lay = QVBoxLayout(right_frame)
+        rf_lay.setContentsMargins(0, 0, 0, 0)
+        rf_lay.setSpacing(2)
+        rhdr = QLabel("  ✂️  Cropped Output — /vision/captured_image_color")
+        rhdr.setStyleSheet(
+            f"color:{C['text2']}; font-size:10px; font-weight:bold;"
+            f" background:{C['panel']}; padding:3px;"
+        )
+        rf_lay.addWidget(rhdr)
+
+        if ROS2_OK and CV2_OK:
+            self._crop_output_preview = TopicPreviewLabel(
+                "/vision/captured_image_color", self._ros_node, self._bridge
+            )
+        else:
+            self._crop_output_preview = QLabel("⌛  /vision/captured_image_color\n(ROS2 / cv2 offline)")
+            self._crop_output_preview.setAlignment(Qt.AlignCenter)
+            self._crop_output_preview.setStyleSheet(
+                f"background:{C['panel']}; color:{C['text2']}; font-size:10px;"
+            )
+        rf_lay.addWidget(self._crop_output_preview)
+        preview_row.addWidget(right_frame)
+
+        root_lay.addLayout(preview_row)
+
+        # ── Bottom control bar ────────────────────────────────────────────
+        ctrl_bar = QHBoxLayout()
+
+        self._crop_status_lbl = QLabel("Status: No crop config (pass-through)")
+        self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
+        ctrl_bar.addWidget(self._crop_status_lbl)
+
+        ctrl_bar.addStretch()
+
+        # ROI readout
+        self._roi_readout = QLabel("ROI: — ")
+        self._roi_readout.setStyleSheet(
+            f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+        )
+        ctrl_bar.addWidget(self._roi_readout)
+
+        ctrl_bar.addSpacing(8)
+
+        clear_roi_btn = QPushButton("🗑  Clear ROI")
+        clear_roi_btn.clicked.connect(self._crop_clear_roi)
+        clear_roi_btn.setStyleSheet(
+            f"background:{C['panel']}; color:{C['text2']}; border:1px solid {C['border']};"
+            " border-radius:5px; padding:5px 10px;"
+        )
+        ctrl_bar.addWidget(clear_roi_btn)
+
+        apply_btn = QPushButton("✅  Apply & Save")
+        apply_btn.setStyleSheet(
+            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        apply_btn.clicked.connect(self._crop_apply_save)
+        ctrl_bar.addWidget(apply_btn)
+
+        reset_btn = QPushButton("↩  Reset (Pass-through)")
+        reset_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        reset_btn.clicked.connect(self._crop_reset)
+        ctrl_bar.addWidget(reset_btn)
+
+        root_lay.addLayout(ctrl_bar)
+
+        # Connect ROI change signal
+        self._crop_view.roi_changed.connect(self._on_roi_changed)
+
+        # Load and display existing config on startup
+        self._crop_load_existing_config()
+
+        return tab
+
+    def _crop_load_existing_config(self) -> None:
+        """Read ~/.parol6/crop_config.json and update status label."""
+        import json
+        from pathlib import Path
+        cfg_path = Path.home() / ".parol6" / "crop_config.json"
+        if cfg_path.exists():
+            try:
+                with open(cfg_path) as f:
+                    cfg = json.load(f)
+                if cfg.get("enabled") and "x" in cfg:
+                    roi = (cfg["x"], cfg["y"], cfg["width"], cfg["height"])
+                    self._crop_status_lbl.setText(
+                        f"✅  Active config: ROI = {roi}"
+                    )
+                    self._crop_status_lbl.setStyleSheet(
+                        f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                    )
+                    self._roi_readout.setText(
+                        f"ROI: x={roi[0]} y={roi[1]} w={roi[2]} h={roi[3]}"
+                    )
+                    self._crop_view.set_saved_roi(roi)
+                    return
+            except Exception:
+                pass
+        self._crop_status_lbl.setText("Status: No crop config (pass-through)")
+        self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
+
+    def _on_roi_changed(self, roi: tuple) -> None:
+        """Called when the user finishes drawing an ROI rectangle."""
+        x, y, w, h = roi
+        self._roi_readout.setText(f"ROI: x={x} y={y} w={w} h={h}")
+        self._crop_status_lbl.setText(
+            f"📐  Pending: ROI = ({x}, {y}, {w}, {h}) — click Apply & Save"
+        )
+        self._crop_status_lbl.setStyleSheet(
+            f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+        )
+
+    def _crop_apply_save(self) -> None:
+        """Save the current ROI to config and call the crop_image node's param."""
+        import json
+        from pathlib import Path
+
+        roi = self._crop_view.current_roi()
+        if roi is None:
+            QMessageBox.warning(self, "No ROI", "Draw a rectangle on the image first.")
+            return
+
+        x, y, w, h = roi
+        cfg_path = Path.home() / ".parol6" / "crop_config.json"
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write config
+        with open(cfg_path, "w") as f:
+            json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
+
+        # Push ROI to running crop_image node via ros2 param set + reload_roi service
+        param_worker = NodeWorker(
+            ["ros2", "param", "set", "/crop_image", "roi", f"[{x},{y},{w},{h}]"],
+        )
+        param_worker.line_out.connect(self._log.append)
+        param_worker.start()
+
+        self._crop_status_lbl.setText(
+            f"✅  Saved & Active: ROI = ({x}, {y}, {w}, {h})"
+        )
+        self._crop_status_lbl.setStyleSheet(
+            f"color:{C['green']}; font-size:11px; font-weight:bold;"
+        )
+        self._log.append(
+            f'<b style="color:{C["green"]}">[Crop] Config saved → {cfg_path}  ROI=({x},{y},{w},{h})</b>'
+        )
+
+    def _crop_clear_roi(self) -> None:
+        """Clear the drawn ROI on the canvas without saving."""
+        self._crop_view.clear_roi()
+        self._roi_readout.setText("ROI: —")
+        self._crop_status_lbl.setText("📐  ROI cleared — draw a new region")
+        self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
+
+    def _crop_reset(self) -> None:
+        """Disable crop (pass-through) — call ~/clear_roi service and update config."""
+        worker = NodeWorker(
+            ["ros2", "service", "call", "/crop_image/clear_roi", "std_srvs/srv/Trigger", "{}"]
+        )
+        worker.line_out.connect(self._log.append)
+        worker.start()
+
+        self._crop_view.clear_roi()
+        self._roi_readout.setText("ROI: —")
+        self._crop_status_lbl.setText("↩  Reset: pass-through active (no crop).")
+        self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
+        self._log.append(
+            f'<span style="color:{C["text2"]}">[Crop] Reset → pass-through.</span>'
+        )
+
+
     # ── Actions ───────────────────────────────────────────────────────────────
 
+    def _start_live_cam(self) -> None:
+        """Start Kinect camera. Worker stored to prevent thread GC crash."""
+        self._live_cam_worker = NodeWorker(
+            [
+                "bash", "-c",
+                "source /opt/ros/humble/setup.bash && "
+                "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+                "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
+            ]
+        )
+        self._live_cam_worker.line_out.connect(self._log.append)
+        self._live_cam_worker.start()
+
     def _trigger_capture(self) -> None:
-        """Simulate pressing 's' in the capture node stdin via ros2 topic pub."""
+        """Send capture trigger.
+        If in 'keyboard' mode, send 's\n' to the capture_images_node's stdin via the NodeWorker if it exists.
+        Otherwise, publish to /vision/capture_trigger for the 'timed' mode override or fallback.
+        """
+        mode = self._capture_mode_combo.currentData()
+        
+        if mode == 'keyboard' and getattr(self._btn_capture, "_worker", None) is not None:
+            # Send 's' + Newline directly to the subprocess stdin
+            proc = self._btn_capture._worker._proc
+            if proc and proc.stdin:
+                try:
+                    proc.stdin.write("s\n")
+                    proc.stdin.flush()
+                    self._log.append(f'<span style="color:{C["yellow"]}">[Trigger] Sent "s" to stdin</span>')
+                    return
+                except Exception as e:
+                    self._log.append(f'<span style="color:{C["red"]}">[Trigger] Failed to write to stdin: {e}</span>')
+        
+        # Fallback to topic publish
+        if not hasattr(self, '_trigger_workers'):
+            self._trigger_workers = []
+            
         worker = NodeWorker(
             ["ros2", "topic", "pub", "--once",
              "/vision/capture_trigger", "std_msgs/msg/Empty", "{}"],
         )
-        worker.line_out.connect(self._log.append)
+        worker.line_out.connect(
+            lambda s: self._log.append(
+                f'<span style="color:{C["yellow"]}">[Trigger] {s}</span>'
+            )
+        )
+        # cleanup completed workers
+        worker.finished.connect(lambda rc, w=worker: self._trigger_workers.remove(w) if w in self._trigger_workers else None)
+        self._trigger_workers.append(worker)
         worker.start()
 
     def _selected_mode(self) -> str:
@@ -1035,9 +1622,10 @@ class VisionPipelineGUI(QMainWindow):
 
         method = self._ros_method.currentData()
         method_cmds = {
-            "fake": ["ros2", "launch", "parol6_vision", "vision_pipeline.launch.py"],
-            "real": ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py",
-                     "use_bag:=false"],
+            "live":  ["ros2", "launch", "parol6_vision", "live_pipeline.launch.py"],
+            "fake":  ["ros2", "launch", "parol6_vision", "vision_pipeline.launch.py"],
+            "real":  ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py",
+                      "use_bag:=false"],
             "vision_moveit": ["ros2", "launch", "parol6_vision",
                                "vision_moveit.launch.py"],
         }

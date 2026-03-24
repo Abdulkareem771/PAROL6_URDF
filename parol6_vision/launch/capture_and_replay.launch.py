@@ -74,7 +74,20 @@ def generate_launch_description():
             'save_dir':       LaunchConfiguration('save_dir'),
             'capture_mode':   LaunchConfiguration('capture_mode'),
             'frame_time':     LaunchConfiguration('frame_time'),
+            # Always publishes to raw topic; crop_image_node relays to /vision/captured_image_color
+            'output_topic':   '/vision/captured_image_raw',
         }],
+        output='screen',
+    )
+
+    # ── Stage 1b: Crop Image (always-active) ─────────────────────────
+    # Sits between capture_images and downstream nodes.
+    # Auto-loads ~/.parol6/crop_config.json on startup.
+    # First run (no config) = full-frame pass-through.
+    crop_node = Node(
+        package='parol6_vision',
+        executable='crop_image',
+        name='crop_image',
         output='screen',
     )
 
@@ -163,6 +176,7 @@ def generate_launch_description():
         static_tf_optical,
         # Pipeline nodes
         capture_node,
+        crop_node,      # always-active crop relay
         read_node,
         detector_node,
         depth_node,

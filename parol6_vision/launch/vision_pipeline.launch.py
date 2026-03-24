@@ -49,6 +49,23 @@ def generate_launch_description():
         output='screen'
     )
 
+    # 4. Capture Images Node — publishes to raw topic; crop node relays downstream
+    capture_node = Node(
+        package='parol6_vision',
+        executable='capture_images',
+        name='capture_images',
+        parameters=[{'output_topic': '/vision/captured_image_raw'}],
+        output='screen',
+    )
+
+    # 5. Crop Image Node (always-active) — auto-loads ~/.parol6/crop_config.json
+    crop_node = Node(
+        package='parol6_vision',
+        executable='crop_image',
+        name='crop_image',
+        output='screen',
+    )
+
     # RViz Node (Optional)
     rviz_node = Node(
         package='rviz2',
@@ -59,7 +76,7 @@ def generate_launch_description():
         output='screen'
     )
 
-    # 4. Optional: Camera Setup (TFs, Robot State Publisher)
+    # 6. Optional: Camera Setup (TFs, Robot State Publisher)
     # This solves the "missing TF" issue for depth_matcher
     launch_setup_arg = DeclareLaunchArgument(
         'launch_setup',
@@ -79,8 +96,10 @@ def generate_launch_description():
         use_rviz_arg,
         launch_setup_arg,
         camera_setup_launch,
+        capture_node,
+        crop_node,      # always-active crop relay
         detector_node,
         matcher_node,
         generator_node,
-        # rviz_node (Handled by camera_setup if launch_setup is true, or you can uncomment this if launch_setup is false)
+        # rviz_node (Handled by camera_setup if launch_setup is true)
     ])
