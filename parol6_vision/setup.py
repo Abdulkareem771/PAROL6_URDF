@@ -39,6 +39,7 @@ setup(
             'yolo_segment = parol6_vision.yolo_segment:main',
             'color_mode = parol6_vision.color_mode:main',
             'path_optimizer = parol6_vision.path_optimizer:main',
+            'vision_trajectory_executor = parol6_vision.vision_trajectory_executor:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],

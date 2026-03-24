@@ -184,12 +184,12 @@ rviz2 -d /workspace/src/parol6_vision/config/vision_debug.rviz
 ros2 topic list | grep kinect
 
 # Expected topics:
-# /kinect2/qhd/image_color_rect
-# /kinect2/qhd/image_depth_rect
-# /kinect2/qhd/camera_info
+# /kinect2/sd/image_color_rect
+# /kinect2/sd/image_depth_rect
+# /kinect2/sd/camera_info
 
 # Check image stream
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 # Expected: ~30 Hz
 ```
 
@@ -291,7 +291,7 @@ ros2 launch parol6_vision red_detector_only.launch.py
 
 **Check 1: Verify image topic is publishing**
 ```bash
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 # Expected: ~30 Hz (if camera is running)
 # If 0 Hz or error → Camera driver isn't running
 ```

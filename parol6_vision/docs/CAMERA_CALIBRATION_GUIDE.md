@@ -39,7 +39,7 @@ ros2 launch iai_kinect2 kinect2_bridge.launch.py
 mkdir -p ~/calibration_data
 ros2 run image_view image_saver \
   --ros-args \
-  -r image:=/kinect2/qhd/image_color_rect \
+  -r image:=/kinect2/sd/image_color_rect \
   -p filename_format:=~/calibration_data/calib_%04d.png
 ```
 

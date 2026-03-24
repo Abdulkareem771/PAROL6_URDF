@@ -12,8 +12,8 @@ The **Depth Matcher** (`depth_matcher.py`) is the 2D→3D lifting node in the we
 
 ```
 ROS Bag (Kinect v2)
-  ├── /kinect2/qhd/image_color_rect  ──→  [red_line_detector]  ──→  /vision/weld_lines_2d
-  └── /kinect2/qhd/image_depth_rect  ──┐
+  ├── /kinect2/sd/image_color_rect  ──→  [red_line_detector]  ──→  /vision/weld_lines_2d
+  └── /kinect2/sd/image_depth_rect  ──┐
                                         ├──→  [depth_matcher]  ──→  /vision/weld_lines_3d
                            /tf_static  ──┘                            /depth_matcher/markers
 ```
@@ -180,7 +180,7 @@ source /workspace/install/setup.bash  # your workspace
 ### Step 1 — Verify topics are publishing
 ```bash
 ros2 topic hz /vision/weld_lines_2d        # should be ~2 Hz
-ros2 topic hz /kinect2/qhd/image_depth_rect  # should be ~2 Hz
+ros2 topic hz /kinect2/sd/image_depth_rect  # should be ~2 Hz
 ros2 topic hz /vision/weld_lines_3d         # should be ~2 Hz once fixed
 ```
 
@@ -188,7 +188,7 @@ ros2 topic hz /vision/weld_lines_3d         # should be ~2 Hz once fixed
 ```bash
 # Confirm depth_matcher is subscribing to the right frames
 ros2 topic echo --once /vision/weld_lines_2d | grep frame_id
-ros2 topic echo --once /kinect2/qhd/image_depth_rect | grep frame_id
+ros2 topic echo --once /kinect2/sd/image_depth_rect | grep frame_id
 ```
 Expected: both should be `kinect2_rgb_optical_frame`
 
@@ -259,9 +259,9 @@ ros2 run parol6_vision depth_matcher
 source /opt/ros/humble/setup.bash
 ros2 run depth_image_proc point_cloud_xyzrgb_node \
   --ros-args \
-  -r /rgb/camera_info:=/kinect2/qhd/camera_info \
-  -r /rgb/image_rect_color:=/kinect2/qhd/image_color_rect \
-  -r /depth_registered/image_rect:=/kinect2/qhd/image_depth_rect \
+  -r /rgb/camera_info:=/kinect2/sd/camera_info \
+  -r /rgb/image_rect_color:=/kinect2/sd/image_color_rect \
+  -r /depth_registered/image_rect:=/kinect2/sd/image_depth_rect \
   -p use_sim_time:=true
 
 # Terminal 5 — Verify output
@@ -279,8 +279,8 @@ ros2 launch parol6_vision camera_setup.launch.py
 1. **Fixed Frame** → `base_link`
 2. **Add** → `MarkerArray` → topic: `/depth_matcher/markers` (blue dots = 3D weld points)
 3. **Add** → `MarkerArray` → topic: `/red_line_detector/markers` (2D overlay reference)
-4. **Add** → `Image` → topic: `/kinect2/qhd/image_color_rect`
-5. **Add** → `Image` → topic: `/kinect2/qhd/image_depth_rect`
+4. **Add** → `Image` → topic: `/kinect2/sd/image_color_rect`
+5. **Add** → `Image` → topic: `/kinect2/sd/image_depth_rect`
 6. **Add** → `PointCloud2` → topic: `/points` (colored 3-D point cloud from `point_cloud_xyzrgb_node`)
    - Style: `Points`, Size: `2 px`
    - Color Transformer: `RGB8`
@@ -291,7 +291,7 @@ ros2 launch parol6_vision camera_setup.launch.py
 ## Architecture Notes
 
 ### Camera Intrinsics
-Populated from `/kinect2/qhd/camera_info`. Cached on first message.
+Populated from `/kinect2/sd/camera_info`. Cached on first message.
 - fx=1081.37, fy=1081.37, cx=959.5, cy=539.5 (QHD 1920×1080 scaled to 960×540)
 
 ### TF Chain

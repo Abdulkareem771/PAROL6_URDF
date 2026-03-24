@@ -259,7 +259,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /kinect2/qhd/points
+        Value: /kinect2/sd/points
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
@@ -275,7 +275,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /kinect2/qhd/image_color_rect
+        Value: /kinect2/sd/image_color_rect
       Value: false
     - Class: rviz_default_plugins/Image
       Enabled: false

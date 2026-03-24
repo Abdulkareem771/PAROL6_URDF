@@ -13,7 +13,7 @@ the full vision pipeline can work on saved images.
 
 A ROS2 node named `capture_images` that:
 
-- Subscribes to **`/kinect2/qhd/image_color_rect`** (RGB) and **`/kinect2/qhd/image_depth_rect`** (depth) simultaneously
+- Subscribes to **`/kinect2/sd/image_color_rect`** (RGB) and **`/kinect2/sd/image_depth_rect`** (depth) simultaneously
 - Saves a matched pair of PNGs (`color_<timestamp>.png` + `depth_<timestamp>.png`) to `~/images_captured/`
 - Supports **two capture modes** (selected via the `capture_mode` parameter):
   - **`keyboard`** – a background thread watches for the user pressing **`s`** + Enter; one pair is saved per keypress
@@ -65,8 +65,8 @@ capture_images  →  saves to parol6_vision/data/images_captured/
 read_image      →  publishes /vision/captured_image_color
                              /vision/captured_image_depth
 
-red_line_detector  remapped: /kinect2/qhd/image_color_rect  → /vision/captured_image_color
-depth_matcher      remapped: /kinect2/qhd/image_depth_rect  → /vision/captured_image_depth
+red_line_detector  remapped: /kinect2/sd/image_color_rect  → /vision/captured_image_color
+depth_matcher      remapped: /kinect2/sd/image_depth_rect  → /vision/captured_image_depth
 ```
 
 #### [MODIFY] [setup.py](file:///home/osama/Desktop/PAROL6_URDF/parol6_vision/setup.py)

@@ -17,8 +17,7 @@ if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; t
                 /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1 \
                 /usr/lib/nvidia-cuda-toolkit \
                 /usr/lib/nvidia \
-                /usr/lib/cuda \
-                /usr/share/cmake-3.22/Modules; do
+                /usr/lib/cuda; do
         if [ -e "$path" ]; then
             real_path=$(realpath "$path")
             GPU_ARGS+=("-v" "$real_path:$path:ro")

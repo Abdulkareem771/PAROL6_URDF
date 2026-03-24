@@ -17,7 +17,7 @@ def generate_launch_description():
             output='screen',
             remappings=[
                 ('/vision/weld_lines_2d', '/vision/weld_lines_2d'),
-                ('/kinect2/qhd/image_color_rect', '/kinect2/qhd/image_color_rect')
+                ('/kinect2/sd/image_color_rect', '/kinect2/sd/image_color_rect')
             ]
         )
     ])

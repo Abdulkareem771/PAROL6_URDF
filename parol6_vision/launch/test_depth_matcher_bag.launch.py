@@ -111,9 +111,9 @@ def generate_launch_description():
         name='point_cloud_xyzrgb',
         output='screen',
         remappings=[
-            ('/rgb/camera_info',        '/kinect2/qhd/camera_info'),
-            ('/rgb/image_rect_color',   '/kinect2/qhd/image_color_rect'),
-            ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
+            ('/rgb/camera_info',        '/kinect2/sd/camera_info'),
+            ('/rgb/image_rect_color',   '/kinect2/sd/image_color_rect'),
+            ('/depth_registered/image_rect', '/kinect2/sd/image_depth_rect'),
         ],
         parameters=[{'use_sim_time': True}]
     )

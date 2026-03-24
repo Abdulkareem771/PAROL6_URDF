@@ -15,9 +15,9 @@ class MockCameraPublisher(Node):
     def __init__(self):
         super().__init__('mock_camera_publisher')
         
-        self.color_pub = self.create_publisher(Image, '/kinect2/qhd/image_color_rect', 10)
-        self.depth_pub = self.create_publisher(Image, '/kinect2/qhd/image_depth_rect', 10)
-        self.info_pub = self.create_publisher(CameraInfo, '/kinect2/qhd/camera_info', 10)
+        self.color_pub = self.create_publisher(Image, '/kinect2/sd/image_color_rect', 10)
+        self.depth_pub = self.create_publisher(Image, '/kinect2/sd/image_depth_rect', 10)
+        self.info_pub = self.create_publisher(CameraInfo, '/kinect2/sd/camera_info', 10)
         
         self.bridge = CvBridge()
         self.timer = self.create_timer(1.0, self.publish_data) # 1 Hz

@@ -12,8 +12,8 @@ Stage 2  read_image
 
 Downstream nodes are remapped to consume these replay topics instead of
 the live camera topics:
-    red_line_detector : /kinect2/qhd/image_color_rect  →  /vision/captured_image_color
-    depth_matcher     : /kinect2/qhd/image_depth_rect  →  /vision/captured_image_depth
+    red_line_detector : /kinect2/sd/image_color_rect  →  /vision/captured_image_color
+    depth_matcher     : /kinect2/sd/image_depth_rect  →  /vision/captured_image_depth
 
 Usage
 -----

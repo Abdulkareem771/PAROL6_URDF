@@ -47,10 +47,11 @@ def generate_launch_description():
     pkg_parol6            = get_package_share_directory('parol6')
     pkg_moveit            = get_package_share_directory('parol6_moveit_config')
     pkg_vision            = get_package_share_directory('parol6_vision')
+    pkg_hardware          = get_package_share_directory('parol6_hardware')
 
     moveit_config = (
         MoveItConfigsBuilder("parol6")
-        .robot_description(file_path=os.path.join(pkg_parol6, 'urdf', 'PAROL6.urdf'))
+        .robot_description(file_path=os.path.join(pkg_hardware, 'urdf', 'parol6.urdf.xacro'), mappings={"use_ros2_control": "true", "allow_spoofing": "true"})
         .robot_description_semantic(file_path=os.path.join(pkg_moveit, 'config', 'parol6.srdf'))
         .trajectory_execution(file_path=os.path.join(pkg_moveit, 'config', 'moveit_controllers.yaml'))
         .planning_pipelines(pipelines=['ompl'])
@@ -145,25 +146,19 @@ def generate_launch_description():
         }]
     )
 
-    # ── 3b. MoveIt Controller (path follower) ──────────────────────────
-    moveit_controller = Node(
+    # ── 3b. Vision Trajectory Executor ─────────────────────────────────
+    vision_trajectory_executor = Node(
         package='parol6_vision',
-        executable='moveit_controller',
-        name='moveit_controller',
+        executable='vision_trajectory_executor',
+        name='vision_trajectory_executor',
         output='screen',
         parameters=[{
             'planning_group': 'parol6_arm',
             'base_frame': 'base_link',
             'end_effector_link': 'L6',
-            'approach_distance': 0.05,
-            'weld_velocity': 0.01,
+            'step_size': 0.02,
+            'jump_threshold': 1.5,
             'auto_execute': True,
-            'use_sim_time': True,
-            'enforce_reachable_test_path': True,
-            'test_workspace_min': [0.20, -0.35, 0.10],
-            'test_workspace_max': [0.65, 0.35, 0.55],
-            'test_min_radius_xy': 0.20,
-            'test_max_radius_xy': 0.70,
         }],
     )
 
@@ -174,9 +169,9 @@ def generate_launch_description():
         name='point_cloud_xyzrgb',
         output='screen',
         remappings=[
-            ('/rgb/camera_info',             '/kinect2/qhd/camera_info'),
-            ('/rgb/image_rect_color',        '/kinect2/qhd/image_color_rect'),
-            ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
+            ('/rgb/camera_info',             '/kinect2/sd/camera_info'),
+            ('/rgb/image_rect_color',        '/kinect2/sd/image_color_rect'),
+            ('/depth_registered/image_rect', '/kinect2/sd/image_depth_rect'),
         ],
         parameters=[{'use_sim_time': True}]
     )
@@ -248,7 +243,7 @@ def generate_launch_description():
         path_optimizer,
         depth_matcher,
         path_generator,
-        moveit_controller,
+        vision_trajectory_executor,
         point_cloud_xyzrgb,
         # MoveIt
         move_group_node,
