@@ -1044,6 +1044,8 @@ class VisionPipelineGUI(QMainWindow):
             ("/path_optimizer/debug_image",             "📊 Path Optimizer Debug"),
         ]
         self._preview_panels = []
+        self._captured_preview = None
+
         for idx, (topic, title) in enumerate(previews):
             frame = QWidget()
             frame.setStyleSheet(
@@ -1062,6 +1064,8 @@ class VisionPipelineGUI(QMainWindow):
             if ROS2_OK and CV2_OK:
                 prev = TopicPreviewLabel(topic, self._ros_node, self._bridge)
                 fl.addWidget(prev)
+                if topic == "/vision/captured_image_color":
+                    self._captured_preview = prev
             else:
                 lbl = QLabel(f"⌛  {topic}\n(ROS2 / cv2 offline)")
                 lbl.setAlignment(Qt.AlignCenter)
@@ -1081,6 +1085,10 @@ class VisionPipelineGUI(QMainWindow):
         load_btn = QPushButton("📂  Load Image")
         load_btn.clicked.connect(self._manual_load_image)
         ctrl_row.addWidget(load_btn)
+
+        load_cap_btn = QPushButton("📥  Load from Captured Frame")
+        load_cap_btn.clicked.connect(self._manual_load_captured)
+        ctrl_row.addWidget(load_cap_btn)
 
         ctrl_row.addWidget(QLabel("Brush (px):"))
         self._brush_spin = QSpinBox()
@@ -1723,6 +1731,20 @@ poses:
                 return
             rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             self._canvas.load_image(rgb)
+
+    def _manual_load_captured(self) -> None:
+        """Load the image that was just captured (stored in _captured_preview)."""
+        if getattr(self, '_captured_preview', None) is None:
+            QMessageBox.warning(self, "Offline", "Captured frame preview is offline.")
+            return
+            
+        frame_rgb = getattr(self._captured_preview, '_latest_img', None)
+        if frame_rgb is None:
+            QMessageBox.warning(self, "No Image", "No image has been captured yet.\nPlease trigger a capture first.")
+            return
+
+        self._canvas.load_image(frame_rgb.copy())
+        self._log.append(f'<b style="color:{C["green"]}">[Manual] Loaded captured frame.</b>')
 
     def _manual_save(self) -> None:
         if not CV2_OK:
