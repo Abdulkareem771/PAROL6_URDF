@@ -20,6 +20,7 @@
 #include <vector>
 #include <cinttypes>
 #include <clocale>
+#include <thread>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -67,7 +68,13 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
     return CallbackReturn::ERROR;
   }
 
-  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d", serial_port_.c_str(), baud_rate_);
+  // Optional: allow_spoofing (default false — real hardware should fail loudly)
+  if (info_.hardware_parameters.count("allow_spoofing")) {
+    allow_spoofing_ = (info_.hardware_parameters.at("allow_spoofing") == "true");
+  }
+
+  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d, Spoofing=%s",
+              serial_port_.c_str(), baud_rate_, allow_spoofing_ ? "true" : "false");
 
   // Read joint names from URDF
   joint_names_.clear();
@@ -110,30 +117,30 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
 CallbackReturn PAROL6System::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port...");
+  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port %s...", serial_port_.c_str());
 
   try {
     serial_.Open(serial_port_);
-    
+
     // Set Baud Rate
     using LibSerial::BaudRate;
     BaudRate baud;
     switch (baud_rate_) {
-      case 9600: baud = BaudRate::BAUD_9600; break;
-      case 19200: baud = BaudRate::BAUD_19200; break;
-      case 38400: baud = BaudRate::BAUD_38400; break;
-      case 57600: baud = BaudRate::BAUD_57600; break;
+      case 9600:   baud = BaudRate::BAUD_9600;   break;
+      case 19200:  baud = BaudRate::BAUD_19200;  break;
+      case 38400:  baud = BaudRate::BAUD_38400;  break;
+      case 57600:  baud = BaudRate::BAUD_57600;  break;
       case 115200: baud = BaudRate::BAUD_115200; break;
       default:
         RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
-        serial_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
+        baud = LibSerial::BaudRate::BAUD_115200;
     }
     serial_.SetBaudRate(baud);
     serial_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
     serial_.SetParity(LibSerial::Parity::PARITY_NONE);
     serial_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
     serial_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
-    
+
     // Non-blocking with timeout protection
     // VTIME is in deciseconds (1 = 100 ms)
     serial_.SetVTime(1);   // 100 ms timeout
@@ -141,15 +148,16 @@ CallbackReturn PAROL6System::on_configure(
 
     if (!serial_.IsOpen()) {
       RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
-      return CallbackReturn::ERROR;
+      if (!allow_spoofing_) { return CallbackReturn::ERROR; }
+    } else {
+      serial_ok_ = true;
+      RCLCPP_INFO(logger_, "✅ Serial opened: %s @ %d baud", serial_port_.c_str(), baud_rate_);
     }
-
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (100ms timeout, non-blocking)", 
-                serial_port_.c_str(), baud_rate_);
 
   } catch (const std::exception &e) {
     RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
-    return CallbackReturn::ERROR;
+    if (!allow_spoofing_) { return CallbackReturn::ERROR; }
+    RCLCPP_WARN(logger_, "⚠️ Continuing in SPOOF mode (allow_spoofing=true)");
   }
 
   return CallbackReturn::SUCCESS;
