@@ -308,6 +308,9 @@ class MainWindow(QMainWindow):
         # Jog tab send
         self._jog_tab.send_command.connect(self._serial_send)
 
+        # Launch tab
+        self._launch_tab.launch_requested.connect(self._prepare_launch)
+
     # ------------------------------------------------------------------
     # Config management
     # ------------------------------------------------------------------
@@ -497,6 +500,28 @@ class MainWindow(QMainWindow):
             self._sb_data_rate.setText(f"{bps/1024.0:.1f} KB/s")
         else:
             self._sb_data_rate.setText(f"{bps:.0f} B/s")
+
+    def _prepare_launch(self) -> None:
+        """Called right before a ROS 2 launch is spawned by LaunchTab."""
+        # 1. Disconnect serial to free the port for ROS 2 hardware interface
+        if self._serial_worker:
+            self._sb_cfg.setText("Disconnecting Serial to free port for ROS 2_control...")
+            self._toggle_serial()
+        
+        # 2. Pass the currently selected port and baud to the bash environment
+        port = self._sb_port.text().strip()
+        
+        # If the user hasn't explicitly set a port or it's just the default, try to grab the one from the serial worker if active
+        if self._serial_worker and hasattr(self._serial_worker, "serial") and self._serial_worker.serial:
+            port = self._serial_worker.serial.port
+            
+        if port:
+            self._launch_tab.launch_env["PAROL6_SERIAL_PORT"] = port
+        elif self._cfg.comms.serial_port:
+            self._launch_tab.launch_env["PAROL6_SERIAL_PORT"] = self._cfg.comms.serial_port
+
+        baud = self._sb_baud.text().strip() or "115200"
+        self._launch_tab.launch_env["PAROL6_BAUD_RATE"] = baud
 
     def _on_raw_line(self, line: str) -> None:
         # Route fault lines to fault log

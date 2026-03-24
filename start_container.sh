@@ -87,6 +87,43 @@ else
     echo -e "${GREEN}[✓]${NC} Container created and started"
 fi
 
+# Install libserial-dev from local cache (no download needed!)
+echo -e "${BLUE}[2/4]${NC} Installing libserial-dev from cache..."
+if [ -d ".docker_cache" ] && [ "$(ls -A .docker_cache/*.deb 2>/dev/null)" ]; then
+  docker exec $CONTAINER_NAME bash -c "dpkg -i /workspace/.docker_cache/*.deb 2>/dev/null; apt-get install -f -y > /dev/null 2>&1; exit 0"
+  echo -e "${GREEN}✓ Installed from cache (no download)${NC}"
+else
+  echo -e "${YELLOW}⚠️  Cache not found, downloading...${NC}"
+  docker exec $CONTAINER_NAME bash -c "apt-get update > /dev/null 2>&1 && apt-get install -y libserial-dev > /dev/null 2>&1"
+  echo -e "${GREEN}✓ Downloaded and installed${NC}"
+fi
+echo ""
+
+# Install ROS 2 controllers (required for ros2_control)
+echo -e "${BLUE}[3/4]${NC} Installing ROS 2 controllers..."
+docker exec $CONTAINER_NAME bash -c "apt-get install -y ros-humble-ros2-controllers ros-humble-ros2-control ros-humble-ros2controlcli > /dev/null 2>&1 || exit 0"
+echo -e "${GREEN}✓ Controllers installed${NC}"
+echo ""
+
+# Build workspace
+echo -e "${BLUE}[4/4]${NC} Building workspace..."
+# Clean workspace inside Docker to avoid pollution/permission issues
+docker exec $CONTAINER_NAME bash -c "rm -rf /workspace/build /workspace/install /workspace/log"
+
+# Using --packages-select to avoid building unrelated packages (like microros) found in the dir
+docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_hardware parol6_moveit_config" > /tmp/parol6_real_build.log 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Build successful${NC}"
+else
+    echo -e "${RED}✗ Build failed. Dumping log:${NC}"
+    cat /tmp/parol6_real_build.log
+    docker stop $CONTAINER_NAME
+    exit 1
+fi
+echo ""
+
+
 # Always refresh xauth token so RViz/GUI apps work in all terminals
 echo -e "${BLUE}[INFO]${NC} Refreshing X11 auth token for GUI support..."
 xauth nlist $DISPLAY 2>/dev/null | sed 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge - 2>/dev/null || true
