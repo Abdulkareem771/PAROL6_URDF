@@ -52,7 +52,24 @@ if [ -f /.dockerenv ]; then
             exit 1
         fi
     done
-    sleep 1
+
+    echo "Waiting for controllers to become active (timeout 20s)..."
+    WAIT=0
+    until ros2 control list_controllers 2>/dev/null | grep -q "joint_state_broadcaster.*active" && \
+          ros2 control list_controllers 2>/dev/null | grep -q "parol6_arm_controller.*active"; do
+        sleep 0.5
+        WAIT=$((WAIT+1))
+        if [ $WAIT -ge 40 ]; then
+            echo "ERROR: controllers did not become active within 20 seconds."
+            ros2 control list_controllers 2>/dev/null || true
+            kill ${HW_PID} 2>/dev/null
+            exit 1
+        fi
+        if ! kill -0 ${HW_PID} 2>/dev/null; then
+            echo "ERROR: ros2_control_node exited while waiting for controllers."
+            exit 1
+        fi
+    done
 
     echo "Controller manager ready — starting MoveIt + RViz..."
     ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false

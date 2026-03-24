@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <clocale>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -50,6 +51,10 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
   }
 
   RCLCPP_INFO(logger_, "🚀 Day 1: SIL Validation - Initializing PAROL6 Hardware Interface");
+
+  // Keep numeric serialization/parsing on the C locale so decimal separators
+  // never depend on the host environment.
+  std::setlocale(LC_NUMERIC, "C");
 
   // Read parameters
   try {
@@ -213,15 +218,31 @@ CallbackReturn PAROL6System::on_activate(
 {
   RCLCPP_INFO(logger_, "⚡ on_activate() - Controllers will now call read()/write()");
 
-  // Do NOT initialize commands here — wait until first real feedback arrives in read().
-  // Initializing to zeros now would cause write() to command all joints to position 0,
-  // arming the motors and driving them toward zero before we know where they actually are.
-  // Commands will be properly seeded in read() when first_feedback_received_ is set.
-  // Fill with NaN so any premature write() calls are detectable and safe.
-  std::fill(hw_command_positions_.begin(), hw_command_positions_.end(), std::numeric_limits<double>::quiet_NaN());
-  std::fill(hw_command_velocities_.begin(), hw_command_velocities_.end(), 0.0);
+  RCLCPP_INFO(logger_, "⏳ Waiting for initial hardware state to sync controllers...");
+  int retries = 50;  // ~1 second at 20 ms intervals
+  while (retries-- > 0 && rclcpp::ok()) {
+    read(rclcpp::Clock().now(), rclcpp::Duration(0, 0));
+    if (first_feedback_received_) {
+      RCLCPP_INFO(logger_, "✅ Hardware state synced successfully!");
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
 
-  RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE (waiting for first encoder feedback before sending commands)");
+  if (!first_feedback_received_) {
+    RCLCPP_WARN(logger_, "⚠️ Timeout waiting for initial feedback. Commands remain gated until feedback arrives.");
+    // Keep commands invalid until read() seeds them from the first real packet.
+    std::fill(hw_command_positions_.begin(), hw_command_positions_.end(), std::numeric_limits<double>::quiet_NaN());
+    std::fill(hw_command_velocities_.begin(), hw_command_velocities_.end(), 0.0);
+    RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE (waiting for first encoder feedback before sending commands)");
+  } else {
+    // We already synchronized against real feedback during activation, so keep
+    // commands aligned with the measured state and allow writes immediately.
+    hw_command_positions_ = hw_state_positions_;
+    hw_command_velocities_ = hw_state_velocities_;
+    RCLCPP_INFO(logger_, "✅ on_activate() complete - System ACTIVE and synchronized to hardware state");
+  }
+
   return CallbackReturn::SUCCESS;
 }
 
@@ -343,9 +364,25 @@ return_type PAROL6System::read(
   }
   
   try {
-    // Read line (blocking with 2ms timeout from serial configuration)
+    // Drain the serial buffer and only use the newest valid telemetry frame.
+    // This matches the working STM32 branch behavior and makes us resilient to
+    // interleaved debug lines and stale buffered packets.
     std::string response;
-    serial_.ReadLine(response, '\n');
+    std::string latest_valid;
+    int max_reads = 100;
+    while (serial_.IsDataAvailable() && max_reads-- > 0) {
+      std::string temp;
+      serial_.ReadLine(temp, '\n', 2);
+      if (!temp.empty() && temp[0] == '<') {
+        latest_valid = temp;
+      }
+    }
+
+    if (latest_valid.empty()) {
+      return return_type::OK;
+    }
+
+    response = latest_valid;
 
     // DEBUG: Log raw feedback for validation (throttled manually to prevent crash)
     static int log_counter = 0;
@@ -361,10 +398,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '<')");
-      if (!allow_spoofing_) {
-        return return_type::ERROR;
-      }
-      goto spoof_states;
+      return return_type::OK;
     }
     
     // Find closing bracket
@@ -373,10 +407,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback format (missing '>')");
-      if (!allow_spoofing_) {
-        return return_type::ERROR;
-      }
-      goto spoof_states;
+      return return_type::OK;
     }
     
     // Extract content between < and >
@@ -400,10 +431,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected 14-18 tokens, got %zu", tokens.size());
-      if (!allow_spoofing_) {
-        return return_type::ERROR;
-      }
-      goto spoof_states;
+      return return_type::OK;
     }
     
     // Validate ACK
@@ -411,10 +439,7 @@ return_type PAROL6System::read(
       parse_errors_++;
       RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
         "Invalid feedback: expected ACK, got '%s'", tokens[0].c_str());
-      if (!allow_spoofing_) {
-        return return_type::ERROR;
-      }
-      goto spoof_states;
+      return return_type::OK;
     }
     
     // Parse sequence number
@@ -455,6 +480,8 @@ return_type PAROL6System::read(
     } else {
       first_feedback_received_ = true;
       last_rx_time_ = time;  // Initialize timing
+      hw_command_positions_ = hw_state_positions_;
+      hw_command_velocities_ = hw_state_velocities_;
       RCLCPP_INFO(logger_, "✅ First feedback received (seq %u)", received_seq);
     }
     
@@ -552,9 +579,7 @@ return_type PAROL6System::read(
     parse_errors_++;
     RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, 
       "Error reading feedback: %s", e.what());
-    if (!allow_spoofing_) {
-      return return_type::ERROR;
-    }
+    return return_type::OK;
   }
 
 spoof_states:
