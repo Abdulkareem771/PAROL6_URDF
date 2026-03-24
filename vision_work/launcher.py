@@ -74,6 +74,10 @@ class Launcher(tk.Tk):
         canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
         canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
 
+        # ── Vision Pipeline ───────────────────────────────────────────────────
+        self._section(inner, "VISION PIPELINE")
+        self._btn_in(inner, "🔭  Vision Pipeline Launcher (ROS 2)", self._launch_vision_pipeline, "#cba6f7")
+
         # ── Legacy Tools ──────────────────────────────────────────────────────
         self._section(inner, "LEGACY TOOLS")
         self._btn_in(inner, "🔍  Detect Objects (YOLO)", self._launch_yolo, C["accent"])
@@ -126,6 +130,18 @@ class Launcher(tk.Tk):
         self.destroy()
 
     # ── Launch methods ────────────────────────────────────────────────────────
+    def _launch_vision_pipeline(self):
+        full = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "parol6_vision", "scripts", "vision_pipeline_gui.py"
+        )
+        if not os.path.exists(full):
+            messagebox.showerror("Error", f"Could not find:\n{full}")
+            return
+        print(f"Launching Vision Pipeline GUI: {full}")
+        subprocess.Popen([sys.executable, full])
+        self.destroy()
+
     def _launch_yolo(self):               self._launch("yolo_training/yolo_gui.py")
     def _launch_resunet(self):            self._launch("resunet_training/weld_seam_gui.py")
     def _launch_annotator(self):          self._launch("tools/manual_annotator.py")

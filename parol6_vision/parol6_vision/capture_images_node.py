@@ -71,9 +71,12 @@ class CaptureImagesNode(Node):
         # ── Parameters ───────────────────────────────────────────────
         self.declare_parameter('capture_mode', 'keyboard')   # keyboard | timed
         self.declare_parameter('frame_time', 10.0)
+        # Always publish to the raw topic; crop_image_node relays to /vision/captured_image_color
+        self.declare_parameter('output_topic', '/vision/captured_image_raw')
 
         self._capture_mode = self.get_parameter('capture_mode').value
         self._frame_time = self.get_parameter('frame_time').value
+        self._output_topic = self.get_parameter('output_topic').value
 
         # Validate mode
         if self._capture_mode not in ('keyboard', 'timed'):
@@ -90,7 +93,7 @@ class CaptureImagesNode(Node):
 
         # ── Publishers ───────────────────────────────────────────────
         self._pub_color = self.create_publisher(
-            Image, '/vision/captured_image_color', 10
+            Image, self._output_topic, 10
         )
         self._pub_depth = self.create_publisher(
             Image, '/vision/captured_image_depth', 10
@@ -125,20 +128,29 @@ class CaptureImagesNode(Node):
         # ── Trigger flag (keyboard mode) ─────────────────────────────
         self._save_requested = threading.Event()
 
-        # ── Start the mode-specific background thread ─────────────────
+        # ── Start the mode-specific background thread / timers ──
         if self._capture_mode == 'keyboard':
             self._kb_thread = threading.Thread(
                 target=self._keyboard_listener, daemon=True
             )
             self._kb_thread.start()
             self.get_logger().info(
-                "Capture mode: KEYBOARD — press 's' + Enter to capture a pair."
+                "Capture mode: KEYBOARD — press 's' + Enter or publish to /vision/capture_trigger to capture a pair."
             )
         else:
             self._timer = self.create_timer(self._frame_time, self._timed_trigger)
             self.get_logger().info(
-                f'Capture mode: TIMED — auto-saving every {self._frame_time:.1f} s.'
+                f'Capture mode: TIMED — auto-saving every {self._frame_time:.1f} s. (Topic trigger also available)'
             )
+
+        # ── Trigger subscriber (from GUI) ─────────────────────────────
+        from std_msgs.msg import Empty
+        self._trigger_sub = self.create_subscription(
+            Empty,
+            '/vision/capture_trigger',
+            self._trigger_callback,
+            10
+        )
 
         self.get_logger().info('Capture_images node ready.')
 
@@ -156,6 +168,26 @@ class CaptureImagesNode(Node):
         if self._capture_mode == 'keyboard' and self._save_requested.is_set():
             self._save_requested.clear()
             self._do_publish(color_msg, depth_msg)
+
+    # ─────────────────────────────────────────────────────────────────
+    # ROS Topic trigger callback (from GUI)
+    # ─────────────────────────────────────────────────────────────────
+
+    def _trigger_callback(self, msg):
+        self.get_logger().info('Received capture trigger via topic.')
+        
+        # In case kinect2_bridge is slow (e.g. fps_limit=1.0), publish the latest cached frame immediately!
+        with self._lock:
+            color_msg = self._latest_color
+            depth_msg = self._latest_depth
+            
+        if color_msg is not None and depth_msg is not None:
+            # We already have a frame pair, publish it right now instead of waiting for the next sync
+            self._save_requested.clear()  # Clear it just in case _sync_callback tries to double-publish
+            self._do_publish(color_msg, depth_msg)
+        else:
+            # No frames yet, set the flag so the first sync_callback gets published
+            self._save_requested.set()
 
     # ─────────────────────────────────────────────────────────────────
     # Keyboard listener thread
