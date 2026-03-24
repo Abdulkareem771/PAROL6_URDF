@@ -98,3 +98,7 @@ legacy code open loop/*
 parol6_vision/data/images_captured/*
 test_yolo_segment_node/*
 test_color_node/*
+parol6_firmware/.pio/libdeps/blackpill_f411ce/integrity.dat
+parol6_firmware/.pio/libdeps/debug_stage3/integrity.dat
+parol6_firmware/.pio/libdeps/debug_stage4/integrity.dat
+parol6_firmware/.pio/libdeps/teensy41_j6_test/integrity.dat
