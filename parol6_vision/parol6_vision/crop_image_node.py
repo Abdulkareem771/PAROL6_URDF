@@ -91,6 +91,7 @@ class CropImageNode(Node):
         self._enabled = False
         self._roi: tuple[int, int, int, int] | None = None   # x, y, w, h
         self._bridge = CvBridge()
+        self._latest_msg: Image | None = None
 
         # Load config from disk
         self._load_config()
@@ -119,6 +120,16 @@ class CropImageNode(Node):
     # ── Image callback (one call per frame, no loop) ──────────────────
 
     def _image_callback(self, msg: Image) -> None:
+        self._latest_msg = msg
+        self._publish_current(msg)
+
+    def _publish_current(self, msg: Image | None = None) -> None:
+        """Publish the latest raw frame using the currently active crop settings."""
+        if msg is None:
+            msg = self._latest_msg
+        if msg is None:
+            return
+
         if not self._enabled or self._roi is None:
             # Pass-through: republish unchanged
             self._pub.publish(msg)
@@ -191,6 +202,7 @@ class CropImageNode(Node):
     def _svc_reload(self, _req, response):
         """Re-read config file from disk without restarting."""
         self._load_config()
+        self._publish_current()
         response.success = True
         response.message = (
             f"ROI reloaded: enabled={self._enabled} roi={self._roi}"
@@ -202,6 +214,7 @@ class CropImageNode(Node):
         self._enabled = False
         self._roi     = None
         self._save_config()
+        self._publish_current()
         response.success = True
         response.message = "Crop cleared — pass-through mode."
         self.get_logger().info("Crop disabled (pass-through).")
@@ -222,6 +235,7 @@ class CropImageNode(Node):
                     self._roi     = tuple(int(v) for v in vals)
                     self._enabled = True
                     self._save_config()
+                    self._publish_current()
                     self.get_logger().info(f"ROI updated via param: {self._roi}")
         return SetParametersResult(successful=True)
 

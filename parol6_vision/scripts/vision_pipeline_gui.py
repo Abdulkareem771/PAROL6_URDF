@@ -44,14 +44,20 @@ from PySide6.QtGui import (
 )
 
 # ─── Try importing ROS / cv_bridge for live topic previews ───────────────────
+ROS2_OK = False
+ROS2_IMPORT_ERROR = ""
 try:
     import rclpy
     from rclpy.node import Node
+    from rclpy.qos import qos_profile_sensor_data
+    from rclpy.parameter import Parameter as RclpyParameter
     from sensor_msgs.msg import Image as ROSImage
+    from std_srvs.srv import Trigger
+    from rcl_interfaces.srv import SetParameters
     from cv_bridge import CvBridge
     ROS2_OK = True
-except ImportError:
-    ROS2_OK = False
+except Exception as exc:
+    ROS2_IMPORT_ERROR = str(exc)
 
 try:
     import cv2
@@ -94,6 +100,20 @@ def _wrap_ros_command(cmd: list[str]) -> list[str]:
         f"{quoted_cmd}"
     )
     return ["bash", "-lc", setup_cmd]
+
+
+def _ros_node_check_cmd(node_name: str) -> list[str]:
+    quoted_name = shlex.quote(node_name)
+    workspace_setup = shlex.quote(str(WORKSPACE_DIR / "install" / "setup.bash"))
+    fallback_setup = shlex.quote(str(FALLBACK_INSTALL_DIR / "setup.bash"))
+    check_cmd = (
+        "source /opt/ros/humble/setup.bash && "
+        "if [ -f /opt/kinect_ws/install/setup.bash ]; then source /opt/kinect_ws/install/setup.bash; fi && "
+        f"if [ -f {workspace_setup} ]; then source {workspace_setup}; fi && "
+        f"if [ -f {fallback_setup} ]; then source {fallback_setup}; fi && "
+        f"ros2 node list | grep -qx {quoted_name}"
+    )
+    return ["bash", "-lc", check_cmd]
 
 # ─── Color Palette (matches firmware configurator dark theme) ─────────────────
 C = {
@@ -251,6 +271,7 @@ class TopicPreviewLabel(QLabel):
         self._ros_node = ros_node
         self._bridge = bridge
         self._latest_img: Optional[bytes] = None   # raw RGB numpy bytes
+        self._subscription = None
 
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
@@ -261,8 +282,8 @@ class TopicPreviewLabel(QLabel):
         self.setMinimumSize(200, 150)
 
         if ROS2_OK and ros_node:
-            ros_node.create_subscription(
-                ROSImage, topic, self._ros_cb, 1
+            self._subscription = ros_node.create_subscription(
+                ROSImage, topic, self._ros_cb, qos_profile_sensor_data
             )
             self._timer = QTimer(self)
             self._timer.timeout.connect(self._refresh)
@@ -457,13 +478,12 @@ class NodeButton(QWidget):
         self._lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay.addWidget(self._lbl)
 
-        # Create a dedicated log tab for this node
+        # Create a dedicated log tab for this node.
+        # NOTE: parent_tabs is always None here (built before _build_tabs runs).
+        # Tab registration happens in VisionPipelineGUI._build_tabs() instead.
         self._node_log = QTextEdit()
         self._node_log.setReadOnly(True)
         self._node_log.setFont(QFont("Monospace", 9))
-        self._log_tabs = getattr(self._log, "parent_tabs", None)
-        if self._log_tabs is not None:
-            self._log_tabs.addTab(self._node_log, label)
 
         self._btn = QPushButton("▶  Start")
         self._btn.setFixedWidth(90)
@@ -601,6 +621,7 @@ class CropROIView(QLabel):
         super().__init__(parent)
         self._ros_node = ros_node
         self._bridge   = bridge
+        self._subscription = None
 
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
@@ -626,8 +647,8 @@ class CropROIView(QLabel):
         
         # ROS subscription
         if ROS2_OK and CV2_OK and ros_node:
-            ros_node.create_subscription(
-                ROSImage, "/vision/captured_image_raw", self._ros_cb, 1
+            self._subscription = ros_node.create_subscription(
+                ROSImage, "/vision/captured_image_raw", self._ros_cb, qos_profile_sensor_data
             )
             self._refresh_timer = QTimer(self)
             self._refresh_timer.timeout.connect(self._repaint)
@@ -835,6 +856,9 @@ class VisionPipelineGUI(QMainWindow):
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
         self.resize(1100, 680)
         self._latest_cropped_rgb: Optional[np.ndarray] = None
+        self._crop_set_params_client = None
+        self._crop_clear_client = None
+        self._crop_futures = []
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -855,15 +879,21 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_timer = QTimer(self)
             self._ros_timer.timeout.connect(_spin_once_safe)
             self._ros_timer.start(10)
+            self._crop_set_params_client = self._ros_node.create_client(SetParameters, "/crop_image/set_parameters")
+            self._crop_clear_client  = self._ros_node.create_client(Trigger, "/crop_image/clear_roi")
+            self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
+            self._manual_cropped_sub = None
             if CV2_OK:
-                self._ros_node.create_subscription(
+                self._manual_cropped_sub = self._ros_node.create_subscription(
                     ROSImage,
                     "/vision/captured_image_color",
                     self._manual_topic_image_cb,
-                    1,
+                    qos_profile_sensor_data,
                 )
 
         self._build_ui()
+        if not ROS2_OK and ROS2_IMPORT_ERROR:
+            print(f"[VisionPipelineGUI] ROS import failed: {ROS2_IMPORT_ERROR}", file=sys.stderr)
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -890,9 +920,9 @@ class VisionPipelineGUI(QMainWindow):
         title.setStyleSheet(f"color:{C['accent']};")
         hdr_lay.addWidget(title)
         hdr_lay.addStretch()
-        ros_badge = QLabel(
-            "ROS 2 ✅" if ROS2_OK else "ROS 2 offline"
-        )
+        badge_text = "ROS 2 ✅" if ROS2_OK else f"ROS 2 offline: {ROS2_IMPORT_ERROR or 'unknown error'}"
+        ros_badge = QLabel(badge_text)
+        ros_badge.setToolTip(ROS2_IMPORT_ERROR or badge_text)
         ros_badge.setStyleSheet(
             f"color:{'#a6e3a1' if ROS2_OK else '#f38ba8'}; font-size:11px;"
         )
@@ -949,16 +979,16 @@ class VisionPipelineGUI(QMainWindow):
             ],
             self._log,
             C["blue"],
-            status_check_cmd=[
-                "bash", "-lc",
-                "pgrep -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml' >/dev/null",
-            ],
-            external_stop_cmd=[
-                "bash", "-lc",
-                "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml'",
-            ],
         )
         cg_lay.addWidget(self._btn_live_cam)
+
+        kill_cam_btn = QPushButton("Kill Stale Camera")
+        kill_cam_btn.clicked.connect(self._kill_camera_processes)
+        kill_cam_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:5px; padding:5px;"
+        )
+        cg_lay.addWidget(kill_cam_btn)
 
         # Capture mode selector
         capture_mode_row = QHBoxLayout()
@@ -1015,13 +1045,12 @@ class VisionPipelineGUI(QMainWindow):
             lambda: ["ros2", "run", "parol6_vision", "crop_image"],
             self._log,
             "#74c7ec",
-            status_check_cmd=[
-                "bash", "-lc",
-                "pgrep -f 'ros2 run parol6_vision crop_image|/crop_image' >/dev/null",
-            ],
+            # No status_check_cmd: avoid periodic blocking subprocess on the Qt thread.
+            # Ownership (self._worker) tracks run state; explicit checks are done on demand.
+            status_check_cmd=None,
             external_stop_cmd=[
                 "bash", "-lc",
-                "pkill -INT -f 'ros2 run parol6_vision crop_image|/crop_image'",
+                "pkill -INT -f 'ros2 run parol6_vision crop_image'",
             ],
         )
         mg_lay.addWidget(self._btn_crop_node)
@@ -1367,9 +1396,18 @@ class VisionPipelineGUI(QMainWindow):
         # Link the tabs widget so NodeButtons can add their tabs
         self._log.parent_tabs = self._log_tabs_widget
         
-        # Retrospectively add the camera node since it was built before the tabs
-        if hasattr(self, '_btn_live_cam') and hasattr(self._btn_live_cam, '_node_log'):
-            self._log_tabs_widget.addTab(self._btn_live_cam._node_log, self._btn_live_cam._label)
+        for attr in (
+            '_btn_live_cam',
+            '_btn_capture',
+            '_btn_crop_node',
+            '_btn_optimizer',
+            '_btn_depth',
+            '_btn_pathgen',
+            '_btn_moveit',
+        ):
+            btn = getattr(self, attr, None)
+            if btn and hasattr(btn, '_node_log') and self._log_tabs_widget.indexOf(btn._node_log) == -1:
+                self._log_tabs_widget.addTab(btn._node_log, btn._label)
         
         ll_lay.addWidget(self._log_tabs_widget)
         tabs.addTab(log_tab, "📋  Console Logs")
@@ -1552,12 +1590,20 @@ class VisionPipelineGUI(QMainWindow):
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
         )
 
-    def _ensure_crop_node_running(self) -> None:
-        if hasattr(self, "_btn_crop_node") and not self._btn_crop_node.is_running():
-            self._btn_crop_node._start()
+    def _ensure_crop_node_running(self) -> bool:
+        if not hasattr(self, "_btn_crop_node"):
+            return False
+        if self._btn_crop_node.is_running():
+            return True
+        self._btn_crop_node._start()
+        return self._btn_crop_node.is_running()
 
     def _crop_apply_save(self) -> None:
-        """Save the current ROI to config and call the crop_image node's param."""
+        """Save the current ROI to config and push it to /crop_image via SetParameters.
+
+        Uses a QTimer retry loop to handle the case where the crop node was just
+        started and its parameter service is not yet available.
+        """
         import json
         from pathlib import Path
 
@@ -1570,31 +1616,123 @@ class VisionPipelineGUI(QMainWindow):
         cfg_path = Path.home() / ".parol6" / "crop_config.json"
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write config
+        # Persist to disk first — crop_image_node reads this on reload_roi even if
+        # the SetParameters call is not available yet.
         with open(cfg_path, "w") as f:
             json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
-
-        # Push ROI to running crop_image node via ros2 param set + reload_roi service
-        self._ensure_crop_node_running()
-        if not hasattr(self, '_crop_workers'):
-            self._crop_workers = []
-            
-        param_worker = NodeWorker(
-            ["ros2", "param", "set", "/crop_image", "roi", f"[{x},{y},{w},{h}]"],
+        self._log.append(
+            f'<b style="color:{C["green"]}">[Crop] Config saved → {cfg_path}  ROI=({x},{y},{w},{h})</b>'
         )
-        param_worker.line_out.connect(self._log.append)
-        param_worker.finished.connect(lambda rc, w=param_worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
-        self._crop_workers.append(param_worker)
-        param_worker.start()
 
+        self._ensure_crop_node_running()
+
+        if not ROS2_OK or self._crop_set_params_client is None:
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] ROS client is unavailable in the GUI.</span>'
+            )
+            return
+
+        # ── Retry loop ────────────────────────────────────────────────────────
+        # The crop node may have just been started; give it up to 4 s to init.
+        _MAX_ATTEMPTS = 8
+        _RETRY_MS     = 500   # ms between attempts
+
+        def _attempt(remaining: int) -> None:
+            if self._crop_set_params_client.service_is_ready():
+                _do_call()
+            elif remaining > 0:
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] Waiting for /crop_image service '
+                    f'({remaining} attempts left)…</span>'
+                )
+                QTimer.singleShot(_RETRY_MS, lambda: _attempt(remaining - 1))
+            else:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] /crop_image parameter service did not '
+                    'become available. Is the node running?</span>'
+                )
+
+        def _do_call() -> None:
+            req = SetParameters.Request()
+            req.parameters = [
+                RclpyParameter(
+                    'roi', RclpyParameter.Type.INTEGER_ARRAY, [x, y, w, h]
+                ).to_parameter_msg()
+            ]
+            future = self._crop_set_params_client.call_async(req)
+            self._crop_futures.append(future)
+
+            def _on_done(fut):
+                try:
+                    result = fut.result()
+                    # Check that the node actually accepted the parameter
+                    if result.results and result.results[0].successful:
+                        self._log.append(
+                            f'<span style="color:{C["green"]}">[Crop] ✅ ROI applied to /crop_image '
+                            f'({x},{y},{w},{h}) — republishing cached frame.</span>'
+                        )
+                        # Belt-and-suspenders: trigger reload_roi so the node
+                        # force-republishes its cached frame even if _on_param_change
+                        # already did it (harmless if duplicate).
+                        _trigger_reload()
+                    else:
+                        reason = (
+                            result.results[0].reason
+                            if result.results else "unknown"
+                        )
+                        self._log.append(
+                            f'<span style="color:{C["red"]}">[Crop] ⚠ Node rejected ROI param: '
+                            f'{reason}</span>'
+                        )
+                except Exception as exc:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] SetParameters failed: {exc}</span>'
+                    )
+                finally:
+                    if fut in self._crop_futures:
+                        self._crop_futures.remove(fut)
+
+            future.add_done_callback(_on_done)
+
+        def _trigger_reload() -> None:
+            """Call ~/reload_roi to ensure the node republishes its cached frame."""
+            if self._crop_reload_client is None:
+                return
+            if not self._crop_reload_client.service_is_ready():
+                return
+            future = self._crop_reload_client.call_async(Trigger.Request())
+            self._crop_futures.append(future)
+
+            def _on_reload_done(fut):
+                try:
+                    resp = fut.result()
+                    self._log.append(
+                        f'<span style="color:{C["text2"]}">[Crop] reload_roi: {resp.message}</span>'
+                    )
+                except Exception:
+                    pass
+                finally:
+                    if fut in self._crop_futures:
+                        self._crop_futures.remove(fut)
+
+            future.add_done_callback(_on_reload_done)
+
+        # Update UI immediately (config is already on disk)
         self._crop_status_lbl.setText(
-            f"✅  Saved & Active: ROI = ({x}, {y}, {w}, {h})"
+            f"⏳  Applying: ROI = ({x}, {y}, {w}, {h}) …"
+        )
+        self._crop_status_lbl.setStyleSheet(
+            f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+        )
+
+        _attempt(_MAX_ATTEMPTS)
+
+        # Update to confirmed-saved once the disk write is done
+        self._crop_status_lbl.setText(
+            f"✅  Saved & Applying: ROI = ({x}, {y}, {w}, {h})"
         )
         self._crop_status_lbl.setStyleSheet(
             f"color:{C['green']}; font-size:11px; font-weight:bold;"
-        )
-        self._log.append(
-            f'<b style="color:{C["green"]}">[Crop] Config saved → {cfg_path}  ROI=({x},{y},{w},{h})</b>'
         )
 
     def _crop_clear_roi(self) -> None:
@@ -1606,17 +1744,40 @@ class VisionPipelineGUI(QMainWindow):
 
     def _crop_reset(self) -> None:
         """Disable crop (pass-through) — call ~/clear_roi service and update config."""
-        self._ensure_crop_node_running()
-        if not hasattr(self, '_crop_workers'):
-            self._crop_workers = []
-            
-        worker = NodeWorker(
-            ["ros2", "service", "call", "/crop_image/clear_roi", "std_srvs/srv/Trigger", "{}"]
-        )
-        worker.line_out.connect(self._log.append)
-        worker.finished.connect(lambda rc, w=worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
-        self._crop_workers.append(worker)
-        worker.start()
+        if not self._ensure_crop_node_running():
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] /crop_image is not running.</span>'
+            )
+            return
+        if not ROS2_OK or self._crop_clear_client is None:
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] Clear-ROI client is unavailable in the GUI.</span>'
+            )
+            return
+        if not self._crop_clear_client.wait_for_service(timeout_sec=1.5):
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] /crop_image/clear_roi service is not available.</span>'
+            )
+            return
+
+        future = self._crop_clear_client.call_async(Trigger.Request())
+        self._crop_futures.append(future)
+
+        def _on_done(fut):
+            try:
+                resp = fut.result()
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] {resp.message}</span>'
+                )
+            except Exception as exc:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] Clear failed: {exc}</span>'
+                )
+            finally:
+                if fut in self._crop_futures:
+                    self._crop_futures.remove(fut)
+
+        future.add_done_callback(_on_done)
 
         self._crop_view.clear_roi()
         self._roi_readout.setText("ROI: —")
@@ -1848,6 +2009,14 @@ poses:
         subprocess.run(["bash", "-c", cmd], check=False)
         self._ros_log.append("[KILL] All ROS 2 processes terminated.")
 
+    def _kill_camera_processes(self) -> None:
+        cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml'"
+        subprocess.run(["bash", "-c", cmd], check=False)
+        self._btn_live_cam._set_stopped()
+        self._log.append(
+            f'<span style="color:{C["red"]}">[Live Kinect Camera] Requested stop for stale camera processes.</span>'
+        )
+
     # ── Manual Red Line actions ────────────────────────────────────────────
 
     def _manual_load_image(self) -> None:
@@ -1866,13 +2035,14 @@ poses:
             self._canvas.load_image(rgb)
 
     def _manual_topic_image_cb(self, msg: "ROSImage") -> None:
+        """Cache the latest cropped frame for use with 'Use Latest Cropped Frame' button.
+        Does NOT auto-load into the canvas — the user opts in explicitly.
+        """
         if not (CV2_OK and self._bridge):
             return
         try:
             frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
             self._latest_cropped_rgb = frame.copy()
-            if hasattr(self, "_canvas") and getattr(self._canvas, "_base_img", None) is None:
-                self._canvas.load_image(self._latest_cropped_rgb.copy())
         except Exception:
             pass
 
