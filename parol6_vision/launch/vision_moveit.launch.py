@@ -46,6 +46,12 @@ def generate_launch_description():
     )
     single_frame_detection = LaunchConfiguration('single_frame_detection')
 
+    camera_frame_arg = DeclareLaunchArgument(
+        'camera_frame', default_value='kinect2_rgb_optical_frame',
+        description='The TF frame ID for the camera optical frame'
+    )
+    camera_frame = LaunchConfiguration('camera_frame')
+
     # ── MoveIt Config ──────────────────────────────────────────────────
     pkg_parol6            = get_package_share_directory('parol6')
     pkg_moveit            = get_package_share_directory('parol6_moveit_config')
@@ -101,7 +107,7 @@ def generate_launch_description():
         name='static_transform_publisher_optical',
         arguments=['--x', '0', '--y', '0', '--z', '0',
                    '--roll', '-1.5708', '--pitch', '0', '--yaw', '-1.5708',
-                   '--frame-id', 'kinect2_link', '--child-frame-id', 'kinect2_rgb_optical_frame'],
+                   '--frame-id', 'kinect2_link', '--child-frame-id', camera_frame],
         output='screen'
     )
 
@@ -221,6 +227,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_bag_arg,
         single_frame_detection_arg,
+        camera_frame_arg,
         # Bag
         play_bag,
         # TFs

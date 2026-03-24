@@ -736,7 +736,7 @@ class VisionPipelineGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
-        self.resize(1400, 860)
+        self.resize(1100, 680)
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -806,7 +806,7 @@ class VisionPipelineGUI(QMainWindow):
         tabs = self._build_tabs()
         splitter.addWidget(tabs)
 
-        splitter.setSizes([340, 1060])
+        splitter.setSizes([360, 1040])
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
 
@@ -815,6 +815,7 @@ class VisionPipelineGUI(QMainWindow):
         wrap.setWidgetResizable(True)
         wrap.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         wrap.setStyleSheet(f"QScrollArea{{background:{C['bg']}; border:none;}}")
+        wrap.setMinimumWidth(360)
 
         inner = QWidget()
         wrap.setWidget(inner)
@@ -833,11 +834,16 @@ class VisionPipelineGUI(QMainWindow):
         cam_grp = QGroupBox("Stage 1 — Camera")
         cg_lay  = QVBoxLayout(cam_grp)
 
-        self._btn_live_cam = QPushButton("Live Kinect Camera")
-        self._btn_live_cam.setStyleSheet(
-            f"background:{C['blue']}; color:{C['bg']}; font-weight:bold; border-radius:6px; padding:6px;"
+        self._btn_live_cam = NodeButton(
+            "Live Kinect Camera",
+            lambda: [
+                "bash", "-c",
+                "source /opt/ros/humble/setup.bash && "
+                "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+                "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
+            ],
+            self._log, C["blue"]
         )
-        self._btn_live_cam.clicked.connect(self._start_live_cam)
         cg_lay.addWidget(self._btn_live_cam)
 
         # Capture mode selector
@@ -1029,9 +1035,7 @@ class VisionPipelineGUI(QMainWindow):
         tabs = QTabWidget()
 
         # ── Tab 1: Visual Outputs ─────────────────────────────────────────
-        vis_tab = QWidget()
-        vt_lay  = QGridLayout(vis_tab)
-        vt_lay.setSpacing(4)
+        vis_tab = QTabWidget()
 
         previews = [
             ("/kinect2/qhd/image_color_rect",           "📷 Live Camera"),
@@ -1041,7 +1045,6 @@ class VisionPipelineGUI(QMainWindow):
         ]
         self._preview_panels = []
         for idx, (topic, title) in enumerate(previews):
-            row, col = divmod(idx, 2)
             frame = QWidget()
             frame.setStyleSheet(
                 f"background:{C['bg']}; border:1px solid {C['border']};"
@@ -1065,7 +1068,7 @@ class VisionPipelineGUI(QMainWindow):
                 lbl.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
                 fl.addWidget(lbl)
             self._preview_panels.append(frame)
-            vt_lay.addWidget(frame, row, col)
+            vis_tab.addTab(frame, title)
 
         tabs.addTab(vis_tab, "👁  Visual Outputs")
 
@@ -1141,6 +1144,12 @@ class VisionPipelineGUI(QMainWindow):
         self._ros_method.addItem("Vision + MoveIt (vision_moveit.launch.py)", "vision_moveit")
         ctrls_row.addWidget(QLabel("Method:"))
         ctrls_row.addWidget(self._ros_method)
+        
+        ctrls_row.addSpacing(16)
+        ctrls_row.addWidget(QLabel("Camera Frame:"))
+        self._ros_frame_input = QLineEdit("kinect2_rgb_optical_frame")
+        self._ros_frame_input.setFixedWidth(180)
+        ctrls_row.addWidget(self._ros_frame_input)
 
         self._ros_launch_btn = QPushButton("🚀  Launch")
         self._ros_launch_btn.setStyleSheet(
@@ -1228,6 +1237,10 @@ class VisionPipelineGUI(QMainWindow):
         
         # Link the tabs widget so NodeButtons can add their tabs
         self._log.parent_tabs = self._log_tabs_widget
+        
+        # Retrospectively add the camera node since it was built before the tabs
+        if hasattr(self, '_btn_live_cam') and hasattr(self._btn_live_cam, '_node_log'):
+            self._log_tabs_widget.addTab(self._btn_live_cam._node_log, self._btn_live_cam._label)
         
         ll_lay.addWidget(self._log_tabs_widget)
         tabs.addTab(log_tab, "📋  Console Logs")
@@ -1425,10 +1438,15 @@ class VisionPipelineGUI(QMainWindow):
             json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
 
         # Push ROI to running crop_image node via ros2 param set + reload_roi service
+        if not hasattr(self, '_crop_workers'):
+            self._crop_workers = []
+            
         param_worker = NodeWorker(
             ["ros2", "param", "set", "/crop_image", "roi", f"[{x},{y},{w},{h}]"],
         )
         param_worker.line_out.connect(self._log.append)
+        param_worker.finished.connect(lambda rc, w=param_worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
+        self._crop_workers.append(param_worker)
         param_worker.start()
 
         self._crop_status_lbl.setText(
@@ -1450,10 +1468,15 @@ class VisionPipelineGUI(QMainWindow):
 
     def _crop_reset(self) -> None:
         """Disable crop (pass-through) — call ~/clear_roi service and update config."""
+        if not hasattr(self, '_crop_workers'):
+            self._crop_workers = []
+            
         worker = NodeWorker(
             ["ros2", "service", "call", "/crop_image/clear_roi", "std_srvs/srv/Trigger", "{}"]
         )
         worker.line_out.connect(self._log.append)
+        worker.finished.connect(lambda rc, w=worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
+        self._crop_workers.append(worker)
         worker.start()
 
         self._crop_view.clear_roi()
@@ -1467,18 +1490,7 @@ class VisionPipelineGUI(QMainWindow):
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
-    def _start_live_cam(self) -> None:
-        """Start Kinect camera. Worker stored to prevent thread GC crash."""
-        self._live_cam_worker = NodeWorker(
-            [
-                "bash", "-c",
-                "source /opt/ros/humble/setup.bash && "
-                "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
-                "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
-            ]
-        )
-        self._live_cam_worker.line_out.connect(self._log.append)
-        self._live_cam_worker.start()
+        # Note: _start_live_cam logic is now handled inline by NodeButton
 
     def _trigger_capture(self) -> None:
         """Send capture trigger.
@@ -1622,12 +1634,13 @@ class VisionPipelineGUI(QMainWindow):
 
         method = self._ros_method.currentData()
         method_cmds = {
-            "live":  ["ros2", "launch", "parol6_vision", "live_pipeline.launch.py"],
-            "fake":  ["ros2", "launch", "parol6_vision", "vision_pipeline.launch.py"],
+            "live":  ["ros2", "launch", "parol6_vision", "live_pipeline.launch.py", "use_bag:=false"],
+            "fake":  ["ros2", "launch", "parol6_vision", "vision_pipeline.launch.py", "use_bag:=false"],
             "real":  ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py",
-                      "use_bag:=false"],
+                      "use_bag:=false", f"camera_frame:={self._ros_frame_input.text()}"],
             "vision_moveit": ["ros2", "launch", "parol6_vision",
-                               "vision_moveit.launch.py"],
+                               "vision_moveit.launch.py", "use_bag:=false",
+                               f"camera_frame:={self._ros_frame_input.text()}"],
         }
         cmd = method_cmds.get(method, method_cmds["fake"])
 
