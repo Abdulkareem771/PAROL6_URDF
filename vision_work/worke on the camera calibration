@@ -7,7 +7,13 @@
 	    ```bash
 	    docker exec -it parol6_dev bash
 	    ```
-    
+	# **Vision GUI**		
+		cd /workspace
+		colcon build --packages-select parol6_vision
+		source install/setup.bash
+	
+		python3 /workspace/parol6_vision/scripts/vision_gui.py
+
 2.  #**Start the camera node**:
 	    ```bash
 	    source /opt/kinect_ws/install/setup.bash
