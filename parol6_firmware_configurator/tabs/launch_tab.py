@@ -18,10 +18,11 @@ class LaunchWorker(QThread):
     finished_ok = pyqtSignal()
     finished_err = pyqtSignal(int)
 
-    def __init__(self, script_path: str, args: list[str], parent=None):
+    def __init__(self, script_path: str, args: list[str], env_vars: dict[str, str] = None, parent=None):
         super().__init__(parent)
         self._script_path = script_path
         self._args = args
+        self._env_vars = env_vars or {}
         self._proc: subprocess.Popen | None = None
 
     def run(self) -> None:
@@ -32,6 +33,9 @@ class LaunchWorker(QThread):
         
         try:
             env = os.environ.copy()
+            # Inject GUI custom variables (e.g., serial port)
+            env.update(self._env_vars)
+            
             # Ensure standard binary paths are present just in case the GUI was launched strangely
             if "PATH" in env:
                 env["PATH"] += os.pathsep + "/usr/local/bin:/usr/bin:/bin"
@@ -45,6 +49,7 @@ class LaunchWorker(QThread):
                 text=True,
                 bufsize=1,
                 env=env,
+                start_new_session=True,  # CRITICAL: Run in new process group so os.killpg doesn't kill the GUI!
             )
             for line in self._proc.stdout:
                 line = line.rstrip()
@@ -73,16 +78,27 @@ class LaunchWorker(QThread):
 
     def abort(self) -> None:
         if self._proc and self._proc.poll() is None:
-            # Send SIGINT (Ctrl+C) instead of terminate so the bash script's trap catches it
+            # Send SIGINT (Ctrl+C) to the entire process group so both bash and docker exec catch it.
+            # This unblocks docker exec so the bash script's trap can execute cleanly!
             import signal
-            os.kill(self._proc.pid, signal.SIGINT)
+            try:
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGINT)
+            except ProcessLookupError:
+                pass
+            
             try:
                 self._proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self._proc.terminate()
+                # If the trap hangs, nuke the entire group
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
 
 class LaunchTab(QWidget):
+    launch_requested = pyqtSignal()  # Emitted when the user clicks Launch or Test
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._worker: LaunchWorker | None = None
@@ -217,7 +233,12 @@ class LaunchTab(QWidget):
             self.log_rviz.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
             return
             
-        self._worker = LaunchWorker(script_path, [])
+        self.launch_requested.emit()
+        
+        # Parent (Main Window) can inject environment variables into this dict before the worker starts
+        self.launch_env = {}
+        
+        self._worker = LaunchWorker(script_path, [], env_vars=self.launch_env)
         self._worker.output_rviz.connect(self.log_rviz.append)
         self._worker.output_gazebo.connect(self.log_gazebo.append)
         self._worker.finished_ok.connect(self._on_finished)
@@ -276,7 +297,10 @@ class LaunchTab(QWidget):
         self.log_rviz.append(f"\n[TEST] Launching comprehensive Auto-Test ({shape})...")
         self.log_rviz.append("[TEST] Spawning moveit_controller and waiting for services...")
         
-        self._test_worker = LaunchWorker(script_path, [shape])
+        self.launch_requested.emit()
+        self.launch_env = {}
+        
+        self._test_worker = LaunchWorker(script_path, [shape], env_vars=self.launch_env)
         self._test_worker.output_rviz.connect(self.log_rviz.append)
         
         # Hook up resetting the button when the worker naturally finishes

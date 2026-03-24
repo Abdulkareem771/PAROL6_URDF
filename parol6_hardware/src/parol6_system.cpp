@@ -345,26 +345,51 @@ return_type PAROL6System::read(
   }
   
   try {
-    // Read all available lines to drain the OS serial buffer
-    // and ONLY use the newest one to eliminate accumulated latency.
-    std::string response;
-    std::string latest_valid;
+    // We use a static accumulator to prevent dropping partial packets 
+    // when USB CDC chunks arrive split across the 10ms control cycle.
+    static std::string rx_buffer;
     
-    // Safety break to prevent infinite loops if data streams too fast
-    int max_reads = 100; 
-    while (serial_.IsDataAvailable() && max_reads-- > 0) {
-      std::string temp;
-      serial_.ReadLine(temp, '\n', 2); // 2ms timeout per line
-      if (!temp.empty() && temp[0] == '<') {
-        latest_valid = temp;
+    // Read ALL currently available bytes in the OS hardware buffer (non-blocking)
+    while (serial_.IsDataAvailable()) {
+      // Read 1 char at a time with 0 timeout (instantly returns if empty)
+      try {
+        uint8_t byte;
+        serial_.ReadByte(byte, 0); 
+        rx_buffer += static_cast<char>(byte);
+      } catch (const LibSerial::ReadTimeout &) {
+        break; // OS buffer drained
+      }
+    }
+    
+    // Protect against unbounded memory growth if '\n' is never received
+    if (rx_buffer.size() > 4096) {
+      rx_buffer.clear();
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, "Cleared overflowed RX buffer!");
+    }
+    
+    // Parse all complete lines in the buffer, keeping only the NEWEST valid one
+    std::string latest_valid;
+    size_t newline_pos;
+    while ((newline_pos = rx_buffer.find('\n')) != std::string::npos) {
+      std::string line = rx_buffer.substr(0, newline_pos);
+      rx_buffer.erase(0, newline_pos + 1);
+      
+      // Trim \r if present (CRLF from STM32)
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      
+      // Basic validation format: <ACK,...>
+      if (!line.empty() && line.front() == '<') {
+        latest_valid = line;
       }
     }
     
     if (latest_valid.empty()) {
-      return return_type::OK; // No valid new data this cycle
+      return return_type::OK; // No complete new message this cycle (wait for next chunk)
     }
     
-    response = latest_valid;
+    std::string response = latest_valid;
 
     // DEBUG: Log raw feedback for validation (throttled manually to prevent crash)
     static int log_counter = 0;
@@ -558,6 +583,12 @@ return_type PAROL6System::write(
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
       return return_type::ERROR;
+  }
+
+  // DEBUG: Log the first command sent every 50 updates (1 second at 50Hz, 0.5s at 100Hz)
+  static int tx_log_counter = 0;
+  if (++tx_log_counter % 50 == 0) {
+      RCLCPP_INFO(logger_, "📤 TX Command: %s", buffer);
   }
 
   try {
