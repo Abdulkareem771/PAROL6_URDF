@@ -2,86 +2,78 @@
 """
 Capture_images Node — PAROL6 Vision Pipeline (Stage 1)
 
-Captures matched colour + depth image pairs from the Kinect v2 and saves them
-to ``parol6_vision/data/images_captured/`` (configurable via ``save_dir``).
+Captures matched colour + depth image pairs from the Kinect v2 and publishes
+them to ROS topics instead of saving to disk.
 
 =============================================================================
 CAPTURE MODES
 =============================================================================
 
 keyboard  (default)
-    A background thread reads stdin.  Press ``s`` followed by Enter to save
+    A background thread reads stdin.  Press ``s`` followed by Enter to publish
     one colour/depth pair immediately.  Any other key is ignored.
 
 timed
-    Saves one pair automatically every ``frame_time`` seconds (default 60 s).
-
-=============================================================================
-SAVED FILES
-=============================================================================
-
-Each capture produces two PNG files with the same timestamp token::
-
-    color_<YYYYMMDD_HHMMSS_ffffff>.png   — 8-bit BGR
-    depth_<YYYYMMDD_HHMMSS_ffffff>.png   — 16-bit unsigned (millimetres)
+    Publishes one pair automatically every ``frame_time`` seconds (default 10 s).
 
 =============================================================================
 TOPICS
 =============================================================================
 
 Subscribed
-    /kinect2/qhd/image_color_rect  (sensor_msgs/Image)  — rectified colour
-    /kinect2/qhd/image_depth_rect  (sensor_msgs/Image)  — aligned depth
+    /kinect2/sd/image_color_rect  (sensor_msgs/Image)      — rectified colour
+    /kinect2/sd/image_depth_rect  (sensor_msgs/Image)      — aligned depth
+    /kinect2/sd/camera_info       (sensor_msgs/CameraInfo) — camera intrinsics
+
+Published
+    /vision/captured_image_color   (sensor_msgs/Image)      — captured colour frame
+    /vision/captured_image_depth   (sensor_msgs/Image)      — captured depth frame
+    /vision/captured_camera_info   (sensor_msgs/CameraInfo) — relayed camera info
 
 =============================================================================
 PARAMETERS
 =============================================================================
 
-    save_dir        string   parol6_vision/data/images_captured
     capture_mode    string   keyboard   (keyboard | timed)
-    frame_time      float    60.0       seconds between auto-saves (timed mode)
-    image_encoding  string   bgr8       cv_bridge encoding for colour
+    frame_time      float    10.0       seconds between auto-publishes (timed mode)
 """
 
-import os
 import sys
 import threading
-import time
-from datetime import datetime
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-import cv2
-import numpy as np
+from sensor_msgs.msg import Image, CameraInfo
 import message_filters
 
 
 class CaptureImagesNode(Node):
     """
-    Capture_images — saves matched Kinect2 colour + depth PNG pairs to disk.
+    Capture_images — publishes matched Kinect2 colour + depth frame pairs
+    and relays CameraInfo to vision topics.
 
     Subscribed Topics
     -----------------
-    /kinect2/qhd/image_color_rect : sensor_msgs/Image
-    /kinect2/qhd/image_depth_rect : sensor_msgs/Image
+    /kinect2/sd/image_color_rect : sensor_msgs/Image
+    /kinect2/sd/image_depth_rect : sensor_msgs/Image
+    /kinect2/sd/camera_info      : sensor_msgs/CameraInfo
+
+    Published Topics
+    ----------------
+    /vision/captured_image_color  : sensor_msgs/Image
+    /vision/captured_image_depth  : sensor_msgs/Image
+    /vision/captured_camera_info  : sensor_msgs/CameraInfo
     """
 
     def __init__(self):
         super().__init__('capture_images')
 
         # ── Parameters ───────────────────────────────────────────────
-        self.declare_parameter('save_dir', 'parol6_vision/data/images_captured')
         self.declare_parameter('capture_mode', 'keyboard')   # keyboard | timed
-        self.declare_parameter('frame_time', 60.0)
-        self.declare_parameter('image_encoding', 'bgr8')
+        self.declare_parameter('frame_time', 10.0)
 
-        raw_dir = self.get_parameter('save_dir').value
-        self._save_dir = os.path.expanduser(raw_dir)
         self._capture_mode = self.get_parameter('capture_mode').value
         self._frame_time = self.get_parameter('frame_time').value
-        self._encoding = self.get_parameter('image_encoding').value
 
         # Validate mode
         if self._capture_mode not in ('keyboard', 'timed'):
@@ -91,24 +83,36 @@ class CaptureImagesNode(Node):
             )
             self._capture_mode = 'keyboard'
 
-        # ── Create output directory ───────────────────────────────────
-        os.makedirs(self._save_dir, exist_ok=True)
-        self.get_logger().info(f'Images will be saved to: {self._save_dir}')
-
-        # ── CV Bridge ────────────────────────────────────────────────
-        self._bridge = CvBridge()
-
         # ── Latest received frames (thread-safe via lock) ─────────────
         self._lock = threading.Lock()
         self._latest_color: Image | None = None
         self._latest_depth: Image | None = None
 
-        # ── Synchronized subscribers ─────────────────────────────────
+        # ── Publishers ───────────────────────────────────────────────
+        self._pub_color = self.create_publisher(
+            Image, '/vision/captured_image_color', 10
+        )
+        self._pub_depth = self.create_publisher(
+            Image, '/vision/captured_image_depth', 10
+        )
+        self._pub_camera_info = self.create_publisher(
+            CameraInfo, '/vision/captured_camera_info', 10
+        )
+
+        # ── Synchronized subscribers (colour + depth) ─────────────────
         self._color_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_color_rect'
+            self, Image, '/kinect2/sd/image_color_rect'
         )
         self._depth_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_depth_rect'
+            self, Image, '/kinect2/sd/image_depth_rect'
+        )
+
+        # ── CameraInfo subscriber ─────────────────────────────────────
+        self._camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/kinect2/sd/camera_info',
+            self._camera_info_callback,
+            10
         )
 
         self._sync = message_filters.ApproximateTimeSynchronizer(
@@ -151,7 +155,7 @@ class CaptureImagesNode(Node):
         # In timed mode the timer fires _timed_trigger which calls _do_save.
         if self._capture_mode == 'keyboard' and self._save_requested.is_set():
             self._save_requested.clear()
-            self._do_save(color_msg, depth_msg)
+            self._do_publish(color_msg, depth_msg)
 
     # ─────────────────────────────────────────────────────────────────
     # Keyboard listener thread
@@ -192,41 +196,28 @@ class CaptureImagesNode(Node):
             )
             return
 
-        self._do_save(color_msg, depth_msg)
+        self._do_publish(color_msg, depth_msg)
 
     # ─────────────────────────────────────────────────────────────────
-    # Core save routine
+    # Core publish routine
     # ─────────────────────────────────────────────────────────────────
 
-    def _do_save(self, color_msg: Image, depth_msg: Image):
-        """Convert and write one colour + depth PNG pair."""
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    def _do_publish(self, color_msg: Image, depth_msg: Image):
+        """Publish one captured colour + depth frame pair to vision topics."""
+        self._pub_color.publish(color_msg)
+        self._pub_depth.publish(depth_msg)
+        self.get_logger().info(
+            'Published captured colour + depth frame pair '
+            '→ /vision/captured_image_color, /vision/captured_image_depth'
+        )
 
-        color_path = os.path.join(self._save_dir, f'color_{ts}.png')
-        depth_path = os.path.join(self._save_dir, f'depth_{ts}.png')
+    # ─────────────────────────────────────────────────────────────────
+    # CameraInfo relay
+    # ─────────────────────────────────────────────────────────────────
 
-        try:
-            # ── Colour image ─────────────────────────────────────────
-            cv_color = self._bridge.imgmsg_to_cv2(
-                color_msg, desired_encoding=self._encoding
-            )
-            cv2.imwrite(color_path, cv_color)
-
-            # ── Depth image ──────────────────────────────────────────
-            # Keep native 16-bit (millimetres) so downstream nodes get real depth
-            cv_depth = self._bridge.imgmsg_to_cv2(
-                depth_msg, desired_encoding='passthrough'
-            )
-            # cv2.imwrite supports 16-bit PNG directly
-            cv2.imwrite(depth_path, cv_depth)
-
-            self.get_logger().info(
-                f'[SAVED] color → {color_path}\n'
-                f'        depth → {depth_path}'
-            )
-
-        except Exception as exc:
-            self.get_logger().error(f'Failed to save frame pair: {exc}')
+    def _camera_info_callback(self, msg: CameraInfo):
+        """Relay /kinect2/sd/camera_info to /vision/captured_camera_info."""
+        self._pub_camera_info.publish(msg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

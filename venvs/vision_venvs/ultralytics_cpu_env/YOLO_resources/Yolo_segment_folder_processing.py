@@ -1,3 +1,13 @@
+"""
+Design an interactive GUI with Controls as following:
+→ / D  : Next image
+← / A  : Previous image
+S      : Save current annotated frame
+T      : Auto-save annotated frames for ALL images
+Q / ESC: Quit
+"""
+
+
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -9,8 +19,10 @@ CEXPAND_PX = 8
 # Paths
 # -----------------------------
 PROJECT_DIR = Path(__file__).parent.parent
-DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
-OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results" / "model_v1"
+DATA_DIR = PROJECT_DIR / "data" / "Full_pipeline_vision"
+#DATA_DIR = PROJECT_DIR / "data" / "raw_images_for_models"
+#SINGLE_IMAGE_PATH = PROJECT_DIR / "data" / "raw_images_for_models" / "image_13.jpg"
+OUTPUT_DIR = PROJECT_DIR / "data" / "Presentation_Samples_Results"
 
 MODEL_PATH_v1 = PROJECT_DIR / "yolo_training" / "experiment_12_YOLO_Segmentation" / "weights" / "best.pt"
 MODEL_PATH_v2 = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
@@ -88,13 +100,13 @@ def process_image(image_path):
     contour_obj1 = find_contours(obj_1)
     contour_obj2 = find_contours(obj_2)
     
-    """
+    
     if contour_obj1 is not None:
-        cv2.drawContours(annotated, [contour_obj1], -1, (255,0,0), 2)
+        cv2.drawContours(annotated, [contour_obj1], -1, (0,0,255), 4)
 
     if contour_obj2 is not None:
-        cv2.drawContours(annotated, [contour_obj2], -1, (255,0,0), 2)
-    """
+        cv2.drawContours(annotated, [contour_obj2], -1, (0,0,255), 4)
+    
     
     dil_kernel = cv2.getStructuringElement(
         cv2.MORPH_ELLIPSE,
@@ -109,21 +121,43 @@ def process_image(image_path):
     
     """
     if contour_obj1_exp is not None:
-        cv2.drawContours(annotated, [contour_obj1_exp], -1, (0,255,0), 2)
+        cv2.drawContours(annotated, [contour_obj1_exp], -1, (0, 0, 255), 4)
 
     if contour_obj2_exp is not None:
-        cv2.drawContours(annotated, [contour_obj2_exp], -1, (0,255,0), 2)
+        cv2.drawContours(annotated, [contour_obj2_exp], -1, (0, 0, 255), 4)
     """
 
     #intersection_mask = cv2.bitwise_and(obj_1, obj_2)   # Intersection mask without expand
     intersection_mask = cv2.bitwise_and(obj_1_exp, obj_2_exp)  # Intersection mask with expand
     contour_I = find_contours(intersection_mask)
-
+    
     if contour_I is not None:
         cv2.drawContours(annotated, [contour_I], -1, (0,0,255), -1)
         #cv2.drawContours(annotated, [contour_I], -1, (255,255,0), 3)
-
+    
     return annotated
+
+
+
+def save_all_images(image_paths):
+
+    print("\nStarting automatic saving of all annotated images...\n")
+
+    for i, img_path in enumerate(image_paths):
+
+        annotated = process_image(img_path)
+
+        if annotated is None:
+            continue
+
+        save_path = OUTPUT_DIR / f"{img_path.stem}_annotated.png"
+
+        cv2.imwrite(str(save_path), annotated)
+
+        print(f"[{i+1}/{len(image_paths)}] Saved:", save_path)
+
+    print("\nFinished saving all images.\n")
+
 
 def resize_to_screen(img, max_w=1400, max_h=900):
     """
@@ -139,6 +173,7 @@ def resize_to_screen(img, max_w=1400, max_h=900):
     new_h = int(h * scale)
 
     return cv2.resize(img, (new_w, new_h))
+
 
 cv2.namedWindow("YOLO Segmentation Viewer", cv2.WINDOW_NORMAL)
 # -----------------------------
@@ -165,6 +200,7 @@ while True:
 
     key = cv2.waitKey(0) & 0xFF
 
+    
     # Next image
     if key in [ord('d'), 83]:
         index = min(index + 1, total-1)
@@ -181,6 +217,14 @@ while True:
 
         print("Saved:", save_path)
 
+    # 🔵 Auto-save ALL images
+    elif key == ord('t'):
+
+        confirm = input("Process ALL images? (y/n): ")
+
+        if confirm.lower() == "y":
+            save_all_images(image_paths)
+    
     # Quit
     elif key in [ord('q'), 27]:
         break

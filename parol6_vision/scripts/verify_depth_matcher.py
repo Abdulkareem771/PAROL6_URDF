@@ -31,8 +31,8 @@ class DepthMatcherVerifier(Node):
         
         # Publishers (Inputs to Depth Matcher)
         self.lines_pub = self.create_publisher(WeldLineArray, '/vision/weld_lines_2d', 10)
-        self.depth_pub = self.create_publisher(Image, '/kinect2/qhd/image_depth_rect', 10)
-        self.info_pub = self.create_publisher(CameraInfo, '/kinect2/qhd/camera_info', 10)
+        self.depth_pub = self.create_publisher(Image, '/kinect2/sd/image_depth_rect', 10)
+        self.info_pub = self.create_publisher(CameraInfo, '/kinect2/sd/camera_info', 10)
         
         # Subscriber (Output from Depth Matcher)
         self.result_sub = self.create_subscription(

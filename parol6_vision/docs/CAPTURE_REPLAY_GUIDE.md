@@ -14,9 +14,9 @@ The pipeline is split into two independent stages:
 ┌─────────────────────────────────────────────────────────────────────┐
 │  STAGE 1  –  capture_images node                                    │
 │                                                                     │
-│  /kinect2/qhd/image_color_rect ──┐                                  │
+│  /kinect2/sd/image_color_rect ──┐                                  │
 │                                  ├──► color_<ts>.png               │
-│  /kinect2/qhd/image_depth_rect ──┘    depth_<ts>.png               │
+│  /kinect2/sd/image_depth_rect ──┘    depth_<ts>.png               │
 │                                       (parol6_vision/data/          │
 │                                        images_captured/)            │
 └─────────────────────────────────────────────────────────────────────┘
@@ -28,7 +28,7 @@ The pipeline is split into two independent stages:
 │  color_<ts>.png ──► /vision/captured_image_color  (bgr8)           │
 │  depth_<ts>.png ──► /vision/captured_image_depth  (16UC1)          │
 │                                                                     │
-│  /kinect2/qhd/camera_info (live) ──► /vision/captured_camera_info  │
+│  /kinect2/sd/camera_info (live) ──► /vision/captured_camera_info  │
 │   (re-stamped to match the replay pair timestamp)                   │
 └─────────────────────────────────────────────────────────────────────┘
                         │
@@ -66,7 +66,7 @@ parol6_vision/data/images_captured/
 | | |
 |---|---|
 | **ROS name** | `capture_images` |
-| **Subscribed topics** | `/kinect2/qhd/image_color_rect` · `/kinect2/qhd/image_depth_rect` |
+| **Subscribed topics** | `/kinect2/sd/image_color_rect` · `/kinect2/sd/image_depth_rect` |
 | **Published topics** | *(none)* |
 
 #### Parameters
@@ -98,7 +98,7 @@ The node uses `message_filters.ApproximateTimeSynchronizer` with a `slop` of 100
 | | |
 |---|---|
 | **ROS name** | `read_image` |
-| **Subscribed topics** | `/kinect2/qhd/camera_info` *(cached for re-stamping)* |
+| **Subscribed topics** | `/kinect2/sd/camera_info` *(cached for re-stamping)* |
 | **Published topics** | `/vision/captured_image_color` (bgr8) · `/vision/captured_image_depth` (16UC1) · `/vision/captured_camera_info` (CameraInfo) |
 
 #### Parameters
@@ -123,7 +123,7 @@ This means the node reacts to captures in near-real-time without re-publishing o
 - `/vision/captured_image_depth` — timestamped at replay time
 - `camera_info` — **must also match replay time**
 
-`read_image` subscribes to the live `/kinect2/qhd/camera_info`, copies its intrinsics, and re-publishes them on `/vision/captured_camera_info` with the same `now()` timestamp as the image pair. Without this, the sync never fires because the live `camera_info` timestamps are unrelated to the replayed image timestamps.
+`read_image` subscribes to the live `/kinect2/sd/camera_info`, copies its intrinsics, and re-publishes them on `/vision/captured_camera_info` with the same `now()` timestamp as the image pair. Without this, the sync never fires because the live `camera_info` timestamps are unrelated to the replayed image timestamps.
 
 ---
 
@@ -131,9 +131,9 @@ This means the node reacts to captures in near-real-time without re-publishing o
 
 | Publisher | Topic | Subscriber |
 |---|---|---|
-| Kinect2 driver | `/kinect2/qhd/image_color_rect` | `capture_images` |
-| Kinect2 driver | `/kinect2/qhd/image_depth_rect` | `capture_images` |
-| Kinect2 driver | `/kinect2/qhd/camera_info` | `read_image` *(cached)* |
+| Kinect2 driver | `/kinect2/sd/image_color_rect` | `capture_images` |
+| Kinect2 driver | `/kinect2/sd/image_depth_rect` | `capture_images` |
+| Kinect2 driver | `/kinect2/sd/camera_info` | `read_image` *(cached)* |
 | `read_image` | `/vision/captured_image_color` | `red_line_detector` |
 | `read_image` | `/vision/captured_image_depth` | `depth_matcher` |
 | `read_image` | `/vision/captured_camera_info` | `depth_matcher` |
@@ -234,10 +234,10 @@ parol6_vision/
 
 **Symptom:** `capture_images` saves files, `read_image` publishes them, `red_line_detector` detects lines — but `depth_matcher` is completely silent.
 
-**Root cause:** `depth_matcher` uses `ApproximateTimeSynchronizer` to align three streams. Originally, the third stream was the **live** `/kinect2/qhd/camera_info` (published at 1 Hz by the Kinect2 driver with hardware timestamps). The replayed images carry fresh `now()` timestamps that never match the live `camera_info` timestamps → the synchronizer never fires.
+**Root cause:** `depth_matcher` uses `ApproximateTimeSynchronizer` to align three streams. Originally, the third stream was the **live** `/kinect2/sd/camera_info` (published at 1 Hz by the Kinect2 driver with hardware timestamps). The replayed images carry fresh `now()` timestamps that never match the live `camera_info` timestamps → the synchronizer never fires.
 
 **Fix applied:**
-- `read_image` now subscribes to `/kinect2/qhd/camera_info`, caches the intrinsics, and re-publishes them on `/vision/captured_camera_info` with the **same `now()` timestamp** as the image pair.
+- `read_image` now subscribes to `/kinect2/sd/camera_info`, caches the intrinsics, and re-publishes them on `/vision/captured_camera_info` with the **same `now()` timestamp** as the image pair.
 - `depth_matcher` was updated to subscribe to `/vision/captured_camera_info` instead of the live topic.
 
 All three streams now share an identical timestamp → sync fires every time a pair is published.
@@ -314,7 +314,7 @@ ros2 run parol6_vision capture_images \
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| `capture_images` starts but never saves | Colour or depth topic not publishing | `ros2 topic hz /kinect2/qhd/image_color_rect` |
+| `capture_images` starts but never saves | Colour or depth topic not publishing | `ros2 topic hz /kinect2/sd/image_color_rect` |
 | `read_image` starts but no topics appear | No matched pairs in folder yet | Capture at least one pair first |
 | `read_image` warns "No camera_info received yet" | Kinect2 driver not running | Start `kinect2_bridge` before the pipeline |
 | `red_line_detector` logs nothing | RGB image has no red content | Check lighting / marker colour |

@@ -3,10 +3,42 @@
 # Single persistent container for ALL robot operations
 
 set -e
-GPU_FLAG=""
+GPU_ARGS=()
 if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-    GPU_FLAG="--gpus all"
+    GPU_ARGS+=("--gpus" "all")
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
+    
+    # Add optional GPU/CUDA mounts if they exist
+    # Note: resolve symlinks so Docker gets real files, not dangling symlinks.
+    # Skip paths where host type (file) would conflict with container type (dir) or vice versa.
+    for path in /etc/OpenCL/vendors \
+                /usr/bin/nvidia-smi \
+                /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1 \
+                /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1 \
+                /usr/lib/nvidia-cuda-toolkit \
+                /usr/lib/nvidia \
+                /usr/lib/cuda; do
+        if [ -e "$path" ]; then
+            real_path=$(realpath "$path")
+            GPU_ARGS+=("-v" "$real_path:$path:ro")
+        fi
+    done
+
+    # /usr/bin/nvcc is a file on host but a directory in the image — skip direct mount,
+    # the container's own nvcc is sufficient since nvidia-cuda-toolkit is mounted above.
+
+    for path in /usr/lib/x86_64-linux-gnu/libcudart.so \
+                /usr/lib/x86_64-linux-gnu/libcudart.so.11.0 \
+                /usr/lib/x86_64-linux-gnu/libcudadevrt.a; do
+        if [ -e "$path" ]; then
+            # Resolve symlinks — Docker cannot bind-mount a symlink as a file.
+            # The container image has /host-cuda-libs/<name>/ as a directory,
+            # so we mount the real file *inside* that directory.
+            real_path=$(realpath "$path")
+            dest_dir="/host-cuda-libs/$(basename $path)"
+            GPU_ARGS+=("-v" "$real_path:$dest_dir/$(basename $real_path):ro")
+        fi
+    done
 else
     echo "[INFO] No NVIDIA runtime detected — running CPU only"
 fi
@@ -55,7 +87,7 @@ else
     docker run -d --name $CONTAINER_NAME \
     --network host \
     --privileged \
-    $GPU_FLAG \
+    "${GPU_ARGS[@]}" \
     -e DISPLAY=$DISPLAY \
     -e PATH="/usr/bin:$PATH" \
     -e LD_LIBRARY_PATH="/usr/lib/nvidia:/usr/lib/nvidia-cuda-toolkit/lib64:/host-cuda-libs:$LD_LIBRARY_PATH" \
@@ -64,21 +96,10 @@ else
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
+    -e XDG_RUNTIME_DIR=/tmp/runtime-root \
     -v $(pwd):/workspace \
-    -v /home/kareem:/host_home:ro \
+    -v $HOME:/host_home:ro \
     -v /dev:/dev \
-    -v /etc/OpenCL/vendors:/etc/OpenCL/vendors:ro \
-    -v /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro \
-    -v /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro \
-    -v /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1:ro \
-    -v /usr/bin/nvcc:/usr/bin/nvcc:ro \
-    -v /usr/lib/nvidia-cuda-toolkit:/usr/lib/nvidia-cuda-toolkit:ro \
-    -v /usr/lib/nvidia:/usr/lib/nvidia:ro \
-    -v /usr/lib/cuda:/usr/lib/cuda:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudart.so:/host-cuda-libs/libcudart.so:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudart.so.11.0:/host-cuda-libs/libcudart.so.11.0:ro \
-    -v /usr/lib/x86_64-linux-gnu/libcudadevrt.a:/host-cuda-libs/libcudadevrt.a:ro \
-    -v /usr/share/cmake-3.22/Modules:/host-cmake:ro \
     -w /workspace \
     --shm-size=512m \
     $IMAGE_NAME \

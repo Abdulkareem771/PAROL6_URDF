@@ -19,7 +19,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
-CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
+CEXPAND_PX    = 8  # pixels to dilate each contour mask outward
 
 
 # --- Configuration ---
@@ -28,7 +28,7 @@ CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
 PROJECT_DIR = Path(__file__).parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_data"
 OUTPUT_DIR = PROJECT_DIR / "data" / "YOLO_Segmentation_results"
-SINGLE_IMAGE = PROJECT_DIR / "data" / "YOLO_Segmentation_data" / "test" / "6.jpg"
+SINGLE_IMAGE = PROJECT_DIR / "data" / "raw_images_for_models" / "13.jpg"
 
 # Model paths
 MODEL_PATH = PROJECT_DIR / "yolo_segmentation_models_results" / "experiment_2" / "weights" / "best.pt"
@@ -173,6 +173,7 @@ plt.show()
 
 
 """
+"""
 # 6. GUI Display Section
 plt.figure(figsize=(20, 20))
 
@@ -198,6 +199,23 @@ plt.axis('off')
 plt.subplot(1, 4, 4)
 plt.title("Seam Path")
 plt.imshow(img_annotated)
+plt.axis('off')
+
+plt.tight_layout()
+plt.show()
+"""
+
+
+# Subplot 2: G Matrix (Green Mask)
+plt.subplot(1, 2, 1)
+plt.title("Piece 1 Mask")
+plt.imshow(obj_1, cmap='gray')
+plt.axis('off')
+
+# Subplot 3: R Matrix (Red Object)
+plt.subplot(1, 2, 2)
+plt.title("Piece 2 Mask")
+plt.imshow(obj_2, cmap='gray')
 plt.axis('off')
 
 plt.tight_layout()

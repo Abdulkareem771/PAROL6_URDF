@@ -56,7 +56,8 @@ WORKDIR /workspace
 
 # Source ROS 2 and Kinect workspace automatically
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
-    echo "source /opt/kinect_ws/install/setup.bash" >> ~/.bashrc
+    echo "source /opt/kinect_ws/install/setup.bash" >> ~/.bashrc && \
+    echo "source /workspace/install/setup.bash" >> ~/.bashrc
 
 CMD ["/bin/bash"]
 

@@ -55,8 +55,8 @@ If the test fails:
 2. **Topic Mismatch**: Check if `ros2 topic list` shows:
    - `/vision/weld_lines_2d`
    - `/vision/weld_lines_3d`
-   - `/kinect2/qhd/image_depth_rect`
-   - `/kinect2/qhd/camera_info`
+   - `/kinect2/sd/image_depth_rect`
+   - `/kinect2/sd/camera_info`
 3. **Synchronization**: The test script automatically timestamps messages. If latency is high, `message_filters` might drop messages.
 
 ## Cleanup

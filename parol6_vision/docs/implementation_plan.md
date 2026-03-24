@@ -207,7 +207,7 @@ parol6_vision/
 **ROS Interface:**
 ```python
 # Subscribers
-/kinect2/qhd/image_color_rect   # sensor_msgs/Image
+/kinect2/sd/image_color_rect   # sensor_msgs/Image
 
 # Publishers
 /vision/weld_lines_2d                 # parol6_msgs/WeldLineArray (semantic output)
@@ -272,8 +272,8 @@ parol6_vision/
 ```python
 # Subscribers (synchronized)
 /vision/weld_lines_2d            # parol6_msgs/WeldLineArray
-/kinect2/qhd/image_depth_rect    # sensor_msgs/Image (depth in mm)
-/kinect2/qhd/camera_info         # sensor_msgs/CameraInfo
+/kinect2/sd/image_depth_rect    # sensor_msgs/Image (depth in mm)
+/kinect2/sd/camera_info         # sensor_msgs/CameraInfo
 
 # Publishers
 /vision/weld_lines_3d            # parol6_msgs/WeldLine3DArray \u2190 Custom!
@@ -418,7 +418,7 @@ Explicitly documenting the planar surface assumption demonstrates scientific mat
 # Subscribers
 /vision/welding_path             # nav_msgs/Path
 # Optional for collision avoidance:
-# /kinect2/qhd/points            # sensor_msgs/PointCloud2  
+# /kinect2/sd/points            # sensor_msgs/PointCloud2  
 
 # Action Clients
 /move_group                      # moveit_msgs/action/MoveGroup
@@ -613,7 +613,7 @@ def generate_launch_description():
             name='red_line_detector',
             parameters=[os.path.join(pkg_share, 'config', 'detection_params.yaml')],
             remappings=[
-                ('/image_raw', '/kinect2/qhd/image_color_rect')
+                ('/image_raw', '/kinect2/sd/image_color_rect')
             ]
         ),
         
@@ -929,9 +929,9 @@ Run command:
 ```bash
 # First record test bag with required topics
 ros2 bag record \
-  /kinect2/qhd/image_color_rect \
-  /kinect2/qhd/image_depth_rect \
-  /kinect2/qhd/camera_info \
+  /kinect2/sd/image_color_rect \
+  /kinect2/sd/image_depth_rect \
+  /kinect2/sd/camera_info \
   -o test_red_line_bag
 
 # Then run integration test
@@ -1113,7 +1113,7 @@ ros2 topic echo /vision/welding_path --field header.stamp
 >    - Downstream nodes are model-agnostic
 
 **YOLO Node Requirements:**
-- Subscribe to same image topic (`/kinect2/qhd/image_color_rect`)
+- Subscribe to same image topic (`/kinect2/sd/image_color_rect`)
 - Publish `parol6_msgs/WeldLineArray` with class ID "weld_seam" (instead of "red_line")
 - Extract line geometry from YOLO bounding boxes or segmentation masks
 - Convert to ordered pixel points along detected seam
