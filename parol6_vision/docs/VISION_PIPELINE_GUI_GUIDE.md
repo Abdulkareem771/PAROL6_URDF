@@ -124,8 +124,15 @@ raw capture and the rest of the pipeline:
 /vision/captured_image_raw  →  [crop_image_node]  →  /vision/captured_image_color
 ```
 
-It loads its ROI from `~/.parol6/crop_config.json` on startup.  
+It loads its config from `~/.parol6/crop_config.json` on startup.
 If no config exists the node runs in **pass-through** mode (full frame).
+
+Two operational modes:
+
+| Mode | Behaviour | Effect on downstream |
+|------|-----------|---------------------|
+| **Mask** *(default)* | Pixels outside the polygon are filled with the mask colour | Resolution unchanged — depth coords valid ✅ |
+| **Crop** *(legacy)* | Image is cut to the polygon's bounding box | Resolution changes — depth coords shift ⚠️ |
 
 ---
 
@@ -214,27 +221,49 @@ Run complete launch files instead of individual nodes:
 
 ### Crop Image Tab
 
-Interactive ROI definition for the crop_image_node.
+Interactive workspace mask / ROI definition for the crop_image_node.
 
-**Left panel** — shows the live raw frame from `/vision/captured_image_raw` with the saved ROI overlaid (blue dashed box).
+**Left panel** — live raw frame from `/vision/captured_image_raw` with the saved polygon overlaid (blue dashed bounding box).  
+**Right panel** — live masked/cropped output from `/vision/captured_image_color`.
 
-**Right panel** — shows the live cropped output from `/vision/captured_image_color`.
+#### Drawing a polygon
 
-**Drawing an ROI:**
-1. Left-click to place polygon vertices on the left panel image
-2. Right-click (or click near the first point) to close the polygon
-3. The bounding box of the polygon becomes the ROI (shown as a yellow dashed box)
-4. Click **✅ Apply & Save** to persist and push to `/crop_image`
+1. Left-click on the left panel to place vertices
+2. Right-click **or** click near the first point to close the polygon (≥ 2 pts to close)
+3. The polygon is shown in yellow; its bounding box is shown as a dashed outline
+4. Press **Escape** to cancel and start over
+
+#### Mask vs Crop mode
+
+| Mode | What the node publishes | Depth coordinates |
+|------|------------------------|------------------|
+| 🛡 **Mask** *(recommended)* | Full-resolution image; pixels outside polygon filled with the mask colour | Preserved ✅ — depth_matcher works correctly |
+| ✂️ **Crop** *(legacy)* | Smaller image cropped to the polygon's bounding box | Shifted ⚠️ — use only if downstream nodes don't need absolute coords |
+
+#### Mask fill colour
+
+The mask fill colour is picked independently of the polygon:
+
+| Control | Action |
+|---------|--------|
+| **Coloured swatch** (e.g. `■`) | Click to open a colour picker dialog |
+| **🔬 Eyedropper** | Click the button, then click any pixel on the left panel image — the sampled colour becomes the fill |
+
+Choose a colour that blends into the background so the AI/colour-mode node is not confused by the masked region (e.g. match the table or floor colour).
+
+#### Control bar buttons
 
 | Button | Action |
 |--------|--------|
-| **🗑 Clear ROI** | Discard the drawn shape (does not touch the saved config) |
-| **✅ Apply & Save** | Write `~/.parol6/crop_config.json`, push ROI to node via `SetParameters`, then trigger `~/reload_roi` |
-| **↩ Reset (Pass-through)** | Call `~/clear_roi` service → node disables crop and republishes the full frame |
+| **🗑 Clear** | Discard the drawn polygon (does not touch the saved config) |
+| **✅ Apply & Save** | Write `~/.parol6/crop_config.json`, call `~/reload_roi` service (mask mode) or push via `SetParameters` (crop mode) |
+| **↩ Reset (Pass-through)** | Call `~/clear_roi` service → node disables masking and republishes the full frame |
 
-> If the Crop Image Node was just started when you click Apply & Save, the GUI
-> will retry every 500 ms for up to 4 seconds until the node's parameter service is
-> ready before sending the ROI.
+> **Persistence:** The config is written to disk before the service call. If the node
+> restarts it automatically reloads the last saved polygon and fill colour.
+
+> **Retry logic:** If the node was just started when you click Apply & Save, the GUI
+> retries every 500 ms for up to 4 s until the service is ready.
 
 ---
 
@@ -304,10 +333,10 @@ One sub-tab per node plus an **All Nodes** tab that receives everything.
 
 | Service | Type | Called by |
 |---------|------|-----------|
-| `/crop_image/set_parameters` | `rcl_interfaces/srv/SetParameters` | GUI Apply & Save |
-| `/crop_image/reload_roi` | `std_srvs/srv/Trigger` | GUI (after Apply & Save) |
-| `/crop_image/clear_roi` | `std_srvs/srv/Trigger` | GUI Reset |
-| `/moveit_controller/execute_welding_path` | `std_srvs/srv/Trigger` | GUI Send Path |
+| `/crop_image/reload_roi` | `std_srvs/srv/Trigger` | GUI — Apply & Save (mask mode + belt-and-suspenders for crop mode) |
+| `/crop_image/clear_roi` | `std_srvs/srv/Trigger` | GUI — Reset (Pass-through) |
+| `/crop_image/set_parameters` | `rcl_interfaces/srv/SetParameters` | GUI — Apply & Save (crop/legacy mode only) |
+| `/moveit_controller/execute_welding_path` | `std_srvs/srv/Trigger` | GUI — Send Path |
 
 ### ROS Parameters — `/crop_image` node
 
@@ -324,11 +353,28 @@ One sub-tab per node plus an **All Nodes** tab that receives everything.
 
 ### Crop config — `~/.parol6/crop_config.json`
 
-Written by the GUI when you click **✅ Apply & Save**, and read by `crop_image_node` on startup and on `~/reload_roi`.
+Written by the GUI on **Apply & Save**, read by `crop_image_node` on startup and on `~/reload_roi`.
+
+#### Mask mode (recommended)
 
 ```json
 {
   "enabled": true,
+  "mode": "mask",
+  "polygon": [[120, 80], [760, 80], [760, 480], [120, 480]],
+  "mask_color": [180, 160, 140]
+}
+```
+
+- `polygon` — list of `[x, y]` pairs in **original image pixel coords** (not scaled)
+- `mask_color` — `[R, G, B]` fill for the masked region; `[0,0,0]` = black (default)
+
+#### Crop mode (legacy bbox)
+
+```json
+{
+  "enabled": true,
+  "mode": "crop",
   "x": 120,
   "y": 80,
   "width": 640,
@@ -513,6 +559,87 @@ kill -INT <pid>
 # Or by name
 pkill -INT -f kinect2_bridge_node
 ```
+
+---
+
+### Mask not applied automatically on second capture
+
+**Symptom:** First capture after Apply & Save shows masking; subsequent captures show the full frame.
+
+**Explanation:** `crop_image_node` applies the mask to **every** message it receives on
+`/vision/captured_image_raw`. If new captures are not being masked, the node likely:
+
+- Was not yet running when later captures arrived (restarted between captures)
+- Lost the config because `~/clear_roi` was called accidentally
+
+**Fix:**
+```bash
+# Confirm node is running and config is loaded
+ros2 node list | grep crop_image
+cat ~/.parol6/crop_config.json    # Check 'enabled': true and polygon present
+
+# Re-trigger reload
+ros2 service call /crop_image/reload_roi std_srvs/srv/Trigger
+
+# If needed, force republish a frame
+ros2 service call /crop_image/reload_roi std_srvs/srv/Trigger
+```
+
+---
+
+### Optimizer / color-mode node sees objects outside the masked region
+
+**Symptom:** Path optimizer draws bounding boxes in the black (masked) region; colour mode detects colours that should be blocked.
+
+**Explanation:** Both `yolo_segment` and `color_mode` subscribe to `/vision/captured_image_color`,
+which is the **masked** output. If they receive an unmasked image it means one of:
+
+1. **crop_image_node not running** — mode nodes receive nothing (stale frame) or fall back to the raw topic.
+2. **Mode node started before crop node** — the mode node may be subscribed but the crop node hadn't published yet.
+
+**Diagnosis:**
+```bash
+ros2 topic hz /vision/captured_image_color   # Should be > 0 Hz after capture
+ros2 topic info /vision/captured_image_color # Publisher should be /crop_image
+```
+
+**Fix:**
+1. Start Crop Image Node **before** or at the same time as the mode node.
+2. After Apply & Save, trigger another capture so the masked frame flows through.
+3. Verify the right panel of the Crop tab shows the black background — that confirms masking is active.
+
+---
+
+### Mask fill colour not applied (background still black)
+
+**Symptom:** Custom fill colour was set and Applied, but the right panel still shows black background.
+
+**Checks:**
+```bash
+cat ~/.parol6/crop_config.json | python3 -m json.tool   # Look for 'mask_color' field
+```
+
+If `mask_color` is missing or `[0,0,0]`, the config was saved before the colour was picked or
+the node is running an old cached binary.
+
+**Fix:**
+1. Pick the colour in the GUI **before** clicking Apply & Save (the swatch must show the chosen colour).
+2. Rebuild to pick up the node update:
+   ```bash
+   colcon build --packages-select parol6_vision
+   source install/setup.bash
+   ```
+3. Restart the Crop Image Node and click Apply & Save again.
+
+---
+
+### Eyedropper picks the wrong colour
+
+**Symptom:** After clicking the 🔬 Eyedropper and clicking the image, the colour swatch shows an unexpected colour.
+
+- The eyedropper samples the **original image pixel** (not the scaled/displayed pixel), so it is accurate even when the display is resized.
+- Make sure to click on the **left panel** (full raw frame), not the right panel.
+- If the panel shows a stale frame, trigger a new capture first.
 
 ---
 

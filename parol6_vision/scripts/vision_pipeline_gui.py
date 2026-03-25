@@ -310,7 +310,7 @@ class TopicPreviewLabel(QLabel):
         scale = min(lw / w, lh / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         frame_small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(frame_small.data, nw, nh, ch * nw, QImage.Format_RGB888)
+        qimg = QImage(frame_small.data, nw, nh, frame_small.strides[0], QImage.Format_RGB888)
         self.setPixmap(QPixmap.fromImage(qimg))
         self.setText("")
 
@@ -353,7 +353,7 @@ class ManualCanvas(QGraphicsView):
         self._scene.clear()
         self._base_img = rgb
         h, w = rgb.shape[:2]
-        qimg = QImage(rgb.data, w, h, w * 3, QImage.Format_RGB888)
+        qimg = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888).copy()
         pix = QPixmap.fromImage(qimg)
         self._scene.addPixmap(pix).setZValue(0)
         self._mask_arr = np.zeros((h, w, 4), dtype=np.uint8)
@@ -402,7 +402,7 @@ class ManualCanvas(QGraphicsView):
         if self._mask_arr is None or self._mask_item is None:
             return
         h, w = self._mask_arr.shape[:2]
-        qimg = QImage(self._mask_arr.data, w, h, w * 4, QImage.Format_RGBA8888)
+        qimg = QImage(self._mask_arr.data, w, h, self._mask_arr.strides[0], QImage.Format_RGBA8888)
         self._mask_item.setPixmap(QPixmap.fromImage(qimg))
 
     def mousePressEvent(self, ev) -> None:
@@ -615,7 +615,8 @@ class CropROIView(QLabel):
         roi_changed(tuple)   emitted when user releases mouse with (x,y,w,h) in
                              image pixel coordinates.
     """
-    roi_changed = Signal(tuple)
+    roi_changed  = Signal(tuple)   # (x, y, w, h) bounding box in image coords
+    pixel_sampled = Signal("QColor")  # emitted when user picks a color with eyedropper
 
     def __init__(self, ros_node=None, bridge=None, parent=None):
         super().__init__(parent)
@@ -655,6 +656,8 @@ class CropROIView(QLabel):
             self._refresh_timer.start(100)
 
         self._latest_frame: Optional[np.ndarray] = None    # RGB numpy
+        self._cv_frame:     Optional[np.ndarray] = None    # BGR numpy (for eyedropper)
+        self._eyedropper_mode: bool = False
 
     # ── ROS callback ─────────────────────────────────────────────────
 
@@ -665,6 +668,8 @@ class CropROIView(QLabel):
             frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
             self._latest_frame = frame
             self._img_size = (frame.shape[1], frame.shape[0])
+            # Keep a BGR copy for eyedropper pixel sampling
+            self._cv_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         except Exception:
             pass
 
@@ -680,7 +685,7 @@ class CropROIView(QLabel):
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
         small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(small.data, nw, nh, ch * nw, QImage.Format_RGB888)
+        qimg = QImage(small.data, nw, nh, small.strides[0], QImage.Format_RGB888)
         self._pix = QPixmap.fromImage(qimg)
         self.update()
 
@@ -768,6 +773,22 @@ class CropROIView(QLabel):
 
     def mousePressEvent(self, ev) -> None:
         self.setFocus() # ensure we get keyboard events
+
+        # ── Eyedropper mode: sample pixel colour ───────────────────────────
+        if getattr(self, "_eyedropper_mode", False) and ev.button() == Qt.LeftButton:
+            if self._pix is not None and self._cv_frame is not None:
+                ix, iy = self._label_to_image(ev.pos().x(), ev.pos().y())
+                ih, iw = self._cv_frame.shape[:2]
+                ix = max(0, min(ix, iw - 1))
+                iy = max(0, min(iy, ih - 1))
+                px = self._cv_frame[iy, ix]  # BGR
+                color = QColor(int(px[2]), int(px[1]), int(px[0]))
+                self._eyedropper_mode = False
+                self.setCursor(Qt.ArrowCursor)
+                self.pixel_sampled.emit(color)
+            return
+
+        # ── Normal polygon drawing ──────────────────────────────────────
         if ev.button() == Qt.LeftButton and self._pix is not None:
             # If we already have a calculated ROI, start a new one
             if self._roi_px is not None:
@@ -1537,6 +1558,38 @@ class VisionPipelineGUI(QMainWindow):
         )
         ctrl_bar.addWidget(self._crop_mode_combo)
 
+        ctrl_bar.addSpacing(6)
+
+        # ── Mask colour picker ────────────────────────────────────────
+        # Default mask fill: black
+        self._crop_mask_color = QColor(0, 0, 0)
+
+        ctrl_bar.addWidget(QLabel("Mask fill:"))
+
+        # Colour swatch — click to open QColorDialog
+        self._color_swatch = QPushButton()
+        self._color_swatch.setFixedSize(28, 22)
+        self._color_swatch.setToolTip(
+            "Click to choose the mask fill colour.\n"
+            "Default: black (RGB 0,0,0)."
+        )
+        self._color_swatch.clicked.connect(self._on_pick_color)
+        self._update_color_swatch()
+        ctrl_bar.addWidget(self._color_swatch)
+
+        # Eyedropper — sample a pixel from the left panel
+        eyedrop_btn = QPushButton("🔬")
+        eyedrop_btn.setFixedSize(28, 22)
+        eyedrop_btn.setToolTip(
+            "Pick fill colour from the image.\n"
+            "Click, then click any pixel on the left panel."
+        )
+        eyedrop_btn.clicked.connect(self._on_eyedropper_activate)
+        ctrl_bar.addWidget(eyedrop_btn)
+
+        # Connect the crop view's pixel_sampled signal
+        self._crop_view.pixel_sampled.connect(self._on_color_sampled)
+
         ctrl_bar.addSpacing(8)
 
         # Polygon vertex readout
@@ -1581,6 +1634,86 @@ class VisionPipelineGUI(QMainWindow):
         self._crop_load_existing_config()
 
         return tab
+
+    # ── Mask colour helpers ───────────────────────────────────────────────
+
+    def _update_color_swatch(self) -> None:
+        """Repaint the colour swatch button to show the current fill colour."""
+        c = self._crop_mask_color
+        hex_bg = c.name()          # e.g. '#000000'
+        # Use white or black text depending on brightness
+        lum = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
+        fg = "#000000" if lum > 128 else "#ffffff"
+        self._color_swatch.setStyleSheet(
+            f"background:{hex_bg}; color:{fg}; border:1px solid {C['border']};"
+            " border-radius:3px;"
+        )
+        self._color_swatch.setToolTip(
+            f"Mask fill colour: {hex_bg} (RGB {c.red()},{c.green()},{c.blue()}).\n"
+            "Click to change."
+        )
+
+    def _on_pick_color(self) -> None:
+        """Open a NON-MODAL QColorDialog so the panel stays visible and undimmed.
+
+        Being non-modal means:
+          • The image is not dimmed — you can clearly see the background colour.
+          • You can drag the dialog anywhere to expose the workspace.
+          • Use the 🔬 Eyedropper for pixel-accurate sampling straight from the image.
+        """
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtCore import Qt
+
+        if hasattr(self, "_color_dialog") and self._color_dialog is not None:
+            # Bring existing dialog to front instead of opening a second one
+            self._color_dialog.raise_()
+            self._color_dialog.activateWindow()
+            return
+
+        dlg = QColorDialog(self._crop_mask_color, self)
+        dlg.setWindowTitle("Choose mask fill colour")
+        dlg.setWindowModality(Qt.NonModal)   # ← image stays fully visible
+        dlg.setOption(QColorDialog.ShowAlphaChannel, False)
+
+        # Wire up result signals
+        def _accepted():
+            color = dlg.currentColor()
+            if color.isValid():
+                self._crop_mask_color = color
+                self._update_color_swatch()
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] Colour set to '
+                    f'{color.name()} (RGB {color.red()},{color.green()},{color.blue()})</span>'
+                )
+            self._color_dialog = None
+
+        def _rejected():
+            self._color_dialog = None
+
+        dlg.accepted.connect(_accepted)
+        dlg.rejected.connect(_rejected)
+        dlg.finished.connect(lambda _: setattr(self, "_color_dialog", None))
+
+        self._color_dialog = dlg
+        dlg.show()
+
+    def _on_eyedropper_activate(self) -> None:
+        """Toggle eyedropper mode: next click on the left panel samples a pixel."""
+        self._crop_view._eyedropper_mode = True
+        self._crop_view.setCursor(Qt.CrossCursor)
+        self._log.append(
+            f'<span style="color:{C["text2"]}">[Crop] Eyedropper active — '
+            'click a pixel on the left panel to sample its colour.</span>'
+        )
+
+    def _on_color_sampled(self, color: "QColor") -> None:
+        """Receive the colour sampled by the eyedropper and update the swatch."""
+        self._crop_mask_color = color
+        self._update_color_swatch()
+        self._log.append(
+            f'<span style="color:{C["text2"]}">[Crop] Sampled colour: '
+            f'{color.name()} (RGB {color.red()},{color.green()},{color.blue()})</span>'
+        )
 
     def _crop_load_existing_config(self) -> None:
         """Read ~/.parol6/crop_config.json and update status label + mode selector."""
@@ -1684,7 +1817,10 @@ class VisionPipelineGUI(QMainWindow):
                     "Need at least 3 polygon vertices for mask mode.")
                 return
 
-            cfg = {"enabled": True, "mode": "mask", "polygon": polygon}
+            cfg = {"enabled": True, "mode": "mask", "polygon": polygon,
+                   "mask_color": [self._crop_mask_color.red(),
+                                  self._crop_mask_color.green(),
+                                  self._crop_mask_color.blue()]}
             with open(cfg_path, "w") as f:
                 json.dump(cfg, f, indent=2)
             self._log.append(

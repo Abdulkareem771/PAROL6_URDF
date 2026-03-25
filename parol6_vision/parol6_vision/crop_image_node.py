@@ -23,11 +23,12 @@ Behaviour
 
 Config file format (~/.parol6/crop_config.json)
 -------------------------------------------------
-Mask mode (recommended):
+Mask mode (recommended — default for new configs):
 {
   "enabled": true,
   "mode": "mask",
-  "polygon": [[x1,y1], [x2,y2], ...]   # image pixel coordinates
+  "polygon": [[x1,y1], [x2,y2], ...],   # image pixel coordinates
+  "mask_color": [0, 0, 0]               # RGB fill for masked region (default = black)
 }
 
 Crop mode (legacy / backward-compat):
@@ -41,7 +42,6 @@ Crop mode (legacy / backward-compat):
 
 from __future__ import annotations
 import json
-import os
 from pathlib import Path
 
 import numpy as np
@@ -50,10 +50,8 @@ import cv2
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import Trigger
 from cv_bridge import CvBridge
-
-from rcl_interfaces.msg import ParameterType
 from rclpy.parameter import Parameter
 
 _DEFAULT_CONFIG = Path.home() / ".parol6" / "crop_config.json"
@@ -96,10 +94,11 @@ class CropImageNode(Node):
         self._cfg_path  = Path(self.get_parameter("config_path").value)
 
         # ── State ─────────────────────────────────────────────────────
-        self._enabled  = False
-        self._mode:    str = "mask"          # "mask" or "crop"
-        self._polygon: list | None = None    # [[x,y],...] image coords (mask mode)
-        self._roi:     tuple | None = None   # (x,y,w,h) pixel coords (crop mode)
+        self._enabled    = False
+        self._mode:      str  = "mask"      # "mask" or "crop"
+        self._polygon:   list | None = None # [[x,y],...] image coords (mask mode)
+        self._roi:       tuple | None = None # (x,y,w,h) pixel coords (crop mode)
+        self._mask_color: list = [0, 0, 0]  # RGB fill color for masked region
 
         self._bridge    = CvBridge()
         self._latest_msg: Image | None = None
@@ -170,11 +169,10 @@ class CropImageNode(Node):
 
     def _apply_polygon_mask(self, cv_img: np.ndarray, polygon: list) -> np.ndarray:
         """
-        Zero out all pixels outside the polygon.
+        Fill all pixels outside the polygon with self._mask_color.
         Output has the SAME shape as input — depth coordinates are preserved.
         """
         ih, iw = cv_img.shape[:2]
-        # Clamp polygon to image bounds
         pts = np.array(
             [[max(0, min(x, iw - 1)), max(0, min(y, ih - 1))] for x, y in polygon],
             dtype=np.int32,
@@ -182,13 +180,25 @@ class CropImageNode(Node):
         mask = np.zeros((ih, iw), dtype=np.uint8)
         cv2.fillPoly(mask, [pts], 255)
 
+        # Build the fill color array matching the image shape
+        r, g, b = self._mask_color
         if cv_img.ndim == 3:
+            channels = cv_img.shape[2]
+            if channels == 3:
+                # BGR order for OpenCV images
+                fill = np.full_like(cv_img, [b, g, r], dtype=cv_img.dtype)
+            else:
+                # Fallback for other channel counts
+                fill = np.zeros_like(cv_img, dtype=cv_img.dtype)
             mask3 = mask[:, :, np.newaxis]
-            result = np.where(mask3 == 255, cv_img, 0).astype(cv_img.dtype)
+            result = np.where(mask3 == 255, cv_img, fill)
         else:
-            result = np.where(mask == 255, cv_img, 0).astype(cv_img.dtype)
+            # Grayscale: use luminance of mask color
+            lum = int(0.299 * r + 0.587 * g + 0.114 * b)
+            fill = np.full_like(cv_img, lum, dtype=cv_img.dtype)
+            result = np.where(mask == 255, cv_img, fill)
 
-        return result
+        return result.astype(cv_img.dtype)
 
     def _apply_crop(self, cv_img: np.ndarray, roi: tuple) -> np.ndarray:
         """Rectangular crop to roi (x, y, w, h). Changes image dimensions."""
@@ -217,7 +227,11 @@ class CropImageNode(Node):
                 cfg = json.load(f)
 
             self._enabled = bool(cfg.get("enabled", False))
-            self._mode    = cfg.get("mode", "crop")  # default "crop" for old configs
+            # Default to "mask" for new configs; "crop" only if explicitly set.
+            # Old configs without a "mode" field are assumed to be crop (they
+            # won't have a "polygon" key, so mask would fail gracefully anyway).
+            self._mode = cfg.get("mode", "mask" if "polygon" in cfg else "crop")
+            self._mask_color = cfg.get("mask_color", [0, 0, 0])
 
             if self._enabled:
                 if self._mode == "mask":
@@ -225,9 +239,22 @@ class CropImageNode(Node):
                     if len(raw_poly) >= 3:
                         self._polygon = [[int(x), int(y)] for x, y in raw_poly]
                         self._roi = None
+                    elif "x" in cfg:
+                        # Graceful fallback: polygon missing but bbox present —
+                        # convert bbox to 4-corner polygon so mask mode still works.
+                        bx, by = int(cfg["x"]), int(cfg["y"])
+                        bw, bh = int(cfg["width"]), int(cfg["height"])
+                        self._polygon = [
+                            [bx, by], [bx + bw, by],
+                            [bx + bw, by + bh], [bx, by + bh]
+                        ]
+                        self._roi = None
+                        self.get_logger().warning(
+                            "Mask mode with no polygon — falling back to bbox as rectangle mask."
+                        )
                     else:
                         self.get_logger().warning(
-                            "Mask mode but polygon has < 3 points — disabling."
+                            "Mask mode but no polygon and no bbox — disabling."
                         )
                         self._enabled = False
                         self._polygon = None
@@ -258,7 +285,11 @@ class CropImageNode(Node):
     def _save_config(self) -> None:
         """Persist current config to JSON file."""
         self._cfg_path.parent.mkdir(parents=True, exist_ok=True)
-        cfg: dict = {"enabled": self._enabled, "mode": self._mode}
+        cfg: dict = {
+            "enabled":    self._enabled,
+            "mode":       self._mode,
+            "mask_color": self._mask_color,
+        }
         if self._polygon:
             cfg["polygon"] = self._polygon
         if self._roi:
