@@ -1,4 +1,4 @@
-<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+String value is: <!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
      Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
 <robot
@@ -399,24 +399,6 @@
       velocity="3" />
   </joint>
 
-  <!-- Dummy link representing the Tool Center Point (TCP) / Gripper Tip -->
-  <link name="tcp_link">
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <sphere radius="0.01"/>
-      </geometry>
-      <material name="red">
-        <color rgba="1.0 0.0 0.0 1.0"/>
-      </material>
-    </visual>
-  </link>
-  <joint name="tcp_joint" type="fixed">
-    <origin xyz="0 0 -0.075" rpy="0 0 0" /> <!-- Adjust this to the tip of the L6 shaft -->
-    <parent link="L6"/>
-    <child link="tcp_link"/>
-  </joint>
-
 
 <ros2_control name="IgnitionSystem" type="system">
     <hardware>
@@ -505,3 +487,4 @@
   </gazebo>
 
 </robot>
+

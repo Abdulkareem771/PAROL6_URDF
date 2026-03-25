@@ -233,10 +233,10 @@ class LaunchTab(QWidget):
             self.log_rviz.append(f"[LAUNCH] ❌ Error: Cannot find script {script_path}")
             return
             
-        self.launch_requested.emit()
-        
         # Parent (Main Window) can inject environment variables into this dict before the worker starts
         self.launch_env = {}
+        
+        self.launch_requested.emit()
         
         self._worker = LaunchWorker(script_path, [], env_vars=self.launch_env)
         self._worker.output_rviz.connect(self.log_rviz.append)
@@ -266,7 +266,7 @@ class LaunchTab(QWidget):
             self.log_rviz.append("[LAUNCH] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
         
         # Send pkill via docker exec if on host, or directly if in container
-        cmd = "pkill -9 -f 'rviz2|ign|gazebo|ruby|move_group|parameter_bridge'"
+        cmd = "pkill -9 -f 'ros2|rviz2|ign|gazebo|ruby|move_group|parameter_bridge|robot_state_publisher|launch_'"
         if os.path.exists("/.dockerenv"):
             full_cmd = ["bash", "-c", cmd]
         else:
