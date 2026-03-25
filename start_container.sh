@@ -132,7 +132,7 @@ echo -e "${BLUE}[4/4]${NC} Building workspace..."
 docker exec $CONTAINER_NAME bash -c "rm -rf /workspace/build /workspace/install /workspace/log"
 
 # Using --packages-select to avoid building unrelated packages (like microros) found in the dir
-docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_hardware parol6_moveit_config" > /tmp/parol6_real_build.log 2>&1
+docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_hardware parol6_moveit_config parol6_driver parol6_msgs parol6_vision" > /tmp/parol6_real_build.log 2>&1
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Build successful${NC}"
