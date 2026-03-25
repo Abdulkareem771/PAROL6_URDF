@@ -578,19 +578,17 @@ pkill -INT -f kinect2_bridge_node
 
 ---
 
-### Mask not applied automatically / mode nodes see the whole image
+### Mask not applied automatically / mode nodes see the whole image / frame flickers
 
-**Symptom:** The path optimizer draws bounding boxes in the black (masked) region, or the mask spontaneously disappears on the second capture, falling back to the full frame.
+**Symptom:** The path optimizer draws bounding boxes in the black (masked) region, or the mask spontaneously disappears on the second capture, falling back to the full frame, or flickers wildly between different mask shapes and colors.
 
-**Explanation:** By design, if `crop_image_node` throws a Python exception while processing a frame, it catches the error and **passes the original unmasked image** to the downstream nodes (`/vision/captured_image_color`) rather than freezing the pipeline or dropping the frame entirely. 
-
-Common causes of processing exceptions in older versions:
-1. **Numpy broadcasting errors** during mask color application (fixed in latest).
-2. **Invalid polygon** geometries (e.g., self-intersecting or < 3 points).
+**Explanation:** There are two main reasons for this:
+1. **Ghost Nodes (Multiple Instances)**: If you restarted the GUI or ran `live_pipeline.launch.py` multiple times without killing old processes, there might be 5–10 old `crop_image_node` instances still running in the background. Because they all subscribe to and publish on the same topics, they cause extreme race conditions! Some nodes have the old pass-through config, and some have the new mask config, sending a garbled mix of images to YOLO.
+2. **Processing Exceptions**: By design, if `crop_image_node` throws a Python exception while processing a frame (e.g., from an invalid polygon or a Numpy array error), it catches the error and **passes the original unmasked image** to the downstream nodes rather than freezing the pipeline.
 
 **Diagnosis & Fix:**
-1. Check the **Crop Image Node** logs in the GUI Console for `Processing error: ...`
-2. Ensure you have rebuilt the workspace with the latest code (which fixes Numpy shape broadcasting arrays).
+1. Click the big red **☠️ Kill All Background Nodes** button at the top-right of the GUI header. This runs `pkill` securely on all pipeline background processes to eliminate ghosts.
+2. Check the **Crop Image Node** logs in the GUI Console for `Processing error: ...`
 3. If the error persists, click **Clear** on the Crop tab, redraw a simple 4-point polygon, and click **Apply & Save**.
 
 ---

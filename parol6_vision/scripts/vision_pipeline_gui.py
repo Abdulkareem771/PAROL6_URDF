@@ -510,6 +510,10 @@ class NodeButton(QWidget):
     def stop(self) -> None:
         if self._worker:
             self._worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._worker)
+            self._worker.finished.connect(lambda rc, w=self._worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._worker = None
         elif self._check_external_running() and self._external_stop_cmd:
             subprocess.run(
@@ -955,6 +959,19 @@ class VisionPipelineGUI(QMainWindow):
             f"color:{'#a6e3a1' if ROS2_OK else '#f38ba8'}; font-size:11px;"
         )
         hdr_lay.addWidget(ros_badge)
+
+        # Global Kill All Background Nodes Button
+        hdr_lay.addSpacing(16)
+        global_kill_btn = QPushButton("☠️ Kill All Background Nodes")
+        global_kill_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:4px; padding:4px 12px;"
+        )
+        global_kill_btn.setToolTip("Terminate all orphaned ghost nodes (crop, capture, yolo, etc.) to fix shifting topics.")
+        global_kill_btn.setCursor(Qt.PointingHandCursor)
+        global_kill_btn.clicked.connect(self._kill_all)
+        hdr_lay.addWidget(global_kill_btn)
+
         root.addWidget(hdr)
 
         # ── Main splitter: sidebar | tabs ─────────────────────────────────────
@@ -1733,6 +1750,11 @@ class VisionPipelineGUI(QMainWindow):
                 if idx >= 0:
                     self._crop_mode_combo.setCurrentIndex(idx)
 
+                mask_color = cfg.get("mask_color", [0, 0, 0])
+                if len(mask_color) == 3:
+                    self._crop_mask_color = QColor(mask_color[0], mask_color[1], mask_color[2])
+                    self._update_color_swatch()
+
                 if mode == "mask" and cfg.get("polygon"):
                     poly = cfg["polygon"]
                     roi = None
@@ -2136,6 +2158,10 @@ class VisionPipelineGUI(QMainWindow):
     def _stop_mode_node(self) -> None:
         if self._mode_worker:
             self._mode_worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._mode_worker)
+            self._mode_worker.finished.connect(lambda rc, w=self._mode_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._mode_worker = None
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
@@ -2163,6 +2189,10 @@ class VisionPipelineGUI(QMainWindow):
         self._stop_mode_node()
         if self._ros_worker:
             self._ros_worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._ros_worker)
+            self._ros_worker.finished.connect(lambda rc, w=self._ros_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._ros_worker = None
 
     def _send_path_to_moveit(self) -> None:
