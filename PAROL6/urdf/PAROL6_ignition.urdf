@@ -412,7 +412,7 @@
     </visual>
   </link>
   <joint name="tcp_joint" type="fixed">
-    <origin xyz="0 0 -0.075" rpy="0 0 0" /> <!-- Adjust this to the tip of the L6 shaft -->
+    <origin xyz="0 0 -0.075" rpy="3.14159 0 0" /> <!-- Adjust this to the tip of the L6 shaft, rotated 180deg to point outwards -->
     <parent link="L6"/>
     <child link="tcp_link"/>
   </joint>

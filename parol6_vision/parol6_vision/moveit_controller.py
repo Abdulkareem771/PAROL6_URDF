@@ -92,7 +92,7 @@ class MoveItController(Node):
         
         self.declare_parameter('planning_group', 'parol6_arm')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('end_effector_link', 'L6')
+        self.declare_parameter('end_effector_link', 'tcp_link')
         
         # Fallback Strategy Config
         self.declare_parameter('cartesian_step_sizes', [0.002, 0.005, 0.010])
