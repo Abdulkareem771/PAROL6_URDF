@@ -21,9 +21,9 @@ TOPICS
 =============================================================================
 
 Subscribed
-    /kinect2/qhd/image_color_rect  (sensor_msgs/Image)      — rectified colour
-    /kinect2/qhd/image_depth_rect  (sensor_msgs/Image)      — aligned depth
-    /kinect2/qhd/camera_info       (sensor_msgs/CameraInfo) — camera intrinsics
+    /kinect2/sd/image_color_rect  (sensor_msgs/Image)      — rectified colour
+    /kinect2/sd/image_depth_rect  (sensor_msgs/Image)      — aligned depth
+    /kinect2/sd/camera_info       (sensor_msgs/CameraInfo) — camera intrinsics
 
 Published
     /vision/captured_image_color   (sensor_msgs/Image)      — captured colour frame
@@ -54,9 +54,9 @@ class CaptureImagesNode(Node):
 
     Subscribed Topics
     -----------------
-    /kinect2/qhd/image_color_rect : sensor_msgs/Image
-    /kinect2/qhd/image_depth_rect : sensor_msgs/Image
-    /kinect2/qhd/camera_info      : sensor_msgs/CameraInfo
+    /kinect2/sd/image_color_rect : sensor_msgs/Image
+    /kinect2/sd/image_depth_rect : sensor_msgs/Image
+    /kinect2/sd/camera_info      : sensor_msgs/CameraInfo
 
     Published Topics
     ----------------
@@ -104,16 +104,16 @@ class CaptureImagesNode(Node):
 
         # ── Synchronized subscribers (colour + depth) ─────────────────
         self._color_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_color_rect'
+            self, Image, '/kinect2/sd/image_color_rect'
         )
         self._depth_sub = message_filters.Subscriber(
-            self, Image, '/kinect2/qhd/image_depth_rect'
+            self, Image, '/kinect2/sd/image_depth_rect'
         )
 
         # ── CameraInfo subscriber ─────────────────────────────────────
         self._camera_info_sub = self.create_subscription(
             CameraInfo,
-            '/kinect2/qhd/camera_info',
+            '/kinect2/sd/camera_info',
             self._camera_info_callback,
             10
         )
@@ -248,7 +248,7 @@ class CaptureImagesNode(Node):
     # ─────────────────────────────────────────────────────────────────
 
     def _camera_info_callback(self, msg: CameraInfo):
-        """Relay /kinect2/qhd/camera_info to /vision/captured_camera_info."""
+        """Relay /kinect2/sd/camera_info to /vision/captured_camera_info."""
         self._pub_camera_info.publish(msg)
 
 
