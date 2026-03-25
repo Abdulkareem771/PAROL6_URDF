@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+
+<package format="3">
+  <name>parol6_vision</name>
+  <version>1.0.0</version>
+  <description>Vision-guided welding path detection for PAROL6 robot</description>
+
+  <maintainer email="your.email@example.com">PAROL6 Team</maintainer>
+  <license>MIT</license>
+
+  <author>PAROL6 Vision Team</author>
+
+  <!-- Build tool -->
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- Runtime dependencies -->
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>message_filters</depend>
+
+  <!-- Custom messages -->
+  <depend>parol6_msgs</depend>
+
+  <!-- MoveIt dependencies -->
+  <depend>moveit_msgs</depend>
+  <depend>moveit_ros_planning_interface</depend>
+  <depend>control_msgs</depend>
+
+  <!-- Python Dependencies -->
+  <exec_depend>python3-scikit-learn</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-scikit-image</exec_depend>
+
+  <!-- Testing -->
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

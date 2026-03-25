@@ -1,0 +1,44 @@
+### Camera Parameters Configuration (Auto-Generated)
+# Generated from Kinect v2 calibration files
+# Intrinsic parameters: Calibrated ✅
+# Extrinsic (camera→robot): DEFAULT ⚠️  CALIBRATE THIS!
+
+/**:
+  ros__parameters:
+    camera_intrinsics:
+      fx: 1059.9465578241038
+      fy: 1053.9326808799726
+      cx: 954.8832667758844
+      cy: 523.7385829106058
+      distortion:
+      - 0.05626844117093032
+      - -0.0741991413086948
+      - 0.0014250797540545752
+      - -0.0016951722389720336
+      - 0.024107681263086548
+    camera_frame: kinect2_rgb_optical_frame
+    robot_base_frame: base_link
+    camera_to_base_transform:
+      translation:
+        x: 0.5
+        y: 0.0
+        z: 1.0
+      rotation:
+        x: -0.5
+        y: 0.5
+        z: -0.5
+        w: 0.5
+    depth_range:
+      min: 500.0
+      max: 2000.0
+    depth_to_color_transform:
+      translation:
+        x: -0.05205247611208199
+        y: -0.0004631386535393911
+        z: 0.0008880673555490758
+      rotation:
+        x: -0.0009122627466022804
+        y: -0.005415650778157245
+        z: 0.008441036291862427
+        w: 0.9999492924191954
+      note: 'Internal: depth sensor relative to RGB sensor (informational only)'

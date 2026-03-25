@@ -2,6 +2,8 @@
 
 trajectory_execution:
   allowed_start_tolerance: 0.1  # Default 0.01 is too tight for encoder noise (~0.02 rad)
+
+  #allowed_start_tolerance: 0.0  # 0 = disabled; mock_components publishes joint states with stamp=0.000000 which trips the stale-state check
   allowed_execution_duration_scaling: 10.0
   allowed_goal_duration_margin: 5.0
 

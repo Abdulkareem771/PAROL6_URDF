@@ -83,5 +83,12 @@ RUN apt-get update && apt-get install -y \
 # Install Python packages (YOLOv8, esptool)
 RUN pip3 install ultralytics esptool
 
+# Install libserial-dev for parol6_hardware and xclip for GUI clipboard paste (added last to preserve cache)
+RUN apt-get update && apt-get install -y libserial-dev xclip && rm -rf /var/lib/apt/lists/*
 # Install libserial-dev for parol6_hardware (added last to preserve cache)
 RUN apt-get update && apt-get install -y libserial-dev && rm -rf /var/lib/apt/lists/*
+
+# Install Teensy Build Tools (PlatformIO + teensy_loader_cli)
+RUN apt-get update && apt-get install -y teensy-loader-cli && rm -rf /var/lib/apt/lists/*
+RUN pip3 install platformio
+

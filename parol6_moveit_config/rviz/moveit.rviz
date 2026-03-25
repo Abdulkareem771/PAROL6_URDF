@@ -5,21 +5,18 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /MotionPlanning1
         - /MotionPlanning1/Scene Geometry1
         - /MotionPlanning1/Scene Robot1
         - /MotionPlanning1/Planning Request1
         - /MotionPlanning1/Planning Metrics1
         - /MotionPlanning1/Planned Path1
-        - /MotionPlanning1/Planned Path1/Links1
-        - /MotionPlanning1/Planned Path1/Links1/world1
-      Splitter Ratio: 0.5
+        - /MarkerArray1/Topic1
+        - /MarkerArray2/Topic1
+        - /Path1/Status1
+      Splitter Ratio: 0.6000000238418579
     Tree Height: 140
-  - Class: rviz_common/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
+  - Class: rviz_common/Transformation
+    Name: Transformation
 Visualization Manager:
   Class: ""
   Displays:
@@ -118,7 +115,7 @@ Visualization Manager:
         Show Robot Visual: true
         Show Trail: false
         State Display Time: 3x
-        Trail Step Size: 1
+        Trail Step Size: 4
         Trajectory Topic: /display_planned_path
         Use Sim Time: true
       Planning Metrics:
@@ -201,6 +198,122 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 1
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        base_link:
+          Value: true
+        kinect2_ir_optical_frame:
+          Value: true
+        kinect2_link:
+          Value: true
+        kinect2_rgb_optical_frame:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 0.30000001192092896
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        world:
+          base_link:
+            kinect2_link:
+              kinect2_rgb_optical_frame:
+                kinect2_ir_optical_frame:
+                  {}
+      Update Interval: 0
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /kinect2/qhd/points
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        weld_connectivity: true
+        weld_points: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /depth_matcher/markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        orientation: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /path_generator/markers
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /vision/welding_path
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -212,7 +325,6 @@ Visualization Manager:
       Hide Inactive Objects: true
     - Class: rviz_default_plugins/Measure
       Line color: 128; 128; 0
-    - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/PublishPoint
       Single click: true
       Topic:
@@ -246,25 +358,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.3510364294052124
+      Distance: 2.4058785438537598
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.21545349061489105
-        Y: 0.10921706259250641
-        Z: 0.34622517228126526
+        X: 0.23147469758987427
+        Y: 0.2566610872745514
+        Z: 0.1861683577299118
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3999998867511749
+      Pitch: 0.5047970414161682
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 2.5050048828125
+      Yaw: 5.258644104003906
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 2.5
@@ -349,16 +461,16 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 898
+  Height: 779
   Hide Left Dock: false
   Hide Right Dock: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001e90000032cfc0200000004fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c0069006400650072000000003b0000003f0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000003b000001b90000016900fffffffb000000100044006900730070006c00610079007301000001fa000000c7000000c700fffffffb0000000a0056006900650077007301000002c7000000a0000000a000ffffff000002a60000032c00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
-  Views:
+  QMainWindow State: 000000ff00000000fd0000000100000000000001c9000002b5fc0200000004fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000003b000001690000016900fffffffb000000100044006900730070006c00610079007301000001aa000000c7000000c700fffffffb0000001c005400720061006e00730066006f0072006d006100740069006f006e0100000277000000790000007900ffffff00000387000002b500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Transformation:
     collapsed: false
-  Width: 1173
-  X: 658
+  Width: 1366
+  X: 0
   Y: 27

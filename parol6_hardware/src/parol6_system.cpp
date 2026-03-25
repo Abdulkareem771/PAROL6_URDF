@@ -20,6 +20,7 @@
 #include <vector>
 #include <cinttypes>
 #include <clocale>
+#include <thread>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -67,7 +68,13 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
     return CallbackReturn::ERROR;
   }
 
-  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d", serial_port_.c_str(), baud_rate_);
+  // Optional: allow_spoofing (default false — real hardware should fail loudly)
+  if (info_.hardware_parameters.count("allow_spoofing")) {
+    allow_spoofing_ = (info_.hardware_parameters.at("allow_spoofing") == "true");
+  }
+
+  RCLCPP_INFO(logger_, "📝 Config: Port=%s, Baud=%d, Spoofing=%s",
+              serial_port_.c_str(), baud_rate_, allow_spoofing_ ? "true" : "false");
 
   // Read joint names from URDF
   joint_names_.clear();
@@ -110,30 +117,30 @@ CallbackReturn PAROL6System::on_init(const hardware_interface::HardwareInfo & in
 CallbackReturn PAROL6System::on_configure(
   const rclcpp_lifecycle::State & /*previous_state*/)
 {
-  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port...");
+  RCLCPP_INFO(logger_, "🔧 on_configure() - Opening serial port %s...", serial_port_.c_str());
 
   try {
     serial_.Open(serial_port_);
-    
+
     // Set Baud Rate
     using LibSerial::BaudRate;
     BaudRate baud;
     switch (baud_rate_) {
-      case 9600: baud = BaudRate::BAUD_9600; break;
-      case 19200: baud = BaudRate::BAUD_19200; break;
-      case 38400: baud = BaudRate::BAUD_38400; break;
-      case 57600: baud = BaudRate::BAUD_57600; break;
+      case 9600:   baud = BaudRate::BAUD_9600;   break;
+      case 19200:  baud = BaudRate::BAUD_19200;  break;
+      case 38400:  baud = BaudRate::BAUD_38400;  break;
+      case 57600:  baud = BaudRate::BAUD_57600;  break;
       case 115200: baud = BaudRate::BAUD_115200; break;
       default:
         RCLCPP_WARN(logger_, "⚠️ Unsupported baud rate %d, defaulting to 115200", baud_rate_);
-        serial_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
+        baud = LibSerial::BaudRate::BAUD_115200;
     }
     serial_.SetBaudRate(baud);
     serial_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
     serial_.SetParity(LibSerial::Parity::PARITY_NONE);
     serial_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
     serial_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
-    
+
     // Non-blocking with timeout protection
     // VTIME is in deciseconds (1 = 100 ms)
     serial_.SetVTime(1);   // 100 ms timeout
@@ -141,15 +148,16 @@ CallbackReturn PAROL6System::on_configure(
 
     if (!serial_.IsOpen()) {
       RCLCPP_ERROR(logger_, "❌ Failed to open serial port: %s", serial_port_.c_str());
-      return CallbackReturn::ERROR;
+      if (!allow_spoofing_) { return CallbackReturn::ERROR; }
+    } else {
+      serial_ok_ = true;
+      RCLCPP_INFO(logger_, "✅ Serial opened: %s @ %d baud", serial_port_.c_str(), baud_rate_);
     }
-
-    RCLCPP_INFO(logger_, "✅ Serial opened successfully: %s @ %d (100ms timeout, non-blocking)", 
-                serial_port_.c_str(), baud_rate_);
 
   } catch (const std::exception &e) {
     RCLCPP_ERROR(logger_, "❌ Serial exception during configure: %s", e.what());
-    return CallbackReturn::ERROR;
+    if (!allow_spoofing_) { return CallbackReturn::ERROR; }
+    RCLCPP_WARN(logger_, "⚠️ Continuing in SPOOF mode (allow_spoofing=true)");
   }
 
   return CallbackReturn::SUCCESS;
@@ -337,26 +345,51 @@ return_type PAROL6System::read(
   }
   
   try {
-    // Read all available lines to drain the OS serial buffer
-    // and ONLY use the newest one to eliminate accumulated latency.
-    std::string response;
-    std::string latest_valid;
+    // We use a static accumulator to prevent dropping partial packets 
+    // when USB CDC chunks arrive split across the 10ms control cycle.
+    static std::string rx_buffer;
     
-    // Safety break to prevent infinite loops if data streams too fast
-    int max_reads = 100; 
-    while (serial_.IsDataAvailable() && max_reads-- > 0) {
-      std::string temp;
-      serial_.ReadLine(temp, '\n', 2); // 2ms timeout per line
-      if (!temp.empty() && temp[0] == '<') {
-        latest_valid = temp;
+    // Read ALL currently available bytes in the OS hardware buffer (non-blocking)
+    while (serial_.IsDataAvailable()) {
+      // Read 1 char at a time with 0 timeout (instantly returns if empty)
+      try {
+        uint8_t byte;
+        serial_.ReadByte(byte, 0); 
+        rx_buffer += static_cast<char>(byte);
+      } catch (const LibSerial::ReadTimeout &) {
+        break; // OS buffer drained
+      }
+    }
+    
+    // Protect against unbounded memory growth if '\n' is never received
+    if (rx_buffer.size() > 4096) {
+      rx_buffer.clear();
+      RCLCPP_WARN_THROTTLE(logger_, clock_, 1000, "Cleared overflowed RX buffer!");
+    }
+    
+    // Parse all complete lines in the buffer, keeping only the NEWEST valid one
+    std::string latest_valid;
+    size_t newline_pos;
+    while ((newline_pos = rx_buffer.find('\n')) != std::string::npos) {
+      std::string line = rx_buffer.substr(0, newline_pos);
+      rx_buffer.erase(0, newline_pos + 1);
+      
+      // Trim \r if present (CRLF from STM32)
+      if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+      }
+      
+      // Basic validation format: <ACK,...>
+      if (!line.empty() && line.front() == '<') {
+        latest_valid = line;
       }
     }
     
     if (latest_valid.empty()) {
-      return return_type::OK; // No valid new data this cycle
+      return return_type::OK; // No complete new message this cycle (wait for next chunk)
     }
     
-    response = latest_valid;
+    std::string response = latest_valid;
 
     // DEBUG: Log raw feedback for validation (throttled manually to prevent crash)
     static int log_counter = 0;
@@ -550,6 +583,12 @@ return_type PAROL6System::write(
   if (written < 0 || written >= (int)sizeof(buffer)) {
       RCLCPP_ERROR(logger_, "Command buffer overflow! written=%d", written);
       return return_type::ERROR;
+  }
+
+  // DEBUG: Log the first command sent every 50 updates (1 second at 50Hz, 0.5s at 100Hz)
+  static int tx_log_counter = 0;
+  if (++tx_log_counter % 50 == 0) {
+      RCLCPP_INFO(logger_, "📤 TX Command: %s", buffer);
   }
 
   try {

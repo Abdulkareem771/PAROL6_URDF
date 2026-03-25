@@ -1,7 +1,8 @@
 // Copyright (c) 2026 PAROL6 Team
 // 
 // ros2_control Hardware Interface for PAROL6 6-DOF Robot
-// Day 1: SIL (Software-in-the-Loop) - Minimal stub implementation
+// Real hardware interface with serial communication, bounds-validated feedback,
+// and configurable per-joint kinematic sign correction (ros_invert in xacro).
 
 #ifndef PAROL6_HARDWARE__PAROL6_SYSTEM_HPP_
 #define PAROL6_HARDWARE__PAROL6_SYSTEM_HPP_
@@ -72,6 +73,8 @@ private:
   LibSerial::SerialPort serial_;
   std::string serial_port_;
   int baud_rate_;
+  bool serial_ok_ = false;  // true only when serial port opened successfully
+  bool allow_spoofing_ = false;  // explicit opt-in only; real hardware should fail loudly
   uint32_t seq_counter_ = 0;  // TX sequence counter
   
   // Feedback tracking (RX)
@@ -84,8 +87,12 @@ private:
   uint64_t parse_errors_ = 0;
   
   // Latency tracking (thesis evidence)
-  rclcpp::Time last_rx_time_;
+  rclcpp::Time last_rx_time_{0, 0, RCL_ROS_TIME};
   double max_rx_period_ms_ = 0.0;
+  
+  // Kinematics sign correction (loaded from xacro ros_invert params in on_init)
+  // +1.0 = no inversion, -1.0 = invert. Applies to both TX commands and RX feedback.
+  std::vector<double> dir_signs_;
   
   // Clock for throttling logs
   rclcpp::Clock clock_;
