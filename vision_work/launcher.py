@@ -131,15 +131,19 @@ class Launcher(tk.Tk):
 
     # ── Launch methods ────────────────────────────────────────────────────────
     def _launch_vision_pipeline(self):
-        full = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "parol6_vision", "scripts", "vision_pipeline_gui.py"
-        )
+        workspace = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        full = os.path.join(workspace, "parol6_vision", "scripts", "vision_pipeline_gui.py")
         if not os.path.exists(full):
             messagebox.showerror("Error", f"Could not find:\n{full}")
             return
         print(f"Launching Vision Pipeline GUI: {full}")
-        subprocess.Popen([sys.executable, full])
+        launch_cmd = (
+            "source /opt/ros/humble/setup.bash && "
+            "if [ -f /opt/kinect_ws/install/setup.bash ]; then source /opt/kinect_ws/install/setup.bash; fi && "
+            f"if [ -f '{workspace}/install/setup.bash' ]; then source '{workspace}/install/setup.bash'; fi && "
+            f"python3 '{full}'"
+        )
+        subprocess.Popen(["bash", "-lc", launch_cmd], cwd=workspace)
         self.destroy()
 
     def _launch_yolo(self):               self._launch("yolo_training/yolo_gui.py")

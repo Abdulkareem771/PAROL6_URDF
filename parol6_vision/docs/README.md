@@ -2,6 +2,13 @@
 
 ## 📍 Quick Navigation
 
+### 🔭 Vision Pipeline GUI
+**Full reference:** [`VISION_PIPELINE_GUI_GUIDE.md`](VISION_PIPELINE_GUI_GUIDE.md)
+
+All-in-one PySide6 launcher — start nodes, preview topics, define crop ROI,
+draw manual red-lines, and send paths to MoveIt.  
+Includes a full **Troubleshooting** section.
+
 ### 🎥 For Teammates with Camera (Snapshot Capture)
 **START HERE:** [`rosbag/TEAMMATE_START_HERE.md`](rosbag/TEAMMATE_START_HERE.md)
 

@@ -23,6 +23,7 @@ stdout/stderr to the log pane, and supports SIGINT abort.
 from __future__ import annotations
 import os
 import sys
+import shlex
 import signal
 import subprocess
 from pathlib import Path
@@ -43,14 +44,20 @@ from PySide6.QtGui import (
 )
 
 # ─── Try importing ROS / cv_bridge for live topic previews ───────────────────
+ROS2_OK = False
+ROS2_IMPORT_ERROR = ""
 try:
     import rclpy
     from rclpy.node import Node
+    from rclpy.qos import qos_profile_sensor_data
+    from rclpy.parameter import Parameter as RclpyParameter
     from sensor_msgs.msg import Image as ROSImage
+    from std_srvs.srv import Trigger
+    from rcl_interfaces.srv import SetParameters
     from cv_bridge import CvBridge
     ROS2_OK = True
-except ImportError:
-    ROS2_OK = False
+except Exception as exc:
+    ROS2_IMPORT_ERROR = str(exc)
 
 try:
     import cv2
@@ -60,9 +67,53 @@ except ImportError:
     CV2_OK = False
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-WORKSPACE_DIR = Path("/home/osama/Desktop/PAROL6_URDF")
+WORKSPACE_DIR = Path(__file__).resolve().parents[2]
 VISION_WORK   = WORKSPACE_DIR / "vision_work"
 VISION_PKG    = "parol6_vision"
+FALLBACK_INSTALL_DIR = Path("/tmp/parol6_install")
+ROS_LOG_DIR = Path("/tmp/parol6_ros_logs")
+
+
+def _wrap_ros_command(cmd: list[str]) -> list[str]:
+    """
+    Ensure every ROS 2 subprocess runs in a shell with the required setup files
+    sourced, even when this GUI itself was launched from plain Python.
+    """
+    if not cmd or cmd[0] != "ros2":
+        return cmd
+
+    quoted_cmd = " ".join(shlex.quote(part) for part in cmd)
+    workspace_setup = shlex.quote(str(WORKSPACE_DIR / "install" / "setup.bash"))
+    fallback_setup = shlex.quote(str(FALLBACK_INSTALL_DIR / "setup.bash"))
+    setup_cmd = (
+        "source /opt/ros/humble/setup.bash && "
+        "if [ -f /opt/kinect_ws/install/setup.bash ]; then "
+        "source /opt/kinect_ws/install/setup.bash; "
+        "fi && "
+        f"if [ -f {workspace_setup} ]; then "
+        f"source {workspace_setup}; "
+        "fi && "
+        f"if [ -f {fallback_setup} ]; then "
+        f"source {fallback_setup}; "
+        "fi && "
+        f"cd {shlex.quote(str(WORKSPACE_DIR))} && "
+        f"{quoted_cmd}"
+    )
+    return ["bash", "-lc", setup_cmd]
+
+
+def _ros_node_check_cmd(node_name: str) -> list[str]:
+    quoted_name = shlex.quote(node_name)
+    workspace_setup = shlex.quote(str(WORKSPACE_DIR / "install" / "setup.bash"))
+    fallback_setup = shlex.quote(str(FALLBACK_INSTALL_DIR / "setup.bash"))
+    check_cmd = (
+        "source /opt/ros/humble/setup.bash && "
+        "if [ -f /opt/kinect_ws/install/setup.bash ]; then source /opt/kinect_ws/install/setup.bash; fi && "
+        f"if [ -f {workspace_setup} ]; then source {workspace_setup}; fi && "
+        f"if [ -f {fallback_setup} ]; then source {fallback_setup}; fi && "
+        f"ros2 node list | grep -qx {quoted_name}"
+    )
+    return ["bash", "-lc", check_cmd]
 
 # ─── Color Palette (matches firmware configurator dark theme) ─────────────────
 C = {
@@ -161,20 +212,25 @@ class NodeWorker(QThread):
 
     def __init__(self, cmd: list[str], env: Optional[dict] = None, parent=None):
         super().__init__(parent)
-        self._cmd  = cmd
+        self._display_cmd = cmd
+        self._cmd  = _wrap_ros_command(cmd)
         self._env  = env or os.environ.copy()
+        self._env.setdefault("ROS_LOG_DIR", str(ROS_LOG_DIR))
         self._proc: Optional[subprocess.Popen] = None
 
     def run(self) -> None:
-        self.line_out.emit(f"[RUN] $ {' '.join(self._cmd)}")
+        self.line_out.emit(f"[RUN] $ {' '.join(self._display_cmd)}")
         try:
+            ROS_LOG_DIR.mkdir(parents=True, exist_ok=True)
             self._proc = subprocess.Popen(
                 self._cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 env=self._env,
+                cwd=str(WORKSPACE_DIR),
             )
             for line in self._proc.stdout:
                 self.line_out.emit(line.rstrip())
@@ -215,6 +271,7 @@ class TopicPreviewLabel(QLabel):
         self._ros_node = ros_node
         self._bridge = bridge
         self._latest_img: Optional[bytes] = None   # raw RGB numpy bytes
+        self._subscription = None
 
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
@@ -225,8 +282,8 @@ class TopicPreviewLabel(QLabel):
         self.setMinimumSize(200, 150)
 
         if ROS2_OK and ros_node:
-            ros_node.create_subscription(
-                ROSImage, topic, self._ros_cb, 1
+            self._subscription = ros_node.create_subscription(
+                ROSImage, topic, self._ros_cb, qos_profile_sensor_data
             )
             self._timer = QTimer(self)
             self._timer.timeout.connect(self._refresh)
@@ -253,7 +310,7 @@ class TopicPreviewLabel(QLabel):
         scale = min(lw / w, lh / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         frame_small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(frame_small.data, nw, nh, ch * nw, QImage.Format_RGB888)
+        qimg = QImage(frame_small.data, nw, nh, int(frame_small.strides[0]), QImage.Format_RGB888)
         self.setPixmap(QPixmap.fromImage(qimg))
         self.setText("")
 
@@ -296,7 +353,7 @@ class ManualCanvas(QGraphicsView):
         self._scene.clear()
         self._base_img = rgb
         h, w = rgb.shape[:2]
-        qimg = QImage(rgb.data, w, h, w * 3, QImage.Format_RGB888)
+        qimg = QImage(rgb.data, w, h, int(rgb.strides[0]), QImage.Format_RGB888).copy()
         pix = QPixmap.fromImage(qimg)
         self._scene.addPixmap(pix).setZValue(0)
         self._mask_arr = np.zeros((h, w, 4), dtype=np.uint8)
@@ -345,7 +402,7 @@ class ManualCanvas(QGraphicsView):
         if self._mask_arr is None or self._mask_item is None:
             return
         h, w = self._mask_arr.shape[:2]
-        qimg = QImage(self._mask_arr.data, w, h, w * 4, QImage.Format_RGBA8888)
+        qimg = QImage(self._mask_arr.data, w, h, int(self._mask_arr.strides[0]), QImage.Format_RGBA8888)
         self._mask_item.setPixmap(QPixmap.fromImage(qimg))
 
     def mousePressEvent(self, ev) -> None:
@@ -393,6 +450,9 @@ class NodeButton(QWidget):
         cmd_fn,          # callable() → list[str]
         log_widget: QTextEdit,
         accent_color: str = "#a6e3a1",
+        on_started=None,
+        status_check_cmd: Optional[list[str]] = None,
+        external_stop_cmd: Optional[list[str]] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -400,6 +460,9 @@ class NodeButton(QWidget):
         self._cmd_fn   = cmd_fn
         self._log      = log_widget
         self._accent   = accent_color
+        self._on_started = on_started
+        self._status_check_cmd = status_check_cmd
+        self._external_stop_cmd = external_stop_cmd
         self._worker: Optional[NodeWorker] = None
 
         lay = QHBoxLayout(self)
@@ -415,13 +478,12 @@ class NodeButton(QWidget):
         self._lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         lay.addWidget(self._lbl)
 
-        # Create a dedicated log tab for this node
+        # Create a dedicated log tab for this node.
+        # NOTE: parent_tabs is always None here (built before _build_tabs runs).
+        # Tab registration happens in VisionPipelineGUI._build_tabs() instead.
         self._node_log = QTextEdit()
         self._node_log.setReadOnly(True)
         self._node_log.setFont(QFont("Monospace", 9))
-        self._log_tabs = getattr(self._log, "parent_tabs", None)
-        if self._log_tabs is not None:
-            self._log_tabs.addTab(self._node_log, label)
 
         self._btn = QPushButton("▶  Start")
         self._btn.setFixedWidth(90)
@@ -432,13 +494,35 @@ class NodeButton(QWidget):
         self._btn.clicked.connect(self._toggle)
         lay.addWidget(self._btn)
 
+        self._status_timer = None
+        if self._status_check_cmd:
+            self._status_timer = QTimer(self)
+            self._status_timer.timeout.connect(self._sync_external_state)
+            self._status_timer.start(1500)
+            self._sync_external_state()
+
     def is_running(self) -> bool:
-        return self._worker is not None and self._worker.isRunning()
+        return (
+            (self._worker is not None and self._worker.isRunning())
+            or self._check_external_running()
+        )
 
     def stop(self) -> None:
         if self._worker:
             self._worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._worker)
+            self._worker.finished.connect(lambda rc, w=self._worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._worker = None
+        elif self._check_external_running() and self._external_stop_cmd:
+            subprocess.run(
+                self._external_stop_cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(WORKSPACE_DIR),
+            )
         self._set_stopped()
 
     def _toggle(self) -> None:
@@ -448,6 +532,12 @@ class NodeButton(QWidget):
             self._start()
 
     def _start(self) -> None:
+        if self._check_external_running():
+            self._set_running()
+            self._log.append(
+                f'<span style="color:{self._accent}">[{self._label}] Already running.</span>'
+            )
+            return
         cmd = self._cmd_fn()
         if not cmd:
             return
@@ -462,6 +552,26 @@ class NodeButton(QWidget):
         self._worker.line_out.connect(_handle_log)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
+        self._set_running()
+        if self._on_started:
+            self._on_started()
+
+    def _on_finished(self, rc: int) -> None:
+        self._worker = None
+        if self._check_external_running():
+            self._set_running()
+        else:
+            self._set_stopped()
+
+    def _set_stopped(self) -> None:
+        self._btn.setText("▶  Start")
+        self._btn.setStyleSheet(
+            f"background:{C['panel']}; color:{C['text']};"
+            " border:1px solid #585b70; border-radius:5px; padding:4px 8px;"
+        )
+        self._status_dot.setStyleSheet(f"color:{C['border']}; font-size:14px;")
+
+    def _set_running(self) -> None:
         self._btn.setText("■  Stop")
         self._btn.setStyleSheet(
             f"background:{C['red']}; color:{C['bg']};"
@@ -471,17 +581,28 @@ class NodeButton(QWidget):
             f"color:{self._accent}; font-size:14px;"
         )
 
-    def _on_finished(self, rc: int) -> None:
-        self._worker = None
-        self._set_stopped()
+    def _check_external_running(self) -> bool:
+        if not self._status_check_cmd:
+            return False
+        try:
+            result = subprocess.run(
+                self._status_check_cmd,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=str(WORKSPACE_DIR),
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
 
-    def _set_stopped(self) -> None:
-        self._btn.setText("▶  Start")
-        self._btn.setStyleSheet(
-            f"background:{C['panel']}; color:{C['text']};"
-            " border:1px solid #585b70; border-radius:5px; padding:4px 8px;"
-        )
-        self._status_dot.setStyleSheet(f"color:{C['border']}; font-size:14px;")
+    def _sync_external_state(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._set_running()
+        elif self._check_external_running():
+            self._set_running()
+        else:
+            self._set_stopped()
 
 
 
@@ -498,12 +619,14 @@ class CropROIView(QLabel):
         roi_changed(tuple)   emitted when user releases mouse with (x,y,w,h) in
                              image pixel coordinates.
     """
-    roi_changed = Signal(tuple)
+    roi_changed  = Signal(tuple)   # (x, y, w, h) bounding box in image coords
+    pixel_sampled = Signal("QColor")  # emitted when user picks a color with eyedropper
 
     def __init__(self, ros_node=None, bridge=None, parent=None):
         super().__init__(parent)
         self._ros_node = ros_node
         self._bridge   = bridge
+        self._subscription = None
 
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
@@ -529,14 +652,16 @@ class CropROIView(QLabel):
         
         # ROS subscription
         if ROS2_OK and CV2_OK and ros_node:
-            ros_node.create_subscription(
-                ROSImage, "/vision/captured_image_raw", self._ros_cb, 1
+            self._subscription = ros_node.create_subscription(
+                ROSImage, "/vision/captured_image_raw", self._ros_cb, qos_profile_sensor_data
             )
             self._refresh_timer = QTimer(self)
             self._refresh_timer.timeout.connect(self._repaint)
             self._refresh_timer.start(100)
 
         self._latest_frame: Optional[np.ndarray] = None    # RGB numpy
+        self._cv_frame:     Optional[np.ndarray] = None    # BGR numpy (for eyedropper)
+        self._eyedropper_mode: bool = False
 
     # ── ROS callback ─────────────────────────────────────────────────
 
@@ -547,6 +672,8 @@ class CropROIView(QLabel):
             frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
             self._latest_frame = frame
             self._img_size = (frame.shape[1], frame.shape[0])
+            # Keep a BGR copy for eyedropper pixel sampling
+            self._cv_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         except Exception:
             pass
 
@@ -562,7 +689,7 @@ class CropROIView(QLabel):
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
         small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(small.data, nw, nh, ch * nw, QImage.Format_RGB888)
+        qimg = QImage(small.data, nw, nh, int(small.strides[0]), QImage.Format_RGB888)
         self._pix = QPixmap.fromImage(qimg)
         self.update()
 
@@ -650,6 +777,22 @@ class CropROIView(QLabel):
 
     def mousePressEvent(self, ev) -> None:
         self.setFocus() # ensure we get keyboard events
+
+        # ── Eyedropper mode: sample pixel colour ───────────────────────────
+        if getattr(self, "_eyedropper_mode", False) and ev.button() == Qt.LeftButton:
+            if self._pix is not None and self._cv_frame is not None:
+                ix, iy = self._label_to_image(ev.pos().x(), ev.pos().y())
+                ih, iw = self._cv_frame.shape[:2]
+                ix = max(0, min(ix, iw - 1))
+                iy = max(0, min(iy, ih - 1))
+                px = self._cv_frame[iy, ix]  # BGR
+                color = QColor(int(px[2]), int(px[1]), int(px[0]))
+                self._eyedropper_mode = False
+                self.setCursor(Qt.ArrowCursor)
+                self.pixel_sampled.emit(color)
+            return
+
+        # ── Normal polygon drawing ──────────────────────────────────────
         if ev.button() == Qt.LeftButton and self._pix is not None:
             # If we already have a calculated ROI, start a new one
             if self._roi_px is not None:
@@ -714,6 +857,13 @@ class CropROIView(QLabel):
     def current_roi(self) -> Optional[tuple]:
         return self._roi_px
 
+    def get_polygon_image_coords(self) -> list:
+        """Return the current polygon vertices as [[x,y],...] in image pixel coords."""
+        return [
+            list(self._label_to_image(pt.x(), pt.y()))
+            for pt in self._poly_pts
+        ]
+
     def set_saved_roi(self, roi: tuple) -> None:
         """Display the previously saved ROI (loaded from config on startup)."""
         self._saved_roi = roi
@@ -737,6 +887,10 @@ class VisionPipelineGUI(QMainWindow):
         super().__init__()
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
         self.resize(1100, 680)
+        self._latest_cropped_rgb: Optional[np.ndarray] = None
+        self._crop_set_params_client = None
+        self._crop_clear_client = None
+        self._crop_futures = []
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -757,8 +911,21 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_timer = QTimer(self)
             self._ros_timer.timeout.connect(_spin_once_safe)
             self._ros_timer.start(10)
+            self._crop_set_params_client = self._ros_node.create_client(SetParameters, "/crop_image/set_parameters")
+            self._crop_clear_client  = self._ros_node.create_client(Trigger, "/crop_image/clear_roi")
+            self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
+            self._manual_cropped_sub = None
+            if CV2_OK:
+                self._manual_cropped_sub = self._ros_node.create_subscription(
+                    ROSImage,
+                    "/vision/captured_image_color",
+                    self._manual_topic_image_cb,
+                    qos_profile_sensor_data,
+                )
 
         self._build_ui()
+        if not ROS2_OK and ROS2_IMPORT_ERROR:
+            print(f"[VisionPipelineGUI] ROS import failed: {ROS2_IMPORT_ERROR}", file=sys.stderr)
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -785,13 +952,26 @@ class VisionPipelineGUI(QMainWindow):
         title.setStyleSheet(f"color:{C['accent']};")
         hdr_lay.addWidget(title)
         hdr_lay.addStretch()
-        ros_badge = QLabel(
-            "ROS 2 ✅" if ROS2_OK else "ROS 2 offline"
-        )
+        badge_text = "ROS 2 ✅" if ROS2_OK else f"ROS 2 offline: {ROS2_IMPORT_ERROR or 'unknown error'}"
+        ros_badge = QLabel(badge_text)
+        ros_badge.setToolTip(ROS2_IMPORT_ERROR or badge_text)
         ros_badge.setStyleSheet(
             f"color:{'#a6e3a1' if ROS2_OK else '#f38ba8'}; font-size:11px;"
         )
         hdr_lay.addWidget(ros_badge)
+
+        # Global Kill All Background Nodes Button
+        hdr_lay.addSpacing(16)
+        global_kill_btn = QPushButton("☠️ Kill All Background Nodes")
+        global_kill_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:4px; padding:4px 12px;"
+        )
+        global_kill_btn.setToolTip("Terminate all orphaned ghost nodes (crop, capture, yolo, etc.) to fix shifting topics.")
+        global_kill_btn.setCursor(Qt.PointingHandCursor)
+        global_kill_btn.clicked.connect(self._kill_all)
+        hdr_lay.addWidget(global_kill_btn)
+
         root.addWidget(hdr)
 
         # ── Main splitter: sidebar | tabs ─────────────────────────────────────
@@ -842,9 +1022,18 @@ class VisionPipelineGUI(QMainWindow):
                 "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
                 "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
             ],
-            self._log, C["blue"]
+            self._log,
+            C["blue"],
         )
         cg_lay.addWidget(self._btn_live_cam)
+
+        kill_cam_btn = QPushButton("Kill Stale Camera")
+        kill_cam_btn.clicked.connect(self._kill_camera_processes)
+        kill_cam_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:5px; padding:5px;"
+        )
+        cg_lay.addWidget(kill_cam_btn)
 
         # Capture mode selector
         capture_mode_row = QHBoxLayout()
@@ -863,7 +1052,9 @@ class VisionPipelineGUI(QMainWindow):
                 "-p", f"capture_mode:={self._capture_mode_combo.currentData()}",
                 "-p", "output_topic:=/vision/captured_image_raw",
             ],
-            self._log, C["green"],
+            self._log,
+            C["green"],
+            on_started=self._ensure_crop_node_running,
         )
         cg_lay.addWidget(self._btn_capture)
 
@@ -897,7 +1088,15 @@ class VisionPipelineGUI(QMainWindow):
         self._btn_crop_node = NodeButton(
             "Crop Image Node",
             lambda: ["ros2", "run", "parol6_vision", "crop_image"],
-            self._log, "#74c7ec",
+            self._log,
+            "#74c7ec",
+            # No status_check_cmd: avoid periodic blocking subprocess on the Qt thread.
+            # Ownership (self._worker) tracks run state; explicit checks are done on demand.
+            status_check_cmd=None,
+            external_stop_cmd=[
+                "bash", "-lc",
+                "pkill -INT -f 'ros2 run parol6_vision crop_image'",
+            ],
         )
         mg_lay.addWidget(self._btn_crop_node)
 
@@ -1039,7 +1238,7 @@ class VisionPipelineGUI(QMainWindow):
 
         previews = [
             ("/kinect2/qhd/image_color_rect",           "📷 Live Camera"),
-            ("/vision/captured_image_color",            "📸 Captured Frame"),
+            ("/vision/captured_image_raw",              "📸 Captured Frame"),
             ("/vision/processing_mode/annotated_image", "🔍 Processing Output"),
             ("/path_optimizer/debug_image",             "📊 Path Optimizer Debug"),
         ]
@@ -1056,6 +1255,7 @@ class VisionPipelineGUI(QMainWindow):
             fl.setContentsMargins(0, 0, 0, 0)
             fl.setSpacing(2)
             title_lbl = QLabel(f"  {title}")
+            title_lbl.setFixedHeight(22)
             title_lbl.setStyleSheet(
                 f"color:{C['text2']}; font-size:10px; font-weight:bold;"
                 f" background:{C['panel']}; padding:3px;"
@@ -1063,14 +1263,13 @@ class VisionPipelineGUI(QMainWindow):
             fl.addWidget(title_lbl)
             if ROS2_OK and CV2_OK:
                 prev = TopicPreviewLabel(topic, self._ros_node, self._bridge)
-                fl.addWidget(prev)
-                if topic == "/vision/captured_image_color":
-                    self._captured_preview = prev
+                prev.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                fl.addWidget(prev, 1)   # stretch=1 → image fills remaining space
             else:
                 lbl = QLabel(f"⌛  {topic}\n(ROS2 / cv2 offline)")
                 lbl.setAlignment(Qt.AlignCenter)
                 lbl.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
-                fl.addWidget(lbl)
+                fl.addWidget(lbl, 1)
             self._preview_panels.append(frame)
             vis_tab.addTab(frame, title)
 
@@ -1086,9 +1285,9 @@ class VisionPipelineGUI(QMainWindow):
         load_btn.clicked.connect(self._manual_load_image)
         ctrl_row.addWidget(load_btn)
 
-        load_cap_btn = QPushButton("📥  Load from Captured Frame")
-        load_cap_btn.clicked.connect(self._manual_load_captured)
-        ctrl_row.addWidget(load_cap_btn)
+        use_topic_btn = QPushButton("📥  Use Latest Cropped Frame")
+        use_topic_btn.clicked.connect(self._manual_use_latest_cropped)
+        ctrl_row.addWidget(use_topic_btn)
 
         ctrl_row.addWidget(QLabel("Brush (px):"))
         self._brush_spin = QSpinBox()
@@ -1246,9 +1445,18 @@ class VisionPipelineGUI(QMainWindow):
         # Link the tabs widget so NodeButtons can add their tabs
         self._log.parent_tabs = self._log_tabs_widget
         
-        # Retrospectively add the camera node since it was built before the tabs
-        if hasattr(self, '_btn_live_cam') and hasattr(self._btn_live_cam, '_node_log'):
-            self._log_tabs_widget.addTab(self._btn_live_cam._node_log, self._btn_live_cam._label)
+        for attr in (
+            '_btn_live_cam',
+            '_btn_capture',
+            '_btn_crop_node',
+            '_btn_optimizer',
+            '_btn_depth',
+            '_btn_pathgen',
+            '_btn_moveit',
+        ):
+            btn = getattr(self, attr, None)
+            if btn and hasattr(btn, '_node_log') and self._log_tabs_widget.indexOf(btn._node_log) == -1:
+                self._log_tabs_widget.addTab(btn._node_log, btn._label)
         
         ll_lay.addWidget(self._log_tabs_widget)
         tabs.addTab(log_tab, "📋  Console Logs")
@@ -1272,9 +1480,12 @@ class VisionPipelineGUI(QMainWindow):
 
         # ── Top info bar ──────────────────────────────────────────────────
         info = QLabel(
-            "📌 <b>Draw a rectangle</b> on the full-frame image (left) to select the crop region. "
-            "Click <b>Apply & Save</b> to activate — every future captured image will be cropped "
-            "automatically using the saved config. <b>Reset</b> restores pass-through."
+            "📌 <b>Draw a polygon</b> on the full-frame image (left) — left-click to add vertices, "
+            "right-click (or click near the first point) to close. "
+            "<b>Mask mode</b> (recommended): keeps full resolution and zeros out pixels outside "
+            "the polygon — depth coordinates stay valid for downstream nodes. "
+            "<b>Crop mode</b>: cuts to the bounding box — changes image dimensions. "
+            "Click <b>Apply & Save</b> to activate. <b>Reset</b> restores pass-through."
         )
         info.setTextFormat(Qt.RichText)
         info.setWordWrap(True)
@@ -1282,6 +1493,7 @@ class VisionPipelineGUI(QMainWindow):
             f"background:{C['panel']}; border:1px solid {C['accent']};"
             f" border-radius:6px; color:{C['text2']}; font-size:11px; padding:8px;"
         )
+        info.setMaximumHeight(80)
         root_lay.addWidget(info)
 
         # ── Dual preview ──────────────────────────────────────────────────
@@ -1296,15 +1508,17 @@ class VisionPipelineGUI(QMainWindow):
         lf_lay.setContentsMargins(0, 0, 0, 0)
         lf_lay.setSpacing(2)
         lhdr = QLabel("  📷  Full Frame — /vision/captured_image_raw")
+        lhdr.setFixedHeight(22)
         lhdr.setStyleSheet(
             f"color:{C['text2']}; font-size:10px; font-weight:bold;"
             f" background:{C['panel']}; padding:3px;"
         )
         lf_lay.addWidget(lhdr)
 
-        # CropROIView: shows ROS image with draggable ROI rectangle
+        # CropROIView: shows ROS image with draggable ROI polygon
         self._crop_view = CropROIView(self._ros_node, self._bridge)
-        lf_lay.addWidget(self._crop_view)
+        self._crop_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        lf_lay.addWidget(self._crop_view, 1)   # stretch → fills remaining height
         preview_row.addWidget(left_frame)
 
         # Right: cropped output
@@ -1315,7 +1529,8 @@ class VisionPipelineGUI(QMainWindow):
         rf_lay = QVBoxLayout(right_frame)
         rf_lay.setContentsMargins(0, 0, 0, 0)
         rf_lay.setSpacing(2)
-        rhdr = QLabel("  ✂️  Cropped Output — /vision/captured_image_color")
+        rhdr = QLabel("  ✂️  Masked/Cropped Output — /vision/captured_image_color")
+        rhdr.setFixedHeight(22)
         rhdr.setStyleSheet(
             f"color:{C['text2']}; font-size:10px; font-weight:bold;"
             f" background:{C['panel']}; padding:3px;"
@@ -1332,10 +1547,14 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_output_preview.setStyleSheet(
                 f"background:{C['panel']}; color:{C['text2']}; font-size:10px;"
             )
-        rf_lay.addWidget(self._crop_output_preview)
+        self._crop_output_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        rf_lay.addWidget(self._crop_output_preview, 1)  # stretch → fills remaining height
         preview_row.addWidget(right_frame)
+        preview_row.setStretch(0, 3)
+        preview_row.setStretch(1, 2)
 
         root_lay.addLayout(preview_row)
+        root_lay.setStretch(1, 1)
 
         # ── Bottom control bar ────────────────────────────────────────────
         ctrl_bar = QHBoxLayout()
@@ -1346,8 +1565,54 @@ class VisionPipelineGUI(QMainWindow):
 
         ctrl_bar.addStretch()
 
-        # ROI readout
-        self._roi_readout = QLabel("ROI: — ")
+        # Mode selector
+        ctrl_bar.addWidget(QLabel("Mode:"))
+        self._crop_mode_combo = QComboBox()
+        self._crop_mode_combo.addItem("🛡  Mask (preserve resolution)", "mask")
+        self._crop_mode_combo.addItem("✂️  Crop (bounding box)", "crop")
+        self._crop_mode_combo.setToolTip(
+            "Mask: pixels outside polygon are zeroed — full resolution kept, "
+            "depth coordinates valid.\n"
+            "Crop: image is cut to the polygon's bounding box — resolution changes."
+        )
+        ctrl_bar.addWidget(self._crop_mode_combo)
+
+        ctrl_bar.addSpacing(6)
+
+        # ── Mask colour picker ────────────────────────────────────────
+        # Default mask fill: black
+        self._crop_mask_color = QColor(0, 0, 0)
+
+        ctrl_bar.addWidget(QLabel("Mask fill:"))
+
+        # Colour swatch — click to open QColorDialog
+        self._color_swatch = QPushButton()
+        self._color_swatch.setFixedSize(28, 22)
+        self._color_swatch.setToolTip(
+            "Click to choose the mask fill colour.\n"
+            "Default: black (RGB 0,0,0)."
+        )
+        self._color_swatch.clicked.connect(self._on_pick_color)
+        self._update_color_swatch()
+        ctrl_bar.addWidget(self._color_swatch)
+
+        # Eyedropper — sample a pixel from the left panel
+        eyedrop_btn = QPushButton("🔬")
+        eyedrop_btn.setFixedSize(28, 22)
+        eyedrop_btn.setToolTip(
+            "Pick fill colour from the image.\n"
+            "Click, then click any pixel on the left panel."
+        )
+        eyedrop_btn.clicked.connect(self._on_eyedropper_activate)
+        ctrl_bar.addWidget(eyedrop_btn)
+
+        # Connect the crop view's pixel_sampled signal
+        self._crop_view.pixel_sampled.connect(self._on_color_sampled)
+
+        ctrl_bar.addSpacing(8)
+
+        # Polygon vertex readout
+        self._roi_readout = QLabel("Polygon: — ")
         self._roi_readout.setStyleSheet(
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
         )
@@ -1355,7 +1620,7 @@ class VisionPipelineGUI(QMainWindow):
 
         ctrl_bar.addSpacing(8)
 
-        clear_roi_btn = QPushButton("🗑  Clear ROI")
+        clear_roi_btn = QPushButton("🗑  Clear")
         clear_roi_btn.clicked.connect(self._crop_clear_roi)
         clear_roi_btn.setStyleSheet(
             f"background:{C['panel']}; color:{C['text2']}; border:1px solid {C['border']};"
@@ -1389,8 +1654,88 @@ class VisionPipelineGUI(QMainWindow):
 
         return tab
 
+    # ── Mask colour helpers ───────────────────────────────────────────────
+
+    def _update_color_swatch(self) -> None:
+        """Repaint the colour swatch button to show the current fill colour."""
+        c = self._crop_mask_color
+        hex_bg = c.name()          # e.g. '#000000'
+        # Use white or black text depending on brightness
+        lum = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
+        fg = "#000000" if lum > 128 else "#ffffff"
+        self._color_swatch.setStyleSheet(
+            f"background:{hex_bg}; color:{fg}; border:1px solid {C['border']};"
+            " border-radius:3px;"
+        )
+        self._color_swatch.setToolTip(
+            f"Mask fill colour: {hex_bg} (RGB {c.red()},{c.green()},{c.blue()}).\n"
+            "Click to change."
+        )
+
+    def _on_pick_color(self) -> None:
+        """Open a NON-MODAL QColorDialog so the panel stays visible and undimmed.
+
+        Being non-modal means:
+          • The image is not dimmed — you can clearly see the background colour.
+          • You can drag the dialog anywhere to expose the workspace.
+          • Use the 🔬 Eyedropper for pixel-accurate sampling straight from the image.
+        """
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtCore import Qt
+
+        if hasattr(self, "_color_dialog") and self._color_dialog is not None:
+            # Bring existing dialog to front instead of opening a second one
+            self._color_dialog.raise_()
+            self._color_dialog.activateWindow()
+            return
+
+        dlg = QColorDialog(self._crop_mask_color, self)
+        dlg.setWindowTitle("Choose mask fill colour")
+        dlg.setWindowModality(Qt.NonModal)   # ← image stays fully visible
+        dlg.setOption(QColorDialog.ShowAlphaChannel, False)
+
+        # Wire up result signals
+        def _accepted():
+            color = dlg.currentColor()
+            if color.isValid():
+                self._crop_mask_color = color
+                self._update_color_swatch()
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] Colour set to '
+                    f'{color.name()} (RGB {color.red()},{color.green()},{color.blue()})</span>'
+                )
+            self._color_dialog = None
+
+        def _rejected():
+            self._color_dialog = None
+
+        dlg.accepted.connect(_accepted)
+        dlg.rejected.connect(_rejected)
+        dlg.finished.connect(lambda _: setattr(self, "_color_dialog", None))
+
+        self._color_dialog = dlg
+        dlg.show()
+
+    def _on_eyedropper_activate(self) -> None:
+        """Toggle eyedropper mode: next click on the left panel samples a pixel."""
+        self._crop_view._eyedropper_mode = True
+        self._crop_view.setCursor(Qt.CrossCursor)
+        self._log.append(
+            f'<span style="color:{C["text2"]}">[Crop] Eyedropper active — '
+            'click a pixel on the left panel to sample its colour.</span>'
+        )
+
+    def _on_color_sampled(self, color: "QColor") -> None:
+        """Receive the colour sampled by the eyedropper and update the swatch."""
+        self._crop_mask_color = color
+        self._update_color_swatch()
+        self._log.append(
+            f'<span style="color:{C["text2"]}">[Crop] Sampled colour: '
+            f'{color.name()} (RGB {color.red()},{color.green()},{color.blue()})</span>'
+        )
+
     def _crop_load_existing_config(self) -> None:
-        """Read ~/.parol6/crop_config.json and update status label."""
+        """Read ~/.parol6/crop_config.json and update status label + mode selector."""
         import json
         from pathlib import Path
         cfg_path = Path.home() / ".parol6" / "crop_config.json"
@@ -1398,94 +1743,331 @@ class VisionPipelineGUI(QMainWindow):
             try:
                 with open(cfg_path) as f:
                     cfg = json.load(f)
-                if cfg.get("enabled") and "x" in cfg:
+                if not cfg.get("enabled"):
+                    raise ValueError("disabled")
+
+                mode = cfg.get("mode", "crop")
+                # Set the combo to match saved mode
+                idx = self._crop_mode_combo.findData(mode)
+                if idx >= 0:
+                    self._crop_mode_combo.setCurrentIndex(idx)
+
+                mask_color = cfg.get("mask_color", [0, 0, 0])
+                if len(mask_color) == 3:
+                    self._crop_mask_color = QColor(mask_color[0], mask_color[1], mask_color[2])
+                    self._update_color_swatch()
+
+                if mode == "mask" and cfg.get("polygon"):
+                    poly = cfg["polygon"]
+                    roi = None
+                    # Compute bounding box for display / set_saved_roi
+                    xs = [p[0] for p in poly]
+                    ys = [p[1] for p in poly]
+                    roi = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+                    self._crop_status_lbl.setText(
+                        f"✅  Active: Mask mode — {len(poly)} polygon pts"
+                    )
+                    self._roi_readout.setText(f"Polygon: {len(poly)} pts")
+                elif "x" in cfg:
                     roi = (cfg["x"], cfg["y"], cfg["width"], cfg["height"])
                     self._crop_status_lbl.setText(
-                        f"✅  Active config: ROI = {roi}"
-                    )
-                    self._crop_status_lbl.setStyleSheet(
-                        f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                        f"✅  Active: Crop mode — ROI = {roi}"
                     )
                     self._roi_readout.setText(
-                        f"ROI: x={roi[0]} y={roi[1]} w={roi[2]} h={roi[3]}"
+                        f"Polygon: x={roi[0]} y={roi[1]} w={roi[2]} h={roi[3]}"
                     )
+                else:
+                    raise ValueError("no geometry")
+
+                self._crop_status_lbl.setStyleSheet(
+                    f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                )
+                if roi:
                     self._crop_view.set_saved_roi(roi)
-                    return
+                return
             except Exception:
                 pass
         self._crop_status_lbl.setText("Status: No crop config (pass-through)")
         self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
 
     def _on_roi_changed(self, roi: tuple) -> None:
-        """Called when the user finishes drawing an ROI rectangle."""
+        """Called when the user finishes drawing a polygon ROI."""
         x, y, w, h = roi
-        self._roi_readout.setText(f"ROI: x={x} y={y} w={w} h={h}")
+        n_pts = len(self._crop_view._poly_pts)
+        self._roi_readout.setText(f"Polygon: {n_pts} pts  bbox=({x},{y},{w},{h})")
         self._crop_status_lbl.setText(
-            f"📐  Pending: ROI = ({x}, {y}, {w}, {h}) — click Apply & Save"
+            f"📐  Pending: {n_pts}-pt polygon — click Apply & Save"
         )
         self._crop_status_lbl.setStyleSheet(
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
         )
 
+    def _ensure_crop_node_running(self) -> bool:
+        if not hasattr(self, "_btn_crop_node"):
+            return False
+        if self._btn_crop_node.is_running():
+            return True
+        self._btn_crop_node._start()
+        return self._btn_crop_node.is_running()
+
     def _crop_apply_save(self) -> None:
-        """Save the current ROI to config and call the crop_image node's param."""
+        """Save the current polygon/ROI to config and push to /crop_image.
+
+        Mask mode  — writes polygon points, calls ~/reload_roi only.
+                     Output has the same resolution as input; depth coords preserved.
+        Crop mode  — writes bounding box, calls set_parameters via retry loop.
+                     Output is a smaller image; depth coords shift.
+        """
         import json
         from pathlib import Path
 
         roi = self._crop_view.current_roi()
         if roi is None:
-            QMessageBox.warning(self, "No ROI", "Draw a rectangle on the image first.")
+            QMessageBox.warning(self, "No ROI",
+                                "Draw a polygon on the image first.")
             return
 
         x, y, w, h = roi
+        mode = self._crop_mode_combo.currentData()   # "mask" or "crop"
+        polygon = self._crop_view.get_polygon_image_coords()  # [[x,y],...]
+
         cfg_path = Path.home() / ".parol6" / "crop_config.json"
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Write config
-        with open(cfg_path, "w") as f:
-            json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
+        if mode == "mask":
+            # ── Mask mode ────────────────────────────────────────────────
+            if len(polygon) < 3:
+                QMessageBox.warning(self, "Not Enough Points",
+                    "Need at least 3 polygon vertices for mask mode.")
+                return
 
-        # Push ROI to running crop_image node via ros2 param set + reload_roi service
-        if not hasattr(self, '_crop_workers'):
-            self._crop_workers = []
-            
-        param_worker = NodeWorker(
-            ["ros2", "param", "set", "/crop_image", "roi", f"[{x},{y},{w},{h}]"],
-        )
-        param_worker.line_out.connect(self._log.append)
-        param_worker.finished.connect(lambda rc, w=param_worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
-        self._crop_workers.append(param_worker)
-        param_worker.start()
+            cfg = {"enabled": True, "mode": "mask", "polygon": polygon,
+                   "mask_color": [self._crop_mask_color.red(),
+                                  self._crop_mask_color.green(),
+                                  self._crop_mask_color.blue()]}
+            with open(cfg_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            self._log.append(
+                f'<b style="color:{C["green"]}">[Crop] Mask config saved → {cfg_path}  '
+                f'{len(polygon)} pts</b>'
+            )
+            self._crop_status_lbl.setText(
+                f"⏳  Applying mask ({len(polygon)} pts) …"
+            )
+            self._crop_status_lbl.setStyleSheet(
+                f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+            )
+            self._ensure_crop_node_running()
 
-        self._crop_status_lbl.setText(
-            f"✅  Saved & Active: ROI = ({x}, {y}, {w}, {h})"
-        )
-        self._crop_status_lbl.setStyleSheet(
-            f"color:{C['green']}; font-size:11px; font-weight:bold;"
-        )
-        self._log.append(
-            f'<b style="color:{C["green"]}">[Crop] Config saved → {cfg_path}  ROI=({x},{y},{w},{h})</b>'
-        )
+            if not ROS2_OK or self._crop_reload_client is None:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] ROS not available.</span>'
+                )
+                return
+
+            # Retry until reload_roi service is ready (node may be starting up)
+            _MAX = 8
+            _MS  = 500
+
+            def _reload_attempt(remaining: int) -> None:
+                if self._crop_reload_client.service_is_ready():
+                    _do_reload()
+                elif remaining > 0:
+                    self._log.append(
+                        f'<span style="color:{C["text2"]}">[Crop] Waiting for '
+                        f'/crop_image/reload_roi service ({remaining} left)…</span>'
+                    )
+                    QTimer.singleShot(_MS, lambda: _reload_attempt(remaining - 1))
+                else:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] reload_roi service '
+                        'not available. Is the node running?</span>'
+                    )
+
+            def _do_reload() -> None:
+                future = self._crop_reload_client.call_async(Trigger.Request())
+                self._crop_futures.append(future)
+
+                def _on_done(fut):
+                    try:
+                        resp = fut.result()
+                        self._log.append(
+                            f'<span style="color:{C["green"]}">[Crop] ✅ Mask applied: '
+                            f'{resp.message}</span>'
+                        )
+                        self._crop_status_lbl.setText(
+                            f"✅  Mask active: {len(polygon)} pts"
+                        )
+                        self._crop_status_lbl.setStyleSheet(
+                            f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                        )
+                        self._roi_readout.setText(f"Polygon: {len(polygon)} pts")
+                    except Exception as exc:
+                        self._log.append(
+                            f'<span style="color:{C["red"]}">[Crop] reload_roi failed: {exc}</span>'
+                        )
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
+
+                future.add_done_callback(_on_done)
+
+            _reload_attempt(_MAX)
+
+        else:
+            # ── Crop mode (legacy bbox) ───────────────────────────────────
+            cfg = {"enabled": True, "mode": "crop",
+                   "x": x, "y": y, "width": w, "height": h}
+            with open(cfg_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            self._log.append(
+                f'<b style="color:{C["green"]}">[Crop] Crop config saved → {cfg_path}  '
+                f'ROI=({x},{y},{w},{h})</b>'
+            )
+            self._crop_status_lbl.setText(f"⏳  Applying crop ROI …")
+            self._crop_status_lbl.setStyleSheet(
+                f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+            )
+            self._ensure_crop_node_running()
+
+            if not ROS2_OK or self._crop_set_params_client is None:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] ROS client unavailable.</span>'
+                )
+                return
+
+            _MAX = 8
+            _MS  = 500
+
+            def _attempt(remaining: int) -> None:
+                if self._crop_set_params_client.service_is_ready():
+                    _do_call()
+                elif remaining > 0:
+                    self._log.append(
+                        f'<span style="color:{C["text2"]}">[Crop] Waiting for '
+                        f'/crop_image service ({remaining} left)…</span>'
+                    )
+                    QTimer.singleShot(_MS, lambda: _attempt(remaining - 1))
+                else:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] /crop_image service '
+                        'not available. Is the node running?</span>'
+                    )
+
+            def _do_call() -> None:
+                req = SetParameters.Request()
+                req.parameters = [
+                    RclpyParameter(
+                        'roi', RclpyParameter.Type.INTEGER_ARRAY, [x, y, w, h]
+                    ).to_parameter_msg()
+                ]
+                future = self._crop_set_params_client.call_async(req)
+                self._crop_futures.append(future)
+
+                def _on_done(fut):
+                    try:
+                        result = fut.result()
+                        if result.results and result.results[0].successful:
+                            self._log.append(
+                                f'<span style="color:{C["green"]}">[Crop] ✅ ROI applied '
+                                f'({x},{y},{w},{h})</span>'
+                            )
+                            _trigger_reload()
+                            self._crop_status_lbl.setText(
+                                f"✅  Crop active: ({x},{y}) {w}×{h}"
+                            )
+                            self._crop_status_lbl.setStyleSheet(
+                                f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                            )
+                            self._roi_readout.setText(
+                                f"Polygon: x={x} y={y} w={w} h={h}"
+                            )
+                        else:
+                            reason = (
+                                result.results[0].reason if result.results else "unknown"
+                            )
+                            self._log.append(
+                                f'<span style="color:{C["red"]}">[Crop] ⚠ Rejected: '
+                                f'{reason}</span>'
+                            )
+                    except Exception as exc:
+                        self._log.append(
+                            f'<span style="color:{C["red"]}">[Crop] SetParameters failed: {exc}</span>'
+                        )
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
+
+                future.add_done_callback(_on_done)
+
+            def _trigger_reload() -> None:
+                if self._crop_reload_client is None:
+                    return
+                if not self._crop_reload_client.service_is_ready():
+                    return
+                future = self._crop_reload_client.call_async(Trigger.Request())
+                self._crop_futures.append(future)
+
+                def _on_r(fut):
+                    try:
+                        resp = fut.result()
+                        self._log.append(
+                            f'<span style="color:{C["text2"]}">[Crop] reload_roi: '
+                            f'{resp.message}</span>'
+                        )
+                    except Exception:
+                        pass
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
+
+                future.add_done_callback(_on_r)
+
+            _attempt(_MAX)
 
     def _crop_clear_roi(self) -> None:
-        """Clear the drawn ROI on the canvas without saving."""
+        """Clear the drawn polygon on the canvas without saving."""
         self._crop_view.clear_roi()
-        self._roi_readout.setText("ROI: —")
-        self._crop_status_lbl.setText("📐  ROI cleared — draw a new region")
+        self._roi_readout.setText("Polygon: —")
+        self._crop_status_lbl.setText("📐  Cleared — draw a new polygon")
         self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
 
     def _crop_reset(self) -> None:
         """Disable crop (pass-through) — call ~/clear_roi service and update config."""
-        if not hasattr(self, '_crop_workers'):
-            self._crop_workers = []
-            
-        worker = NodeWorker(
-            ["ros2", "service", "call", "/crop_image/clear_roi", "std_srvs/srv/Trigger", "{}"]
-        )
-        worker.line_out.connect(self._log.append)
-        worker.finished.connect(lambda rc, w=worker: self._crop_workers.remove(w) if w in self._crop_workers else None)
-        self._crop_workers.append(worker)
-        worker.start()
+        if not self._ensure_crop_node_running():
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] /crop_image is not running.</span>'
+            )
+            return
+        if not ROS2_OK or self._crop_clear_client is None:
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] Clear-ROI client is unavailable in the GUI.</span>'
+            )
+            return
+        if not self._crop_clear_client.wait_for_service(timeout_sec=1.5):
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Crop] /crop_image/clear_roi service is not available.</span>'
+            )
+            return
+
+        future = self._crop_clear_client.call_async(Trigger.Request())
+        self._crop_futures.append(future)
+
+        def _on_done(fut):
+            try:
+                resp = fut.result()
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] {resp.message}</span>'
+                )
+            except Exception as exc:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] Clear failed: {exc}</span>'
+                )
+            finally:
+                if fut in self._crop_futures:
+                    self._crop_futures.remove(fut)
+
+        future.add_done_callback(_on_done)
 
         self._crop_view.clear_roi()
         self._roi_readout.setText("ROI: —")
@@ -1578,6 +2160,10 @@ class VisionPipelineGUI(QMainWindow):
     def _stop_mode_node(self) -> None:
         if self._mode_worker:
             self._mode_worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._mode_worker)
+            self._mode_worker.finished.connect(lambda rc, w=self._mode_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._mode_worker = None
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
@@ -1588,6 +2174,7 @@ class VisionPipelineGUI(QMainWindow):
         self._btn_stop_mode.setEnabled(False)
 
     def _launch_full_pipeline(self) -> None:
+        self._ensure_crop_node_running()
         self._btn_capture.stop()
         QTimer.singleShot(200, self._btn_capture._toggle)
         QTimer.singleShot(600, self._start_mode_node)
@@ -1597,12 +2184,17 @@ class VisionPipelineGUI(QMainWindow):
 
     def _stop_all(self) -> None:
         for btn in (self._btn_live_cam, self._btn_capture,
+                    self._btn_crop_node,
                     self._btn_optimizer, self._btn_depth,
                     self._btn_pathgen, self._btn_moveit):
             btn.stop()
         self._stop_mode_node()
         if self._ros_worker:
             self._ros_worker.abort()
+            if not hasattr(self, "_graveyard"):
+                self._graveyard = []
+            self._graveyard.append(self._ros_worker)
+            self._ros_worker.finished.connect(lambda rc, w=self._ros_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._ros_worker = None
 
     def _send_path_to_moveit(self) -> None:
@@ -1715,6 +2307,14 @@ poses:
         subprocess.run(["bash", "-c", cmd], check=False)
         self._ros_log.append("[KILL] All ROS 2 processes terminated.")
 
+    def _kill_camera_processes(self) -> None:
+        cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml'"
+        subprocess.run(["bash", "-c", cmd], check=False)
+        self._btn_live_cam._set_stopped()
+        self._log.append(
+            f'<span style="color:{C["red"]}">[Live Kinect Camera] Requested stop for stale camera processes.</span>'
+        )
+
     # ── Manual Red Line actions ────────────────────────────────────────────
 
     def _manual_load_image(self) -> None:
@@ -1732,19 +2332,33 @@ poses:
             rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             self._canvas.load_image(rgb)
 
-    def _manual_load_captured(self) -> None:
-        """Load the image that was just captured (stored in _captured_preview)."""
-        if getattr(self, '_captured_preview', None) is None:
-            QMessageBox.warning(self, "Offline", "Captured frame preview is offline.")
+    def _manual_topic_image_cb(self, msg: "ROSImage") -> None:
+        """Cache the latest cropped frame for use with 'Use Latest Cropped Frame' button.
+        Does NOT auto-load into the canvas — the user opts in explicitly.
+        """
+        if not (CV2_OK and self._bridge):
             return
-            
-        frame_rgb = getattr(self._captured_preview, '_latest_img', None)
-        if frame_rgb is None:
-            QMessageBox.warning(self, "No Image", "No image has been captured yet.\nPlease trigger a capture first.")
-            return
+        try:
+            frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
+            self._latest_cropped_rgb = frame.copy()
+        except Exception:
+            pass
 
-        self._canvas.load_image(frame_rgb.copy())
-        self._log.append(f'<b style="color:{C["green"]}">[Manual] Loaded captured frame.</b>')
+    def _manual_use_latest_cropped(self) -> None:
+        if not CV2_OK:
+            QMessageBox.warning(self, "cv2 Missing", "OpenCV (cv2) is required.")
+            return
+        if self._latest_cropped_rgb is None:
+            QMessageBox.warning(
+                self,
+                "No Cropped Frame",
+                "No image has been received yet on /vision/captured_image_color.",
+            )
+            return
+        self._canvas.load_image(self._latest_cropped_rgb.copy())
+        self._log.append(
+            f'<span style="color:{C["green"]}">[Manual] Loaded latest cropped frame from /vision/captured_image_color.</span>'
+        )
 
     def _manual_save(self) -> None:
         if not CV2_OK:
