@@ -8,47 +8,88 @@ import math
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Trigger
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 
 class AutoTestRunner(Node):
     def __init__(self, shape):
         super().__init__('auto_test_runner')
         self.shape = shape
-        self.path_pub = self.create_publisher(Path, '/vision/welding_path', 10)
+        # Use transient-local (latching) QoS so the controller receives the
+        # path even if it subscribes after the publish call.
+        latch_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.path_pub = self.create_publisher(Path, '/vision/welding_path', latch_qos)
         self.client = self.create_client(Trigger, '/moveit_controller/execute_welding_path')
         self.status_client = self.create_client(Trigger, '/moveit_controller/is_execution_idle')
         self.controller_proc = None
 
     def run(self):
-        # 1. Start moveit_controller in the background
+        # 0. Kill stale nodes and wait long enough for DDS to de-register their endpoints.
+        #    0.5s is not enough — DDS endpoint liveliness lease can take 2-3 seconds.
+        #    Without this, wait_for_service() returns True on the dead service immediately.
+        self.get_logger().info("Killing any stale moveit_controller processes...")
+        subprocess.run(
+            ["pkill", "-9", "-f", "moveit_controller"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        time.sleep(3.0)  # Must wait for DDS to expire old endpoints
+
+        # 1. Start a fresh moveit_controller
         self.get_logger().info("Starting moveit_controller in the background...")
         self.controller_proc = subprocess.Popen(
             ["ros2", "run", "parol6_vision", "moveit_controller"]
         )
 
-        # 2. Wait for service to become available
+        # 2. Wait for the NEW service to become available (now DDS endpoints are clean)
         self.get_logger().info("Waiting for execute_welding_path service...")
         attempts = 0
         while not self.client.wait_for_service(timeout_sec=1.0):
             attempts += 1
-            if attempts > 10:
+            if attempts > 15:
                 self.get_logger().error("Service never became available. Aborting.")
                 self.cleanup()
                 return
             self.get_logger().info('Service not available yet, waiting...')
 
-        # 3. Generate and publish path multiple times to ensure RViz and MoveIt see the Latched topic
+        # 3. Give the node an extra moment to finish setting up its subscriptions
+        #    (service advertised slightly before subscriptions are fully wired in DDS)
+        time.sleep(0.5)
+
+        # 4. Publish path and confirm delivery via re-publish loop
         if self.shape != 'Live Camera (No Inject)':
-            self.get_logger().info(f"Publishing '{self.shape}' shape to /vision/welding_path...")
             path_msg = self.generate_path(self.shape)
-            for _ in range(5):
+            path_received = False
+            for attempt in range(5):
+                self.get_logger().info(
+                    f"Publishing '{self.shape}' path (attempt {attempt+1}/5)..."
+                )
                 self.path_pub.publish(path_msg)
-                time.sleep(0.2)
+                # Yield to let callbacks fire
+                time.sleep(0.6)
+                rclpy.spin_once(self, timeout_sec=0.1)
+
+                # Ask the controller if it has a path yet via a dry-run trigger
+                if self.status_client.wait_for_service(timeout_sec=0.5):
+                    check_fut = self.status_client.call_async(Trigger.Request())
+                    rclpy.spin_until_future_complete(self, check_fut, timeout_sec=1.0)
+                    try:
+                        r = check_fut.result()
+                        # is_execution_idle returns success=True when idle AND path received
+                        if r is not None:
+                            path_received = True
+                            break
+                    except Exception:
+                        pass
+
+            if not path_received:
+                self.get_logger().warn("Could not confirm path delivery — proceeding anyway.")
         else:
-            self.get_logger().info("Live Camera Mode selected. Waiting 3 seconds for real vision path...")
+            self.get_logger().info("Live Camera Mode selected. Waiting 3s for real vision path...")
             time.sleep(3.0)
 
-        # 4. Give MoveIt exactly a moment to ingest the path
-        time.sleep(0.5)
 
         # 5. Call execute service
         self.get_logger().info("Triggering execution via service call...")

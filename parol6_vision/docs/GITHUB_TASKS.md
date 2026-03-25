@@ -18,7 +18,7 @@ This document provides ready-to-use GitHub issue templates for the remaining vis
 Create an interactive HSV color space inspector tool that helps developers tune red line detection parameters in real-time by displaying pixel-level RGB and HSV values as the mouse moves over the camera feed.
 
 ### 🎯 Objectives
-- Subscribe to live Kinect camera feed (`/kinect2/qhd/image_color_rect`)
+- Subscribe to live Kinect camera feed (`/kinect2/sd/image_color_rect`)
 - Display camera image in OpenCV window
 - Show real-time RGB and HSV values at mouse cursor position
 - Provide visual feedback (crosshair, text overlay)
@@ -26,7 +26,7 @@ Create an interactive HSV color space inspector tool that helps developers tune 
 
 ### ✅ Acceptance Criteria
 - [ ] ROS2 node implemented: `hsv_inspector_node.py`
-- [ ] Subscribes to configurable image topic (default: `/kinect2/qhd/image_color_rect`)
+- [ ] Subscribes to configurable image topic (default: `/kinect2/sd/image_color_rect`)
 - [ ] OpenCV window titled "HSV Inspector" displays live camera feed
 - [ ] Mouse move callback triggered on every cursor movement
 - [ ] Text overlay shows:
@@ -344,7 +344,7 @@ Implement the `depth_matcher` node that projects 2D weld line detections into 3D
 - Publish `WeldLine3DArray` messages with quality metrics
 
 ### ✅ Acceptance Criteria
-- [ ] Node subscribes to `/vision/weld_lines_2d`, `/kinect2/qhd/image_depth_rect`, and `/kinect2/qhd/camera_info`
+- [ ] Node subscribes to `/vision/weld_lines_2d`, `/kinect2/sd/image_depth_rect`, and `/kinect2/sd/camera_info`
 - [ ] Publishes `/vision/weld_lines_3d` with 3D points in `base_link` frame
 - [ ] Implements TF transformation from camera to robot base
 - [ ] Includes depth quality metric (% valid depth readings)

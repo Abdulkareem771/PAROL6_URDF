@@ -108,7 +108,7 @@ ros2 launch kinect2_bridge kinect2_bridge.launch.py
 ### Step 3: Verify Camera Feed in RViz
 
 - The **Camera** panel (bottom right in RViz) should now show live video
-- Image topic: `/kinect2/qhd/image_color_rect`
+- Image topic: `/kinect2/sd/image_color_rect`
 
 ### Step 4: Check Camera Frame Alignment
 
@@ -147,9 +147,9 @@ ros2 topic echo /vision/weld_lines_2d
 source /opt/ros/humble/setup.bash
 ros2 run depth_image_proc point_cloud_xyzrgb_node \
   --ros-args \
-  -r /rgb/camera_info:=/kinect2/qhd/camera_info \
-  -r /rgb/image_rect_color:=/kinect2/qhd/image_color_rect \
-  -r /depth_registered/image_rect:=/kinect2/qhd/image_depth_rect \
+  -r /rgb/camera_info:=/kinect2/sd/camera_info \
+  -r /rgb/image_rect_color:=/kinect2/sd/image_color_rect \
+  -r /depth_registered/image_rect:=/kinect2/sd/image_depth_rect \
   -p use_sim_time:=true
 ```
 
@@ -220,7 +220,7 @@ Should show positions for `joint_L1` through `joint_L6`.
 **Check if Kinect is publishing:**
 ```bash
 ros2 topic list | grep kinect
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 ```
 
 **Expected output:** ~15-30 Hz

@@ -26,7 +26,12 @@ _ACK_RE = re.compile(
 def list_serial_ports() -> list[str]:
     if not SERIAL_AVAILABLE:
         return []
-    return [p.device for p in serial.tools.list_ports.comports()]
+    ports = [p.device for p in serial.tools.list_ports.comports()]
+    # Filter out system ports unless it's the only one available
+    filtered = [p for p in ports if "ttyS" not in p]
+    if filtered:
+        return sorted(filtered)
+    return sorted(ports)
 
 
 class SerialWorker(QThread):

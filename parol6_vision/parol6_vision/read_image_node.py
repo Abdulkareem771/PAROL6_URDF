@@ -28,8 +28,8 @@ INTEGRATION
 
 Use the ``capture_and_replay.launch.py`` launch file which remaps:
 
-    red_line_detector:  /kinect2/qhd/image_color_rect → /vision/captured_image_color
-    depth_matcher:      /kinect2/qhd/image_depth_rect → /vision/captured_image_depth
+    red_line_detector:  /kinect2/sd/image_color_rect → /vision/captured_image_color
+    depth_matcher:      /kinect2/sd/image_depth_rect → /vision/captured_image_depth
 
 =============================================================================
 PARAMETERS
@@ -61,7 +61,7 @@ class ReadImageNode(Node):
 
     Subscribed Topics
     -----------------
-    /kinect2/qhd/camera_info : sensor_msgs/CameraInfo   (cached, re-stamped)
+    /kinect2/sd/camera_info : sensor_msgs/CameraInfo   (cached, re-stamped)
 
     Published Topics
     ----------------
@@ -98,14 +98,14 @@ class ReadImageNode(Node):
         )
 
         # ── Camera info cache ─────────────────────────────────────────
-        # We subscribe to the live /kinect2/qhd/camera_info, cache the
+        # We subscribe to the live /kinect2/sd/camera_info, cache the
         # latest message, and re-publish it with a fresh timestamp that
         # matches the replayed image pair — this is what lets
         # depth_matcher's ApproximateTimeSynchronizer fire reliably.
         self._latest_camera_info: CameraInfo | None = None
         self._info_sub = self.create_subscription(
             CameraInfo,
-            '/kinect2/qhd/camera_info',
+            '/kinect2/sd/camera_info',
             self._camera_info_callback,
             10
         )
@@ -244,7 +244,7 @@ class ReadImageNode(Node):
             self.get_logger().warn(
                 f'[{token}] No camera_info received yet — '
                 'depth_matcher sync may not fire. '
-                'Ensure /kinect2/qhd/camera_info is publishing.'
+                'Ensure /kinect2/sd/camera_info is publishing.'
             )
 
         self.get_logger().info(

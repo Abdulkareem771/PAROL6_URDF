@@ -11,13 +11,13 @@ y_min_R, y_max_R = 0, 0
 x_min_R, x_max_R = 0, 0
 EPSILON_FACTOR = 0.05
 EXPAND_PX     = 0   # pixels to expand the polygon outward from each corner
-CEXPAND_PX    = 10  # pixels to dilate each contour mask outward
+CEXPAND_PX    = 12  # pixels to dilate each contour mask outward
 
 
 current_dir = Path(__file__)                # YOLO_resources/detect_path.py
 project_dir = current_dir.parent.parent     # ultralytics_cpu_env
 
-SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_3.jpg"
+SINGLE_IMAGE = project_dir / "data" / "some_images" / "image_2.png"
 
 IMAGE_FOLDER = project_dir / "data" / "Segmentation_images"
 
@@ -90,13 +90,13 @@ def segment_blocks(image_path):
     # Find the full external contours from the original masks
     contour_G = find_contours(G)
     contour_B = find_contours(B)
+    """
+    if contour_G is not None:
+        cv2.drawContours(img_annotated, [contour_G], -1, (255, 0, 0), 4)   # red outline (green object)
 
-    #if contour_G is not None:
-        #cv2.drawContours(img_annotated, [contour_G], -1, (0, 0, 255), 2)   # blue outline (green object)
-
-    #if contour_B is not None:
-        #cv2.drawContours(img_annotated, [contour_B], -1, (0, 0, 255), 2)   # blue outline (red object)
-
+    if contour_B is not None:
+        cv2.drawContours(img_annotated, [contour_B], -1, (255, 0, 0), 4)   # red outline (red object)
+    """
     # Expand contours outward by CEXPAND_PX using morphological dilation
     dil_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2*CEXPAND_PX+1, 2*CEXPAND_PX+1))
     G_exp = cv2.dilate(G, dil_kernel)
@@ -104,21 +104,22 @@ def segment_blocks(image_path):
 
     contour_G_exp = find_contours(G_exp)
     contour_B_exp = find_contours(B_exp)
+    """
+    if contour_G_exp is not None:
+        cv2.drawContours(img_annotated, [contour_G_exp], -1, (255, 0, 0), 4)  # red = expanded green contour
 
-    #if contour_G_exp is not None:
-        #cv2.drawContours(img_annotated, [contour_G_exp], -1, (0, 255, 0), 2)  # green = expanded green contour
-
-    #if contour_B_exp is not None:
-        #cv2.drawContours(img_annotated, [contour_B_exp], -1, (255, 0, 0), 2)  # red = expanded red contour
-
+    if contour_B_exp is not None:
+        cv2.drawContours(img_annotated, [contour_B_exp], -1, (255, 0, 0), 4)  # red = expanded red contour
+    """
     # Intersection of the two expanded contour regions
     intersection_mask = cv2.bitwise_and(G_exp, B_exp)
     contour_I = find_contours(intersection_mask)
-
+    
     if contour_I is not None:
-        cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), 3)    # red = intersection region
+        cv2.drawContours(img_annotated, [contour_I], -1, (255, 0, 0), -1)    # red = intersection region
+    
 
-
+    """
     # 6. GUI Display Section
     plt.figure(figsize=(20, 5))
 
@@ -148,8 +149,8 @@ def segment_blocks(image_path):
 
     plt.tight_layout()
     plt.show()
-
-    return G, B, img_annotated
+    """
+    return G, B, img_annotated, img_rgb
 
 def process_folder(folder_path, output_folder):
     if not os.path.exists(output_folder):
@@ -176,8 +177,9 @@ def process_folder(folder_path, output_folder):
 #process_folder('input_folder_path', 'output_folder_path')
 # Replace 'image.jpg' with your file or use the folder function
 
-g_matrix, b_matrix, img_annotated = segment_blocks(SINGLE_IMAGE)
+g_matrix, b_matrix, img_annotated, img_rgb = segment_blocks(SINGLE_IMAGE)
 
+"""
 print(f"g_matrix dtype: {g_matrix.dtype}")
 print(f"img_annotated dtype: {img_annotated.dtype}")
 
@@ -185,3 +187,41 @@ print(f"img_annotated dtype: {img_annotated.dtype}")
 print(f"img_annotated shape: {img_annotated.shape}")
 print(f"type(img_annotated): {type(img_annotated)}")
 print(f"type(g_matrix): {type(g_matrix)}")
+
+"""
+"""
+#plt.figure(figsize=(20, 20))
+
+# Subplot 1: Original Image
+#plt.subplot(1, 1)
+plt.title("Original Image")
+plt.imshow(img_rgb)
+plt.axis('off')
+
+"""
+
+
+# Subplot 2: G Matrix (Green Mask)
+plt.subplot(1, 2, 1)
+plt.title("Green Object")
+plt.imshow(g_matrix, cmap='gray')
+plt.axis('off')
+
+# Subplot 3: R Matrix (Red Object)
+plt.subplot(1, 2, 2)
+plt.title("Blue Object")
+plt.imshow(b_matrix, cmap='gray')
+plt.axis('off')
+
+
+"""
+# Subplot 4: Annotated Image with Bounding Boxes
+#plt.subplot(1, 4, 4)
+plt.title("Result")
+plt.imshow(img_annotated)
+plt.axis('off')
+"""
+plt.tight_layout()
+plt.show()
+
+

@@ -77,7 +77,7 @@ class DepthMatcher(Node):
     Subscribed Topics:
         /vision/weld_lines_2d (WeldLineArray): 2D detections
         /vision/captured_image_depth (Image): Aligned depth image (replayed)
-        /kinect2/qhd/camera_info (CameraInfo): Camera intrinsics
+        /kinect2/sd/camera_info (CameraInfo): Camera intrinsics
         
     Published Topics:
         /vision/weld_lines_3d (WeldLine3DArray): 3D weld seams

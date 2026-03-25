@@ -92,7 +92,8 @@ logs/launchers/*
 *.onnx
 *.h5
 *.weights
-
+*.tar
+*.tar.gz
 # Training output images / artifacts that are regenerated each run
 vision_work/resunet_training/test_results/
 vision_work/resunet_training/Tests/
@@ -124,3 +125,9 @@ parol6_vision/data/images_captured/*
 vision_work/resunet_training/best_resunet_seam.pth
 src/kinect2_ros2
 src/kinect2_ros2/color images to calibrate/*
+
+
+# Captured images
+parol6_vision/data/images_captured/*
+test_yolo_segment_node/*
+test_color_node/*

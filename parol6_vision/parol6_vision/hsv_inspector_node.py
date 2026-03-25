@@ -12,7 +12,7 @@ class HSVInspector(Node):
     def __init__(self):
         super().__init__('hsv_inspector')
 
-        self.image_topic = '/kinect2/qhd/image_color_rect'
+        self.image_topic = '/vision/processing_mode/annotated_image'
 
         self.bridge = CvBridge()
         self.sub = self.create_subscription(

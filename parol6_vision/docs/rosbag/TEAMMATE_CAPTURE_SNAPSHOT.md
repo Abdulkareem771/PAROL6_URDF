@@ -90,11 +90,11 @@ source /opt/ros/humble/setup.bash
 ros2 topic list | grep kinect
 
 # Check image is publishing
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 ```
 
 **Expected output:**
-- You should see `/kinect2/qhd/image_color_rect` and other topics
+- You should see `/kinect2/sd/image_color_rect` and other topics
 - Hz should show ~10-30 (meaning images are publishing)
 
 **Optional - Preview Camera View:**
@@ -102,7 +102,7 @@ ros2 topic hz /kinect2/qhd/image_color_rect
 source /opt/kinect_ws/install/setup.bash
 ros2 run rqt_image_view rqt_image_view
 ```
-Select `/kinect2/qhd/image_color_rect` from dropdown. Verify red lines are visible.
+Select `/kinect2/sd/image_color_rect` from dropdown. Verify red lines are visible.
 
 ### Step 6: Record Snapshot
 
@@ -128,9 +128,9 @@ Duration: 3 seconds
 Output: /workspace/test_data/kinect_snapshot_YYYYMMDD_HHMMSS
 
 Checking topic availability...
-  ✓ /kinect2/qhd/image_color_rect
-  ✓ /kinect2/qhd/image_depth_rect
-  ✓ /kinect2/qhd/camera_info
+  ✓ /kinect2/sd/image_color_rect
+  ✓ /kinect2/sd/image_depth_rect
+  ✓ /kinect2/sd/camera_info
   ✓ /tf
   ✓ /tf_static
 
@@ -169,7 +169,7 @@ ros2 bag play rosbag2_/kinect_snapshot_YYYYMMDD_HHMMSS --loop
 
 **Terminal 2 - Verify:**
 ```bash
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 ```
 
 Should show ~10 Hz. If yes, replay works! ✅

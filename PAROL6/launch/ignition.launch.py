@@ -13,7 +13,9 @@ def generate_launch_description():
     # Get package paths
     parol6_package_path = get_package_share_directory('parol6')
     controller_config_path = os.path.join(parol6_package_path, 'config', 'ros2_controllers.yaml')
-    urdf_path = os.path.join(parol6_package_path, 'urdf', 'PAROL6.urdf')
+    # Use the Ignition-specific URDF because it contains the <ros2_control> tag
+    # required by gz_ros2_control.
+    urdf_path = os.path.join(parol6_package_path, 'urdf', 'PAROL6_ignition.urdf')
     
     # Read URDF
     with open(urdf_path, 'r') as urdf_file:
@@ -61,14 +63,8 @@ def generate_launch_description():
         executable='create',
         arguments=[
             '-name', 'parol6',
-            '-file', urdf_path,
+            '-topic', 'robot_description',
             '-z', '0.0',
-            '-J', 'joint_L1', '0.0',
-            '-J', 'joint_L2', '-1.0',
-            '-J', 'joint_L3', '1.3',
-            '-J', 'joint_L4', '0.0',
-            '-J', 'joint_L5', '0.0',
-            '-J', 'joint_L6', '0.0',
         ],
         output='screen'
     )
@@ -115,4 +111,3 @@ def generate_launch_description():
             )
         ),
     ])
-

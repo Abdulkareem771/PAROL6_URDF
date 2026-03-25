@@ -59,6 +59,7 @@ THESIS-READY STATEMENTS
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from nav_msgs.msg import Path
 from moveit_msgs.msg import (
     MoveItErrorCodes, RobotTrajectory,
@@ -92,7 +93,7 @@ class MoveItController(Node):
         
         self.declare_parameter('planning_group', 'parol6_arm')
         self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('end_effector_link', 'L6')
+        self.declare_parameter('end_effector_link', 'tcp_link')
         
         # Fallback Strategy Config
         self.declare_parameter('cartesian_step_sizes', [0.002, 0.005, 0.010])
@@ -162,12 +163,18 @@ class MoveItController(Node):
             'move_action'
         )
         
-        # Input Path
+        # Input Path — TRANSIENT_LOCAL (latching) so a message published before
+        # this node starts is still received. Must match the publisher's QoS.
+        latch_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.sub = self.create_subscription(
             Path,
             '/vision/welding_path',
             self.path_callback,
-            10
+            latch_qos
         )
         
         # Manual Trigger
@@ -273,53 +280,74 @@ class MoveItController(Node):
     def execute_welding_sequence(self, path):
         """
         Full 3-Phase Welding Sequence: Approach -> Weld -> Retract
-        """
-        self.get_logger().info("STARTING WELDING SEQUENCE")
 
-        # Optional test-mode normalization: keep path inside a conservative workspace.
-        # This validates pipeline connectivity even when raw detected points are unreachable.
+        KEY DESIGN: All planning is done BEFORE any execution begins.
+        This eliminates the robot "freeze" that occurs when the weld Cartesian
+        path is planned AFTER the approach move has already finished.
+        """
+        self.get_logger().info("STARTING WELDING SEQUENCE (pre-plan all phases)")
+
+        # Optional test-mode normalization
         if self.enforce_reachable_test_path:
             path = self._make_path_reachable(path)
             if len(path.poses) == 0:
                 self.get_logger().error("Reachability normalization produced empty path")
                 return False
-        
-        # 1. Move to home state (joint-space goal, always kinematically valid)
-        self.get_logger().info("Phase 1: Move to Home (joint-space approach)")
-        if not self.move_to_home():
-            self.get_logger().error("Move to home failed — aborting")
-            return False
-            
-        # 2. Move to the first waypoint in Join Space (Approach)
-        self.get_logger().info("Phase 2: Move to Approach Point (Joint Space)")
-        approach_pose = copy.deepcopy(path.poses[0])
-        # Lift slightly for approach
-        approach_pose.pose.position.z += self.approach_dist
-        if not self.move_to_pose(approach_pose):
-            self.get_logger().error("Approach to start pose failed")
+
+        # ── PLANNING PHASE ────────────────────────────────────────────────────
+        # Phase 1: Plan home trajectory (plan only, no execution)
+        self.get_logger().info("[Plan 1/3] Planning Home trajectory…")
+        home_traj = self.plan_to_home()
+        if home_traj is None:
+            self.get_logger().error("Planning home failed — aborting")
             return False
 
-        # 3. Plan Welding Path (Cartesian Fallback)
-        self.get_logger().info("Phase 3: Planning Weld Trajectory")
-        weld_trajectory = self.plan_cartesian_with_fallback(path)
-        
-        if not weld_trajectory:
+        # Phase 2: Plan approach trajectory using home end-state as start
+        self.get_logger().info("[Plan 2/3] Planning Approach trajectory…")
+        approach_pose = copy.deepcopy(path.poses[0])
+        approach_pose.pose.position.z += self.approach_dist
+        approach_traj = self.plan_pose(
+            approach_pose, start_state_traj=home_traj
+        )
+        if approach_traj is None:
+            self.get_logger().error("Planning approach failed — aborting")
+            return False
+
+        # Phase 3: Plan Cartesian weld path using approach end-state as start
+        self.get_logger().info("[Plan 3/3] Planning Cartesian weld trajectory…")
+        weld_traj = self.plan_cartesian_with_fallback(
+            path, start_state_traj=approach_traj
+        )
+        if not weld_traj:
             self.get_logger().error("All Cartesian planning attempts failed")
             if self.enable_joint_waypoint_fallback:
-                self.get_logger().warn(
-                    "Falling back to joint-space waypoint execution "
-                    "(coarser motion, but robust for diagnostics)"
-                )
+                self.get_logger().warn("Falling back to joint-space waypoint execution")
+                # Fallback must execute on its own (plan+execute inside loop)
+                if not self.execute_trajectory_action(home_traj):
+                    return False
+                if not self.execute_trajectory_action(approach_traj):
+                    return False
                 return self.execute_waypoint_fallback(path)
             return False
-            
-        # 4. Execute Weld
-        self.get_logger().info("Phase 4: Executing Weld")
-        if not self.execute_trajectory_action(weld_trajectory):
+
+        # ── EXECUTION PHASE (all plans ready, execute back-to-back) ──────────
+        self.get_logger().info("All phases planned! Starting seamless execution…")
+
+        self.get_logger().info("[Exec 1/3] Moving to Home")
+        if not self.execute_trajectory_action(home_traj):
+            self.get_logger().error("Home execution failed")
+            return False
+
+        self.get_logger().info("[Exec 2/3] Moving to Approach Point")
+        if not self.execute_trajectory_action(approach_traj):
+            self.get_logger().error("Approach execution failed")
+            return False
+
+        self.get_logger().info("[Exec 3/3] Executing Weld")
+        if not self.execute_trajectory_action(weld_traj):
             self.get_logger().error("Weld execution failed")
             return False
-            
-        # 5. Retract (Optional)
+
         self.get_logger().info("Sequence Complete")
         return True
 
@@ -379,12 +407,19 @@ class MoveItController(Node):
     # PLANNING LOGIC
     # ================================================================
 
-    def plan_cartesian_with_fallback(self, path):
+    def plan_cartesian_with_fallback(self, path, start_state_traj=None):
         """
         Try to plan Cartesian path with decreasing precision requirements.
+        If start_state_traj is provided, its end joint state is used as the
+        planning start state (critical for pre-plan consistency).
         """
         waypoints = [p.pose for p in path.poses]
-        
+
+        # Build start state from the previous trajectory if supplied
+        start_state = None
+        if start_state_traj is not None:
+            start_state = self._extract_end_state(start_state_traj)
+
         for i, step in enumerate(self.step_sizes):
             threshold = self.thresholds[i]
             
@@ -398,13 +433,15 @@ class MoveItController(Node):
 
             req = GetCartesianPath.Request()
             req.header = path.header
-            req.header.stamp = self.get_clock().now().to_msg()  # Use live clock for state lookup
+            req.header.stamp = self.get_clock().now().to_msg()
             req.group_name = self.group_name
             req.link_name = self.ee_link  # CRITICAL: tell MoveIt which link to plan for
             req.waypoints = waypoints
             req.max_step = step
-            req.jump_threshold = 0.0 # Disable jump check for now
+            req.jump_threshold = 0.0
             req.avoid_collisions = True
+            if start_state is not None:
+                req.start_state = start_state
             
             future = self.cartesian_client.call_async(req)
             try:
@@ -501,8 +538,195 @@ class MoveItController(Node):
         self.get_logger().info("Waypoint fallback execution completed")
         return True
 
+    def _extract_end_state(self, trajectory):
+        """
+        Build a RobotState matching the last point of a JointTrajectory so it
+        can be used as `start_state` for the next planning request.
+        Returns None if the trajectory is empty or malformed.
+        """
+        from moveit_msgs.msg import RobotState
+        from sensor_msgs.msg import JointState
+
+        jt = trajectory.joint_trajectory
+        if not jt.points:
+            return None
+
+        rs = RobotState()
+        js = JointState()
+        js.name = list(jt.joint_names)
+        js.position = list(jt.points[-1].positions)
+        rs.joint_state = js
+        return rs
+
+    def plan_to_home(self):
+        """
+        Plan (don't execute) a move to home joint state.
+        Returns a RobotTrajectory or None on failure.
+        """
+        if not self._wait_for_action_server(
+            self.move_group_client, 'move_action', self.move_group_wait_timeout
+        ):
+            return None
+
+        joint_names = ['joint_L1', 'joint_L2', 'joint_L3',
+                       'joint_L4', 'joint_L5', 'joint_L6']
+        home_positions = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        joint_constraints = []
+        for name, pos in zip(joint_names, home_positions):
+            jc = JointConstraint()
+            jc.joint_name = name
+            jc.position = pos
+            jc.tolerance_above = 0.05
+            jc.tolerance_below = 0.05
+            jc.weight = 1.0
+            joint_constraints.append(jc)
+
+        goal_constraints = Constraints()
+        goal_constraints.joint_constraints = joint_constraints
+
+        goal = MoveGroup.Goal()
+        goal.request.group_name = self.group_name
+        goal.request.num_planning_attempts = 5
+        goal.request.allowed_planning_time = 10.0
+        goal.request.max_velocity_scaling_factor = 0.5
+        goal.request.max_acceleration_scaling_factor = 0.5
+        goal.request.goal_constraints = [goal_constraints]
+        # CRITICAL: is_diff=True tells MoveIt to use the current robot state from the
+        # planning scene monitor as the start state, rather than trusting the default
+        # empty RobotState (which maps to all-zero joints and generates a trivially
+        # short "already at home" trajectory that fails the start-point tolerance check).
+        goal.request.start_state.is_diff = True
+        goal.planning_options.plan_only = True  # PLAN ONLY
+
+        future = self.move_group_client.send_goal_async(goal)
+        try:
+            handle = self._wait_async_result(future, timeout_sec=20.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for home plan')
+            return None
+        if handle is None or not handle.accepted:
+            self.get_logger().error('Home plan goal rejected')
+            return None
+
+        res_future = handle.get_result_async()
+        try:
+            result = self._wait_async_result(res_future, timeout_sec=30.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for home plan result')
+            return None
+        if result is None or result.result.error_code.val != MoveItErrorCodes.SUCCESS:
+            code = getattr(result, 'result', None)
+            self.get_logger().error(f'Home plan failed — code: {code}')
+            return None
+
+        self._ensure_trajectory_timing(result.result.planned_trajectory)
+        self.get_logger().info('Home trajectory planned')
+        return result.result.planned_trajectory
+
+    def plan_pose(
+        self,
+        pose_stamped,
+        start_state_traj=None,
+        use_orientation_constraint=True,
+        orientation_tolerance_xyz=0.2
+    ):
+        """
+        Plan (don't execute) a move to a target pose.
+        If start_state_traj is provided, its last point is used as the planning
+        start state, so the plan is consistent with the previous phase.
+        Returns a RobotTrajectory on success, or None on failure.
+        """
+        self.get_logger().info(
+            f'Planning approach: x={pose_stamped.pose.position.x:.3f}, '
+            f'y={pose_stamped.pose.position.y:.3f}, '
+            f'z={pose_stamped.pose.position.z:.3f}'
+        )
+        if not self._wait_for_action_server(
+            self.move_group_client, 'move_action', self.move_group_wait_timeout
+        ):
+            return None
+
+        prim = SolidPrimitive()
+        prim.type = SolidPrimitive.BOX
+        prim.dimensions = [0.02, 0.02, 0.02]
+
+        bv = BoundingVolume()
+        bv.primitives = [prim]
+        bv.primitive_poses = [pose_stamped.pose]
+
+        pos_con = PositionConstraint()
+        pos_con.header = pose_stamped.header
+        pos_con.link_name = self.ee_link
+        pos_con.constraint_region = bv
+        pos_con.weight = 1.0
+
+        goal_constraints = Constraints()
+        goal_constraints.position_constraints = [pos_con]
+        if use_orientation_constraint:
+            ori_con = OrientationConstraint()
+            ori_con.header = pose_stamped.header
+            ori_con.link_name = self.ee_link
+            ori_con.orientation = pose_stamped.pose.orientation
+            ori_con.absolute_x_axis_tolerance = orientation_tolerance_xyz
+            ori_con.absolute_y_axis_tolerance = orientation_tolerance_xyz
+            ori_con.absolute_z_axis_tolerance = orientation_tolerance_xyz
+            ori_con.weight = 1.0
+            goal_constraints.orientation_constraints = [ori_con]
+
+        goal = MoveGroup.Goal()
+        goal.request.group_name = self.group_name
+        goal.request.num_planning_attempts = 5
+        goal.request.allowed_planning_time = 10.0
+        goal.request.max_velocity_scaling_factor = 0.5
+        goal.request.max_acceleration_scaling_factor = 0.5
+        goal.request.goal_constraints = [goal_constraints]
+        goal.planning_options.plan_only = True  # PLAN ONLY
+
+        # Seed the planner from the previous trajectory's final state
+        if start_state_traj is not None:
+            rs = self._extract_end_state(start_state_traj)
+            if rs is not None:
+                goal.request.start_state = rs
+
+        future = self.move_group_client.send_goal_async(goal)
+        try:
+            handle = self._wait_async_result(future, timeout_sec=20.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for approach plan')
+            return None
+        if handle is None or not handle.accepted:
+            self.get_logger().error('Approach plan rejected')
+            return None
+
+        res_future = handle.get_result_async()
+        try:
+            result = self._wait_async_result(res_future, timeout_sec=30.0)
+        except FutureTimeoutError:
+            self.get_logger().error('Timed out waiting for approach plan result')
+            return None
+        if result is None or result.result.error_code.val != MoveItErrorCodes.SUCCESS:
+            code = getattr(result, 'result', None)
+            self.get_logger().error(f'Approach plan failed — code: {code}')
+            return None
+
+        self._ensure_trajectory_timing(result.result.planned_trajectory)
+        self.get_logger().info('Approach trajectory planned')
+        return result.result.planned_trajectory
+
     def move_to_home(self):
         """
+        Execute a move to home (convenience wrapper: plan + execute).
+        Used by fallback paths only. Main sequence uses plan_to_home() directly.
+        """
+        traj = self.plan_to_home()
+        if traj is None:
+            return False
+        return self.execute_trajectory_action(traj)
+
+    def _move_to_home_legacy(self):
+        """
+        Original plan+execute home move kept for reference.
         Move arm to home joint state (all joints = 0) using JointConstraints.
         This is always kinematically valid and is used as the approach phase
         in the connection-validation test.
@@ -697,7 +921,7 @@ class MoveItController(Node):
             self.get_logger().error('ExecuteTrajectory result is None')
             return False
         
-        return result.error_code.val == MoveItErrorCodes.SUCCESS
+        return result.result.error_code.val == MoveItErrorCodes.SUCCESS
 
 def main(args=None):
     rclpy.init(args=args)
