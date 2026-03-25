@@ -560,53 +560,38 @@ kill -INT <pid>
 pkill -INT -f kinect2_bridge_node
 ```
 
----
+### Live camera or captured frame previews do not update (silently fail)
 
-### Mask not applied automatically on second capture
+**Symptom:** You click **📷 Trigger Capture** (or the camera is running), but the GUI's Visual Outputs tabs stay blank or do not refresh. The GUI does not crash, but the terminal might show no errors, or only `DeprecationWarning`s.
 
-**Symptom:** First capture after Apply & Save shows masking; subsequent captures show the full frame.
-
-**Explanation:** `crop_image_node` applies the mask to **every** message it receives on
-`/vision/captured_image_raw`. If new captures are not being masked, the node likely:
-
-- Was not yet running when later captures arrived (restarted between captures)
-- Lost the config because `~/clear_roi` was called accidentally
-
-**Fix:**
-```bash
-# Confirm node is running and config is loaded
-ros2 node list | grep crop_image
-cat ~/.parol6/crop_config.json    # Check 'enabled': true and polygon present
-
-# Re-trigger reload
-ros2 service call /crop_image/reload_roi std_srvs/srv/Trigger
-
-# If needed, force republish a frame
-ros2 service call /crop_image/reload_roi std_srvs/srv/Trigger
-```
+**Explanation:** If the GUI's PySide image callback attempts to construct a `QImage` using a Numpy `int64` type for the memory stride (instead of a native Python `int`), PySide strictly rejects it with a `TypeError`. Because this happens inside a background Qt slot, the GUI silently "swallows" the exception (stopping the image from drawing) without crashing the application. 
+**Fix:** The latest version wraps all Numpy strides in explicit `int()` casts and adds rigorous traceback logging. Re-launch the GUI with the latest code.
 
 ---
 
-### Optimizer / color-mode node sees objects outside the masked region
+### GUI crashes when clicking "Use Latest Cropped Frame" (Manual tab)
 
-**Symptom:** Path optimizer draws bounding boxes in the black (masked) region; colour mode detects colours that should be blocked.
+**Symptom:** You click the button to load the cached cropped frame, and the entire GUI window instantly closes (segmentation fault).
 
-**Explanation:** Both `yolo_segment` and `color_mode` subscribe to `/vision/captured_image_color`,
-which is the **masked** output. If they receive an unmasked image it means one of:
+**Explanation:** This was a memory alignment issue. PySide's `QImage` generator requires exact memory stride measurements. If an image was cropped to a width that isn't a multiple of 4, OpenCV adds padding bytes to the rows. Older versions of the GUI assumed a strict `width * 3` stride, causing an out-of-bounds memory read when the padding existed.
+**Fix:** This is fixed in the latest version by dynamically passing `image.strides[0]` to the `QImage` constructor. Pull the latest code and restart the GUI.
 
-1. **crop_image_node not running** — mode nodes receive nothing (stale frame) or fall back to the raw topic.
-2. **Mode node started before crop node** — the mode node may be subscribed but the crop node hadn't published yet.
+---
 
-**Diagnosis:**
-```bash
-ros2 topic hz /vision/captured_image_color   # Should be > 0 Hz after capture
-ros2 topic info /vision/captured_image_color # Publisher should be /crop_image
-```
+### Mask not applied automatically / mode nodes see the whole image
 
-**Fix:**
-1. Start Crop Image Node **before** or at the same time as the mode node.
-2. After Apply & Save, trigger another capture so the masked frame flows through.
-3. Verify the right panel of the Crop tab shows the black background — that confirms masking is active.
+**Symptom:** The path optimizer draws bounding boxes in the black (masked) region, or the mask spontaneously disappears on the second capture, falling back to the full frame.
+
+**Explanation:** By design, if `crop_image_node` throws a Python exception while processing a frame, it catches the error and **passes the original unmasked image** to the downstream nodes (`/vision/captured_image_color`) rather than freezing the pipeline or dropping the frame entirely. 
+
+Common causes of processing exceptions in older versions:
+1. **Numpy broadcasting errors** during mask color application (fixed in latest).
+2. **Invalid polygon** geometries (e.g., self-intersecting or < 3 points).
+
+**Diagnosis & Fix:**
+1. Check the **Crop Image Node** logs in the GUI Console for `Processing error: ...`
+2. Ensure you have rebuilt the workspace with the latest code (which fixes Numpy shape broadcasting arrays).
+3. If the error persists, click **Clear** on the Crop tab, redraw a simple 4-point polygon, and click **Apply & Save**.
 
 ---
 

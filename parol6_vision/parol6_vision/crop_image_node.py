@@ -186,7 +186,8 @@ class CropImageNode(Node):
             channels = cv_img.shape[2]
             if channels == 3:
                 # BGR order for OpenCV images
-                fill = np.full_like(cv_img, [b, g, r], dtype=cv_img.dtype)
+                fill = np.empty_like(cv_img, dtype=cv_img.dtype)
+                fill[:] = [b, g, r]
             else:
                 # Fallback for other channel counts
                 fill = np.zeros_like(cv_img, dtype=cv_img.dtype)

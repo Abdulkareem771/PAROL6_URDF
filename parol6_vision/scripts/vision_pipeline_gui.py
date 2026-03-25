@@ -310,7 +310,7 @@ class TopicPreviewLabel(QLabel):
         scale = min(lw / w, lh / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         frame_small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(frame_small.data, nw, nh, frame_small.strides[0], QImage.Format_RGB888)
+        qimg = QImage(frame_small.data, nw, nh, int(frame_small.strides[0]), QImage.Format_RGB888)
         self.setPixmap(QPixmap.fromImage(qimg))
         self.setText("")
 
@@ -353,7 +353,7 @@ class ManualCanvas(QGraphicsView):
         self._scene.clear()
         self._base_img = rgb
         h, w = rgb.shape[:2]
-        qimg = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888).copy()
+        qimg = QImage(rgb.data, w, h, int(rgb.strides[0]), QImage.Format_RGB888).copy()
         pix = QPixmap.fromImage(qimg)
         self._scene.addPixmap(pix).setZValue(0)
         self._mask_arr = np.zeros((h, w, 4), dtype=np.uint8)
@@ -402,7 +402,7 @@ class ManualCanvas(QGraphicsView):
         if self._mask_arr is None or self._mask_item is None:
             return
         h, w = self._mask_arr.shape[:2]
-        qimg = QImage(self._mask_arr.data, w, h, self._mask_arr.strides[0], QImage.Format_RGBA8888)
+        qimg = QImage(self._mask_arr.data, w, h, int(self._mask_arr.strides[0]), QImage.Format_RGBA8888)
         self._mask_item.setPixmap(QPixmap.fromImage(qimg))
 
     def mousePressEvent(self, ev) -> None:
@@ -685,7 +685,7 @@ class CropROIView(QLabel):
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
         small = cv2.resize(frame, (nw, nh))
-        qimg = QImage(small.data, nw, nh, small.strides[0], QImage.Format_RGB888)
+        qimg = QImage(small.data, nw, nh, int(small.strides[0]), QImage.Format_RGB888)
         self._pix = QPixmap.fromImage(qimg)
         self.update()
 
