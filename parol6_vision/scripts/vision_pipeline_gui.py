@@ -832,6 +832,13 @@ class CropROIView(QLabel):
     def current_roi(self) -> Optional[tuple]:
         return self._roi_px
 
+    def get_polygon_image_coords(self) -> list:
+        """Return the current polygon vertices as [[x,y],...] in image pixel coords."""
+        return [
+            list(self._label_to_image(pt.x(), pt.y()))
+            for pt in self._poly_pts
+        ]
+
     def set_saved_roi(self, roi: tuple) -> None:
         """Display the previously saved ROI (loaded from config on startup)."""
         self._saved_roi = roi
@@ -1208,6 +1215,7 @@ class VisionPipelineGUI(QMainWindow):
             fl.setContentsMargins(0, 0, 0, 0)
             fl.setSpacing(2)
             title_lbl = QLabel(f"  {title}")
+            title_lbl.setFixedHeight(22)
             title_lbl.setStyleSheet(
                 f"color:{C['text2']}; font-size:10px; font-weight:bold;"
                 f" background:{C['panel']}; padding:3px;"
@@ -1215,12 +1223,13 @@ class VisionPipelineGUI(QMainWindow):
             fl.addWidget(title_lbl)
             if ROS2_OK and CV2_OK:
                 prev = TopicPreviewLabel(topic, self._ros_node, self._bridge)
-                fl.addWidget(prev)
+                prev.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                fl.addWidget(prev, 1)   # stretch=1 → image fills remaining space
             else:
                 lbl = QLabel(f"⌛  {topic}\n(ROS2 / cv2 offline)")
                 lbl.setAlignment(Qt.AlignCenter)
                 lbl.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
-                fl.addWidget(lbl)
+                fl.addWidget(lbl, 1)
             self._preview_panels.append(frame)
             vis_tab.addTab(frame, title)
 
@@ -1431,9 +1440,12 @@ class VisionPipelineGUI(QMainWindow):
 
         # ── Top info bar ──────────────────────────────────────────────────
         info = QLabel(
-            "📌 <b>Draw a rectangle</b> on the full-frame image (left) to select the crop region. "
-            "Click <b>Apply & Save</b> to activate — every future captured image will be cropped "
-            "automatically using the saved config. <b>Reset</b> restores pass-through."
+            "📌 <b>Draw a polygon</b> on the full-frame image (left) — left-click to add vertices, "
+            "right-click (or click near the first point) to close. "
+            "<b>Mask mode</b> (recommended): keeps full resolution and zeros out pixels outside "
+            "the polygon — depth coordinates stay valid for downstream nodes. "
+            "<b>Crop mode</b>: cuts to the bounding box — changes image dimensions. "
+            "Click <b>Apply & Save</b> to activate. <b>Reset</b> restores pass-through."
         )
         info.setTextFormat(Qt.RichText)
         info.setWordWrap(True)
@@ -1441,7 +1453,7 @@ class VisionPipelineGUI(QMainWindow):
             f"background:{C['panel']}; border:1px solid {C['accent']};"
             f" border-radius:6px; color:{C['text2']}; font-size:11px; padding:8px;"
         )
-        info.setMaximumHeight(62)
+        info.setMaximumHeight(80)
         root_lay.addWidget(info)
 
         # ── Dual preview ──────────────────────────────────────────────────
@@ -1456,15 +1468,17 @@ class VisionPipelineGUI(QMainWindow):
         lf_lay.setContentsMargins(0, 0, 0, 0)
         lf_lay.setSpacing(2)
         lhdr = QLabel("  📷  Full Frame — /vision/captured_image_raw")
+        lhdr.setFixedHeight(22)
         lhdr.setStyleSheet(
             f"color:{C['text2']}; font-size:10px; font-weight:bold;"
             f" background:{C['panel']}; padding:3px;"
         )
         lf_lay.addWidget(lhdr)
 
-        # CropROIView: shows ROS image with draggable ROI rectangle
+        # CropROIView: shows ROS image with draggable ROI polygon
         self._crop_view = CropROIView(self._ros_node, self._bridge)
-        lf_lay.addWidget(self._crop_view)
+        self._crop_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        lf_lay.addWidget(self._crop_view, 1)   # stretch → fills remaining height
         preview_row.addWidget(left_frame)
 
         # Right: cropped output
@@ -1475,7 +1489,8 @@ class VisionPipelineGUI(QMainWindow):
         rf_lay = QVBoxLayout(right_frame)
         rf_lay.setContentsMargins(0, 0, 0, 0)
         rf_lay.setSpacing(2)
-        rhdr = QLabel("  ✂️  Cropped Output — /vision/captured_image_color")
+        rhdr = QLabel("  ✂️  Masked/Cropped Output — /vision/captured_image_color")
+        rhdr.setFixedHeight(22)
         rhdr.setStyleSheet(
             f"color:{C['text2']}; font-size:10px; font-weight:bold;"
             f" background:{C['panel']}; padding:3px;"
@@ -1492,7 +1507,8 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_output_preview.setStyleSheet(
                 f"background:{C['panel']}; color:{C['text2']}; font-size:10px;"
             )
-        rf_lay.addWidget(self._crop_output_preview)
+        self._crop_output_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        rf_lay.addWidget(self._crop_output_preview, 1)  # stretch → fills remaining height
         preview_row.addWidget(right_frame)
         preview_row.setStretch(0, 3)
         preview_row.setStretch(1, 2)
@@ -1509,8 +1525,22 @@ class VisionPipelineGUI(QMainWindow):
 
         ctrl_bar.addStretch()
 
-        # ROI readout
-        self._roi_readout = QLabel("ROI: — ")
+        # Mode selector
+        ctrl_bar.addWidget(QLabel("Mode:"))
+        self._crop_mode_combo = QComboBox()
+        self._crop_mode_combo.addItem("🛡  Mask (preserve resolution)", "mask")
+        self._crop_mode_combo.addItem("✂️  Crop (bounding box)", "crop")
+        self._crop_mode_combo.setToolTip(
+            "Mask: pixels outside polygon are zeroed — full resolution kept, "
+            "depth coordinates valid.\n"
+            "Crop: image is cut to the polygon's bounding box — resolution changes."
+        )
+        ctrl_bar.addWidget(self._crop_mode_combo)
+
+        ctrl_bar.addSpacing(8)
+
+        # Polygon vertex readout
+        self._roi_readout = QLabel("Polygon: — ")
         self._roi_readout.setStyleSheet(
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
         )
@@ -1518,7 +1548,7 @@ class VisionPipelineGUI(QMainWindow):
 
         ctrl_bar.addSpacing(8)
 
-        clear_roi_btn = QPushButton("🗑  Clear ROI")
+        clear_roi_btn = QPushButton("🗑  Clear")
         clear_roi_btn.clicked.connect(self._crop_clear_roi)
         clear_roi_btn.setStyleSheet(
             f"background:{C['panel']}; color:{C['text2']}; border:1px solid {C['border']};"
@@ -1553,7 +1583,7 @@ class VisionPipelineGUI(QMainWindow):
         return tab
 
     def _crop_load_existing_config(self) -> None:
-        """Read ~/.parol6/crop_config.json and update status label."""
+        """Read ~/.parol6/crop_config.json and update status label + mode selector."""
         import json
         from pathlib import Path
         cfg_path = Path.home() / ".parol6" / "crop_config.json"
@@ -1561,30 +1591,55 @@ class VisionPipelineGUI(QMainWindow):
             try:
                 with open(cfg_path) as f:
                     cfg = json.load(f)
-                if cfg.get("enabled") and "x" in cfg:
+                if not cfg.get("enabled"):
+                    raise ValueError("disabled")
+
+                mode = cfg.get("mode", "crop")
+                # Set the combo to match saved mode
+                idx = self._crop_mode_combo.findData(mode)
+                if idx >= 0:
+                    self._crop_mode_combo.setCurrentIndex(idx)
+
+                if mode == "mask" and cfg.get("polygon"):
+                    poly = cfg["polygon"]
+                    roi = None
+                    # Compute bounding box for display / set_saved_roi
+                    xs = [p[0] for p in poly]
+                    ys = [p[1] for p in poly]
+                    roi = (min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+                    self._crop_status_lbl.setText(
+                        f"✅  Active: Mask mode — {len(poly)} polygon pts"
+                    )
+                    self._roi_readout.setText(f"Polygon: {len(poly)} pts")
+                elif "x" in cfg:
                     roi = (cfg["x"], cfg["y"], cfg["width"], cfg["height"])
                     self._crop_status_lbl.setText(
-                        f"✅  Active config: ROI = {roi}"
-                    )
-                    self._crop_status_lbl.setStyleSheet(
-                        f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                        f"✅  Active: Crop mode — ROI = {roi}"
                     )
                     self._roi_readout.setText(
-                        f"ROI: x={roi[0]} y={roi[1]} w={roi[2]} h={roi[3]}"
+                        f"Polygon: x={roi[0]} y={roi[1]} w={roi[2]} h={roi[3]}"
                     )
+                else:
+                    raise ValueError("no geometry")
+
+                self._crop_status_lbl.setStyleSheet(
+                    f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                )
+                if roi:
                     self._crop_view.set_saved_roi(roi)
-                    return
+                return
             except Exception:
                 pass
         self._crop_status_lbl.setText("Status: No crop config (pass-through)")
         self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
 
     def _on_roi_changed(self, roi: tuple) -> None:
-        """Called when the user finishes drawing an ROI rectangle."""
+        """Called when the user finishes drawing a polygon ROI."""
         x, y, w, h = roi
-        self._roi_readout.setText(f"ROI: x={x} y={y} w={w} h={h}")
+        n_pts = len(self._crop_view._poly_pts)
+        self._roi_readout.setText(f"Polygon: {n_pts} pts  bbox=({x},{y},{w},{h})")
         self._crop_status_lbl.setText(
-            f"📐  Pending: ROI = ({x}, {y}, {w}, {h}) — click Apply & Save"
+            f"📐  Pending: {n_pts}-pt polygon — click Apply & Save"
         )
         self._crop_status_lbl.setStyleSheet(
             f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
@@ -1599,147 +1654,222 @@ class VisionPipelineGUI(QMainWindow):
         return self._btn_crop_node.is_running()
 
     def _crop_apply_save(self) -> None:
-        """Save the current ROI to config and push it to /crop_image via SetParameters.
+        """Save the current polygon/ROI to config and push to /crop_image.
 
-        Uses a QTimer retry loop to handle the case where the crop node was just
-        started and its parameter service is not yet available.
+        Mask mode  — writes polygon points, calls ~/reload_roi only.
+                     Output has the same resolution as input; depth coords preserved.
+        Crop mode  — writes bounding box, calls set_parameters via retry loop.
+                     Output is a smaller image; depth coords shift.
         """
         import json
         from pathlib import Path
 
         roi = self._crop_view.current_roi()
         if roi is None:
-            QMessageBox.warning(self, "No ROI", "Draw a rectangle on the image first.")
+            QMessageBox.warning(self, "No ROI",
+                                "Draw a polygon on the image first.")
             return
 
         x, y, w, h = roi
+        mode = self._crop_mode_combo.currentData()   # "mask" or "crop"
+        polygon = self._crop_view.get_polygon_image_coords()  # [[x,y],...]
+
         cfg_path = Path.home() / ".parol6" / "crop_config.json"
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Persist to disk first — crop_image_node reads this on reload_roi even if
-        # the SetParameters call is not available yet.
-        with open(cfg_path, "w") as f:
-            json.dump({"enabled": True, "x": x, "y": y, "width": w, "height": h}, f, indent=2)
-        self._log.append(
-            f'<b style="color:{C["green"]}">[Crop] Config saved → {cfg_path}  ROI=({x},{y},{w},{h})</b>'
-        )
+        if mode == "mask":
+            # ── Mask mode ────────────────────────────────────────────────
+            if len(polygon) < 3:
+                QMessageBox.warning(self, "Not Enough Points",
+                    "Need at least 3 polygon vertices for mask mode.")
+                return
 
-        self._ensure_crop_node_running()
-
-        if not ROS2_OK or self._crop_set_params_client is None:
+            cfg = {"enabled": True, "mode": "mask", "polygon": polygon}
+            with open(cfg_path, "w") as f:
+                json.dump(cfg, f, indent=2)
             self._log.append(
-                f'<span style="color:{C["red"]}">[Crop] ROS client is unavailable in the GUI.</span>'
+                f'<b style="color:{C["green"]}">[Crop] Mask config saved → {cfg_path}  '
+                f'{len(polygon)} pts</b>'
             )
-            return
+            self._crop_status_lbl.setText(
+                f"⏳  Applying mask ({len(polygon)} pts) …"
+            )
+            self._crop_status_lbl.setStyleSheet(
+                f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+            )
+            self._ensure_crop_node_running()
 
-        # ── Retry loop ────────────────────────────────────────────────────────
-        # The crop node may have just been started; give it up to 4 s to init.
-        _MAX_ATTEMPTS = 8
-        _RETRY_MS     = 500   # ms between attempts
-
-        def _attempt(remaining: int) -> None:
-            if self._crop_set_params_client.service_is_ready():
-                _do_call()
-            elif remaining > 0:
+            if not ROS2_OK or self._crop_reload_client is None:
                 self._log.append(
-                    f'<span style="color:{C["text2"]}">[Crop] Waiting for /crop_image service '
-                    f'({remaining} attempts left)…</span>'
+                    f'<span style="color:{C["red"]}">[Crop] ROS not available.</span>'
                 )
-                QTimer.singleShot(_RETRY_MS, lambda: _attempt(remaining - 1))
-            else:
+                return
+
+            # Retry until reload_roi service is ready (node may be starting up)
+            _MAX = 8
+            _MS  = 500
+
+            def _reload_attempt(remaining: int) -> None:
+                if self._crop_reload_client.service_is_ready():
+                    _do_reload()
+                elif remaining > 0:
+                    self._log.append(
+                        f'<span style="color:{C["text2"]}">[Crop] Waiting for '
+                        f'/crop_image/reload_roi service ({remaining} left)…</span>'
+                    )
+                    QTimer.singleShot(_MS, lambda: _reload_attempt(remaining - 1))
+                else:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] reload_roi service '
+                        'not available. Is the node running?</span>'
+                    )
+
+            def _do_reload() -> None:
+                future = self._crop_reload_client.call_async(Trigger.Request())
+                self._crop_futures.append(future)
+
+                def _on_done(fut):
+                    try:
+                        resp = fut.result()
+                        self._log.append(
+                            f'<span style="color:{C["green"]}">[Crop] ✅ Mask applied: '
+                            f'{resp.message}</span>'
+                        )
+                        self._crop_status_lbl.setText(
+                            f"✅  Mask active: {len(polygon)} pts"
+                        )
+                        self._crop_status_lbl.setStyleSheet(
+                            f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                        )
+                        self._roi_readout.setText(f"Polygon: {len(polygon)} pts")
+                    except Exception as exc:
+                        self._log.append(
+                            f'<span style="color:{C["red"]}">[Crop] reload_roi failed: {exc}</span>'
+                        )
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
+
+                future.add_done_callback(_on_done)
+
+            _reload_attempt(_MAX)
+
+        else:
+            # ── Crop mode (legacy bbox) ───────────────────────────────────
+            cfg = {"enabled": True, "mode": "crop",
+                   "x": x, "y": y, "width": w, "height": h}
+            with open(cfg_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            self._log.append(
+                f'<b style="color:{C["green"]}">[Crop] Crop config saved → {cfg_path}  '
+                f'ROI=({x},{y},{w},{h})</b>'
+            )
+            self._crop_status_lbl.setText(f"⏳  Applying crop ROI …")
+            self._crop_status_lbl.setStyleSheet(
+                f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
+            )
+            self._ensure_crop_node_running()
+
+            if not ROS2_OK or self._crop_set_params_client is None:
                 self._log.append(
-                    f'<span style="color:{C["red"]}">[Crop] /crop_image parameter service did not '
-                    'become available. Is the node running?</span>'
+                    f'<span style="color:{C["red"]}">[Crop] ROS client unavailable.</span>'
                 )
-
-        def _do_call() -> None:
-            req = SetParameters.Request()
-            req.parameters = [
-                RclpyParameter(
-                    'roi', RclpyParameter.Type.INTEGER_ARRAY, [x, y, w, h]
-                ).to_parameter_msg()
-            ]
-            future = self._crop_set_params_client.call_async(req)
-            self._crop_futures.append(future)
-
-            def _on_done(fut):
-                try:
-                    result = fut.result()
-                    # Check that the node actually accepted the parameter
-                    if result.results and result.results[0].successful:
-                        self._log.append(
-                            f'<span style="color:{C["green"]}">[Crop] ✅ ROI applied to /crop_image '
-                            f'({x},{y},{w},{h}) — republishing cached frame.</span>'
-                        )
-                        # Belt-and-suspenders: trigger reload_roi so the node
-                        # force-republishes its cached frame even if _on_param_change
-                        # already did it (harmless if duplicate).
-                        _trigger_reload()
-                    else:
-                        reason = (
-                            result.results[0].reason
-                            if result.results else "unknown"
-                        )
-                        self._log.append(
-                            f'<span style="color:{C["red"]}">[Crop] ⚠ Node rejected ROI param: '
-                            f'{reason}</span>'
-                        )
-                except Exception as exc:
-                    self._log.append(
-                        f'<span style="color:{C["red"]}">[Crop] SetParameters failed: {exc}</span>'
-                    )
-                finally:
-                    if fut in self._crop_futures:
-                        self._crop_futures.remove(fut)
-
-            future.add_done_callback(_on_done)
-
-        def _trigger_reload() -> None:
-            """Call ~/reload_roi to ensure the node republishes its cached frame."""
-            if self._crop_reload_client is None:
                 return
-            if not self._crop_reload_client.service_is_ready():
-                return
-            future = self._crop_reload_client.call_async(Trigger.Request())
-            self._crop_futures.append(future)
 
-            def _on_reload_done(fut):
-                try:
-                    resp = fut.result()
+            _MAX = 8
+            _MS  = 500
+
+            def _attempt(remaining: int) -> None:
+                if self._crop_set_params_client.service_is_ready():
+                    _do_call()
+                elif remaining > 0:
                     self._log.append(
-                        f'<span style="color:{C["text2"]}">[Crop] reload_roi: {resp.message}</span>'
+                        f'<span style="color:{C["text2"]}">[Crop] Waiting for '
+                        f'/crop_image service ({remaining} left)…</span>'
                     )
-                except Exception:
-                    pass
-                finally:
-                    if fut in self._crop_futures:
-                        self._crop_futures.remove(fut)
+                    QTimer.singleShot(_MS, lambda: _attempt(remaining - 1))
+                else:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] /crop_image service '
+                        'not available. Is the node running?</span>'
+                    )
 
-            future.add_done_callback(_on_reload_done)
+            def _do_call() -> None:
+                req = SetParameters.Request()
+                req.parameters = [
+                    RclpyParameter(
+                        'roi', RclpyParameter.Type.INTEGER_ARRAY, [x, y, w, h]
+                    ).to_parameter_msg()
+                ]
+                future = self._crop_set_params_client.call_async(req)
+                self._crop_futures.append(future)
 
-        # Update UI immediately (config is already on disk)
-        self._crop_status_lbl.setText(
-            f"⏳  Applying: ROI = ({x}, {y}, {w}, {h}) …"
-        )
-        self._crop_status_lbl.setStyleSheet(
-            f"color:{C['yellow']}; font-size:11px; font-weight:bold;"
-        )
+                def _on_done(fut):
+                    try:
+                        result = fut.result()
+                        if result.results and result.results[0].successful:
+                            self._log.append(
+                                f'<span style="color:{C["green"]}">[Crop] ✅ ROI applied '
+                                f'({x},{y},{w},{h})</span>'
+                            )
+                            _trigger_reload()
+                            self._crop_status_lbl.setText(
+                                f"✅  Crop active: ({x},{y}) {w}×{h}"
+                            )
+                            self._crop_status_lbl.setStyleSheet(
+                                f"color:{C['green']}; font-size:11px; font-weight:bold;"
+                            )
+                            self._roi_readout.setText(
+                                f"Polygon: x={x} y={y} w={w} h={h}"
+                            )
+                        else:
+                            reason = (
+                                result.results[0].reason if result.results else "unknown"
+                            )
+                            self._log.append(
+                                f'<span style="color:{C["red"]}">[Crop] ⚠ Rejected: '
+                                f'{reason}</span>'
+                            )
+                    except Exception as exc:
+                        self._log.append(
+                            f'<span style="color:{C["red"]}">[Crop] SetParameters failed: {exc}</span>'
+                        )
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
 
-        _attempt(_MAX_ATTEMPTS)
+                future.add_done_callback(_on_done)
 
-        # Update to confirmed-saved once the disk write is done
-        self._crop_status_lbl.setText(
-            f"✅  Saved & Applying: ROI = ({x}, {y}, {w}, {h})"
-        )
-        self._crop_status_lbl.setStyleSheet(
-            f"color:{C['green']}; font-size:11px; font-weight:bold;"
-        )
+            def _trigger_reload() -> None:
+                if self._crop_reload_client is None:
+                    return
+                if not self._crop_reload_client.service_is_ready():
+                    return
+                future = self._crop_reload_client.call_async(Trigger.Request())
+                self._crop_futures.append(future)
+
+                def _on_r(fut):
+                    try:
+                        resp = fut.result()
+                        self._log.append(
+                            f'<span style="color:{C["text2"]}">[Crop] reload_roi: '
+                            f'{resp.message}</span>'
+                        )
+                    except Exception:
+                        pass
+                    finally:
+                        if fut in self._crop_futures:
+                            self._crop_futures.remove(fut)
+
+                future.add_done_callback(_on_r)
+
+            _attempt(_MAX)
 
     def _crop_clear_roi(self) -> None:
-        """Clear the drawn ROI on the canvas without saving."""
+        """Clear the drawn polygon on the canvas without saving."""
         self._crop_view.clear_roi()
-        self._roi_readout.setText("ROI: —")
-        self._crop_status_lbl.setText("📐  ROI cleared — draw a new region")
+        self._roi_readout.setText("Polygon: —")
+        self._crop_status_lbl.setText("📐  Cleared — draw a new polygon")
         self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
 
     def _crop_reset(self) -> None:
