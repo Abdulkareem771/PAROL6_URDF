@@ -108,6 +108,8 @@ class LaunchTab(QWidget):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self._launchers_dir = os.path.abspath(os.path.join(base_dir, "..", "..", "scripts", "launchers"))
         
+        self.launch_env = {}
+        
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -234,7 +236,7 @@ class LaunchTab(QWidget):
             return
             
         # Parent (Main Window) can inject environment variables into this dict before the worker starts
-        self.launch_env = {}
+        self.launch_env.clear()
         
         self.launch_requested.emit()
         
@@ -297,8 +299,8 @@ class LaunchTab(QWidget):
         self.log_rviz.append(f"\n[TEST] Launching comprehensive Auto-Test ({shape})...")
         self.log_rviz.append("[TEST] Spawning moveit_controller and waiting for services...")
         
+        self.launch_env.clear()
         self.launch_requested.emit()
-        self.launch_env = {}
         
         self._test_worker = LaunchWorker(script_path, [shape], env_vars=self.launch_env)
         self._test_worker.output_rviz.connect(self.log_rviz.append)
