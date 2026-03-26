@@ -42,6 +42,7 @@ setup(
             'crop_image = parol6_vision.crop_image_node:main',
             'manual_line = parol6_vision.manual_line_node:main',
             'vision_trajectory_executor = parol6_vision.vision_trajectory_executor:main',
+            'eye_to_hand_calibrator = parol6_vision.eye_to_hand_calibrator:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
