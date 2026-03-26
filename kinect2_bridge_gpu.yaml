@@ -24,6 +24,14 @@ launch:
     name: "reg_method"
     default: "cuda"   # colour-depth registration
 
+- arg:
+    name: "bilateral_filter"
+    default: "true"
+
+- arg:
+    name: "edge_aware_filter"
+    default: "true"
+
 - node:
     pkg: "kinect2_bridge"
     exec: "kinect2_bridge_node"
@@ -71,10 +79,10 @@ launch:
         # Bilateral + edge-aware filters add significant CPU cost.
         # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
-          value: true
+          value: "$(var bilateral_filter)"
 
         - name: "edge_aware_filter"
-          value: true
+          value: "$(var edge_aware_filter)"
 
         - name: "hole_fill_radius"
           value: "$(var hole_fill_radius)"
