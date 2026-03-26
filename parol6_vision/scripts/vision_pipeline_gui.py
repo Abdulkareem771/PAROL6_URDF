@@ -1097,6 +1097,7 @@ class VisionPipelineGUI(QMainWindow):
         self._crop_set_params_client = None
         self._crop_clear_client = None
         self._crop_futures = []
+        self._trigger_workers: list = []  # keeps NodeWorker threads alive until done
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -2508,13 +2509,18 @@ class VisionPipelineGUI(QMainWindow):
             def _on_param_done(rc):
                 if rc == 0:
                     svc_w = NodeWorker(svc_cmd)
+                    def _on_svc_done(rc):
+                        if rc == 0:
+                            # Auto-publish the annotated image to the path optimizer
+                            self._manual_publish_ros()
+                        else:
+                            self._log.append('<span style="color:#f38ba8">[Manual] set_strokes service call failed.</span>')
                     svc_w.line_out.connect(
                         lambda s: self._log.append(f'<span style="color:#a6e3a1">[Manual] {s}</span>')
                     )
-                    
+                    svc_w.finished.connect(_on_svc_done)
                     self._trigger_workers.append(svc_w)
                     svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
-                    
                     svc_w.start()
                 else:
                     self._log.append('<span style="color:#f38ba8">[Manual] Failed to set strokes_json param.</span>')
