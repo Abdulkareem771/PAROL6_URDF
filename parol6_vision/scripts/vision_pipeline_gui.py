@@ -1234,9 +1234,9 @@ class VisionPipelineGUI(QMainWindow):
         backend_row = QHBoxLayout()
         backend_row.addWidget(QLabel("Camera Backend:"))
         self._backend_combo = QComboBox()
-        self._backend_combo.addItem("CUDA (Nvidia GPU)", "cuda")
-        self._backend_combo.addItem("OpenCL (AMD/Intel)", "opencl")
-        self._backend_combo.addItem("CPU Fallback", "cpu")
+        self._backend_combo.addItem("CPU (Stable/Default)", "cpu")
+        self._backend_combo.addItem("CUDA (Nvidia GPU - Requires rebuild)", "cuda")
+        self._backend_combo.addItem("OpenCL (AMD/Intel - Requires rebuild)", "opencl")
         backend_row.addWidget(self._backend_combo)
         cg_lay.addLayout(backend_row)
 

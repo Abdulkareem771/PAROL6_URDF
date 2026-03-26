@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -z "${PAROL6_SERIAL_PORT}" ] || [ ! -e "${PAROL6_SERIAL_PORT}" ]; then
+if [ -z "${PAROL6_SERIAL_PORT:-}" ] || [ ! -e "${PAROL6_SERIAL_PORT:-}" ]; then
     DETECTED_PORT=$(ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -n 1 || true)
     if [ ! -z "$DETECTED_PORT" ]; then
         SERIAL_PORT="$DETECTED_PORT"
