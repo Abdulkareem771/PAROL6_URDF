@@ -1121,6 +1121,8 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_set_params_client = self._ros_node.create_client(SetParameters, "/crop_image/set_parameters")
             self._crop_clear_client  = self._ros_node.create_client(Trigger, "/crop_image/clear_roi")
             self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
+            self._manual_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line/set_parameters")
+            self._manual_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line/set_strokes")
             self._manual_cropped_sub = None
             if CV2_OK:
                 self._manual_cropped_sub = self._ros_node.create_subscription(
@@ -1593,7 +1595,24 @@ class VisionPipelineGUI(QMainWindow):
         canvas_hint.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
         mt_lay.addWidget(canvas_hint)
 
-        mt_lay.addWidget(self._canvas)
+        mt_lay.addWidget(self._canvas, stretch=1)
+
+        # Dedicated manual log panel
+        manual_log_header = QHBoxLayout()
+        manual_log_header.addWidget(QLabel("📋  Manual Log"))
+        manual_log_header.addStretch()
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.setStyleSheet(f"font-size:10px; padding:2px 6px; background:{C['panel']}; color:{C['text2']}; border:1px solid {C['border']}; border-radius:4px;")
+        clear_log_btn.clicked.connect(lambda: self._manual_log.clear() if hasattr(self, '_manual_log') else None)
+        manual_log_header.addWidget(clear_log_btn)
+        mt_lay.addLayout(manual_log_header)
+
+        self._manual_log = QTextEdit()
+        self._manual_log.setReadOnly(True)
+        self._manual_log.setFixedHeight(100)
+        self._manual_log.setFont(QFont("Monospace", 9))
+        self._manual_log.setStyleSheet(f"background:{C['bg']}; color:{C['text']}; border:1px solid {C['border']}; border-radius:4px;")
+        mt_lay.addWidget(self._manual_log)
 
         tabs.addTab(manual_tab, "✏️  Manual Red Line")
         self._manual_tab_index = tabs.indexOf(manual_tab)
@@ -2476,63 +2495,66 @@ class VisionPipelineGUI(QMainWindow):
         if hasattr(self, '_canvas') and CV2_OK:
             self._canvas.set_straight_line_mode(bool(state))
 
+    def _manual_log_append(self, html: str) -> None:
+        """Append to both the global log and the manual-specific log panel."""
+        self._log.append(html)
+        if hasattr(self, '_manual_log'):
+            self._manual_log.append(html)
+
     def _manual_send_strokes(self) -> None:
-        """Serialise canvas strokes and send them to the manual_line node."""
+        """Serialise canvas strokes and send them to the manual_line node via rclpy."""
         if not (ROS2_OK and CV2_OK):
-            self._log.append('<span style="color:#f38ba8">[Manual] ROS2 + cv2 required.</span>')
+            self._manual_log_append('<span style="color:#f38ba8">[Manual] ROS2 + cv2 required.</span>')
             return
         strokes = self._canvas.get_strokes()
         if not strokes:
-            self._log.append(
-                f'<span style="color:#f9e2af">[Manual] No strokes to send — draw something first.</span>'
-            )
+            self._manual_log_append('<span style="color:#f9e2af">[Manual] No strokes to send — draw something first.</span>')
             return
         c = self._manual_color_picker.color()
-        w = self._manual_brush_spin.value()
-        payload = {
-            'color': [c.blue(), c.green(), c.red()],  # store as BGR
-            'width': w,
-            'strokes': strokes,
-        }
+        w_px = self._manual_brush_spin.value()
         import json
+        payload = {'color': [c.blue(), c.green(), c.red()], 'width': w_px, 'strokes': strokes}
         json_str = json.dumps(payload)
-        # Step 1: set the strokes_json parameter, Step 2: call the service
-        param_cmd = [
-            "ros2", "param", "set", "/manual_line", "strokes_json", json_str
-        ]
-        svc_cmd = [
-            "ros2", "service", "call", "/manual_line/set_strokes",
-            "std_srvs/srv/Trigger", "{}",
-        ]
-        def _do_send():
-            param_w = NodeWorker(param_cmd)
-            def _on_param_done(rc):
-                if rc == 0:
-                    svc_w = NodeWorker(svc_cmd)
+        self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Sending {len(strokes)} stroke(s) → /manual_line/set_strokes…</span>')
+        
+        if not hasattr(self, '_manual_set_params_client') or self._manual_set_params_client is None:
+            self._manual_log_append('<span style="color:#f38ba8">[Manual] ROS client not ready.</span>')
+            return
+        
+        # Use rclpy SetParameters directly — avoids shell JSON quoting issues
+        from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+        pv = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=json_str)
+        req = SetParameters.Request()
+        req.parameters = [Parameter(name='strokes_json', value=pv)]
+        
+        future = self._manual_set_params_client.call_async(req)
+        
+        def _on_param_set(fut):
+            try:
+                result = fut.result()
+                if result and result.results and result.results[0].successful:
+                    # Now call the set_strokes service
+                    svc_w = NodeWorker([
+                        "ros2", "service", "call", "/manual_line/set_strokes",
+                        "std_srvs/srv/Trigger", "{}",
+                    ])
                     def _on_svc_done(rc):
                         if rc == 0:
-                            # Auto-publish the annotated image to the path optimizer
                             self._manual_publish_ros()
                         else:
-                            self._log.append('<span style="color:#f38ba8">[Manual] set_strokes service call failed.</span>')
-                    svc_w.line_out.connect(
-                        lambda s: self._log.append(f'<span style="color:#a6e3a1">[Manual] {s}</span>')
-                    )
+                            self._manual_log_append('<span style="color:#f38ba8">[Manual] set_strokes service call failed.</span>')
+                    svc_w.line_out.connect(lambda s: self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] {s}</span>'))
                     svc_w.finished.connect(_on_svc_done)
                     self._trigger_workers.append(svc_w)
-                    svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
+                    svc_w.finished.connect(lambda r, ww=svc_w: self._trigger_workers.remove(ww) if ww in self._trigger_workers else None)
                     svc_w.start()
                 else:
-                    self._log.append('<span style="color:#f38ba8">[Manual] Failed to set strokes_json param.</span>')
-                    
-            param_w.finished.connect(_on_param_done)
-            self._trigger_workers.append(param_w)
-            param_w.finished.connect(lambda r, w=param_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
-            param_w.start()
-        _do_send()
-        self._log.append(
-            f'<span style="color:#a6e3a1">[Manual] Sending {len(strokes)} stroke(s) → /manual_line/set_strokes…</span>'
-        )
+                    msg = result.results[0].reason if result and result.results else 'unknown'
+                    self._manual_log_append(f'<span style="color:#f38ba8">[Manual] Failed to set strokes param: {msg}</span>')
+            except Exception as e:
+                self._manual_log_append(f'<span style="color:#f38ba8">[Manual] Param set error: {e}</span>')
+        
+        future.add_done_callback(_on_param_set)
 
     def _manual_reset_strokes(self) -> None:
         """Call ~/reset_strokes on the manual_line node and clear the canvas."""
