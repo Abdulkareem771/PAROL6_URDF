@@ -97,26 +97,36 @@ class VisionExecutionGUI(QMainWindow):
         layout.addWidget(QLabel("ROS2 System Log:"))
         layout.addWidget(self.terminal)
 
+    # Source scripts loaded before every ros2 command so QProcess (which does
+    # NOT inherit the interactive ~/.bashrc) always sees the full workspace.
+    _SOURCE_CMD = (
+        "source /opt/ros/humble/setup.bash && "
+        "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+        "source /workspace/install/setup.bash && "
+    )
+
     def launch_system(self, use_bag=True):
         if self.process is not None and self.process.state() == QProcess.ProcessState.Running:
             QMessageBox.warning(self, "Warning", "A launch process is already running!")
             return
 
-        cmd = 'ros2'
-        args = ['launch', 'parol6_vision', 'vision_moveit.launch.py']
+        ros2_args = 'ros2 launch parol6_vision vision_moveit.launch.py'
         if not use_bag:
-            args.append('use_bag:=false')
-            
+            ros2_args += ' use_bag:=false'
+
+        bash_cmd = self._SOURCE_CMD + ros2_args
+
         self.terminal.clear()
-        self.terminal.appendPlainText(f">>> Running: {cmd} {' '.join(args)}\n")
+        self.terminal.appendPlainText(f">>> Running: {ros2_args}\n")
 
         self.process = QProcess()
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.handle_finished)
-        
-        self.process.start(cmd, args)
-        
+
+        # Use bash -c so the source commands are executed first
+        self.process.start('bash', ['-c', bash_cmd])
+
         self.btn_live.setEnabled(False)
         self.btn_bag.setEnabled(False)
         self.btn_stop.setEnabled(True)

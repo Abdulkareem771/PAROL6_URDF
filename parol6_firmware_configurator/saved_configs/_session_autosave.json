@@ -205,7 +205,7 @@
     "feedback_rate_hz": 10,
     "control_loop_rate_hz": 1000,
     "command_timeout_ms": 200,
-    "serial_port": "/dev/ttyACM0",
+    "serial_port": "/dev/ttyS0",
     "baud_rate": 115200,
     "ethernet_ip": "192.168.1.177",
     "ethernet_port": 8888,

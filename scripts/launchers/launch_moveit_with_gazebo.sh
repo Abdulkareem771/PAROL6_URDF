@@ -17,6 +17,7 @@ if [ -f /.dockerenv ]; then
     sleep 5
     
     echo "Starting MoveIt and RViz..."
+    #ros2 launch parol6_vision vision_moveit.launch.py use_bag:=false
     ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false use_sim_time:=true
     
     # If MoveIt naturally dies, kill Gazebo too
