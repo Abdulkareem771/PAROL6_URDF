@@ -234,6 +234,7 @@ class NodeWorker(QThread):
                 bufsize=1,
                 env=self._env,
                 cwd=str(WORKSPACE_DIR),
+                start_new_session=True,  # CRITICAL: Ensures we can kill the entire process tree later!
             )
             for line in self._proc.stdout:
                 self.line_out.emit(line.rstrip())
@@ -252,10 +253,16 @@ class NodeWorker(QThread):
     def abort(self) -> None:
         if self._proc and self._proc.poll() is None:
             try:
-                os.kill(self._proc.pid, signal.SIGINT)
+                # Send SIGINT to the process *group* so the shell and all children (e.g., ROS nodes) catch it
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGINT)
                 self._proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self._proc.terminate()
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            except ProcessLookupError:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2773,22 +2780,11 @@ class VisionPipelineGUI(QMainWindow):
             '/vision/welding_path</b>'
         )
 
-    def _kill_all(self) -> None:
-        """Stop all managed workers then kill stray background ROS processes.
-
-        Uses SIGINT first (allows clean ROS graph deregistration) then SIGTERM
-        after a short delay. SIGKILL (-9) is intentionally avoided so that nodes
-        can call rclpy.shutdown() and cleanly remove themselves from the graph.
-        """
-        self._stop_all()
-        # SIGINT → gives nodes time to deregister; SIGTERM as fallback
-        cmd = (
-            "pkill -INT -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' ; "
-            "sleep 1 ; "
-            "pkill -TERM -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' 2>/dev/null || true"
-        )
-        subprocess.Popen(["bash", "-c", cmd])
-        self._ros_log.append("[KILL] Sent SIGINT to all stray ROS 2 processes (SIGTERM fallback after 1 s).")
+    def _ros_kill_all(self) -> None:
+        self._ros_log.append("[KILL] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
+        cmd = "pkill -9 -f 'ros2|rviz2|ign|gazebo|ruby|move_group|parameter_bridge|robot_state_publisher|launch_'"
+        subprocess.run(["bash", "-c", cmd], check=False)
+        self._ros_log.append("[KILL] ✅ Sent SIGKILL.")
 
     def _kill_camera_processes(self) -> None:
         cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_gpu|kinect2_bridge_launch'"
