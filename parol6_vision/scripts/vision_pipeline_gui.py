@@ -1394,13 +1394,6 @@ class VisionPipelineGUI(QMainWindow):
         mi_grp = QGroupBox("Stage 4 — Send to MoveIt")
         mi_lay = QVBoxLayout(mi_grp)
 
-        # Method selector (matches firmware configurator pattern)
-        mi_lay.addWidget(QLabel("Launch Method:"))
-        self._moveit_method = QComboBox()
-        self._moveit_method.addItem("Method 3: Fake Hardware (Standalone RViz)", "fake")
-        self._moveit_method.addItem("Method 4: Real Hardware + MoveIt", "real")
-        mi_lay.addWidget(self._moveit_method)
-
         self._btn_moveit = NodeButton(
             "MoveIt Controller",
             lambda: ["ros2", "run", "parol6_vision", "moveit_controller"],
@@ -1416,13 +1409,17 @@ class VisionPipelineGUI(QMainWindow):
         send_btn.clicked.connect(self._send_path_to_moveit)
         mi_lay.addWidget(send_btn)
 
-        launch_vision_moveit_btn = QPushButton("🌐  Launch vision_moveit.launch.py")
-        launch_vision_moveit_btn.setStyleSheet(
-            f"background:#313244; color:{C['text']}; border:1px solid {C['border']};"
-            " border-radius:6px; padding:5px;"
+        open_launch_tab_btn = QPushButton("🚀  Open ROS2 Launch Tab")
+        open_launch_tab_btn.setStyleSheet(
+            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px;"
         )
-        launch_vision_moveit_btn.clicked.connect(self._launch_vision_moveit)
-        mi_lay.addWidget(launch_vision_moveit_btn)
+        open_launch_tab_btn.clicked.connect(
+            lambda: self._main_tabs.setCurrentIndex(
+                self._main_tabs.indexOf(self._ros_launch_tab)
+            ) if hasattr(self, '_ros_launch_tab') else None
+        )
+        mi_lay.addWidget(open_launch_tab_btn)
 
         lay.addWidget(mi_grp)
 
@@ -1617,89 +1614,114 @@ class VisionPipelineGUI(QMainWindow):
         tabs.addTab(manual_tab, "✏️  Manual Red Line")
         self._manual_tab_index = tabs.indexOf(manual_tab)
 
-        # ── Tab 3: ROS Launch (firmware-configurator style) ────────────────
-        ros_tab  = QWidget()
-        rt_lay   = QVBoxLayout(ros_tab)
-        rt_lay.setContentsMargins(12, 12, 12, 12)
+        # ── Tab 3: ROS Launch (firmware-configurator style ─ exact replica) ──
+        ros_tab = QWidget()
+        rt_lay = QVBoxLayout(ros_tab)
+        rt_lay.setContentsMargins(16, 16, 16, 16)
+        rt_lay.setSpacing(12)
+        self._ros_launch_tab = ros_tab
 
-        hint = QLabel(
-            "📋 <b>Method 3</b> Fake Hardware — RViz + fake joints (path planning).  "
-            "<b>Method 4</b> Real Hardware — live MoveIt execution.  "
-            "▶️ <b>Run Auto-Test</b> injects a synthetic path and executes it to "
-            "verify the full pipeline end-to-end.  "
-            "<b>Inject Path</b> calls the moveit_controller service manually.  "
-        )
-        hint.setTextFormat(Qt.RichText)
-        hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"background:{C['panel']}; border:1px solid {C['accent']};"
-            f" border-radius:6px; color:{C['text2']}; font-size:11px; padding:8px;"
-        )
-        rt_lay.addWidget(hint)
+        ros_title = QLabel("🚀 ROS2 / MoveIt Launcher")
+        ros_title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
+        rt_lay.addWidget(ros_title)
 
-        ctrls_row = QHBoxLayout()
+        ros_hint = QLabel(
+            "📋 <b>Method 1</b> Gazebo Only — load the 3D simulation world (no robot control).  "
+            "<b>Method 2</b> Gazebo + MoveIt — full simulated robot you can plan and execute on.  "
+            "<b>Method 3</b> Fake Hardware — RViz + fake joint states (no Teensy needed, for path planning).  "
+            "<b>Method 4</b> Real Hardware (Current) — hardware bringup first, then MoveIt.  "
+            "<b>Method 5</b> Real Hardware (Tested Single-Motor Legacy) — branch-locked bringup.  "
+            "<span style='color:#fab387;'>⚠️ Only use real hardware methods after flashing firmware, homing, and testing limit switches.</span>  "
+            "<b>☠️ Kill All</b> forcefully stops all running ROS 2 / Gazebo processes if something hangs."
+        )
+        ros_hint.setTextFormat(Qt.RichText)
+        ros_hint.setWordWrap(True)
+        ros_hint.setStyleSheet(
+            "background:#1e1a2e; border:1px solid #cba6f7; border-radius:6px; "
+            "color:#cdd6f4; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        rt_lay.addWidget(ros_hint)
+
+        # ── Launch Mode group box ─────────────────────────────────────────────
+        from PySide6.QtWidgets import QGroupBox as _QGB
+        ctrls_grp = _QGB("Launch Mode")
+        cl = QHBoxLayout(ctrls_grp)
 
         self._ros_method = QComboBox()
-        self._ros_method.addItem("Live Pipeline (no bag)",               "live")
-        self._ros_method.addItem("Method 3: MoveIt Fake Hardware",        "fake")
-        self._ros_method.addItem("Method 4: Real Hardware (MoveIt)",      "real")
-        self._ros_method.addItem("Vision + MoveIt (vision_moveit.launch.py)", "vision_moveit")
-        ctrls_row.addWidget(QLabel("Method:"))
-        ctrls_row.addWidget(self._ros_method)
-        
-        ctrls_row.addSpacing(16)
-        ctrls_row.addWidget(QLabel("Camera Frame:"))
-        self._ros_frame_input = QLineEdit("kinect2_rgb_optical_frame")
-        self._ros_frame_input.setFixedWidth(180)
-        ctrls_row.addWidget(self._ros_frame_input)
+        self._ros_method.setMinimumWidth(300)
+        self._ros_method.addItem("Method 1: Gazebo Only (Simulation World)",                    "launch_gazebo_only.sh")
+        self._ros_method.addItem("Method 2: Gazebo AND MoveIt (Simulated)",                     "launch_moveit_with_gazebo.sh")
+        self._ros_method.addItem("Method 3: MoveIt Fake (Standalone RViz)",                     "launch_moveit_fake.sh")
+        self._ros_method.addItem("Method 4: MoveIt Real Hardware",                              "launch_moveit_real_hw.sh")
+        self._ros_method.addItem("Method 5: MoveIt Real Hardware (Tested Single-Motor Legacy)", "launch_moveit_real_hw_tested_single_motor.sh")
+        cl.addWidget(QLabel("Target:"))
+        cl.addWidget(self._ros_method)
 
-        self._ros_launch_btn = QPushButton("🚀  Launch")
+        self._ros_launch_btn = QPushButton("🚀 Launch")
         self._ros_launch_btn.setStyleSheet(
             f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
             " border:none; border-radius:6px; padding:5px 14px;"
         )
         self._ros_launch_btn.clicked.connect(self._ros_launch_toggle)
-        ctrls_row.addWidget(self._ros_launch_btn)
+        cl.addWidget(self._ros_launch_btn)
 
-        kill_btn = QPushButton("☠️  Kill All")
-        kill_btn.setStyleSheet(
+        ros_kill_btn = QPushButton("☠️ Kill All")
+        ros_kill_btn.setStyleSheet(
             f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
             " border:none; border-radius:6px; padding:5px 14px;"
         )
-        kill_btn.clicked.connect(self._kill_all)
-        ctrls_row.addWidget(kill_btn)
+        ros_kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
+        ros_kill_btn.clicked.connect(self._kill_all)
+        cl.addWidget(ros_kill_btn)
 
-        ctrls_row.addSpacing(16)
+        cl.addSpacing(20)
 
-        inject_btn = QPushButton("💉  Inject Test Path")
-        inject_btn.setStyleSheet(
+        cl.addWidget(QLabel("Test Plan:"))
+        self._test_shape_combo = QComboBox()
+        self._test_shape_combo.addItems(["Straight", "Curve", "Circle", "ZigZag", "Live Camera (No Inject)"])
+        cl.addWidget(self._test_shape_combo)
+
+        self._test_btn = QPushButton("▶️ Run Auto-Test")
+        self._test_btn.setStyleSheet(
             f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
             " border:none; border-radius:6px; padding:5px 14px;"
         )
-        inject_btn.clicked.connect(self._inject_test_path)
-        inject_btn.setToolTip(
-            "Publishes a synthetic straight-line path on /vision/welding_path "
-            "so the moveit_controller can execute it without the full camera pipeline."
-        )
-        ctrls_row.addWidget(inject_btn)
+        self._test_btn.setToolTip("Starts the moveit_controller, injects the selected path shape, and executes it.")
+        self._test_btn.clicked.connect(self._ros_run_auto_test)
+        cl.addWidget(self._test_btn)
 
-        send_moveit_btn = QPushButton("📡  Send Path → MoveIt")
-        send_moveit_btn.setStyleSheet(
-            f"background:{C['accent']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
-        send_moveit_btn.clicked.connect(self._send_path_to_moveit)
-        ctrls_row.addWidget(send_moveit_btn)
+        cl.addStretch()
+        rt_lay.addWidget(ctrls_grp)
 
-        ctrls_row.addStretch()
-        rt_lay.addLayout(ctrls_row)
+        # ── Split log view ────────────────────────────────────────────────────
+        logs_row = QHBoxLayout()
+        logs_row.setContentsMargins(0, 0, 0, 0)
 
+        rviz_grp = _QGB("ROS 2 / MoveIt Logs")
+        rl = QVBoxLayout(rviz_grp)
         self._ros_log = QTextEdit()
         self._ros_log.setReadOnly(True)
         self._ros_log.setFont(QFont("Monospace", 9))
-        rt_lay.addWidget(self._ros_log)
+        self._ros_log.setLineWrapMode(QTextEdit.NoWrap)
+        self._ros_log.setStyleSheet("background:#11111b; color:#a6adc8;")
+        rl.addWidget(self._ros_log)
+        logs_row.addWidget(rviz_grp)
+
+        gazebo_grp = _QGB("Gazebo / Physics Logs")
+        gl = QVBoxLayout(gazebo_grp)
+        self._gazebo_log = QTextEdit()
+        self._gazebo_log.setReadOnly(True)
+        self._gazebo_log.setFont(QFont("Monospace", 9))
+        self._gazebo_log.setLineWrapMode(QTextEdit.NoWrap)
+        self._gazebo_log.setStyleSheet("background:#11111b; color:#89b4fa;")
+        gl.addWidget(self._gazebo_log)
+        logs_row.addWidget(gazebo_grp)
+
+        rt_lay.addLayout(logs_row)
 
         self._ros_worker: Optional[NodeWorker] = None
+        self._ros_test_worker: Optional[NodeWorker] = None
+        self._launchers_dir = str(WORKSPACE_DIR / "scripts" / "launchers")
         tabs.addTab(ros_tab, "🚀  ROS Launch")
 
         # ── Tab 4: Crop Image ─────────────────────────────────────────────
@@ -2628,44 +2650,95 @@ class VisionPipelineGUI(QMainWindow):
     def _ros_launch_toggle(self) -> None:
         if self._ros_worker and self._ros_worker.isRunning():
             self._ros_log.append("[LAUNCH] Stopping...")
+            self._gazebo_log.append("[LAUNCH] Stopping...")
             self._ros_worker.abort()
             self._ros_worker = None
-            self._ros_launch_btn.setText("🚀  Launch")
+            self._ros_launch_btn.setText("\U0001f680 Launch")
             self._ros_launch_btn.setStyleSheet(
                 f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
                 " border:none; border-radius:6px; padding:5px 14px;"
             )
+            self._ros_method.setEnabled(True)
             return
 
-        method = self._ros_method.currentData()
-        method_cmds = {
-            "live":  ["ros2", "launch", "parol6_vision", "live_pipeline.launch.py", "use_bag:=false"],
-            "fake":  ["ros2", "launch", "parol6_vision", "vision_pipeline.launch.py", "use_bag:=false"],
-            "real":  ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py",
-                      "use_bag:=false", f"camera_frame:={self._ros_frame_input.text()}"],
-            "vision_moveit": ["ros2", "launch", "parol6_vision",
-                               "vision_moveit.launch.py", "use_bag:=false",
-                               f"camera_frame:={self._ros_frame_input.text()}"],
-        }
-        cmd = method_cmds.get(method, method_cmds["fake"])
+        script_name = self._ros_method.currentData()   # e.g. 'launch_moveit_fake.sh'
+        script_path = os.path.join(self._launchers_dir, script_name)
 
         self._ros_log.clear()
-        self._ros_worker = NodeWorker(cmd)
-        self._ros_worker.line_out.connect(self._ros_log.append)
-        self._ros_worker.finished.connect(self._on_ros_launch_finished)
-        self._ros_worker.start()
+        self._gazebo_log.clear()
 
-        self._ros_launch_btn.setText("■  Stop")
+        if not os.path.exists(script_path):
+            self._ros_log.append(f"[LAUNCH] \u274c Error: Cannot find script {script_path}")
+            return
+
+        worker = NodeWorker([script_path])
+
+        def _route_line(s: str):
+            lo = s.lower()
+            if any(k in lo for k in ("ign", "gazebo", "/usr/bin/ruby", "spawn")):
+                self._gazebo_log.append(s)
+            else:
+                self._ros_log.append(s)
+
+        worker.line_out.connect(_route_line)
+        worker.finished.connect(self._on_ros_launch_finished)
+        self._ros_worker = worker
+        worker.start()
+
+        self._ros_launch_btn.setText("\u25a0 Stop")
         self._ros_launch_btn.setStyleSheet(
             f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
             " border:none; border-radius:6px; padding:5px 14px;"
         )
+        self._ros_method.setEnabled(False)
 
     def _on_ros_launch_finished(self, rc: int) -> None:
         self._ros_worker = None
-        self._ros_launch_btn.setText("🚀  Launch")
+        self._ros_launch_btn.setText("\U0001f680 Launch")
         self._ros_launch_btn.setStyleSheet(
             f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        self._ros_method.setEnabled(True)
+
+    def _ros_run_auto_test(self) -> None:
+        if self._ros_test_worker and self._ros_test_worker.isRunning():
+            self._ros_log.append("[TEST] Stopping currently running test...")
+            self._ros_test_worker.abort()
+            self._ros_test_worker = None
+            self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
+            self._test_btn.setStyleSheet(
+                f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
+                " border:none; border-radius:6px; padding:5px 14px;"
+            )
+            return
+
+        script_path = os.path.join(self._launchers_dir, "launch_auto_test.sh")
+        if not os.path.exists(script_path):
+            self._ros_log.append(f"[TEST] \u274c Cannot find script {script_path}")
+            return
+
+        shape = self._test_shape_combo.currentText()
+        self._ros_log.append(f"\n[TEST] Launching Auto-Test ({shape})...")
+        self._ros_log.append("[TEST] Spawning moveit_controller and waiting for services...")
+
+        worker = NodeWorker([script_path, shape])
+        worker.line_out.connect(self._ros_log.append)
+        worker.finished.connect(self._on_ros_test_finished)
+        self._ros_test_worker = worker
+        worker.start()
+
+        self._test_btn.setText("\u25a0 Stop Test")
+        self._test_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+
+    def _on_ros_test_finished(self, rc: int = 0) -> None:
+        self._ros_test_worker = None
+        self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
+        self._test_btn.setStyleSheet(
+            f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
             " border:none; border-radius:6px; padding:5px 14px;"
         )
 
