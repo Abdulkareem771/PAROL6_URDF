@@ -39,6 +39,8 @@ setup(
             'yolo_segment = parol6_vision.yolo_segment:main',
             'color_mode = parol6_vision.color_mode:main',
             'path_optimizer = parol6_vision.path_optimizer:main',
+            'crop_image = parol6_vision.crop_image_node:main',
+            'manual_line = parol6_vision.manual_line_node:main',
             'vision_trajectory_executor = parol6_vision.vision_trajectory_executor:main',
         ],
     },

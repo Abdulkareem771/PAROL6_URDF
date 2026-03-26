@@ -331,7 +331,7 @@ The debug image also shows:
 
 ```bash
 # Build (inside Docker or with ROS 2 sourced)
-cd /path/to/PAROL6_URDF
+cd /workspace
 colcon build --packages-select parol6_vision --symlink-install
 source install/setup.bash
 

@@ -1,7 +1,8 @@
 launch:
+  # ── Kinect bridge identity ────────────────────────────────────────────────────
   - arg:
-      name: "base_name"
-      default: "kinect2"
+    name: "base_name"
+    default: "kinect2"
 
   - arg:
       name: "hole_fill_radius"
@@ -57,6 +58,8 @@ launch:
         - name: "queue_size"
           value: 5
 
+        # Bilateral + edge-aware filters add significant CPU cost.
+        # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
           value: true
 
