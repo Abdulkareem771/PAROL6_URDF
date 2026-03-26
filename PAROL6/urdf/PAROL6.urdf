@@ -420,6 +420,51 @@
 
 
 
+  <!-- ═══════════════════════════════════════════════════════════════
+       ros2_control hardware interface
+       • Fake / Demo mode  → mock_components/GenericSystem  (no Teensy needed)
+       • Real hardware     → parol6_hardware/PAROL6System
+       demo.launch.py replaces "mock_components/GenericSystem" with itself
+       (already correct for fake mode).
+       real_robot launch files replace with "parol6_hardware/PAROL6System".
+       ═══════════════════════════════════════════════════════════════ -->
+  <ros2_control name="parol6_ros2_control" type="system">
+    <hardware>
+      <plugin>mock_components/GenericSystem</plugin>
+    </hardware>
+
+    <joint name="joint_L1">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint_L2">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint_L3">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint_L4">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint_L5">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint_L6">
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
   <gazebo>
     <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ros2_controllers_sim.yaml</parameters>
