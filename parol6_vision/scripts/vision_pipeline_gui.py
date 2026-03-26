@@ -1473,6 +1473,8 @@ class VisionPipelineGUI(QMainWindow):
             ("/path_optimizer/debug_image",             "📊 Path Optimizer Debug"),
         ]
         self._preview_panels = []
+        self._captured_preview = None
+
         for idx, (topic, title) in enumerate(previews):
             frame = QWidget()
             frame.setStyleSheet(

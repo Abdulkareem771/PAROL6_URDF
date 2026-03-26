@@ -63,7 +63,7 @@ class CaptureImagesNode(Node):
 
     Published Topics
     ----------------
-    /vision/captured_image_color  : sensor_msgs/Image
+    /vision/captured_image_raw  : sensor_msgs/Image
     /vision/captured_image_depth  : sensor_msgs/Image
     /vision/captured_camera_info  : sensor_msgs/CameraInfo
     """
@@ -238,12 +238,12 @@ class CaptureImagesNode(Node):
     # ─────────────────────────────────────────────────────────────────
 
     def _do_publish(self, color_msg: Image, depth_msg: Image):
-        """Publish one captured colour + depth frame pair to vision topics."""
+        """Publish one captured color + depth frame pair to vision topics."""
         self._pub_color.publish(color_msg)
         self._pub_depth.publish(depth_msg)
         self.get_logger().info(
-            'Published captured colour + depth frame pair '
-            '→ /vision/captured_image_color, /vision/captured_image_depth'
+            'Published captured color + depth frame pair '
+            '→ /vision/captured_image_raw, /vision/captured_image_depth'
         )
 
     # ─────────────────────────────────────────────────────────────────
