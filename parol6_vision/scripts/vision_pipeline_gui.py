@@ -21,6 +21,9 @@ stdout/stderr to the log pane, and supports SIGINT abort.
 """
 
 from __future__ import annotations
+import faulthandler
+faulthandler.enable()
+
 import os
 import sys
 import shlex
@@ -34,7 +37,7 @@ from PySide6.QtWidgets import (
     QSplitter, QGroupBox, QLabel, QPushButton, QRadioButton,
     QButtonGroup, QTextEdit, QScrollArea, QFrame, QTabWidget,
     QSizePolicy, QGridLayout, QGraphicsView, QGraphicsScene,
-    QGraphicsPixmapItem, QSpinBox, QComboBox, QDialog, QDialogButtonBox,
+    QGraphicsPixmapItem, QSpinBox, QComboBox, QSlider, QDialog, QDialogButtonBox,
     QFileDialog, QMessageBox, QCheckBox, QLineEdit,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QRectF
@@ -310,6 +313,7 @@ class TopicPreviewLabel(QLabel):
         scale = min(lw / w, lh / h)
         nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
         frame_small = cv2.resize(frame, (nw, nh))
+        self._img_gc_cache = frame_small  # KEEP ALIVE for PySide reference count
         qimg = QImage(frame_small.data, nw, nh, int(frame_small.strides[0]), QImage.Format_RGB888)
         self.setPixmap(QPixmap.fromImage(qimg))
         self.setText("")
@@ -345,10 +349,15 @@ class ManualCanvas(QGraphicsView):
         self._straight_line_mode = False
         self._sl_waypoints: list[list[int]] = []   # waypoints for current straight-line stroke
 
-        placeholder = QLabel("Load an image above to start drawing red lines.")
-        placeholder.setAlignment(Qt.AlignCenter)
-        placeholder.setStyleSheet(f"color:{C['text2']}; font-size:13px;")
-        self._scene.addWidget(placeholder)
+        self._bg_item = self._scene.addPixmap(QPixmap())
+        self._bg_item.setZValue(0)
+        self._mask_item = self._scene.addPixmap(QPixmap())
+        self._mask_item.setZValue(1)
+
+        self._placeholder = QLabel("Load an image above to start drawing red lines.")
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        self._placeholder.setStyleSheet(f"color:{C['text2']}; font-size:13px;")
+        self._placeholder_proxy = self._scene.addWidget(self._placeholder)
 
     # -- public API -----------------------------------------------------------
     def set_brush(self, px: int) -> None:
@@ -366,15 +375,16 @@ class ManualCanvas(QGraphicsView):
         return self._all_strokes.copy()
 
     def load_image(self, rgb: np.ndarray) -> None:
-        self._scene.clear()
-        self._base_img = rgb
+        if self._placeholder_proxy.isVisible():
+            self._placeholder_proxy.setVisible(False)
+            
+        self._base_img = rgb  # KEEP ALIVE
         h, w = rgb.shape[:2]
-        qimg = QImage(rgb.data, w, h, int(rgb.strides[0]), QImage.Format_RGB888).copy()
-        pix = QPixmap.fromImage(qimg)
-        self._scene.addPixmap(pix).setZValue(0)
+        qimg = QImage(rgb.data, w, h, int(rgb.strides[0]), QImage.Format_RGB888)
+        
+        self._bg_item.setPixmap(QPixmap.fromImage(qimg))
         self._mask_arr = np.zeros((h, w, 4), dtype=np.uint8)
-        self._mask_item = self._scene.addPixmap(QPixmap(w, h))
-        self._mask_item.setZValue(1)
+        self._refresh_mask()
         self.setSceneRect(QRectF(0, 0, w, h))
         self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
         self._update_cursor()
@@ -391,8 +401,8 @@ class ManualCanvas(QGraphicsView):
         if self._mask_arr is None or self._mask_item is None:
             return
         h, w = self._mask_arr.shape[:2]
-        qimg = QImage(self._mask_arr.data, w, h, int(self._mask_arr.strides[0]),
-                      QImage.Format_RGBA8888)
+        # _mask_arr is kept alive by self._mask_arr
+        qimg = QImage(self._mask_arr.data, w, h, int(self._mask_arr.strides[0]), QImage.Format_RGBA8888)
         self._mask_item.setPixmap(QPixmap.fromImage(qimg))
 
     def get_annotated_bgr(self) -> Optional[np.ndarray]:
@@ -437,6 +447,21 @@ class ManualCanvas(QGraphicsView):
         if len(self._sl_waypoints) >= 2:
             self._all_strokes.append(self._sl_waypoints.copy())
         self._sl_waypoints = []
+
+    def wheelEvent(self, event) -> None:
+        """Add robust Canvas zooming functionality with the scroll wheel via modifiers."""
+        if event.modifiers() & Qt.ControlModifier:
+            zoom_in_factor = 1.15
+            zoom_out_factor = 1.0 / zoom_in_factor
+            
+            if event.angleDelta().y() > 0:
+                zoom_factor = zoom_in_factor
+            else:
+                zoom_factor = zoom_out_factor
+                
+            self.scale(zoom_factor, zoom_factor)
+        else:
+            super().wheelEvent(event)
 
     def mousePressEvent(self, ev) -> None:
         if self._mask_arr is None:
@@ -751,6 +776,7 @@ class CropROIView(QLabel):
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
         small = cv2.resize(frame, (nw, nh))
+        self._img_gc_cache = small  # KEEP ALIVE for PySide reference count
         qimg = QImage(small.data, nw, nh, int(small.strides[0]), QImage.Format_RGB888)
         self._pix = QPixmap.fromImage(qimg)
         self.update()
@@ -1060,6 +1086,9 @@ class ColorPickerWidget(QWidget):
 
 
 class VisionPipelineGUI(QMainWindow):
+    # Use a custom Qt Signal to thread-safely enforce manual canvas redraws
+    manual_image_ready = Signal(np.ndarray)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
@@ -1118,6 +1147,14 @@ class VisionPipelineGUI(QMainWindow):
         accent_bar.setFixedHeight(4)
         accent_bar.setStyleSheet(f"background:{C['accent']};")
         root.addWidget(accent_bar)
+
+        # Initialize the global drawing canvas early so sidebar can reference it
+        if CV2_OK:
+            self._canvas = ManualCanvas()
+            self.manual_image_ready.connect(self._canvas.load_image)
+        else:
+            self._canvas = QLabel("cv2 not available — Manual canvas disabled.")
+            self._canvas.setAlignment(Qt.AlignCenter)
 
         # ── Header ────────────────────────────────────────────────────────────
         hdr = QWidget()
@@ -1265,97 +1302,13 @@ class VisionPipelineGUI(QMainWindow):
             mg_lay.addWidget(rb)
         self._mode_buttons.buttons()[0].setChecked(True)
 
-        # ── Manual Red Line sub-panel (shown only in manual mode) ──────────
-        self._manual_sub = QWidget()
-        ms_lay = QVBoxLayout(self._manual_sub)
-        ms_lay.setContentsMargins(4, 4, 4, 4)
-        ms_lay.setSpacing(4)
-
-        # Color + brush row
-        color_brush_row = QHBoxLayout()
-        color_brush_row.addWidget(QLabel("Color:"))
-        self._manual_color_picker = ColorPickerWidget(
-            QColor(255, 0, 0),   # default red
-            parent=self._manual_sub,
-        )
-        color_brush_row.addWidget(self._manual_color_picker)
-        color_brush_row.addSpacing(8)
-        color_brush_row.addWidget(QLabel("Brush:"))
-        self._manual_brush_spin = QSpinBox()
-        self._manual_brush_spin.setRange(1, 100)
-        self._manual_brush_spin.setValue(5)
-        self._manual_brush_spin.setFixedWidth(52)
-        self._manual_brush_spin.valueChanged.connect(
-            lambda v: self._canvas.set_brush(v) if CV2_OK else None
-        )
-        color_brush_row.addWidget(self._manual_brush_spin)
-        color_brush_row.addStretch()
-        ms_lay.addLayout(color_brush_row)
-
-        # Straight-line mode toggle
-        self._straight_line_check = QCheckBox("📐  Straight-line mode (shift locks H/V)")
-        self._straight_line_check.setToolTip(
-            "When enabled, each click adds a waypoint.\n"
-            "Hold Shift to snap to horizontal or vertical."
-        )
-        self._straight_line_check.stateChanged.connect(self._on_straight_line_toggled)
-        ms_lay.addWidget(self._straight_line_check)
-
-        # Inline canvas
-        if CV2_OK:
-            self._canvas.setMinimumHeight(160)
-            ms_lay.addWidget(self._canvas)
-            canvas_hint = QLabel("Left-click drag to draw. Right-click to undo last point.")
-        else:
-            canvas_hint = QLabel("(cv2 offline — drawing disabled)")
-        canvas_hint.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
-        ms_lay.addWidget(canvas_hint)
-
-        # Action buttons row
-        action_row = QHBoxLayout()
-        clear_canvas_btn = QPushButton("🗑  Clear")
-        clear_canvas_btn.setToolTip("Clear current drawing.")
-        clear_canvas_btn.setStyleSheet(
-            f"background:{C['panel']}; color:{C['text2']};"
-            f" border:1px solid {C['border']}; border-radius:5px; padding:4px 8px;"
-        )
-        clear_canvas_btn.clicked.connect(lambda: self._canvas.clear_mask() if CV2_OK else None)
-        action_row.addWidget(clear_canvas_btn)
-
-        send_strokes_btn = QPushButton("📤  Send Strokes")
-        send_strokes_btn.setToolTip(
-            "Serialize current strokes and send to manual_line node.\n"
-            "Config is saved to ~/.parol6/manual_line_config.json."
-        )
-        send_strokes_btn.setStyleSheet(
-            f"background:{C['accent']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:5px; padding:4px 8px;"
-        )
-        send_strokes_btn.clicked.connect(self._manual_send_strokes)
-        action_row.addWidget(send_strokes_btn)
-
-        reset_strokes_btn = QPushButton("🔄  Reset")
-        reset_strokes_btn.setToolTip("Clear strokes from node and delete saved config.")
-        reset_strokes_btn.setStyleSheet(
-            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:5px; padding:4px 8px;"
-        )
-        reset_strokes_btn.clicked.connect(self._manual_reset_strokes)
-        action_row.addWidget(reset_strokes_btn)
-        ms_lay.addLayout(action_row)
-
-        self._manual_sub.setVisible(False)
-        mg_lay.addWidget(self._manual_sub)
-
-        # Show/hide sub-panel when mode changes
+        # Switch to Manual Red Line tab when manual mode is selected
         def _on_mode_selected(btn):
-            self._manual_sub.setVisible(
-                btn.property('mode_key') == 'manual'
-            )
-            if btn.property('mode_key') == 'manual' and CV2_OK:
-                # Load latest cropped frame into canvas automatically
-                if self._latest_cropped_rgb is not None:
-                    self._canvas.load_image(self._latest_cropped_rgb.copy())
+            if btn.property('mode_key') == 'manual':
+                if hasattr(self, '_main_tabs') and hasattr(self, '_manual_tab_index'):
+                    self._main_tabs.setCurrentIndex(self._manual_tab_index)
+                if CV2_OK and getattr(self, '_latest_cropped_rgb', None) is not None:
+                    self.manual_image_ready.emit(self._latest_cropped_rgb.copy())
 
         self._mode_buttons.buttonClicked.connect(_on_mode_selected)
 
@@ -1507,6 +1460,7 @@ class VisionPipelineGUI(QMainWindow):
 
     def _build_tabs(self) -> QTabWidget:
         tabs = QTabWidget()
+        self._main_tabs = tabs
 
         # ── Tab 1: Visual Outputs ─────────────────────────────────────────
         vis_tab = QTabWidget()
@@ -1554,47 +1508,92 @@ class VisionPipelineGUI(QMainWindow):
         mt_lay = QVBoxLayout(manual_tab)
         mt_lay.setContentsMargins(8, 8, 8, 8)
 
-        ctrl_row = QHBoxLayout()
+        # Toolbar Row 1: File / Data Controls
+        row1 = QHBoxLayout()
         load_btn = QPushButton("📂  Load Image")
         load_btn.clicked.connect(self._manual_load_image)
-        ctrl_row.addWidget(load_btn)
+        row1.addWidget(load_btn)
 
         use_topic_btn = QPushButton("📥  Use Latest Cropped Frame")
         use_topic_btn.clicked.connect(self._manual_use_latest_cropped)
-        ctrl_row.addWidget(use_topic_btn)
-
-        ctrl_row.addWidget(QLabel("Brush (px):"))
-        self._brush_spin = QSpinBox()
-        self._brush_spin.setRange(1, 150)
-        self._brush_spin.setValue(5)
-        self._brush_spin.valueChanged.connect(
-            lambda v: self._canvas.set_brush(v) if CV2_OK else None
-        )
-        ctrl_row.addWidget(self._brush_spin)
-
-        clear_btn = QPushButton("🗑  Clear")
-        clear_btn.clicked.connect(lambda: self._canvas.clear_mask() if CV2_OK else None)
-        ctrl_row.addWidget(clear_btn)
+        row1.addWidget(use_topic_btn)
 
         save_btn = QPushButton("💾  Save Red-Line Image")
         save_btn.clicked.connect(self._manual_save)
-        ctrl_row.addWidget(save_btn)
+        row1.addWidget(save_btn)
 
         ros_pub_btn = QPushButton("📡  Publish as ROS Image")
         ros_pub_btn.clicked.connect(self._manual_publish_ros)
-        ctrl_row.addWidget(ros_pub_btn)
+        row1.addWidget(ros_pub_btn)
+        
+        row1.addStretch()
+        mt_lay.addLayout(row1)
 
-        ctrl_row.addStretch()
-        mt_lay.addLayout(ctrl_row)
+        # Toolbar Row 2: Drawing Tools
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("Color:"))
+        self._manual_color_picker = ColorPickerWidget(QColor(255, 0, 0), parent=manual_tab)
+        row2.addWidget(self._manual_color_picker)
+        row2.addSpacing(8)
+        
+        row2.addWidget(QLabel("Brush (px):"))
+        self._manual_brush_spin = QSpinBox()
+        self._manual_brush_spin.setRange(1, 150)
+        self._manual_brush_spin.setValue(5)
+        
+        self._manual_brush_slider = QSlider(Qt.Horizontal)
+        self._manual_brush_slider.setRange(1, 150)
+        self._manual_brush_slider.setValue(5)
+        self._manual_brush_slider.setFixedWidth(80)
+        
+        # Link them together
+        self._manual_brush_spin.valueChanged.connect(self._manual_brush_slider.setValue)
+        self._manual_brush_slider.valueChanged.connect(self._manual_brush_spin.setValue)
+        
+        self._manual_brush_spin.valueChanged.connect(
+            lambda v: self._canvas.set_brush(v) if getattr(self, '_canvas', None) else None
+        )
+        row2.addWidget(self._manual_brush_slider)
+        row2.addWidget(self._manual_brush_spin)
+        row2.addSpacing(8)
+
+        self._straight_line_check = QCheckBox("📐  Straight-line mode (shift locks H/V)")
+        self._straight_line_check.setToolTip("When enabled, each click adds a waypoint.\nHold Shift to snap to horizontal or vertical.")
+        self._straight_line_check.stateChanged.connect(self._on_straight_line_toggled)
+        row2.addWidget(self._straight_line_check)
+        row2.addSpacing(8)
+
+        clear_btn = QPushButton("🗑  Clear")
+        clear_btn.setStyleSheet(f"background:{C['panel']}; color:{C['text2']}; border:1px solid {C['border']}; border-radius:5px; padding:4px 8px;")
+        clear_btn.clicked.connect(lambda: self._canvas.clear_mask() if CV2_OK else None)
+        row2.addWidget(clear_btn)
+
+        send_strokes_btn = QPushButton("📤  Send Strokes")
+        send_strokes_btn.setToolTip("Serialize current strokes and send to manual_line node.\nConfig is saved to ~/.parol6/manual_line_config.json.")
+        send_strokes_btn.setStyleSheet(f"background:{C['accent']}; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
+        send_strokes_btn.clicked.connect(self._manual_send_strokes)
+        row2.addWidget(send_strokes_btn)
+
+        reset_strokes_btn = QPushButton("🔄  Reset")
+        reset_strokes_btn.setToolTip("Clear strokes from node and delete saved config.")
+        reset_strokes_btn.setStyleSheet(f"background:{C['red']}; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
+        reset_strokes_btn.clicked.connect(self._manual_reset_strokes)
+        row2.addWidget(reset_strokes_btn)
+        
+        row2.addStretch()
+        mt_lay.addLayout(row2)
 
         if CV2_OK:
-            self._canvas = ManualCanvas()
+            canvas_hint = QLabel("Left-click drag to draw. Right-click to undo last point. Hold Shift with straight-line mode to lock H/V.")
         else:
-            self._canvas = QLabel("cv2 not available — Manual canvas disabled.")
-            self._canvas.setAlignment(Qt.AlignCenter)
+            canvas_hint = QLabel("(cv2 offline — drawing disabled)")
+        canvas_hint.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
+        mt_lay.addWidget(canvas_hint)
+
         mt_lay.addWidget(self._canvas)
 
         tabs.addTab(manual_tab, "✏️  Manual Red Line")
+        self._manual_tab_index = tabs.indexOf(manual_tab)
 
         # ── Tab 3: ROS Launch (firmware-configurator style) ────────────────
         ros_tab  = QWidget()
@@ -2508,18 +2507,19 @@ class VisionPipelineGUI(QMainWindow):
                 if rc == 0:
                     svc_w = NodeWorker(svc_cmd)
                     svc_w.line_out.connect(
-                        lambda s: self._log.append(
-                            f'<span style="color:#a6e3a1">[Manual] {s}</span>'
-                        )
+                        lambda s: self._log.append(f'<span style="color:#a6e3a1">[Manual] {s}</span>')
                     )
+                    
+                    self._trigger_workers.append(svc_w)
+                    svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
+                    
                     svc_w.start()
-                    if hasattr(self, '_mode_workers_tmp'):
-                        self._mode_workers_tmp.append(svc_w)
                 else:
-                    self._log.append(
-                        '<span style="color:#f38ba8">[Manual] Failed to set strokes_json param.</span>'
-                    )
+                    self._log.append('<span style="color:#f38ba8">[Manual] Failed to set strokes_json param.</span>')
+                    
             param_w.finished.connect(_on_param_done)
+            self._trigger_workers.append(param_w)
+            param_w.finished.connect(lambda r, w=param_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
             param_w.start()
         _do_send()
         self._log.append(
@@ -2541,6 +2541,8 @@ class VisionPipelineGUI(QMainWindow):
                 f'<span style="color:#f9e2af">[Manual] {s}</span>'
             )
         )
+        self._trigger_workers.append(svc_w)
+        svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
         svc_w.start()
         self._log.append('<span style="color:#f9e2af">[Manual] Reset sent → /manual_line/reset_strokes</span>')
         self._btn_start_mode.setEnabled(True)
@@ -2731,29 +2733,36 @@ class VisionPipelineGUI(QMainWindow):
             self._canvas.load_image(rgb)
 
     def _manual_topic_image_cb(self, msg: "ROSImage") -> None:
-        """Cache the latest cropped frame for use with 'Use Latest Cropped Frame' button.
-        Does NOT auto-load into the canvas — the user opts in explicitly.
-        """
+        """Cache the latest cropped frame and auto-load into canvas if Manual mode is active."""
         if not (CV2_OK and self._bridge):
             return
         try:
             frame = self._bridge.imgmsg_to_cv2(msg, "rgb8")
             self._latest_cropped_rgb = frame.copy()
-        except Exception:
-            pass
+            
+            # Auto-load into manual canvas if the Manual mode is currently selected
+            if hasattr(self, '_mode_buttons'):
+                btn = self._mode_buttons.checkedButton()
+                if btn and btn.property('mode_key') == 'manual':
+                    if hasattr(self, '_canvas'):
+                        # Thread-safely defer heavy scene manipulation to the Qt event loop
+                        self.manual_image_ready.emit(self._latest_cropped_rgb.copy())
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
 
     def _manual_use_latest_cropped(self) -> None:
         if not CV2_OK:
             QMessageBox.warning(self, "cv2 Missing", "OpenCV (cv2) is required.")
             return
-        if self._latest_cropped_rgb is None:
+        if getattr(self, '_latest_cropped_rgb', None) is None:
             QMessageBox.warning(
                 self,
                 "No Cropped Frame",
                 "No image has been received yet on /vision/captured_image_color.",
             )
             return
-        self._canvas.load_image(self._latest_cropped_rgb.copy())
+        self.manual_image_ready.emit(self._latest_cropped_rgb.copy())
         self._log.append(
             f'<span style="color:{C["green"]}">[Manual] Loaded latest cropped frame from /vision/captured_image_color.</span>'
         )
