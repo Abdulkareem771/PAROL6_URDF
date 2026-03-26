@@ -96,7 +96,7 @@ Every node button follows the same pattern:
 
 | Control | Action |
 |---------|--------|
-| **Live Kinect Camera ▶ Start** | Runs `ros2 launch kinect2_bridge kinect2_bridge_launch.yaml` |
+| **Live Kinect Camera ▶ Start** | Runs `ros2 launch ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml` |
 | **Kill Stale Camera** | Sends SIGINT to any lingering `kinect2_bridge_node` process |
 | **Capture mode** | `keyboard (press 's')` — manual single-shot; `timed (auto)` — continuous |
 | **Capture Images Node ▶ Start** | Runs `ros2 run parol6_vision capture_images`; also auto-starts Crop Image Node |
@@ -544,7 +544,7 @@ ros2 topic hz /kinect2/qhd/image_color_rect   # should be ~30 Hz; higher → red
 ```
 
 **Fixes:**
-- Reduce Kinect stream quality in `kinect2_bridge_launch.yaml` if CPU is saturated.
+- Reduce Kinect stream quality in `kinect2_bridge_gpu.yaml` if CPU is saturated.
 - Kill the camera and reconnect: **Kill Stale Camera** button.
 
 ---
@@ -638,13 +638,88 @@ source install/setup.bash
 
 ---
 
+### Camera running at ~0.3 Hz (Kinect GPU regression)
+
+**Symptom:** The `/kinect2/qhd/image_color_rect` topic publishes at 0.3–1 Hz instead of ~15 Hz; everything downstream is extremely slow.
+
+**Root cause:** `kinect2_bridge_gpu.yaml` can accidentally have `depth_method: "cpu"` which, combined with `bilateral_filter: true` and `edge_aware_filter: true`, reduces throughput to ~0.3 Hz because both filters serialize on CPU.
+
+**Diagnosis:**
+```bash
+ros2 topic hz /kinect2/qhd/image_color_rect   # should be ~15 Hz
+clinfo -l                                      # check OpenCL platform is listed
+cat ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml | grep -E 'depth_method|fps_limit|reg_method'
+```
+
+**Fix (GPU/OpenCL available — NVIDIA driver present):**
+```yaml
+# kinect2_bridge_gpu.yaml
+depth_method: "opencl"       # was "cpu"
+reg_method:   "opencl_cpu"   # was "cpu"
+fps_limit:    15.0           # was 1.0
+```
+
+**Fix (CPU-only fallback):** If no OpenCL GPU is available, disable the expensive filters:
+```yaml
+depth_method:      "cpu"
+reg_method:        "cpu"
+fps_limit:         15.0
+bilateral_filter:  false   # ← REQUIRED for CPU mode
+edge_aware_filter: false   # ← REQUIRED for CPU mode
+```
+
+Restart the Kinect camera node from the GUI after editing the YAML.
+
+---
+
+### ☠️ Kill All — nodes still visible in `ros2 node list` after kill
+
+**Old behaviour (before 2026-03-26):** The Kill All button used `pkill -9` (SIGKILL), which bypassed ROS shutdown code and left ghost entries in the graph for 30–60 s.
+
+**Current behaviour:** Uses `pkill -INT` first (allows `rclpy.shutdown()`) then `pkill -TERM` after 1 s. Ghosts clear within a few seconds.
+
+If you still see ghost nodes:
+```bash
+pkill -KILL -f 'ros2 run parol6'   # nuclear option — only if TERM didn't work
+```
+
+---
+
 ## Related Documentation
 
 | Guide | Location |
 |-------|----------|
+| **Developer guide (architecture, nodes, handoff prompt)** | [`VISION_PIPELINE_DEVELOPER_GUIDE.md`](VISION_PIPELINE_DEVELOPER_GUIDE.md) |
 | Capture & replay with bags | [`CAPTURE_REPLAY_GUIDE.md`](CAPTURE_REPLAY_GUIDE.md) |
 | Camera calibration | [`CAMERA_CALIBRATION_GUIDE.md`](CAMERA_CALIBRATION_GUIDE.md) |
 | Depth matcher deep-dive | [`DEPTH_MATCHER_GUIDE.md`](DEPTH_MATCHER_GUIDE.md) |
 | Path generator | [`PATH_GENERATOR_GUIDE.md`](PATH_GENERATOR_GUIDE.md) |
 | RViz visualization setup | [`RVIZ_SETUP_GUIDE.md`](RVIZ_SETUP_GUIDE.md) |
 | Testing guide | [`TESTING_GUIDE.md`](TESTING_GUIDE.md) |
+
+---
+
+## Change Log
+
+### Session 1 — 2026-03-24
+
+| # | Change |
+|---|--------|
+| 1 | Removed blocking auto-poll for crop node button status |
+| 2 | `_crop_apply_save` → async retry (8 × 500 ms) for reload_roi service |
+| 3 | Manual tab: no auto-load from topic; explicit button only |
+| 4 | `SetParameters` result checks `.successful` before logging |
+| 5 | Log tab registration moved to `_build_tabs()` |
+| 6 | `QImage` stride: `int(strides[0])` — prevents PySide6 TypeErrors |
+| 7 | `crop_image_node`: numpy mask fill fixed (was crashing silently) |
+
+### Session 2 — 2026-03-26
+
+| # | Change |
+|---|--------|
+| 8 | `_crop_reset()` async retry — was blocking `wait_for_service` on Qt thread |
+| 9 | `_manual_publish_ros()` publisher cached — was leaking a new publisher on every click |
+| 10 | `_inject_test_path()` YAML corrected — was malformed for `ros2 topic pub` |
+| 11 | `_kill_all()` SIGKILL → SIGINT+SIGTERM — allows clean ROS deregistration |
+| 12 | `capture_images_node.py` docstring corrected (topic name) |
+| 13 | **Kinect GPU regression fixed:** `kinect2_bridge_gpu.yaml` — `depth_method: opencl`, `fps_limit: 15.0` |

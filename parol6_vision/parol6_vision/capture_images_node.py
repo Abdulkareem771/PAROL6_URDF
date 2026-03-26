@@ -26,9 +26,12 @@ Subscribed
     /kinect2/qhd/camera_info       (sensor_msgs/CameraInfo) — camera intrinsics
 
 Published
-    /vision/captured_image_color   (sensor_msgs/Image)      — captured colour frame
+    /vision/captured_image_raw     (sensor_msgs/Image)      — captured colour frame (default output_topic)
     /vision/captured_image_depth   (sensor_msgs/Image)      — captured depth frame
     /vision/captured_camera_info   (sensor_msgs/CameraInfo) — relayed camera info
+
+NOTE: output_topic defaults to /vision/captured_image_raw.
+      crop_image_node relays that to /vision/captured_image_color.
 
 =============================================================================
 PARAMETERS

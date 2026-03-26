@@ -29,7 +29,7 @@ Note
 ----
 The Kinect camera (kinect2_bridge) must be started SEPARATELY before this
 launch file, as it lives in a different workspace:
-  ros2 launch kinect2_bridge kinect2_bridge_launch.yaml
+  ros2 launch ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml
 """
 
 import os

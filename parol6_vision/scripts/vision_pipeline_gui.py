@@ -1014,14 +1014,18 @@ class VisionPipelineGUI(QMainWindow):
         cam_grp = QGroupBox("Stage 1 — Camera")
         cg_lay  = QVBoxLayout(cam_grp)
 
+        backend_row = QHBoxLayout()
+        backend_row.addWidget(QLabel("Camera Backend:"))
+        self._backend_combo = QComboBox()
+        self._backend_combo.addItem("CUDA (Nvidia GPU)", "cuda")
+        self._backend_combo.addItem("OpenCL (AMD/Intel)", "opencl")
+        self._backend_combo.addItem("CPU Fallback", "cpu")
+        backend_row.addWidget(self._backend_combo)
+        cg_lay.addLayout(backend_row)
+
         self._btn_live_cam = NodeButton(
             "Live Kinect Camera",
-            lambda: [
-                "bash", "-c",
-                "source /opt/ros/humble/setup.bash && "
-                "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
-                "ros2 launch kinect2_bridge kinect2_bridge_launch.yaml"
-            ],
+            self._get_kinect_launch_cmd,
             self._log,
             C["blue"],
         )
@@ -2031,49 +2035,65 @@ class VisionPipelineGUI(QMainWindow):
         self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
 
     def _crop_reset(self) -> None:
-        """Disable crop (pass-through) — call ~/clear_roi service and update config."""
-        if not self._ensure_crop_node_running():
-            self._log.append(
-                f'<span style="color:{C["red"]}">[Crop] /crop_image is not running.</span>'
-            )
-            return
+        """Disable crop (pass-through) — call ~/clear_roi service and update config.
+
+        Uses the same async retry loop as _crop_apply_save to avoid blocking the Qt
+        main thread if the node was just started (service not immediately available).
+        """
         if not ROS2_OK or self._crop_clear_client is None:
             self._log.append(
-                f'<span style="color:{C["red"]}">[Crop] Clear-ROI client is unavailable in the GUI.</span>'
-            )
-            return
-        if not self._crop_clear_client.wait_for_service(timeout_sec=1.5):
-            self._log.append(
-                f'<span style="color:{C["red"]}">[Crop] /crop_image/clear_roi service is not available.</span>'
+                f'<span style="color:{C["red"]}">[Crop] Clear-ROI ROS client unavailable.</span>'
             )
             return
 
-        future = self._crop_clear_client.call_async(Trigger.Request())
-        self._crop_futures.append(future)
+        self._ensure_crop_node_running()
 
-        def _on_done(fut):
-            try:
-                resp = fut.result()
-                self._log.append(
-                    f'<span style="color:{C["text2"]}">[Crop] {resp.message}</span>'
-                )
-            except Exception as exc:
-                self._log.append(
-                    f'<span style="color:{C["red"]}">[Crop] Clear failed: {exc}</span>'
-                )
-            finally:
-                if fut in self._crop_futures:
-                    self._crop_futures.remove(fut)
+        _MAX = 8
+        _MS  = 500
 
-        future.add_done_callback(_on_done)
+        def _clear_attempt(remaining: int) -> None:
+            if self._crop_clear_client.service_is_ready():
+                _do_clear()
+            elif remaining > 0:
+                self._log.append(
+                    f'<span style="color:{C["text2"]}">[Crop] Waiting for '
+                    f'/crop_image/clear_roi service ({remaining} left)…</span>'
+                )
+                QTimer.singleShot(_MS, lambda: _clear_attempt(remaining - 1))
+            else:
+                self._log.append(
+                    f'<span style="color:{C["red"]}">[Crop] clear_roi service not available. '
+                    'Is the node running?</span>'
+                )
+
+        def _do_clear() -> None:
+            future = self._crop_clear_client.call_async(Trigger.Request())
+            self._crop_futures.append(future)
+
+            def _on_done(fut):
+                try:
+                    resp = fut.result()
+                    self._log.append(
+                        f'<span style="color:{C["text2"]}">[Crop] {resp.message}</span>'
+                    )
+                except Exception as exc:
+                    self._log.append(
+                        f'<span style="color:{C["red"]}">[Crop] Clear failed: {exc}</span>'
+                    )
+                finally:
+                    if fut in self._crop_futures:
+                        self._crop_futures.remove(fut)
+
+            future.add_done_callback(_on_done)
 
         self._crop_view.clear_roi()
         self._roi_readout.setText("ROI: —")
-        self._crop_status_lbl.setText("↩  Reset: pass-through active (no crop).")
-        self._crop_status_lbl.setStyleSheet(f"color:{C['text2']}; font-size:11px;")
+        self._crop_status_lbl.setText("⏳  Resetting to pass-through…")
+        self._crop_status_lbl.setStyleSheet(f"color:{C['yellow']}; font-size:11px; font-weight:bold;")
         self._log.append(
-            f'<span style="color:{C["text2"]}">[Crop] Reset → pass-through.</span>'
+            f'<span style="color:{C["text2"]}">[Crop] Requesting pass-through reset…</span>'
         )
+        _clear_attempt(_MAX)
 
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -2263,30 +2283,24 @@ class VisionPipelineGUI(QMainWindow):
         )
 
     def _inject_test_path(self) -> None:
-        """Publish a small synthetic straight-line path to /vision/welding_path."""
-        yaml_path = """
-poses:
-  - header:
-      frame_id: base_link
-    pose:
-      position: {x: 0.4, y: -0.1, z: 0.45}
-      orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}
-  - header:
-      frame_id: base_link
-    pose:
-      position: {x: 0.4, y: 0.0, z: 0.45}
-      orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}
-  - header:
-      frame_id: base_link
-    pose:
-      position: {x: 0.4, y: 0.1, z: 0.45}
-      orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}
-""".strip()
+        """Publish a small synthetic straight-line path to /vision/welding_path.
+
+        The YAML value for `ros2 topic pub` must be a single flat YAML mapping.
+        """
+        # Three waypoints along Y axis at fixed X=0.4m, Z=0.45m
+        path_yaml = (
+            "{"
+            "header: {frame_id: base_link}, "
+            "poses: ["
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y: -0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.0, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}"
+            "]}"
+        )
 
         worker = NodeWorker(
             ["ros2", "topic", "pub", "--once",
-             "/vision/welding_path", "nav_msgs/msg/Path",
-             f"{{header: {{frame_id: base_link}}, {yaml_path}}}"],
+             "/vision/welding_path", "nav_msgs/msg/Path", path_yaml],
         )
         worker.line_out.connect(
             lambda s: self._ros_log.append(
@@ -2295,23 +2309,54 @@ poses:
         )
         worker.start()
         self._ros_log.append(
-            f'<b style="color:{C["yellow"]}">[Inject] Synthetic path published → '
+            f'<b style="color:{C["yellow"]}">[Inject] Synthetic 3-point path published → '
             '/vision/welding_path</b>'
         )
 
     def _kill_all(self) -> None:
+        """Stop all managed workers then kill stray background ROS processes.
+
+        Uses SIGINT first (allows clean ROS graph deregistration) then SIGTERM
+        after a short delay. SIGKILL (-9) is intentionally avoided so that nodes
+        can call rclpy.shutdown() and cleanly remove themselves from the graph.
+        """
         self._stop_all()
-        cmd = "pkill -9 -f 'rviz2|move_group|ros2_control_node|ros2 run parol6'"
-        subprocess.run(["bash", "-c", cmd], check=False)
-        self._ros_log.append("[KILL] All ROS 2 processes terminated.")
+        # SIGINT → gives nodes time to deregister; SIGTERM as fallback
+        cmd = (
+            "pkill -INT -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' ; "
+            "sleep 1 ; "
+            "pkill -TERM -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' 2>/dev/null || true"
+        )
+        subprocess.Popen(["bash", "-c", cmd])
+        self._ros_log.append("[KILL] Sent SIGINT to all stray ROS 2 processes (SIGTERM fallback after 1 s).")
 
     def _kill_camera_processes(self) -> None:
-        cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_launch.yaml'"
+        cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_gpu|kinect2_bridge_launch'"
         subprocess.run(["bash", "-c", cmd], check=False)
         self._btn_live_cam._set_stopped()
         self._log.append(
             f'<span style="color:{C["red"]}">[Live Kinect Camera] Requested stop for stale camera processes.</span>'
         )
+
+    def _get_kinect_launch_cmd(self) -> list[str]:
+        backend = self._backend_combo.currentData()
+        
+        if backend == "cpu":
+            # For CPU, reg_method is CPU, and expensive filters must be disabled to hit 15Hz
+            args = "depth_method:=cpu reg_method:=cpu bilateral_filter:=false edge_aware_filter:=false fps_limit:=15.0"
+        elif backend == "opencl":
+            # OpenCL reg_method is opencl_cpu
+            args = "depth_method:=opencl reg_method:=opencl_cpu fps_limit:=15.0"
+        else:
+            # CUDA reg_method is cuda
+            args = "depth_method:=cuda reg_method:=cuda fps_limit:=15.0"
+
+        return [
+            "bash", "-c",
+            "source /opt/ros/humble/setup.bash && "
+            "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+            f"ros2 launch {WORKSPACE_DIR}/kinect2_bridge_gpu.yaml {args}"
+        ]
 
     # ── Manual Red Line actions ────────────────────────────────────────────
 
@@ -2373,7 +2418,11 @@ poses:
             QMessageBox.information(self, "Saved", f"Saved to:\n{p}")
 
     def _manual_publish_ros(self) -> None:
-        """Publish the annotated canvas image to /vision/processing_mode/annotated_image."""
+        """Publish the annotated canvas image to /vision/processing_mode/annotated_image.
+
+        Publisher is cached on first call (not recreated on every click) to avoid
+        leaking publisher handles into the ROS graph.
+        """
         if not (ROS2_OK and CV2_OK):
             QMessageBox.warning(self, "Unavailable", "ROS 2 + cv2 required.")
             return
@@ -2382,11 +2431,13 @@ poses:
             QMessageBox.warning(self, "Nothing to Publish", "Draw red lines first.")
             return
         try:
+            # Lazily create once; reuse on subsequent clicks
+            if not hasattr(self, "_manual_annotated_pub") or self._manual_annotated_pub is None:
+                self._manual_annotated_pub = self._ros_node.create_publisher(
+                    ROSImage, "/vision/processing_mode/annotated_image", 1
+                )
             msg = self._bridge.cv2_to_imgmsg(img, encoding="bgr8")
-            pub = self._ros_node.create_publisher(
-                ROSImage, "/vision/processing_mode/annotated_image", 1
-            )
-            pub.publish(msg)
+            self._manual_annotated_pub.publish(msg)
             self._log.append(
                 f'<b style="color:{C["green"]}">[Manual] Published to '
                 '/vision/processing_mode/annotated_image ✅</b>'
