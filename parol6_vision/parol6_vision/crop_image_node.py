@@ -105,6 +105,9 @@ class CropImageNode(Node):
 
         # Load config from disk
         self._load_config()
+        # Auto-apply flag: if a crop config was loaded, process the very first
+        # incoming frame immediately so the worker doesn't need to press anything.
+        self._auto_apply_pending: bool = self._enabled
 
         # ── Publishers / Subscribers ──────────────────────────────────
         self._pub = self.create_publisher(Image, self._out_topic, 10)
@@ -132,6 +135,11 @@ class CropImageNode(Node):
 
     def _image_callback(self, msg: Image) -> None:
         self._latest_msg = msg
+        if self._auto_apply_pending:
+            self._auto_apply_pending = False
+            self.get_logger().info(
+                "[crop_image] Auto-applying saved config on first frame."
+            )
         self._publish_current(msg)
 
     def _publish_current(self, msg: Image | None = None) -> None:

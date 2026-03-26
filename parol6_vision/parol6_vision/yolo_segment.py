@@ -288,16 +288,40 @@ class YoloSegmentNode(Node):
         num_detections = len(result.boxes) if result.boxes is not None else 0
 
         if result.masks is None or len(result.masks.data) < 2:
-            # Not enough objects detected – return unmodified frames
+            # Not enough objects — draw debug outlines for whatever masks exist
+            if self.publish_debug and debug_img is not None and result.masks is not None:
+                _colours = [(255, 100, 0), (0, 200, 255)]  # BGR: orange, cyan
+                for i, poly in enumerate(result.masks.xy):
+                    if len(poly) > 0:
+                        cv2.polylines(
+                            debug_img,
+                            [np.int32(poly)],
+                            isClosed=True,
+                            color=_colours[i % len(_colours)],
+                            thickness=2,
+                        )
+                # Badge in top-left
+                badge = f"Detected {num_detections} mask(s) — need 2"
+                cv2.rectangle(debug_img, (0, 0), (340, 26), (30, 30, 30), -1)
+                cv2.putText(
+                    debug_img, badge, (6, 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 180, 255), 1, cv2.LINE_AA
+                )
+            if num_detections != 2:
+                self.get_logger().warn(
+                    f"⚠️  Only {num_detections} mask(s) detected — need 2 for intersection."
+                )
             return annotated_img, debug_img, None, num_detections
 
         # 2 ─ Extract & Binarise Masks (take the first two objects) ----------
-        raw_masks = result.masks.data
+        # Use result.masks.xy to get coordinates in the original image bounds,
+        # avoiding letterboxing deformation issues present in result.masks.data.
+        polygons = result.masks.xy
         obj_matrices = []
-        for mask_tensor in raw_masks[:2]:          # only need first two
-            mask_np = mask_tensor.cpu().numpy()
-            mask_resized = cv2.resize(mask_np, (w, h))
-            mask_binary = (mask_resized > self.mask_conf).astype(np.uint8) * 255
+        for poly in polygons[:2]:                  # only need first two
+            mask_binary = np.zeros((h, w), dtype=np.uint8)
+            if len(poly) > 0:
+                cv2.fillPoly(mask_binary, [np.int32(poly)], 255)
             obj_matrices.append(mask_binary)
 
         obj_1, obj_2 = obj_matrices

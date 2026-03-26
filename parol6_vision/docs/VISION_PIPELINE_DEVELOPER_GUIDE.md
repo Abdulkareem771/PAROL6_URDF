@@ -164,6 +164,33 @@ ros2 launch ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml
 
 **Subscribed:** `/vision/captured_image_color` · **Published:** same 3 topics as `color_mode`
 
+> **Debug image:** Always published, even when fewer than 2 masks are detected. Shows polygon outlines per mask, with a status badge in the top-left corner.
+
+---
+
+### 2.6 manual_line *(new — Session 3)*
+
+**Entry point:** `ros2 run parol6_vision manual_line`
+
+**Subscribed:** `/vision/captured_image_color`
+
+**Published:** same 3 topics as `color_mode` + `yolo_segment`:
+- `/vision/processing_mode/annotated_image`
+- `/vision/processing_mode/debug_image`
+- `/vision/processing_mode/seam_centroid`
+
+**Services:**
+| Service | Type | Action |
+|---------|------|--------|
+| `~/set_strokes` | `std_srvs/Trigger` | Load strokes from `strokes_json` param + save config |
+| `~/reset_strokes` | `std_srvs/Trigger` | Clear in-memory strokes + delete saved config |
+
+**Parameters:** `stroke_color` (int[3], BGR), `stroke_width` (int), `strokes_json` (str, set before calling set_strokes)
+
+**Persistent config:** `~/.parol6/manual_line_config.json` — loaded automatically on node startup.
+
+> **Use case:** Draw the weld seam once for a given fixture position. Config is saved and replayed on every subsequent node start — no re-drawing needed for repeat jobs.
+
 ---
 
 ### 2.6 Manual Red Line (GUI-only)
@@ -306,24 +333,27 @@ vision_pipeline_gui.py
 ├── _wrap_ros_command(cmd)         Wraps ros2 cmds in bash with setup.bash sources
 ├── NodeWorker(QThread)            subprocess.Popen wrapper, streams stdout
 ├── TopicPreviewLabel(QLabel)      ROS Image → 10 Hz QLabel preview
-├── ManualCanvas(QGraphicsView)    Draw red-line annotations → get BGR numpy
+├── ManualCanvas(QGraphicsView)    Draw annotations → get BGR numpy + serialisable strokes
+├── ColorPickerWidget(QWidget)     Reusable colour swatch + eyedropper (emits color_changed)
 ├── NodeButton(QWidget)            Toggle start/stop for a managed subprocess
 ├── CropROIView(QLabel)            Polygon drawing + eyedropper colour picker
 └── VisionPipelineGUI(QMainWindow)
     ├── _build_sidebar()           Stage 1–4 + Legacy Tools
     ├── _build_tabs()
-    │   ├── Visual Outputs         4 × TopicPreviewLabel
-    │   ├── Manual Red Line        ManualCanvas
+    │   ├── Visual Outputs         5 × TopicPreviewLabel (incl. Mode Debug sub-tab)
+    │   ├── Manual Red Line        ManualCanvas (advanced/legacy tab)
     │   ├── ROS Launch             Launch file runner
-    │   ├── Crop Image             CropROIView + output preview
-    │   └── Console Logs           Per-node QTextEdit sub-tabs
+    │   ├── Crop Image             CropROIView + ColorPickerWidget + output preview
+    │   └── Console Logs           Per-node QTextEdit sub-tabs incl. Stage 2 Mode
     └── Key action methods
         ├── _trigger_capture()
         ├── _crop_apply_save()     Async retry → reload_roi / set_parameters
-        ├── _crop_reset()          Async retry → clear_roi  [fixed session 2]
-        ├── _inject_test_path()    Flat YAML dict  [fixed session 2]
-        ├── _kill_all()            SIGINT→SIGTERM  [fixed session 2]
-        └── _manual_publish_ros()  Cached publisher  [fixed session 2]
+        ├── _crop_reset()          Async retry → clear_roi
+        ├── _inject_test_path()    Flat YAML dict
+        ├── _kill_all()            SIGINT→SIGTERM
+        ├── _manual_publish_ros()  Cached publisher
+        ├── _manual_send_strokes() Serialize canvas → ros2 param set + set_strokes service
+        └── _manual_reset_strokes() Call reset_strokes service + clear canvas
 ```
 
 ### Design rules
@@ -446,6 +476,12 @@ top -p $(pgrep -f kinect2_bridge_node)         # check CPU usage
 | 11 | `_kill_all()` `pkill -9` → `pkill -INT` + `pkill -TERM` after 1 s |
 | 12 | `capture_images_node.py` docstring: corrected published topic name |
 | 13 | Kinect GPU regression: `kinect2_bridge_gpu.yaml` depth_method / reg_method / fps_limit |
+| 14 | GUI: Added Camera Backend selector (CUDA / OpenCL / CPU) + Stage 2 logs sub-tab + Mode Debug YOLO sub-tab |
+| 15 | `yolo_segment.py`: Fixed silent intersection failure due to letterbox-padded `result.masks.data` aspect-ratio squishing. Mapped polygons using `result.masks.xy` directly to original unpadded image coords. |
+| 16 | `yolo_segment.py`: Always publish debug image even when `< 2` masks detected; shows polygon outlines + status badge. |
+| 17 | `crop_image_node.py`: Auto-apply saved config on the very first incoming frame (no manual trigger needed). |
+| 18 | New `manual_line_node.py`: Full ROS 2 node consistent with `color_mode`/`yolo_segment`; persistent stroke config in `~/.parol6/manual_line_config.json`; auto-loads on startup; `set_strokes` and `reset_strokes` services. |
+| 19 | GUI: `ColorPickerWidget` reusable class (swatch + eyedropper); Manual Red Line sidebar sub-panel with inline `ManualCanvas`, brush size, straight-line mode (shift snap), Send/Reset Strokes buttons. |
 
 ---
 
@@ -556,9 +592,16 @@ KNOWN GOTCHAS
 4. Kinect 0.3 Hz: depth_method must be "opencl", not "cpu". Fixed in gpu.yaml.
 5. Never use wait_for_service() on Qt main thread — use async retry pattern.
 6. _manual_publish_ros caches publisher; don't create new one per click.
+7. YOLO model has a single class 'Object' — it generates ONE combined mask, not two separate ones. This is a training labelling issue. The intersection logic needs two separate masks to find the seam; until retrained with 2 classes, manual_line or color_mode should be used instead.
+8. crop_image auto-applies saved polygon on the first frame after node start. No manual trigger needed after setting up the workspace once.
+9. manual_line node saves strokes to ~/.parol6/manual_line_config.json and auto-loads on next startup.
 
-ALL BUGS FIXED UP TO 2026-03-26 (13 total across 2 sessions):
+ALL BUGS FIXED UP TO 2026-03-26 (19 total across 3 sessions):
   See §9 of VISION_PIPELINE_DEVELOPER_GUIDE.md for full list.
+
+NEW IN SESSION 3
+  manual_line node: ros2 run parol6_vision manual_line
+  Config: ~/.parol6/manual_line_config.json (auto-loaded on startup)
 
 FIRST STEPS
 1. Read VISION_PIPELINE_DEVELOPER_GUIDE.md

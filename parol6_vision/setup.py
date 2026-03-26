@@ -40,6 +40,7 @@ setup(
             'color_mode = parol6_vision.color_mode:main',
             'path_optimizer = parol6_vision.path_optimizer:main',
             'crop_image = parol6_vision.crop_image_node:main',
+            'manual_line = parol6_vision.manual_line_node:main',
         ],
     },
     scripts=['test/mock_camera_publisher.py', 'test/check_path.py'],
