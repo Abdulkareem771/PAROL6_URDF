@@ -1,13 +1,14 @@
 """
 vision_moveit.launch.py
 =======================
-Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz
+Unified launch: Vision Pipeline + MoveIt (fake hardware) + RViz + MoveIt Controller
 
 Combines:
   - ros2 bag play  (replays Kinect data — set use_bag:=false for live camera)
-  - red_line_detector  →  /vision/weld_lines_2d
+  - path_optimizer     →  /vision/weld_lines_2d
   - depth_matcher      →  /vision/weld_lines_3d
   - path_generator     →  /vision/welding_path
+  - moveit_controller  (consumes /vision/welding_path and calls MoveIt services/actions)
   - move_group         (fake hardware — robot model + motion planning panel)
   - ros2_control_node  (FakeSystem — no ESP32 needed)
   - RViz with vision_debug.rviz  (all overlays + MotionPlanning panel)
@@ -52,14 +53,16 @@ def generate_launch_description():
     )
     camera_frame = LaunchConfiguration('camera_frame')
 
+
     # ── MoveIt Config ──────────────────────────────────────────────────
     pkg_parol6            = get_package_share_directory('parol6')
     pkg_moveit            = get_package_share_directory('parol6_moveit_config')
     pkg_vision            = get_package_share_directory('parol6_vision')
+    pkg_hardware          = get_package_share_directory('parol6_hardware')
 
     moveit_config = (
         MoveItConfigsBuilder("parol6")
-        .robot_description(file_path=os.path.join(pkg_parol6, 'urdf', 'PAROL6.urdf'))
+        .robot_description(file_path=os.path.join(pkg_hardware, 'urdf', 'parol6.urdf.xacro'), mappings={"use_ros2_control": "true", "allow_spoofing": "true"})
         .robot_description_semantic(file_path=os.path.join(pkg_moveit, 'config', 'parol6.srdf'))
         .trajectory_execution(file_path=os.path.join(pkg_moveit, 'config', 'moveit_controllers.yaml'))
         .planning_pipelines(pipelines=['ompl'])
@@ -95,8 +98,8 @@ def generate_launch_description():
         # Camera is 1.2 m in front of robot base, 1.0 m up, looking back+down
         # yaw=pi  → faces toward -X (toward robot)
         # pitch=+0.52 rad (+30° = tilts DOWN after yaw=π flip) → tilts down toward workspace
-        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
-                   '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
+        arguments=['--x', '0.2', '--y', '0.0', '--z', '1.0',
+                   '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
@@ -112,14 +115,13 @@ def generate_launch_description():
     )
 
     # ── 3. Vision Nodes ────────────────────────────────────────────────
-    red_line_detector = Node(
+    path_optimizer = Node(
         package='parol6_vision',
-        executable='red_line_detector',
-        name='red_line_detector',
+        executable='path_optimizer',
+        name='path_optimizer',
         output='screen',
         parameters=[{
             'publish_debug_images': True,
-            'single_frame_mode': ParameterValue(single_frame_detection, value_type=bool),
             'use_sim_time': True,
         }]
     )
@@ -155,6 +157,22 @@ def generate_launch_description():
         }]
     )
 
+    # ── 3b. Vision Trajectory Executor ─────────────────────────────────
+    vision_trajectory_executor = Node(
+        package='parol6_vision',
+        executable='vision_trajectory_executor',
+        name='vision_trajectory_executor',
+        output='screen',
+        parameters=[{
+            'planning_group': 'parol6_arm',
+            'base_frame': 'base_link',
+            'end_effector_link': 'L6',
+            'step_size': 0.02,
+            'jump_threshold': 1.5,
+            'auto_execute': True,
+        }],
+    )
+
     # ── 4. Point Cloud (RViz 3D view) ──────────────────────────────────
     point_cloud_xyzrgb = Node(
         package='depth_image_proc',
@@ -162,9 +180,9 @@ def generate_launch_description():
         name='point_cloud_xyzrgb',
         output='screen',
         remappings=[
-            ('/rgb/camera_info',             '/kinect2/qhd/camera_info'),
-            ('/rgb/image_rect_color',        '/kinect2/qhd/image_color_rect'),
-            ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
+            ('/rgb/camera_info',             '/kinect2/sd/camera_info'),
+            ('/rgb/image_rect_color',        '/kinect2/sd/image_color_rect'),
+            ('/depth_registered/image_rect', '/kinect2/sd/image_depth_rect'),
         ],
         parameters=[{'use_sim_time': True}]
     )
@@ -235,9 +253,10 @@ def generate_launch_description():
         static_tf_camera,
         static_tf_optical,
         # Vision pipeline
-        red_line_detector,
+        path_optimizer,
         depth_matcher,
         path_generator,
+        vision_trajectory_executor,
         point_cloud_xyzrgb,
         # MoveIt
         move_group_node,

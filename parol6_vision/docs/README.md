@@ -30,6 +30,8 @@ Complete snapshot capture workflow:
 
 ### 🧪 Testing
 - **`TESTING_GUIDE.md`** - Unit and integration tests for vision pipeline
+- **`GAZEBO_PATH_EXEC_CHECKLIST.md`** - End-to-end validation (Path Generator → MoveIt → Gazebo)
+- **`MOVEIT_CONTROLLER_DEBUG_CONTEXT.md`** - Known execution failure signatures and recovery
 
 ### 📋 Implementation & Planning
 - **`implementation_plan.md`** - Original vision pipeline architecture
@@ -71,6 +73,11 @@ ros2 launch parol6_vision camera_setup.launch.py
 ```bash
 # Read setup guide
 cat parol6_vision/docs/RVIZ_SETUP_GUIDE.md
+```
+
+### I want to validate path execution in Gazebo
+```bash
+cat parol6_vision/docs/GAZEBO_PATH_EXEC_CHECKLIST.md
 ```
 
 ---

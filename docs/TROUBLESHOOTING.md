@@ -158,6 +158,159 @@ RViz config file has markers disabled. The config path fix (Issue 3A) should sol
 
 ## ⚙️ Build & Environment Issues
 
+### Issue: `colcon build` Fails With `Permission denied` in `build/`, `install/`, or `log/`
+
+**Symptoms:**
+```bash
+PermissionError: [Errno 13] Permission denied: '/home/.../build/...'
+PermissionError: [Errno 13] Permission denied: '/home/.../install/...'
+```
+
+**Cause:** Generated ROS workspace folders are owned by `root` from a previous sudo/container-side write.
+
+**Fix (host terminal):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+sudo chown -R $USER:$USER build install log
+ls -ld build install log
+```
+
+Expected owner/group should be your user (for example `kareem kareem`).
+
+### Issue: CMake Cache Points to Wrong Workspace Path (`/workspace/...` vs host path)
+
+**Symptoms:**
+```bash
+CMake Error: The current CMakeCache.txt directory ... is different than ...
+The build time path "/workspace/install/..." doesn't exist
+```
+
+**Cause:** Stale CMake cache generated in a different environment (host vs container).
+
+**Safe Fix (generated artifacts only):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+rm -rf build install log
+```
+
+Then rebuild in the environment you actually run in (recommended: inside `parol6_dev`):
+```bash
+docker exec -i parol6_dev bash -lc "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6 parol6_hardware parol6_moveit_config"
+```
+
+---
+
+## 🎯 Gazebo + MoveIt Execution Issues
+
+### Issue: Plan Works, But Execute Doesn't Move in Gazebo
+
+**Symptoms:**
+- Planning succeeds in RViz (trajectory shown)
+- Gazebo robot does not move
+- TF warnings like `TF_OLD_DATA` or "jump back in time"
+
+**Config Note:**
+- Gazebo simulation now uses simulation-only controller files (`*_sim.yaml`).
+- Do not tune Gazebo behavior in hardware-oriented `ros2_controllers.yaml`.
+- If you run MoveIt with Gazebo, use:
+  - `ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false`
+- Rationale:
+  - `use_fake_hardware:=true` starts a second internal `ros2_control_node` and can conflict with Gazebo's controller manager.
+
+**Fix (Correct Order):**
+
+1. **Restart the container (clean state):**
+   ```bash
+   docker restart parol6_dev
+   ```
+
+2. **Launch Gazebo first (Terminal 1):**
+   ```bash
+   docker exec -it parol6_dev bash
+   cd /workspace && source install/setup.bash
+   ros2 launch parol6 ignition.launch.py
+   ```
+
+3. **Launch MoveIt second (Terminal 2):**
+   ```bash
+   docker exec -it parol6_dev bash
+   cd /workspace && source install/setup.bash
+   ros2 launch parol6_moveit_config demo.launch.py use_fake_hardware:=false
+   ```
+
+4. **Enable sim time (so RViz/MoveIt use `/clock`):**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /move_group use_sim_time true"
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 param set /rviz2 use_sim_time true"
+   ```
+
+5. **Verify `/clock` exists:**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic list | grep /clock"
+   ```
+
+6. **Verify controllers are active:**
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 control list_controllers"
+   ```
+   Expected:
+   ```
+   joint_state_broadcaster  ...  active
+   parol6_arm_controller    ...  active
+   ```
+
+7. **Test execution:**  
+   In RViz: Plan → Execute.  
+   If still no motion, check if a trajectory is published:
+   ```bash
+   docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 topic echo /parol6_arm_controller/joint_trajectory --once"
+   ```
+
+**Root Cause (Most Common):**
+Multiple ROS instances or time desync caused TF to jump backwards. Restarting and ensuring sim time fixed it.
+
+### Issue: Plan Succeeds, But Execute Fails Instantly (No error, just fails)
+
+**Symptoms:**
+- The robot spawns correctly in Gazebo.
+- RViz loads and planning succeeds.
+- Clicking "Execute" instantly returns a failure.
+
+**Cause:** The `parol6_arm_controller` is loaded, but MoveIt's trajectory manager cannot link to its action server because it lacks a namespace. 
+
+**Fix:**
+Open `parol6_moveit_config/config/moveit_controllers.yaml` and ensure `action_ns: follow_joint_trajectory` is specified under the `parol6_arm_controller` block. Otherwise, MoveIt doesn't know where to send the action goal.
+
+### Host GUI Permission Fix (X11)
+
+**Symptoms:**
+- `qt.qpa.xcb: could not connect to display :0`
+- `Authorization required, but no authorization protocol specified`
+
+**Run on host terminal (not inside Docker):**
+```bash
+cd ~/Desktop/PAROL6_URDF
+xhost +local:root
+xhost +local:docker
+docker restart parol6_dev
+./start_container.sh
+```
+
+Then relaunch:
+```bash
+docker exec -it parol6_dev bash -c "cd /workspace && source install/setup.bash && ros2 launch parol6 ignition.launch.py"
+```
+
+### Clean Shutdown (Avoid Frozen Restart)
+
+1. In MoveIt/RViz terminal: press `Ctrl+C` and wait for full shutdown.
+2. In Gazebo terminal: press `Ctrl+C` and wait for full shutdown.
+3. Exit container shells with `exit`.
+4. Optional when done:
+```bash
+docker stop parol6_dev
+```
+
 ### Issue 5: Python Environment Conflicts
 
 **Symptoms:**
@@ -289,6 +442,24 @@ source /opt/ros/humble/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+**D. Namespace Collisions (Segmentation fault -11)**
+If RViz immediately segfaults specifically when physical hardware or simulation controllers are loaded (but works fine in `fake` mode):
+This is a known ROS 2 Humble bug related to the RViz MotionPlanning plugin's `class_loader`. 
+- **Fix:** Ensure your `demo.launch.py` does NOT pass the entire `moveit_config.to_dict()` into the `rviz_node` parameters. You must selectively pass keys (`robot_description`, `robot_description_semantic`, etc.) instead.
+
+---
+
+### Issue 9.5: RViz Displays "Requesting initial scene failed"
+
+**Symptoms:**
+- RViz opens successfully but doesn't load the robot.
+- The `MotionPlanning` display shows a yellow warning error: `Requesting initial scene failed`.
+
+**Cause:** There are trailing/zombie `move_group` processes running in the background. They are conflicting over the `/monitored_planning_scene` ROS 2 network topic, preventing your new RViz instance from connecting.
+
+**Fix:**
+Click the **☠️ Kill All** button in the ROS 2 Launch Tab of the Firmware Configurator GUI to cleanly terminate all dangling Gazebo and MoveIt instances, then try launching again.
 
 ---
 

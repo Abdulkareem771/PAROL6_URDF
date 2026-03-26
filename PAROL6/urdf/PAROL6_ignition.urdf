@@ -399,6 +399,24 @@
       velocity="3" />
   </joint>
 
+  <!-- Dummy link representing the Tool Center Point (TCP) / Gripper Tip -->
+  <link name="tcp_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1.0 0.0 0.0 1.0"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="tcp_joint" type="fixed">
+    <origin xyz="0 0 -0.075" rpy="3.14159 0 0" /> <!-- Adjust this to the tip of the L6 shaft, rotated 180deg to point outwards -->
+    <parent link="L6"/>
+    <child link="tcp_link"/>
+  </joint>
+
 
 <ros2_control name="IgnitionSystem" type="system">
     <hardware>
@@ -456,7 +474,7 @@
 
   <gazebo>
     <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>/workspace/install/parol6/share/parol6/config/ros2_controllers.yaml</parameters>
+      <parameters>/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ros2_controllers_sim.yaml</parameters>
       <robot_param>robot_description</robot_param>
       <robot_param_node>robot_state_publisher</robot_param_node>
     </plugin>

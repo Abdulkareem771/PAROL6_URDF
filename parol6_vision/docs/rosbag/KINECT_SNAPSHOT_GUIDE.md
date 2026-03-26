@@ -116,7 +116,7 @@ ros2 launch parol6_vision camera_setup.launch.py
 ### Check Topics Are Publishing
 ```bash
 ros2 topic list | grep kinect
-ros2 topic hz /kinect2/qhd/image_color_rect
+ros2 topic hz /kinect2/sd/image_color_rect
 ```
 
 ### View Bag Info

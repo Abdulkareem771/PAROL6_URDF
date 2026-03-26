@@ -9,25 +9,34 @@ if docker info | grep -i nvidia >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; t
     echo "[INFO] NVIDIA runtime detected — enabling GPU"
     
     # Add optional GPU/CUDA mounts if they exist
+    # Note: resolve symlinks so Docker gets real files, not dangling symlinks.
+    # Skip paths where host type (file) would conflict with container type (dir) or vice versa.
     for path in /etc/OpenCL/vendors \
                 /usr/bin/nvidia-smi \
                 /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1 \
                 /usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.1 \
-                /usr/bin/nvcc \
                 /usr/lib/nvidia-cuda-toolkit \
                 /usr/lib/nvidia \
-                /usr/lib/cuda \
-                /usr/share/cmake-3.22/Modules; do
+                /usr/lib/cuda; do
         if [ -e "$path" ]; then
-            GPU_ARGS+=("-v" "$path:$path:ro")
+            real_path=$(realpath "$path")
+            GPU_ARGS+=("-v" "$real_path:$path:ro")
         fi
     done
-    
+
+    # /usr/bin/nvcc is a file on host but a directory in the image — skip direct mount,
+    # the container's own nvcc is sufficient since nvidia-cuda-toolkit is mounted above.
+
     for path in /usr/lib/x86_64-linux-gnu/libcudart.so \
                 /usr/lib/x86_64-linux-gnu/libcudart.so.11.0 \
                 /usr/lib/x86_64-linux-gnu/libcudadevrt.a; do
         if [ -e "$path" ]; then
-            GPU_ARGS+=("-v" "$path:/host-cuda-libs/$(basename $path):ro")
+            # Resolve symlinks — Docker cannot bind-mount a symlink as a file.
+            # The container image has /host-cuda-libs/<name>/ as a directory,
+            # so we mount the real file *inside* that directory.
+            real_path=$(realpath "$path")
+            dest_dir="/host-cuda-libs/$(basename $path)"
+            GPU_ARGS+=("-v" "$real_path:$dest_dir/$(basename $real_path):ro")
         fi
     done
 else
@@ -87,6 +96,7 @@ else
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
     --env QT_X11_NO_MITSHM=1 \
     -e XAUTHORITY=/tmp/.docker.xauth \
+    -e XDG_RUNTIME_DIR=/tmp/runtime-root \
     -v $(pwd):/workspace \
     -v $HOME:/host_home:ro \
     -v /dev:/dev \
@@ -97,6 +107,43 @@ else
 
     echo -e "${GREEN}[✓]${NC} Container created and started"
 fi
+
+# Install libserial-dev from local cache (no download needed!)
+echo -e "${BLUE}[2/4]${NC} Installing libserial-dev from cache..."
+if [ -d ".docker_cache" ] && [ "$(ls -A .docker_cache/*.deb 2>/dev/null)" ]; then
+  docker exec $CONTAINER_NAME bash -c "dpkg -i /workspace/.docker_cache/*.deb 2>/dev/null; apt-get install -f -y > /dev/null 2>&1; exit 0"
+  echo -e "${GREEN}✓ Installed from cache (no download)${NC}"
+else
+  echo -e "${YELLOW}⚠️  Cache not found, downloading...${NC}"
+  docker exec $CONTAINER_NAME bash -c "apt-get update > /dev/null 2>&1 && apt-get install -y libserial-dev > /dev/null 2>&1"
+  echo -e "${GREEN}✓ Downloaded and installed${NC}"
+fi
+echo ""
+
+# Install ROS 2 controllers (required for ros2_control)
+echo -e "${BLUE}[3/4]${NC} Installing ROS 2 controllers..."
+docker exec $CONTAINER_NAME bash -c "apt-get install -y ros-humble-ros2-controllers ros-humble-ros2-control ros-humble-ros2controlcli > /dev/null 2>&1 || exit 0"
+echo -e "${GREEN}✓ Controllers installed${NC}"
+echo ""
+
+# Build workspace
+echo -e "${BLUE}[4/4]${NC} Building workspace..."
+# Clean workspace inside Docker to avoid pollution/permission issues
+docker exec $CONTAINER_NAME bash -c "rm -rf /workspace/build /workspace/install /workspace/log"
+
+# Using --packages-select to avoid building unrelated packages (like microros) found in the dir
+docker exec $CONTAINER_NAME bash -c "source /opt/ros/humble/setup.bash && cd /workspace && colcon build --symlink-install --packages-select parol6 parol6_hardware parol6_moveit_config parol6_driver parol6_msgs parol6_vision" > /tmp/parol6_real_build.log 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Build successful${NC}"
+else
+    echo -e "${RED}✗ Build failed. Dumping log:${NC}"
+    cat /tmp/parol6_real_build.log
+    docker stop $CONTAINER_NAME
+    exit 1
+fi
+echo ""
+
 
 # Always refresh xauth token so RViz/GUI apps work in all terminals
 echo -e "${BLUE}[INFO]${NC} Refreshing X11 auth token for GUI support..."

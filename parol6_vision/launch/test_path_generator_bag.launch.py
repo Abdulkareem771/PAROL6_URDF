@@ -55,8 +55,8 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
         # Camera 1.2 m in front of robot, 1.0 m high, looking back+down at workspace
-        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
-                   '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
+        arguments=['--x', '0.2', '--y', '0.0', '--z', '1.0',
+                   '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
@@ -132,9 +132,9 @@ def generate_launch_description():
         name='point_cloud_xyzrgb',
         output='screen',
         remappings=[
-            ('/rgb/camera_info',             '/kinect2/qhd/camera_info'),
-            ('/rgb/image_rect_color',        '/kinect2/qhd/image_color_rect'),
-            ('/depth_registered/image_rect', '/kinect2/qhd/image_depth_rect'),
+            ('/rgb/camera_info',             '/kinect2/sd/camera_info'),
+            ('/rgb/image_rect_color',        '/kinect2/sd/image_color_rect'),
+            ('/depth_registered/image_rect', '/kinect2/sd/image_depth_rect'),
         ],
         parameters=[{'use_sim_time': True}]
     )

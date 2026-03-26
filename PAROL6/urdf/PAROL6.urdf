@@ -163,7 +163,7 @@
     <axis
       xyz="0 0 1" />
     <limit
-      lower="-0.98"
+      lower="-0.802444444"
       upper="1"
       effort="300"
       velocity="3" />
@@ -222,7 +222,7 @@
       xyz="0 0 -1" />
     <limit
       lower="-2"
-      upper="1.3"
+      upper="1.186823892"
       effort="300"
       velocity="3" />
   </joint>
@@ -279,8 +279,8 @@
     <axis
       xyz="0 0 -1" />
     <limit
-      lower="-2"
-      upper="2"
+      lower="-2.4945"
+      upper="1.849111111"
       effort="300"
       velocity="3" />
   </joint>
@@ -399,66 +399,75 @@
       velocity="3" />
   </joint>
 
+  <!-- Dummy link representing the Tool Center Point (TCP) / Gripper Tip -->
+  <link name="tcp_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.01"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1.0 0.0 0.0 1.0"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="tcp_joint" type="fixed">
+    <origin xyz="0 0 -0.075" rpy="3.14159 0 0" /> <!-- Adjust this to the tip of the L6 shaft, rotated 180deg to point outwards -->
+    <parent link="L6"/>
+    <child link="tcp_link"/>
+  </joint>
 
-<ros2_control name="IgnitionSystem" type="system">
+
+
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ros2_control hardware interface
+       • Fake / Demo mode  → mock_components/GenericSystem  (no Teensy needed)
+       • Real hardware     → parol6_hardware/PAROL6System
+       demo.launch.py replaces "mock_components/GenericSystem" with itself
+       (already correct for fake mode).
+       real_robot launch files replace with "parol6_hardware/PAROL6System".
+       ═══════════════════════════════════════════════════════════════ -->
+  <ros2_control name="parol6_ros2_control" type="system">
     <hardware>
-      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+      <plugin>mock_components/GenericSystem</plugin>
     </hardware>
-    
+
     <joint name="joint_L1">
-      <command_interface name="position">
-        <param name="min">-1.7</param>
-        <param name="max">1.7</param>
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
-
     <joint name="joint_L2">
-      <command_interface name="position">
-        <param name="min">-0.98</param>
-        <param name="max">1.0</param>
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
-
     <joint name="joint_L3">
-      <command_interface name="position">
-        <param name="min">-2.0</param>
-        <param name="max">1.3</param>
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
-
     <joint name="joint_L4">
-      <command_interface name="position">
-        <param name="min">-2.0</param>
-        <param name="max">2.0</param>
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
-
     <joint name="joint_L5">
-      <command_interface name="position">
-        <param name="min">-2.1</param>
-        <param name="max">2.1</param>
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
-
-    <!-- CORRECTED: Removed the invalid 'type' attribute from the joint tag in ros2_control -->
     <joint name="joint_L6">
-      <command_interface name="position">
-        <!-- For continuous joints, position limits (min/max) are not necessary in the command interface -->
-      </command_interface>
-      <state_interface name="position"/>
+      <command_interface name="position"/>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
     </joint>
   </ros2_control>
 
   <gazebo>
     <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>/workspace/install/parol6/share/parol6/config/ros2_controllers.yaml</parameters>
-      <robot_param>robot_description</robot_param>
-      <robot_param_node>robot_state_publisher</robot_param_node>
+      <parameters>/workspace/install/parol6_moveit_config/share/parol6_moveit_config/config/ros2_controllers_sim.yaml</parameters>
     </plugin>
   </gazebo>
   

@@ -89,15 +89,41 @@ else
 fi
 echo ""
 
+# =====================================================================
+# Serial Port Detection
+# =====================================================================
+echo -e "${BLUE}[Diagnostics]${NC} Detecting STM32 serial port inside container..."
+DETECTED_PORT=$(docker exec $CONTAINER_NAME bash -c "ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -1")
+if [ -z "$DETECTED_PORT" ]; then
+    echo -e "${RED}✗ No STM32 serial device found! (/dev/ttyACM* or /dev/ttyUSB*)${NC}"
+    echo -e "${YELLOW}  → Is the STM32 plugged in via USB?${NC}"
+    echo -e "${YELLOW}  → To run without hardware, use: ./start_real_robot.sh --spoof${NC}"
+    SERIAL_PORT="/dev/ttyACM0"
+else
+    echo -e "${GREEN}✓ Found serial device: $DETECTED_PORT${NC}"
+    SERIAL_PORT="$DETECTED_PORT"
+fi
+
+# Allow --spoof flag to run in software-in-the-loop mode
+ALLOW_SPOOFING="false"
+if [[ "$1" == "--spoof" ]]; then
+    ALLOW_SPOOFING="true"
+    echo -e "${YELLOW}⚠️  Spoofing mode (--spoof) — no real STM32 needed${NC}"
+fi
+echo ""
+
 # Launch Real Robot
-echo -e "${BLUE}[4/4]${NC} Launching Real Robot Driver + MoveIt + RViz..."
+echo -e "${BLUE}[5/5]${NC} Launching Real Robot Driver + MoveIt + RViz..."
 echo -e "${YELLOW}⚠️  Keep this terminal open!${NC}"
+echo -e "${BLUE}    Serial Port: $SERIAL_PORT | Spoofing: $ALLOW_SPOOFING${NC}"
 echo ""
 
 docker exec -it $CONTAINER_NAME bash -c "
   source /opt/ros/humble/setup.bash && \
   source /workspace/install/setup.bash && \
-  ros2 launch parol6_hardware real_robot.launch.py
+  ros2 launch parol6_hardware real_robot.launch.py \
+    serial_port:=$SERIAL_PORT \
+    allow_spoofing:=$ALLOW_SPOOFING
 "
 
 # Cleanup

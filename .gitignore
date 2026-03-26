@@ -17,6 +17,10 @@ parol6-ultimate-with-servo-updated.tar.gz
 parol6-ultimate.tar.gz
 parol6-ultimate-with-kinect.tar.gz
 parol6-ultimate-with-kinect-updated-tar.gz
+
+# PlatformIO build/dependency cache
+parol6_firmware/.pio/
+
 # MoveIt source dependencies (should not be committed)
 moveit2/
 moveit_msgs/
@@ -33,6 +37,11 @@ microros_esp32/
 *.swp
 *.swo
 *~
+color images to calibrate/
+vision_work/
+libfreenect2
+IR_Images_ToCalibrate/
+src/kinect2_ros2/
 
 # OS
 .DS_Store
@@ -42,6 +51,7 @@ logs/*.csv
 # Extracted datasets (RGB and Depth images)
 vision_work/extracted_dataset/*
 vision_work/rosbags/*
+
 vision_work/Checkboards/*
 vision_work/IR_Images_ToCalibrate/*
 vision_work/Sync_Images_ToCalibrate/*
@@ -57,6 +67,10 @@ wheels/*
 legacy code open loop/*
 test_data/kinect_snapshot_20260126_231342/*
 
+test_data/*
+logs/launchers/*
+test_data/kinect_snapshot_20260126_231342/*
+legacy code open loop/*
 rosbag2_2026_01_26-23_26_59.zip
 
 # virtual environments
@@ -93,6 +107,25 @@ vision_work/color_calibrate/*
 rosbag2_2026_01_26-23_26_59.zip/*
 vision_work/color images to calibrate/*
 legacy code open loop/*
+
+vision_work/YOLO/*
+venv_310/*
+Yolo_data2_model/*
+YOLO dependencies/
+01Yolo_model2_data/
+vision_work/color_calibrate/*
+rosbag2_2026_01_26-23_26_59.zip/*
+vision_work/color images to calibrate/*
+legacy code open loop/*
+logs/launchers/*
+logs/launchers/*
+vision_work/resunet_training/best_resunet_seam.pth
+parol6_vision/data/images_captured/*
+
+vision_work/resunet_training/best_resunet_seam.pth
+src/kinect2_ros2
+src/kinect2_ros2/color images to calibrate/*
+
 
 # Captured images
 parol6_vision/data/images_captured/*

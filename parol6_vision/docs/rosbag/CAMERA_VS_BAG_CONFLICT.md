@@ -9,9 +9,9 @@ If you have:
 
 **Both publish to the SAME topics:**
 ```
-/kinect2/qhd/image_color_rect
-/kinect2/qhd/image_depth_rect
-/kinect2/qhd/camera_info
+/kinect2/sd/image_color_rect
+/kinect2/sd/image_depth_rect
+/kinect2/sd/camera_info
 /tf
 /tf_static
 ```
@@ -58,7 +58,7 @@ ros2 launch parol6_vision camera_setup.launch.py
 
 ### Check what's publishing:
 ```bash
-ros2 topic info /kinect2/qhd/image_color_rect
+ros2 topic info /kinect2/sd/image_color_rect
 ```
 
 **Good output (single publisher):**

@@ -12,8 +12,8 @@ class SyncChecker(Node):
         
         # Subscribe to the same topics as depth_matcher
         self.create_subscription(WeldLineArray, '/vision/weld_lines_2d', lambda m: self.cb(m, 'lines'), 10)
-        self.create_subscription(Image, '/kinect2/qhd/image_depth_rect', lambda m: self.cb(m, 'depth'), 10)
-        self.create_subscription(CameraInfo, '/kinect2/qhd/camera_info', lambda m: self.cb(m, 'info'), 10)
+        self.create_subscription(Image, '/kinect2/sd/image_depth_rect', lambda m: self.cb(m, 'depth'), 10)
+        self.create_subscription(CameraInfo, '/kinect2/sd/camera_info', lambda m: self.cb(m, 'info'), 10)
         
         self.timer = self.create_timer(1.0, self.check_sync)
         self.get_logger().info("Listening for topics...")

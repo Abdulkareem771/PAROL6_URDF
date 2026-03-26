@@ -1,40 +1,47 @@
 <?xml version="1.0"?>
 <!--
   ros2_control configuration for PAROL6 robot
-  Day 1: SIL (Software-in-the-Loop) Validation
-  
+
   This file adds ros2_control tags to the robot description.
-  
+
   Usage: Include in main URDF with:
     <xacro:include filename="$(find parol6_hardware)/urdf/parol6.ros2_control.xacro"/>
     <xacro:parol6_ros2_control name="PAROL6Hardware" ... />
+
+  ros_invert params per joint:
+    "true"  = apply -1.0 sign to TX commands and RX feedback for this joint
+    "false" = no sign correction
+  J1, J3, J6 are mechanically inverted vs. URDF (from STM32 legacy motor_init.cpp).
+  These can be toggled from the Firmware Configurator GUI > Joints tab > "ROS Inv" checkbox.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyUSB0 baud_rate:=115200">
-    
+  <xacro:macro name="parol6_ros2_control" params="name use_sim_time:=false serial_port:=/dev/ttyACM0 baud_rate:=115200 allow_spoofing:=false">
+
     <!-- ======================================================================
          ros2_control Hardware Interface Configuration
          =====================================================================-->
-    
+
     <ros2_control name="${name}" type="system">
-      
+
       <!-- Hardware Plugin -->
       <hardware>
         <plugin>parol6_hardware/PAROL6System</plugin>
-        
-        <!-- Serial communication parameters (for Day 2+) -->
+
+        <!-- Serial communication parameters -->
         <param name="serial_port">${serial_port}</param>
         <param name="baud_rate">${baud_rate}</param>
-        <param name="timeout_ms">5</param>  <!-- Must be << loop period (40ms @ 25Hz) -->
-        
+        <param name="allow_spoofing">${allow_spoofing}</param>
+        <param name="timeout_ms">5</param>        <!-- Must be << loop period (40ms @ 25Hz) -->
+
         <!-- Logging -->
         <param name="enable_logging">true</param>
         <param name="log_dir">/workspace/logs/hw_interface</param>
       </hardware>
-      
+
       <!-- ====================================================================
            Joint 1: L1 (Base rotation)
+           ros_invert: true — J1 is mechanically inverted (legacy STM32 motor_init.cpp)
            ===================================================================-->
       <joint name="joint_L1">
         <!-- Command interface: what we send TO hardware -->
@@ -42,86 +49,106 @@
           <param name="min">-3.14159</param>
           <param name="max">3.14159</param>
         </command_interface>
-        
+        <command_interface name="velocity"/>
+        <!-- Velocity control -->
+
         <!-- State interfaces: what we read FROM hardware -->
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+
+        <!-- Kinematic sign inversion flag (read by parol6_system.cpp on_init) -->
+        <param name="ros_invert">true</param>
       </joint>
-      
+
       <!-- ====================================================================
            Joint 2: L2
+           ros_invert: false — J2 is NOT inverted
            ===================================================================-->
       <joint name="joint_L2">
         <command_interface name="position">
-          <param name="min">-3.14159</param>
-          <param name="max">3.14159</param>
+          <param name="min">-0.98</param>
+          <param name="max">1.0</param>
         </command_interface>
+        <command_interface name="velocity"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+        <param name="ros_invert">false</param>
       </joint>
-      
+
       <!-- ====================================================================
            Joint 3: L3
+           ros_invert: true — J3 is mechanically inverted (legacy STM32 motor_init.cpp)
            ===================================================================-->
       <joint name="joint_L3">
         <command_interface name="position">
-          <param name="min">-3.14159</param>
-          <param name="max">3.14159</param>
+          <param name="min">-2.0</param>
+          <param name="max">1.3</param>
         </command_interface>
+        <command_interface name="velocity"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+        <param name="ros_invert">true</param>
       </joint>
-      
+
       <!-- ====================================================================
            Joint 4: L4
+           ros_invert: false — J4 is NOT inverted
            ===================================================================-->
       <joint name="joint_L4">
         <command_interface name="position">
           <param name="min">-3.14159</param>
           <param name="max">3.14159</param>
         </command_interface>
+        <command_interface name="velocity"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+        <param name="ros_invert">false</param>
       </joint>
-      
+
       <!-- ====================================================================
            Joint 5: L5
+           ros_invert: false — J5 is NOT inverted
            ===================================================================-->
       <joint name="joint_L5">
         <command_interface name="position">
           <param name="min">-3.14159</param>
           <param name="max">3.14159</param>
         </command_interface>
+        <command_interface name="velocity"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+        <param name="ros_invert">false</param>
       </joint>
-      
+
       <!-- ====================================================================
            Joint 6: L6
+           ros_invert: true — J6 is mechanically inverted (legacy STM32 motor_init.cpp)
            ===================================================================-->
       <joint name="joint_L6">
         <command_interface name="position">
           <param name="min">-3.14159</param>
           <param name="max">3.14159</param>
         </command_interface>
+        <command_interface name="velocity"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param>
         </state_interface>
         <state_interface name="velocity"/>
+        <param name="ros_invert">true</param>
       </joint>
-      
+
     </ros2_control>
-    
+
   </xacro:macro>
 
 </robot>

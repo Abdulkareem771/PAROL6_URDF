@@ -6,8 +6,9 @@
 1.  # **Enter the container**:
 	    ```bash
 	    docker exec -it parol6_dev bash
-	    ```
-    
+	 
+	 docker exec parol6_dev bash -c "cd /workspace && source /opt/ros/humble/setup.bash && colcon build --packages-select parol6_msgs parol6_vision && echo 'DONE'"   ```
+	python3 parol6_firmware_configurator/main.py
 2.  #**Start the camera node**:
 	    ```bash
 	    source /opt/kinect_ws/install/setup.bash
