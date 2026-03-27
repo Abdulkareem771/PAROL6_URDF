@@ -110,6 +110,12 @@ class MoveItController(Node):
         self.declare_parameter('enable_joint_waypoint_fallback', True)
         self.declare_parameter('joint_waypoint_fallback_count', 8)
 
+        # Hardware trajectory time scaling.
+        # Real hardware (2 Hz serial) needs trajectories stretched so the
+        # controller has enough command updates to interpolate smoothly.
+        # Set to 1.0 for no scaling (default). Only increase if needed.
+        self.declare_parameter('hardware_trajectory_scale', 1.0)
+
         # Test mode: clamp incoming path into a conservative reachable workspace.
         # Useful to validate pipeline wiring even when vision points are out of reach.
         self.declare_parameter('enforce_reachable_test_path', False)
@@ -138,6 +144,7 @@ class MoveItController(Node):
         self.workspace_max = self.get_parameter('test_workspace_max').value
         self.min_radius_xy = self.get_parameter('test_min_radius_xy').value
         self.max_radius_xy = self.get_parameter('test_max_radius_xy').value
+        self.hw_traj_scale = float(self.get_parameter('hardware_trajectory_scale').value)
         
         # ============================================================
         # ROS INTERFACES
@@ -318,8 +325,13 @@ class MoveItController(Node):
         weld_traj = self.plan_cartesian_with_fallback(
             path, start_state_traj=approach_traj
         )
+        if weld_traj:
+            # Densify: TOTG compresses 188 IK waypoints to ~46 trajectory pts.
+            # The JointTrajectoryController spline-interpolates between these
+            # in joint space, which doesn't preserve Cartesian linearity.
+            # Densify back to ~50 Hz to keep the spline close to the circle.
+            self._densify_cartesian_trajectory(weld_traj, max_segment_dt=0.02)
         if not weld_traj:
-            self.get_logger().error("All Cartesian planning attempts failed")
             if self.enable_joint_waypoint_fallback:
                 self.get_logger().warn("Falling back to joint-space waypoint execution")
                 # Fallback must execute on its own (plan+execute inside loop)
@@ -333,15 +345,33 @@ class MoveItController(Node):
         # ── EXECUTION PHASE (all plans ready, execute back-to-back) ──────────
         self.get_logger().info("All phases planned! Starting seamless execution…")
 
+        # Stretch trajectory timing for real hardware
+        if self.hw_traj_scale > 1.0:
+            self.get_logger().info(
+                f"Scaling trajectories by {self.hw_traj_scale}x for hardware"
+            )
+            self._scale_trajectory_time(home_traj, self.hw_traj_scale)
+            self._scale_trajectory_time(approach_traj, self.hw_traj_scale)
+            self._scale_trajectory_time(weld_traj, self.hw_traj_scale)
+
+        # Hardware settle delay (seconds) — real servos report "goal reached"
+        # while still physically converging. 2.0s is enough for Servo42C.
+        SETTLE_DELAY = 2.0
+
         self.get_logger().info("[Exec 1/3] Moving to Home")
         if not self.execute_trajectory_action(home_traj):
             self.get_logger().error("Home execution failed")
             return False
+        import time
+        self.get_logger().info(f"Waiting {SETTLE_DELAY}s for hardware settle…")
+        time.sleep(SETTLE_DELAY)
 
         self.get_logger().info("[Exec 2/3] Moving to Approach Point")
         if not self.execute_trajectory_action(approach_traj):
             self.get_logger().error("Approach execution failed")
             return False
+        self.get_logger().info(f"Waiting {SETTLE_DELAY}s for hardware settle…")
+        time.sleep(SETTLE_DELAY)
 
         self.get_logger().info("[Exec 3/3] Executing Weld")
         if not self.execute_trajectory_action(weld_traj):
@@ -500,6 +530,127 @@ class MoveItController(Node):
         self.get_logger().info(
             f"Added linear timing to {len(points)} trajectory points "
             f"(total={total_time:.1f}s, {dt}s/pt)"
+        )
+
+    def _densify_cartesian_trajectory(self, trajectory, max_segment_dt=0.02):
+        """
+        Re-interpolate a TOTG-compressed trajectory to a minimum point density.
+
+        MoveIt's Time-Optimal Trajectory Generation (TOTG) merges joint-space-
+        colinear segments, compressing e.g. 188 IK waypoints to 46 trajectory
+        points.  The JointTrajectoryController then cubic-spline-interpolates
+        between these sparse joint-space waypoints.  Because joint-space splines
+        do NOT preserve Cartesian linearity, the TCP deviates from the planned
+        Cartesian path between waypoints — producing visible Z-dipping.
+
+        This method linearly re-interpolates any segment longer than
+        `max_segment_dt` seconds, creating dense waypoints so the controller's
+        cubic spline stays close to the true Cartesian path.
+
+        Args:
+            trajectory: RobotTrajectory message to densify (modified in place).
+            max_segment_dt: Maximum allowed time gap between adjacent waypoints
+                            (seconds).  Default 20 ms → ~50 Hz point density.
+        """
+        from builtin_interfaces.msg import Duration as RosDuration
+        from trajectory_msgs.msg import JointTrajectoryPoint
+
+        points = trajectory.joint_trajectory.points
+        if len(points) < 2:
+            return
+
+        def _time_sec(pt):
+            return pt.time_from_start.sec + pt.time_from_start.nanosec * 1e-9
+
+        def _make_duration(t):
+            return RosDuration(sec=int(t), nanosec=int((t % 1) * 1_000_000_000))
+
+        new_points = [points[0]]
+
+        for k in range(1, len(points)):
+            p0 = points[k - 1]
+            p1 = points[k]
+            t0 = _time_sec(p0)
+            t1 = _time_sec(p1)
+            seg_dt = t1 - t0
+
+            if seg_dt <= max_segment_dt or seg_dt < 1e-9:
+                new_points.append(p1)
+                continue
+
+            # Number of sub-segments to insert
+            n_sub = max(2, int(seg_dt / max_segment_dt) + 1)
+
+            for s in range(1, n_sub):
+                alpha = s / float(n_sub)
+                t_interp = t0 + alpha * seg_dt
+
+                interp_pt = JointTrajectoryPoint()
+                interp_pt.time_from_start = _make_duration(t_interp)
+
+                # Linearly interpolate positions
+                interp_pt.positions = [
+                    p0.positions[j] + alpha * (p1.positions[j] - p0.positions[j])
+                    for j in range(len(p0.positions))
+                ]
+
+                # Linearly interpolate velocities (if present)
+                if p0.velocities and p1.velocities:
+                    interp_pt.velocities = [
+                        p0.velocities[j] + alpha * (p1.velocities[j] - p0.velocities[j])
+                        for j in range(len(p0.velocities))
+                    ]
+
+                # Linearly interpolate accelerations (if present)
+                if p0.accelerations and p1.accelerations:
+                    interp_pt.accelerations = [
+                        p0.accelerations[j] + alpha * (p1.accelerations[j] - p0.accelerations[j])
+                        for j in range(len(p0.accelerations))
+                    ]
+
+                new_points.append(interp_pt)
+
+            # Append the original endpoint
+            new_points.append(p1)
+
+        orig_count = len(points)
+        trajectory.joint_trajectory.points = new_points
+
+        total_t = _time_sec(new_points[-1])
+        self.get_logger().info(
+            f"Densified trajectory: {orig_count} → {len(new_points)} pts "
+            f"(max_dt={max_segment_dt*1000:.0f}ms, total={total_t:.2f}s)"
+        )
+
+    def _scale_trajectory_time(self, trajectory, scale_factor: float):
+        """
+        Uniformly stretch all trajectory point timestamps by `scale_factor`.
+        Velocities are divided by the same factor to maintain kinematic consistency.
+        This gives the hardware controller more time between waypoints.
+        """
+        from builtin_interfaces.msg import Duration as RosDuration
+
+        points = trajectory.joint_trajectory.points
+        if not points:
+            return
+
+        for pt in points:
+            old_sec = pt.time_from_start.sec + pt.time_from_start.nanosec * 1e-9
+            new_sec = old_sec * scale_factor
+            pt.time_from_start = RosDuration(
+                sec=int(new_sec),
+                nanosec=int((new_sec % 1) * 1_000_000_000)
+            )
+            # Scale velocities down proportionally
+            if pt.velocities:
+                pt.velocities = [v / scale_factor for v in pt.velocities]
+            if pt.accelerations:
+                pt.accelerations = [a / (scale_factor * scale_factor) for a in pt.accelerations]
+
+        new_total = points[-1].time_from_start.sec + points[-1].time_from_start.nanosec * 1e-9
+        self.get_logger().info(
+            f"Scaled trajectory time by {scale_factor}x: "
+            f"{len(points)} pts, new total={new_total:.2f}s"
         )
 
     def execute_waypoint_fallback(self, path: Path) -> bool:

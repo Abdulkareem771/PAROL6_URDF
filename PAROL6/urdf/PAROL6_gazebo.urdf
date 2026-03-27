@@ -384,7 +384,7 @@
   </link>
   <joint
     name="joint_L6"
-    type="continuous">
+    type="revolute">
     <origin
       xyz="0 0 0"
       rpy="1.5708 0 0" />
@@ -394,6 +394,9 @@
       link="L6" />
     <axis
       xyz="0 0 -1" />
+    <limit
+      lower="-6.28318"
+      upper="6.28318"
       effort="300"
       velocity="3" />
   </joint>
@@ -415,6 +418,7 @@
     <parent link="L6"/>
     <child link="tcp_link"/>
   </joint>
+
 
 
 <ros2_control name="GazeboSystem" type="system">
@@ -462,10 +466,10 @@
       <state_interface name="position"/>
     </joint>
 
-    <!-- CORRECTED: Removed the invalid 'type' attribute from the joint tag in ros2_control -->
     <joint name="joint_L6">
       <command_interface name="position">
-        <!-- For continuous joints, position limits (min/max) are not necessary in the command interface -->
+        <param name="min">-6.28318</param>
+        <param name="max">6.28318</param>
       </command_interface>
       <state_interface name="position"/>
     </joint>

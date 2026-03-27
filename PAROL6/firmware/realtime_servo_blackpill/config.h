@@ -147,7 +147,7 @@ static const int HOMING_DIR[NUM_MOTORS] = { -1, -1, +1, -1, +1, 0 };
 
 // Homing speed (rad/s at joint level)
 static const float HOMING_SPEED[NUM_MOTORS] = {
-    1.0f, 0.2f, 0.3f, 0.4f, 0.3f, 0.0f
+    0.5f, 0.5f, 0.6f, 0.8f, 0.8f, 0.0f
 };
 
 // Position offset assigned after homing (DEGREES — easy to tune)
@@ -155,8 +155,8 @@ static const float HOMING_SPEED[NUM_MOTORS] = {
 static const float HOMING_OFFSET_DEG[NUM_MOTORS] = {
     -27.0f,    // J1
     -46.0f,  // J2
-    68.0f,   // J3
-    -143.0f,  // J4 — homes at ~108° in MoveIt range
+    74.0f,   // J3
+    -145.0f,  // J4 — homes at ~108° in MoveIt range
     120.0f,  // J5
     0.0f     // J6
 };
@@ -191,7 +191,7 @@ static const float HOMING_READY_POS_DEG[NUM_MOTORS] = {
 
 #define STEPS_PER_REV 200
 
-static const int MICROSTEPS[NUM_MOTORS] = { 4, 16, 16, 16, 16, 16 };
+static const int MICROSTEPS[NUM_MOTORS] = { 16, 16, 16, 16, 16, 16 };
 
 static const float GEAR_RATIOS[NUM_MOTORS] = {
   6.4f,  // J1: 20:1 gearbox
@@ -249,7 +249,7 @@ static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 
 static const float Kp[NUM_MOTORS] = { 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f };
 static const float Kd[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 3.0f, 0.5f, 0.5f, 1.5f, 1.5f, 1.5f };
+static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 0.5f, 0.5f, 0.6f, 1.5f, 1.5f, 1.5f };
 
 #define VELOCITY_DEADBAND       0.02f
 #define POSITION_ERROR_LIMIT    0.5f

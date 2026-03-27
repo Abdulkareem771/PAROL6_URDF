@@ -384,7 +384,7 @@
   </link>
   <joint
     name="joint_L6"
-    type="continuous">
+    type="revolute">
     <origin
       xyz="0 0 0"
       rpy="1.5708 0 0" />
@@ -395,6 +395,8 @@
     <axis
       xyz="0 0 -1" />
     <limit
+      lower="-6.28318"
+      upper="6.28318"
       effort="300"
       velocity="3" />
   </joint>

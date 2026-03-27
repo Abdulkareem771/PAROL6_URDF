@@ -222,7 +222,7 @@
       xyz="0 0 -1" />
     <limit
       lower="-2"
-      upper="1.186823892"
+      upper="1.29"
       effort="300"
       velocity="3" />
   </joint>
@@ -279,7 +279,7 @@
     <axis
       xyz="0 0 -1" />
     <limit
-      lower="-2.4945"
+      lower="-2.5294444"
       upper="1.849111111"
       effort="300"
       velocity="3" />
@@ -384,7 +384,7 @@
   </link>
   <joint
     name="joint_L6"
-    type="continuous">
+    type="revolute">
     <origin
       xyz="0 0 0"
       rpy="1.5708 0 0" />
@@ -395,6 +395,8 @@
     <axis
       xyz="0 0 -1" />
     <limit
+      lower="-6.28318"
+      upper="6.28318"
       effort="300"
       velocity="3" />
   </joint>
@@ -412,7 +414,7 @@
     </visual>
   </link>
   <joint name="tcp_joint" type="fixed">
-    <origin xyz="0 0 -0.075" rpy="3.14159 0 0" /> <!-- Adjust this to the tip of the L6 shaft, rotated 180deg to point outwards -->
+    <origin xyz="0 0 -0.1995" rpy="3.14159 0 0" /> <!-- Adjust this to the tip of the L6 shaft, rotated 180deg to point outwards -->
     <parent link="L6"/>
     <child link="tcp_link"/>
   </joint>
