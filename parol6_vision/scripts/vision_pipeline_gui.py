@@ -2748,6 +2748,15 @@ class VisionPipelineGUI(QMainWindow):
 
     # ── Manual Red Line actions ───────────────────────────────────────────────
 
+    def _on_roi_toggled(self, state: int) -> None:
+        if state == Qt.Checked:
+            if hasattr(self, '_straight_line_check'): self._straight_line_check.setChecked(False)
+            if getattr(self, '_canvas', None):
+                self._canvas.set_roi_mode(True)
+        else:
+            if getattr(self, '_canvas', None):
+                self._canvas.set_roi_mode(False)
+
     def _on_straight_line_toggled(self, state: int) -> None:
         """Toggle straight-line drawing mode on the canvas."""
         if hasattr(self, '_canvas') and CV2_OK:
