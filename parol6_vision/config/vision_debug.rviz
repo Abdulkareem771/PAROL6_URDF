@@ -337,10 +337,10 @@ Visualization Manager:
       Shaft Length: 0.10000000149011612
       Topic:
         Depth: 5
-        Durability Policy: Volatile
+        Durability Policy: Transient Local
         Filter size: 10
         History Policy: Keep Last
-        Reliability Policy: Best Effort
+        Reliability Policy: Reliable
         Value: /vision/welding_path
       Value: true
     - Class: rviz_default_plugins/MarkerArray

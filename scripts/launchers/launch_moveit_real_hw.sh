@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source_workspace_setup() {
+    # Colcon-generated setup scripts may read optional variables like
+    # COLCON_TRACE without guarding for `set -u`.
+    export COLCON_TRACE="${COLCON_TRACE-}"
+    set +u
+    source install/setup.bash
+    set -u
+}
+
 if [ -z "${PAROL6_SERIAL_PORT:-}" ] || [ ! -e "${PAROL6_SERIAL_PORT:-}" ]; then
     DETECTED_PORT=$(ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -n 1 || true)
     if [ ! -z "$DETECTED_PORT" ]; then
@@ -18,7 +27,7 @@ BAUD_RATE="${PAROL6_BAUD_RATE:-115200}"
 if [ -f /.dockerenv ]; then
     # We are inside the container
     cd /workspace
-    source install/setup.bash
+    source_workspace_setup
 
     echo "Starting ros2_control hardware bringup on ${SERIAL_PORT}..."
     ros2 launch parol6_hardware real_robot.launch.py \

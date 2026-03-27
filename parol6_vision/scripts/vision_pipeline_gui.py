@@ -261,6 +261,84 @@ class NodeWorker(QThread):
                     os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+
+
+class RosLaunchWorker(QThread):
+    """Replica of the firmware configurator launch worker for the ROS tab."""
+    output_rviz = Signal(str)
+    output_gazebo = Signal(str)
+    finished_ok = Signal()
+    finished_err = Signal(int)
+
+    def __init__(self, script_path: str, args: list[str], env_vars: Optional[dict[str, str]] = None, parent=None):
+        super().__init__(parent)
+        self._script_path = script_path
+        self._args = args
+        self._env_vars = env_vars or {}
+        self._proc: Optional[subprocess.Popen] = None
+
+    def run(self) -> None:
+        cmd = [self._script_path] + self._args
+        msg = f"[LAUNCH] $ {' '.join(cmd)}"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+
+        try:
+            env = os.environ.copy()
+            env.update(self._env_vars)
+            if "PATH" in env:
+                env["PATH"] += os.pathsep + "/usr/local/bin:/usr/bin:/bin"
+            else:
+                env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+                cwd=str(WORKSPACE_DIR),
+                start_new_session=True,
+            )
+            for line in self._proc.stdout:
+                line = line.rstrip()
+                lower = line.lower()
+                if "ign" in lower or "gazebo" in lower or "/usr/bin/ruby" in lower or "spawn" in lower:
+                    self.output_gazebo.emit(line)
+                else:
+                    self.output_rviz.emit(line)
+            self._proc.wait()
+            rc = self._proc.returncode
+        except Exception as exc:
+            msg = f"[LAUNCH] ERROR: {exc}"
+            self.output_rviz.emit(msg)
+            self.output_gazebo.emit(msg)
+            rc = -1
+
+        msg = "[LAUNCH] Process Exited." if rc == 0 else f"[LAUNCH] ❌ Stopped (code {rc})"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+
+        if rc == 0:
+            self.finished_ok.emit()
+        else:
+            self.finished_err.emit(rc)
+
+    def abort(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGINT)
+            except ProcessLookupError:
+                pass
+
+            try:
+                self._proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             except ProcessLookupError:
                 pass
 
@@ -1103,6 +1181,8 @@ class VisionPipelineGUI(QMainWindow):
         self._latest_cropped_rgb: Optional[np.ndarray] = None
         self._crop_set_params_client = None
         self._crop_clear_client = None
+        self._pathgen_trigger_client = None
+        self._moveit_execute_client = None
         self._crop_futures = []
         self._trigger_workers: list = []  # keeps NodeWorker threads alive until done
 
@@ -1128,6 +1208,8 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_set_params_client = self._ros_node.create_client(SetParameters, "/crop_image/set_parameters")
             self._crop_clear_client  = self._ros_node.create_client(Trigger, "/crop_image/clear_roi")
             self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
+            self._pathgen_trigger_client = self._ros_node.create_client(Trigger, "/path_generator/trigger_path_generation")
+            self._moveit_execute_client = self._ros_node.create_client(Trigger, "/moveit_controller/execute_welding_path")
             self._manual_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line/set_parameters")
             self._manual_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line/set_strokes")
             self._manual_cropped_sub = None
@@ -1678,7 +1760,7 @@ class VisionPipelineGUI(QMainWindow):
             " border:none; border-radius:6px; padding:5px 14px;"
         )
         ros_kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
-        ros_kill_btn.clicked.connect(self._kill_all)
+        ros_kill_btn.clicked.connect(self._ros_kill_all_nodes)
         cl.addWidget(ros_kill_btn)
 
         cl.addSpacing(20)
@@ -1726,8 +1808,9 @@ class VisionPipelineGUI(QMainWindow):
 
         rt_lay.addLayout(logs_row)
 
-        self._ros_worker: Optional[NodeWorker] = None
-        self._ros_test_worker: Optional[NodeWorker] = None
+        self._ros_worker: Optional[RosLaunchWorker] = None
+        self._ros_test_worker: Optional[RosLaunchWorker] = None
+        self._ros_launch_env: dict[str, str] = {}
         self._launchers_dir = str(WORKSPACE_DIR / "scripts" / "launchers")
         tabs.addTab(ros_tab, "🚀  ROS Launch")
 
@@ -2466,6 +2549,17 @@ class VisionPipelineGUI(QMainWindow):
         self._trigger_workers.append(worker)
         worker.start()
 
+    def _start_transient_worker(self, worker: NodeWorker) -> None:
+        """Keep short-lived workers alive until their thread fully exits."""
+        if not hasattr(self, "_trigger_workers"):
+            self._trigger_workers = []
+        self._trigger_workers.append(worker)
+        worker.finished.connect(
+            lambda rc, w=worker: self._trigger_workers.remove(w)
+            if w in self._trigger_workers else None
+        )
+        worker.start()
+
     def _selected_mode(self) -> str:
         for btn in self._mode_buttons.buttons():
             if btn.isChecked():
@@ -2625,50 +2719,89 @@ class VisionPipelineGUI(QMainWindow):
         self._stop_mode_node()
         if self._ros_worker:
             self._ros_worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._ros_worker)
-            self._ros_worker.finished.connect(lambda rc, w=self._ros_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
             self._ros_worker = None
+        if self._ros_test_worker:
+            self._ros_test_worker.abort()
+            self._ros_test_worker = None
 
     def _send_path_to_moveit(self) -> None:
-        """Call the moveit_controller trigger service."""
-        worker = NodeWorker(
-            ["ros2", "service", "call",
-             "/moveit_controller/execute_welding_path",
-             "std_srvs/srv/Trigger", "{}"],
-        )
-        worker.line_out.connect(
-            lambda s: self._log.append(
-                f'<span style="color:{C["accent"]}">[MoveIt] {s}</span>'
-            )
-        )
-        worker.start()
+        """Regenerate the latest path, then trigger MoveIt execution."""
+        def _log(msg: str, color: str = C["accent"]) -> None:
+            html = f'<span style="color:{color}">[MoveIt] {msg}</span>'
+            self._log.append(html)
+            if hasattr(self, "_ros_log"):
+                self._ros_log.append(html)
+
+        if not ROS2_OK or self._ros_node is None:
+            _log("ROS 2 client unavailable in GUI.", C["red"])
+            return
+
+        if self._pathgen_trigger_client is None or self._moveit_execute_client is None:
+            _log("Required ROS service clients are not ready.", C["red"])
+            return
+
+        if not self._pathgen_trigger_client.wait_for_service(timeout_sec=1.0):
+            _log("/path_generator/trigger_path_generation is not available.", C["red"])
+            return
+
+        _log("Requesting latest path regeneration from path_generator…", C["yellow"])
+        trigger_future = self._pathgen_trigger_client.call_async(Trigger.Request())
+        self._crop_futures.append(trigger_future)
+
+        def _on_trigger_done(fut):
+            try:
+                result = fut.result()
+                if not result or not result.success:
+                    reason = result.message if result else "unknown failure"
+                    _log(f"Path generation failed: {reason}", C["red"])
+                    return
+
+                _log(f"Path ready: {result.message or 'generated'}", C["green"])
+
+                if not self._moveit_execute_client.wait_for_service(timeout_sec=1.0):
+                    _log("/moveit_controller/execute_welding_path is not available.", C["red"])
+                    return
+
+                _log("Triggering MoveIt execution…", C["yellow"])
+                exec_future = self._moveit_execute_client.call_async(Trigger.Request())
+                self._crop_futures.append(exec_future)
+
+                def _on_exec_done(exec_fut):
+                    try:
+                        exec_result = exec_fut.result()
+                        if exec_result and exec_result.success:
+                            _log(exec_result.message or "Execution started.", C["green"])
+                        else:
+                            reason = exec_result.message if exec_result else "unknown failure"
+                            _log(f"Execution failed: {reason}", C["red"])
+                    except Exception as exc:
+                        _log(f"Execution service error: {exc}", C["red"])
+
+                exec_future.add_done_callback(_on_exec_done)
+            except Exception as exc:
+                _log(f"Path generation service error: {exc}", C["red"])
+
+        trigger_future.add_done_callback(_on_trigger_done)
 
     def _launch_vision_moveit(self) -> None:
         worker = NodeWorker(
             ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py"],
         )
         worker.line_out.connect(self._log.append)
-        worker.start()
+        self._start_transient_worker(worker)
 
     # ── ROS Launch Tab actions ─────────────────────────────────────────────
 
     def _ros_launch_toggle(self) -> None:
-        if self._ros_worker and self._ros_worker.isRunning():
-            self._ros_log.append("[LAUNCH] Stopping...")
-            self._gazebo_log.append("[LAUNCH] Stopping...")
+        if self._ros_worker:
+            self._ros_log.append("[LAUNCH] Stopping process...")
+            self._gazebo_log.append("[LAUNCH] Stopping process...")
             self._ros_worker.abort()
             self._ros_worker = None
-            self._ros_launch_btn.setText("\U0001f680 Launch")
-            self._ros_launch_btn.setStyleSheet(
-                f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
-                " border:none; border-radius:6px; padding:5px 14px;"
-            )
-            self._ros_method.setEnabled(True)
+            self._set_ros_button_state(False)
             return
 
-        script_name = self._ros_method.currentData()   # e.g. 'launch_moveit_fake.sh'
+        script_name = self._ros_method.currentData()
         script_path = os.path.join(self._launchers_dir, script_name)
 
         self._ros_log.clear()
@@ -2678,46 +2811,49 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_log.append(f"[LAUNCH] \u274c Error: Cannot find script {script_path}")
             return
 
-        worker = NodeWorker([script_path])
+        self._ros_launch_env.clear()
+        self._ros_worker = RosLaunchWorker(script_path, [], env_vars=self._ros_launch_env)
+        self._ros_worker.output_rviz.connect(self._ros_log.append)
+        self._ros_worker.output_gazebo.connect(self._gazebo_log.append)
+        self._ros_worker.finished_ok.connect(self._on_ros_launch_finished)
+        self._ros_worker.finished_err.connect(self._on_ros_launch_finished)
+        self._ros_worker.start()
+        self._set_ros_button_state(True)
 
-        def _route_line(s: str):
-            lo = s.lower()
-            if any(k in lo for k in ("ign", "gazebo", "/usr/bin/ruby", "spawn")):
-                self._gazebo_log.append(s)
-            else:
-                self._ros_log.append(s)
+    def _set_ros_button_state(self, is_running: bool) -> None:
+        if is_running:
+            self._ros_launch_btn.setText("🛑 Stop")
+            self._ros_launch_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
+            self._ros_method.setEnabled(False)
+        else:
+            self._ros_launch_btn.setText("🚀 Launch")
+            self._ros_launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
+            self._ros_method.setEnabled(True)
 
-        worker.line_out.connect(_route_line)
-        worker.finished.connect(self._on_ros_launch_finished)
-        self._ros_worker = worker
-        worker.start()
-
-        self._ros_launch_btn.setText("\u25a0 Stop")
-        self._ros_launch_btn.setStyleSheet(
-            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
-        self._ros_method.setEnabled(False)
-
-    def _on_ros_launch_finished(self, rc: int) -> None:
+    def _on_ros_launch_finished(self, rc: Optional[int] = None) -> None:
         self._ros_worker = None
-        self._ros_launch_btn.setText("\U0001f680 Launch")
-        self._ros_launch_btn.setStyleSheet(
-            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
-        self._ros_method.setEnabled(True)
+        self._set_ros_button_state(False)
+
+    def _ros_kill_all_nodes(self) -> None:
+        self._ros_log.append("[LAUNCH] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
+        cmd = "pkill -9 -f 'ros2|rviz2|ign|gazebo|ruby|move_group|parameter_bridge|robot_state_publisher|launch_'"
+        if os.path.exists("/.dockerenv"):
+            full_cmd = ["bash", "-c", cmd]
+        else:
+            full_cmd = ["docker", "exec", "parol6_dev", "bash", "-c", cmd]
+        try:
+            subprocess.run(full_cmd, check=False)
+            self._ros_log.append("[LAUNCH] ✅ Kill command executed. Zombie processes terminated.")
+        except Exception as exc:
+            self._ros_log.append(f"[LAUNCH] ❌ Error executing kill: {exc}")
 
     def _ros_run_auto_test(self) -> None:
-        if self._ros_test_worker and self._ros_test_worker.isRunning():
+        if self._ros_test_worker:
             self._ros_log.append("[TEST] Stopping currently running test...")
             self._ros_test_worker.abort()
             self._ros_test_worker = None
-            self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
-            self._test_btn.setStyleSheet(
-                f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
-                " border:none; border-radius:6px; padding:5px 14px;"
-            )
+            self._test_btn.setText("▶️ Run Auto-Test")
+            self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
             return
 
         script_path = os.path.join(self._launchers_dir, "launch_auto_test.sh")
@@ -2726,28 +2862,23 @@ class VisionPipelineGUI(QMainWindow):
             return
 
         shape = self._test_shape_combo.currentText()
-        self._ros_log.append(f"\n[TEST] Launching Auto-Test ({shape})...")
+        self._ros_log.append(f"\n[TEST] Launching comprehensive Auto-Test ({shape})...")
         self._ros_log.append("[TEST] Spawning moveit_controller and waiting for services...")
 
-        worker = NodeWorker([script_path, shape])
-        worker.line_out.connect(self._ros_log.append)
-        worker.finished.connect(self._on_ros_test_finished)
-        self._ros_test_worker = worker
-        worker.start()
+        self._ros_launch_env.clear()
+        self._ros_test_worker = RosLaunchWorker(script_path, [shape], env_vars=self._ros_launch_env)
+        self._ros_test_worker.output_rviz.connect(self._ros_log.append)
+        self._ros_test_worker.finished_ok.connect(self._on_ros_test_finished)
+        self._ros_test_worker.finished_err.connect(self._on_ros_test_finished)
+        self._ros_test_worker.start()
 
-        self._test_btn.setText("\u25a0 Stop Test")
-        self._test_btn.setStyleSheet(
-            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
+        self._test_btn.setText("🛑 Stop Test")
+        self._test_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
 
-    def _on_ros_test_finished(self, rc: int = 0) -> None:
+    def _on_ros_test_finished(self, rc: Optional[int] = None) -> None:
         self._ros_test_worker = None
-        self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
-        self._test_btn.setStyleSheet(
-            f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
+        self._test_btn.setText("▶️ Run Auto-Test")
+        self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
 
     def _inject_test_path(self) -> None:
         """Publish a small synthetic straight-line path to /vision/welding_path.
@@ -2767,6 +2898,8 @@ class VisionPipelineGUI(QMainWindow):
 
         worker = NodeWorker(
             ["ros2", "topic", "pub", "--once",
+             "--qos-reliability", "reliable",
+             "--qos-durability", "transient_local",
              "/vision/welding_path", "nav_msgs/msg/Path", path_yaml],
         )
         worker.line_out.connect(
@@ -2774,17 +2907,30 @@ class VisionPipelineGUI(QMainWindow):
                 f'<span style="color:{C["yellow"]}">[Inject] {s}</span>'
             )
         )
-        worker.start()
+        self._start_transient_worker(worker)
         self._ros_log.append(
             f'<b style="color:{C["yellow"]}">[Inject] Synthetic 3-point path published → '
             '/vision/welding_path</b>'
         )
 
+    def _kill_all(self) -> None:
+        """Stop managed workers, then signal stray ROS processes to exit."""
+        self._stop_all()
+        cmd = (
+            "pkill -INT -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' ; "
+            "sleep 1 ; "
+            "pkill -TERM -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' "
+            "2>/dev/null || true"
+        )
+        subprocess.Popen(["bash", "-c", cmd])
+        self._ros_log.append(
+            "[KILL] Sent SIGINT to stray ROS 2 processes "
+            "(SIGTERM fallback after 1 s)."
+        )
+
     def _ros_kill_all(self) -> None:
-        self._ros_log.append("[KILL] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
-        cmd = "pkill -9 -f 'ros2|rviz2|ign|gazebo|ruby|move_group|parameter_bridge|robot_state_publisher|launch_'"
-        subprocess.run(["bash", "-c", cmd], check=False)
-        self._ros_log.append("[KILL] ✅ Sent SIGKILL.")
+        """Compatibility wrapper for older signal/slot hookups."""
+        self._kill_all()
 
     def _kill_camera_processes(self) -> None:
         cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_gpu|kinect2_bridge_launch'"
@@ -2810,7 +2956,9 @@ class VisionPipelineGUI(QMainWindow):
         return [
             "bash", "-c",
             "source /opt/ros/humble/setup.bash && "
-            "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+            "if [ -f /opt/kinect_ws/install/setup.bash ]; then "
+            "source /opt/kinect_ws/install/setup.bash; "
+            "fi && "
             f"ros2 launch {WORKSPACE_DIR}/kinect2_bridge_gpu.yaml {args}"
         ]
 
@@ -2927,6 +3075,27 @@ class VisionPipelineGUI(QMainWindow):
 
     def closeEvent(self, ev) -> None:
         self._stop_all()
+        for worker in list(getattr(self, "_trigger_workers", [])):
+            try:
+                worker.abort()
+                worker.wait(1500)
+            except Exception:
+                pass
+        for worker in list(getattr(self, "_graveyard", [])):
+            try:
+                worker.wait(1500)
+            except Exception:
+                pass
+        for worker in (
+            getattr(self, "_mode_worker", None),
+            getattr(self, "_ros_worker", None),
+            getattr(self, "_ros_test_worker", None),
+        ):
+            if worker is not None:
+                try:
+                    worker.wait(1500)
+                except Exception:
+                    pass
         ev.accept()
 
 

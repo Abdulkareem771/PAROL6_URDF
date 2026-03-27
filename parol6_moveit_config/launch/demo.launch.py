@@ -63,7 +63,7 @@ def generate_launch_description():
         package="rviz2",
         executable="rviz2",
         name="rviz2",
-        output="log",
+        output="screen",
         arguments=["-d", rviz_config_file],
         parameters=[
             fake_robot_description,

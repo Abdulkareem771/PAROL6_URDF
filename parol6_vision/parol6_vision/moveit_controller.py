@@ -163,18 +163,18 @@ class MoveItController(Node):
             'move_action'
         )
         
-        # Input Path — TRANSIENT_LOCAL (latching) so a message published before
-        # this node starts is still received. Must match the publisher's QoS.
-        latch_qos = QoSProfile(
-            depth=1,
+        # Input Path — request VOLATILE durability so we can receive from both
+        # normal publishers and transient-local test/injection publishers.
+        path_qos = QoSProfile(
+            depth=10,
             reliability=QoSReliabilityPolicy.RELIABLE,
-            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            durability=QoSDurabilityPolicy.VOLATILE,
         )
         self.sub = self.create_subscription(
             Path,
             '/vision/welding_path',
             self.path_callback,
-            latch_qos
+            path_qos
         )
         
         # Manual Trigger
@@ -246,11 +246,17 @@ class MoveItController(Node):
         return response
 
     def get_execution_status(self, request, response):
-        """Service callback to check if execution is idle"""
+        """Report whether execution is idle and a path is available."""
         with self._exec_lock:
-            # If idle, return success=True
-            response.success = not self.execution_in_progress
-            response.message = "Idle" if not self.execution_in_progress else "Executing"
+            has_path = self.latest_path is not None
+            is_idle = not self.execution_in_progress
+            response.success = is_idle and has_path
+            if self.execution_in_progress:
+                response.message = "Executing"
+            elif not has_path:
+                response.message = "Idle, no path received yet"
+            else:
+                response.message = "Idle, path ready"
             return response
 
     def _start_execution_async(self, path, source='unknown'):

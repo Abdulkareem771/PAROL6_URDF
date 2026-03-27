@@ -48,6 +48,7 @@ THESIS-READY STATEMENTS
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from parol6_msgs.msg import WeldLine3DArray
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
@@ -112,10 +113,15 @@ class PathGenerator(Node):
             10
         )
         
+        path_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.path_pub = self.create_publisher(
             Path,
             '/vision/welding_path',
-            10
+            path_qos
         )
         
         self.marker_pub = self.create_publisher(
