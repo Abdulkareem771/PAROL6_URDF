@@ -18,11 +18,19 @@ launch:
 # to "cpu".
 - arg:
     name: "depth_method"
-    default: "cuda"
+    default: "cpu"
 
 - arg:
     name: "reg_method"
-    default: "cuda"   # colour-depth registration
+    default: "cpu"   # colour-depth registration
+
+- arg:
+    name: "bilateral_filter"
+    default: "true"
+
+- arg:
+    name: "edge_aware_filter"
+    default: "true"
 
 - node:
     pkg: "kinect2_bridge"
@@ -48,7 +56,7 @@ launch:
         #       that was the regression.  Disable those filters if you must use
         #       cpu mode.
         - name: "fps_limit"
-          value: 15.0
+          value: 1.0
 
         - name: "use_png"
           value: false
@@ -71,10 +79,10 @@ launch:
         # Bilateral + edge-aware filters add significant CPU cost.
         # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
-          value: true
+          value: "$(var bilateral_filter)"
 
         - name: "edge_aware_filter"
-          value: true
+          value: "$(var edge_aware_filter)"
 
         - name: "hole_fill_radius"
           value: "$(var hole_fill_radius)"
@@ -88,7 +96,7 @@ launch:
 - node:
     pkg: "depth_image_proc"
     exec: "point_cloud_xyzrgb_node"
-    name: "$(var base_name)_points_xyzrgb_qhd"
+    name: "$(var base_name)_points_xyzrgb_sd"
     remap:
     -
       from: "rgb/camera_info"
