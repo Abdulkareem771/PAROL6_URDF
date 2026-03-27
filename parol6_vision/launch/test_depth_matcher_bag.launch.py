@@ -55,7 +55,7 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
         # Camera 1.2 m in front of robot, 1.0 m high, looking back+down at workspace
-        arguments=['--x', '0.2', '--y', '0.0', '--z', '1.0',
+        arguments=['--x', '0.245', '--y', '0.0', '--z', '1.014',
                    '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
