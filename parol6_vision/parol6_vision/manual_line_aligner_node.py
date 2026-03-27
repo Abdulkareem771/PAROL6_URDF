@@ -4,6 +4,19 @@ manual_line_aligner_node.py
 ===========================
 A hybrid computer vision node that dynamically aligns manually drawn welding
 strokes to moving parts using ORB feature matching and Affine Transformations.
+
+Subscribed:
+  /vision/captured_image_color (sensor_msgs/Image)
+
+Published:
+  /vision/processing_mode/annotated_image (sensor_msgs/Image)
+  /vision/processing_mode/debug_image (sensor_msgs/Image)
+  /vision/processing_mode/seam_centroid (geometry_msgs/PointStamped)
+
+Services:
+  ~/set_strokes (std_srvs/Trigger) - Legacy fixed stroke injection
+  ~/teach_reference (std_srvs/Trigger) - Taught via an ROI polygon to enable Auto-Align
+  ~/reset_strokes (std_srvs/Trigger) - Clears in-memory cache and saved configurations
 """
 
 import json

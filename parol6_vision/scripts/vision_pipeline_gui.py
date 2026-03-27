@@ -24,6 +24,7 @@ from __future__ import annotations
 import faulthandler
 faulthandler.enable()
 
+import copy
 import os
 import sys
 import shlex
@@ -52,8 +53,14 @@ ROS2_IMPORT_ERROR = ""
 try:
     import rclpy
     from rclpy.node import Node
-    from rclpy.qos import qos_profile_sensor_data
+    from rclpy.qos import (
+        qos_profile_sensor_data,
+        QoSProfile,
+        QoSDurabilityPolicy,
+        QoSReliabilityPolicy,
+    )
     from rclpy.parameter import Parameter as RclpyParameter
+    from nav_msgs.msg import Path as ROSPath
     from sensor_msgs.msg import Image as ROSImage
     from std_srvs.srv import Trigger
     from rcl_interfaces.srv import SetParameters
@@ -433,6 +440,9 @@ class ManualCanvas(QGraphicsView):
         # Straight-line mode
         self._straight_line_mode = False
         self._sl_waypoints: list[list[int]] = []   # waypoints for current straight-line stroke
+        
+        self._roi_mode = False
+        self._roi_polygon: list[list[int]] = []
 
         self._bg_item = self._scene.addPixmap(QPixmap())
         self._bg_item.setZValue(0)
@@ -454,10 +464,22 @@ class ManualCanvas(QGraphicsView):
         self._straight_line_mode = enabled
         if not enabled:
             self._finish_sl_stroke()
+            
+    def set_roi_mode(self, enabled: bool) -> None:
+        """Toggle ROI drawing mode."""
+        self._roi_mode = enabled
+        if not enabled:
+            if len(self._sl_waypoints) >= 3:
+                self._roi_polygon = self._sl_waypoints.copy()
+            self._sl_waypoints = []
+            self._refresh_mask()
 
     def get_strokes(self) -> list[list[list[int]]]:
         """Return all recorded strokes as a list of point lists for serialisation."""
         return self._all_strokes.copy()
+        
+    def get_roi_polygon(self) -> list[list[int]]:
+        return getattr(self, '_roi_polygon', []).copy()
 
     def load_image(self, rgb: np.ndarray) -> None:
         if self._placeholder_proxy.isVisible():
@@ -481,6 +503,7 @@ class ManualCanvas(QGraphicsView):
         self._all_strokes = []
         self._current_stroke = []
         self._sl_waypoints = []
+        self._roi_polygon = []
 
     def _refresh_mask(self) -> None:
         if self._mask_arr is None or self._mask_item is None:
@@ -556,7 +579,7 @@ class ManualCanvas(QGraphicsView):
         h, w = self._mask_arr.shape[:2]
         in_bounds = 0 <= sp.x() < w and 0 <= sp.y() < h
 
-        if self._straight_line_mode:
+        if self._straight_line_mode or self._roi_mode:
             if ev.button() == Qt.LeftButton and in_bounds:
                 ix, iy = int(sp.x()), int(sp.y())
                 # Snap to H/V if Shift held
@@ -568,15 +591,25 @@ class ManualCanvas(QGraphicsView):
                         ix = px   # snap vertical
                 if self._sl_waypoints:
                     prev = self._sl_waypoints[-1]
+                    color = (255, 100, 0, 255) if self._roi_mode else (255, 0, 0, 255)
                     cv2.line(self._mask_arr,
                              (prev[0], prev[1]), (ix, iy),
-                             (255, 0, 0, 255), self._brush, lineType=cv2.LINE_AA)
+                             color, self._brush, lineType=cv2.LINE_AA)
                     self._refresh_mask()
                 self._sl_waypoints.append([ix, iy])
                 ev.accept()
                 return
             elif ev.button() == Qt.RightButton:
-                self._finish_sl_stroke()
+                if self._roi_mode:
+                    if len(self._sl_waypoints) >= 3:
+                        first = self._sl_waypoints[0]
+                        last = self._sl_waypoints[-1]
+                        cv2.line(self._mask_arr, (last[0], last[1]), (first[0], first[1]), (255, 100, 0, 255), self._brush, cv2.LINE_AA)
+                        self._roi_polygon = self._sl_waypoints.copy()
+                        self._refresh_mask()
+                    self._sl_waypoints = []
+                else:
+                    self._finish_sl_stroke()
                 ev.accept()
                 return
         else:
@@ -681,12 +714,13 @@ class NodeButton(QWidget):
 
     def stop(self) -> None:
         if self._worker:
-            self._worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._worker)
-            self._worker.finished.connect(lambda rc, w=self._worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
+            worker = self._worker
             self._worker = None
+            try:
+                worker.abort()
+            except Exception:
+                pass
+            self._park_worker(worker)
         elif self._check_external_running() and self._external_stop_cmd:
             subprocess.run(
                 self._external_stop_cmd,
@@ -722,14 +756,32 @@ class NodeButton(QWidget):
                 self._node_log.append(formatted) # Write to the dedicated tab
                 
         self._worker.line_out.connect(_handle_log)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished.connect(lambda rc, w=self._worker: self._on_finished(w, rc))
         self._worker.start()
         self._set_running()
         if self._on_started:
             self._on_started()
 
-    def _on_finished(self, rc: int) -> None:
-        self._worker = None
+    def _park_worker(self, worker: NodeWorker) -> None:
+        host = self.window()
+        if hasattr(host, "_park_worker"):
+            host._park_worker(worker)
+            return
+        if not hasattr(self, "_graveyard"):
+            self._graveyard = []
+        if worker not in self._graveyard:
+            self._graveyard.append(worker)
+            worker.finished.connect(
+                lambda rc, w=worker: self._graveyard.remove(w)
+                if w in getattr(self, "_graveyard", []) else None
+            )
+
+    def _on_finished(self, worker: NodeWorker, rc: int) -> None:
+        if self._worker is worker:
+            self._worker = None
+        if self._worker is not None and self._worker.isRunning():
+            self._set_running()
+            return
         if self._check_external_running():
             self._set_running()
         else:
@@ -1184,7 +1236,11 @@ class VisionPipelineGUI(QMainWindow):
         self._pathgen_trigger_client = None
         self._moveit_execute_client = None
         self._crop_futures = []
+        self._graveyard: list = []
         self._trigger_workers: list = []  # keeps NodeWorker threads alive until done
+        self._latest_welding_path: Optional["ROSPath"] = None
+        self._welding_path_pub = None
+        self._welding_path_sub = None
 
         # ROS 2 preview infrastructure (optional)
         self._ros_node = None
@@ -1210,9 +1266,21 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
             self._pathgen_trigger_client = self._ros_node.create_client(Trigger, "/path_generator/trigger_path_generation")
             self._moveit_execute_client = self._ros_node.create_client(Trigger, "/moveit_controller/execute_welding_path")
-            self._manual_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line/set_parameters")
-            self._manual_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line/set_strokes")
+            self._manual_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line_aligner/set_parameters")
+            self._manual_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line_aligner/set_strokes")
+            self._manual_teach_client = self._ros_node.create_client(Trigger, "/manual_line_aligner/teach_reference")
             self._manual_cropped_sub = None
+            path_qos = QoSProfile(
+                depth=10,
+                reliability=QoSReliabilityPolicy.RELIABLE,
+                durability=QoSDurabilityPolicy.VOLATILE,
+            )
+            self._welding_path_sub = self._ros_node.create_subscription(
+                ROSPath,
+                "/vision/welding_path",
+                self._welding_path_cb,
+                path_qos,
+            )
             if CV2_OK:
                 self._manual_cropped_sub = self._ros_node.create_subscription(
                     ROSImage,
@@ -1652,6 +1720,12 @@ class VisionPipelineGUI(QMainWindow):
         self._straight_line_check.setToolTip("When enabled, each click adds a waypoint.\nHold Shift to snap to horizontal or vertical.")
         self._straight_line_check.stateChanged.connect(self._on_straight_line_toggled)
         row2.addWidget(self._straight_line_check)
+        row2.addSpacing(8)
+        
+        self._roi_check = QCheckBox("🎯  Enable Auto-Align (Draw ROI Boundary)")
+        self._roi_check.setToolTip("Draw a polygon around the part. This teaches the vision system to auto-align your strokes when the part moves.")
+        self._roi_check.stateChanged.connect(self._on_roi_toggled)
+        row2.addWidget(self._roi_check)
         row2.addSpacing(8)
 
         clear_btn = QPushButton("🗑  Clear")
@@ -2560,6 +2634,70 @@ class VisionPipelineGUI(QMainWindow):
         )
         worker.start()
 
+    def _park_worker(self, worker) -> None:
+        """Keep aborted workers alive until their QThread fully exits."""
+        if worker is None:
+            return
+        if worker not in self._graveyard:
+            self._graveyard.append(worker)
+            worker.finished.connect(
+                lambda *_, w=worker: self._graveyard.remove(w)
+                if w in self._graveyard else None
+            )
+
+    def _abort_and_park_worker(self, worker, wait_ms: int = 0):
+        if worker is None:
+            return None
+        try:
+            worker.abort()
+        except Exception:
+            pass
+        self._park_worker(worker)
+        if wait_ms > 0:
+            try:
+                worker.wait(wait_ms)
+            except Exception:
+                pass
+        return None
+
+    def _welding_path_cb(self, msg: "ROSPath") -> None:
+        try:
+            self._latest_welding_path = copy.deepcopy(msg)
+        except Exception:
+            self._latest_welding_path = msg
+
+    def _publish_cached_welding_path(self) -> bool:
+        if not (ROS2_OK and self._ros_node is not None):
+            return False
+        if self._latest_welding_path is None or not self._latest_welding_path.poses:
+            return False
+        try:
+            if self._welding_path_pub is None:
+                pub_qos = QoSProfile(
+                    depth=1,
+                    reliability=QoSReliabilityPolicy.RELIABLE,
+                    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                )
+                self._welding_path_pub = self._ros_node.create_publisher(
+                    ROSPath, "/vision/welding_path", pub_qos
+                )
+            path_msg = copy.deepcopy(self._latest_welding_path)
+            stamp = self._ros_node.get_clock().now().to_msg()
+            path_msg.header.stamp = stamp
+            if not path_msg.header.frame_id:
+                path_msg.header.frame_id = "base_link"
+            for pose in path_msg.poses:
+                pose.header.stamp = stamp
+                if not pose.header.frame_id:
+                    pose.header.frame_id = path_msg.header.frame_id
+            self._welding_path_pub.publish(path_msg)
+            return True
+        except Exception as exc:
+            self._log.append(
+                f'<span style="color:{C["red"]}">[MoveIt] Failed to republish cached path: {exc}</span>'
+            )
+            return False
+
     def _selected_mode(self) -> str:
         for btn in self._mode_buttons.buttons():
             if btn.isChecked():
@@ -2571,7 +2709,7 @@ class VisionPipelineGUI(QMainWindow):
         cmds = {
             "yolo":   ["ros2", "run", "parol6_vision", "yolo_segment"],
             "color":  ["ros2", "run", "parol6_vision", "color_mode"],
-            "manual": ["ros2", "run", "parol6_vision", "manual_line"],
+            "manual": ["ros2", "run", "parol6_vision", "manual_line_aligner"],
         }
         cmd = cmds.get(mode)
         if not cmd:
@@ -2587,7 +2725,9 @@ class VisionPipelineGUI(QMainWindow):
                 self._mode_log.append(styled)
                 
         self._mode_worker.line_out.connect(_log_mode)
-        self._mode_worker.finished.connect(self._on_mode_finished)
+        self._mode_worker.finished.connect(
+            lambda rc, w=self._mode_worker: self._on_mode_finished(w, rc)
+        )
         self._mode_worker.start()
         self._btn_start_mode.setEnabled(False)
         self._btn_stop_mode.setEnabled(True)
@@ -2596,18 +2736,13 @@ class VisionPipelineGUI(QMainWindow):
         )
 
     def _stop_mode_node(self) -> None:
-        if self._mode_worker:
-            self._mode_worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._mode_worker)
-            self._mode_worker.finished.connect(lambda rc, w=self._mode_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
-            self._mode_worker = None
+        self._mode_worker = self._abort_and_park_worker(self._mode_worker)
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
-    def _on_mode_finished(self, rc: int) -> None:
-        self._mode_worker = None
+    def _on_mode_finished(self, worker: NodeWorker, rc: int) -> None:
+        if self._mode_worker is worker:
+            self._mode_worker = None
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
@@ -2630,6 +2765,8 @@ class VisionPipelineGUI(QMainWindow):
             self._manual_log_append('<span style="color:#f38ba8">[Manual] ROS2 + cv2 required.</span>')
             return
         strokes = self._canvas.get_strokes()
+        roi_polygon = getattr(self._canvas, 'get_roi_polygon', lambda: [])()
+        
         if not strokes:
             self._manual_log_append('<span style="color:#f9e2af">[Manual] No strokes to send — draw something first.</span>')
             return
@@ -2637,8 +2774,11 @@ class VisionPipelineGUI(QMainWindow):
         w_px = self._manual_brush_spin.value()
         import json
         payload = {'color': [c.blue(), c.green(), c.red()], 'width': w_px, 'strokes': strokes}
+        if roi_polygon:
+            payload['roi_polygon'] = roi_polygon
+            
         json_str = json.dumps(payload)
-        self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Sending {len(strokes)} stroke(s) → /manual_line/set_strokes…</span>')
+        self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Sending {len(strokes)} stroke(s) + ROI → /manual_line_aligner…</span>')
         
         if not hasattr(self, '_manual_set_params_client') or self._manual_set_params_client is None:
             self._manual_log_append('<span style="color:#f38ba8">[Manual] ROS client not ready.</span>')
@@ -2656,9 +2796,12 @@ class VisionPipelineGUI(QMainWindow):
             try:
                 result = fut.result()
                 if result and result.results and result.results[0].successful:
-                    # Now call the set_strokes service
+                    # Target correct service mode (Teach/Auto-Align vs Standard Fixed Strokes)
+                    roi_polygon = getattr(self._canvas, 'get_roi_polygon', lambda: [])()
+                    svc_topic = "/manual_line_aligner/teach_reference" if roi_polygon else "/manual_line_aligner/set_strokes"
+                    
                     svc_w = NodeWorker([
-                        "ros2", "service", "call", "/manual_line/set_strokes",
+                        "ros2", "service", "call", svc_topic,
                         "std_srvs/srv/Trigger", "{}",
                     ])
                     def _on_svc_done(rc):
@@ -2686,18 +2829,18 @@ class VisionPipelineGUI(QMainWindow):
         if not ROS2_OK:
             return
         svc_w = NodeWorker([
-            "ros2", "service", "call", "/manual_line/reset_strokes",
+            "ros2", "service", "call", "/manual_line_aligner/reset_strokes",
             "std_srvs/srv/Trigger", "{}",
         ])
         svc_w.line_out.connect(
-            lambda s: self._log.append(
+            lambda s: self._manual_log_append(
                 f'<span style="color:#f9e2af">[Manual] {s}</span>'
             )
         )
         self._trigger_workers.append(svc_w)
         svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
         svc_w.start()
-        self._log.append('<span style="color:#f9e2af">[Manual] Reset sent → /manual_line/reset_strokes</span>')
+        self._manual_log_append('<span style="color:#f9e2af">[Manual] Reset sent → /manual_line_aligner/reset_strokes</span>')
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
@@ -2717,15 +2860,11 @@ class VisionPipelineGUI(QMainWindow):
                     self._btn_pathgen, self._btn_moveit):
             btn.stop()
         self._stop_mode_node()
-        if self._ros_worker:
-            self._ros_worker.abort()
-            self._ros_worker = None
-        if self._ros_test_worker:
-            self._ros_test_worker.abort()
-            self._ros_test_worker = None
+        self._ros_worker = self._abort_and_park_worker(self._ros_worker)
+        self._ros_test_worker = self._abort_and_park_worker(self._ros_test_worker)
 
     def _send_path_to_moveit(self) -> None:
-        """Regenerate the latest path, then trigger MoveIt execution."""
+        """Publish the latest path like the inject scripts do, then trigger MoveIt."""
         def _log(msg: str, color: str = C["accent"]) -> None:
             html = f'<span style="color:{color}">[MoveIt] {msg}</span>'
             self._log.append(html)
@@ -2740,13 +2879,59 @@ class VisionPipelineGUI(QMainWindow):
             _log("Required ROS service clients are not ready.", C["red"])
             return
 
-        if not self._pathgen_trigger_client.wait_for_service(timeout_sec=1.0):
-            _log("/path_generator/trigger_path_generation is not available.", C["red"])
+        def _execute_moveit() -> None:
+            if not self._moveit_execute_client.wait_for_service(timeout_sec=1.0):
+                _log("/moveit_controller/execute_welding_path is not available.", C["red"])
+                return
+            _log("Triggering MoveIt execution…", C["yellow"])
+            exec_future = self._moveit_execute_client.call_async(Trigger.Request())
+            self._crop_futures.append(exec_future)
+
+            def _on_exec_done(exec_fut):
+                try:
+                    exec_result = exec_fut.result()
+                    if exec_result and exec_result.success:
+                        _log(exec_result.message or "Execution started.", C["green"])
+                    else:
+                        reason = exec_result.message if exec_result else "unknown failure"
+                        _log(f"Execution failed: {reason}", C["red"])
+                except Exception as exc:
+                    _log(f"Execution service error: {exc}", C["red"])
+
+            exec_future.add_done_callback(_on_exec_done)
+
+        if self._publish_cached_welding_path():
+            pose_count = len(self._latest_welding_path.poses) if self._latest_welding_path else 0
+            _log(
+                f"Republished cached path ({pose_count} pose(s)) to /vision/welding_path "
+                "using the same direct topic flow as the inject scripts.",
+                C["green"],
+            )
+            _execute_moveit()
             return
 
-        _log("Requesting latest path regeneration from path_generator…", C["yellow"])
+        if not self._pathgen_trigger_client.wait_for_service(timeout_sec=1.0):
+            _log("No cached path is available, and /path_generator/trigger_path_generation is unavailable.", C["red"])
+            return
+
+        _log("No cached path yet. Requesting latest path regeneration from path_generator…", C["yellow"])
         trigger_future = self._pathgen_trigger_client.call_async(Trigger.Request())
         self._crop_futures.append(trigger_future)
+
+        def _after_regen() -> None:
+            if self._publish_cached_welding_path():
+                pose_count = len(self._latest_welding_path.poses) if self._latest_welding_path else 0
+                _log(
+                    f"Republished regenerated path ({pose_count} pose(s)) to /vision/welding_path.",
+                    C["green"],
+                )
+            else:
+                _log(
+                    "Path generator reported success, but the GUI has not seen a cached /vision/welding_path yet. "
+                    "Proceeding with direct execution request anyway.",
+                    C["yellow"],
+                )
+            _execute_moveit()
 
         def _on_trigger_done(fut):
             try:
@@ -2755,29 +2940,8 @@ class VisionPipelineGUI(QMainWindow):
                     reason = result.message if result else "unknown failure"
                     _log(f"Path generation failed: {reason}", C["red"])
                     return
-
                 _log(f"Path ready: {result.message or 'generated'}", C["green"])
-
-                if not self._moveit_execute_client.wait_for_service(timeout_sec=1.0):
-                    _log("/moveit_controller/execute_welding_path is not available.", C["red"])
-                    return
-
-                _log("Triggering MoveIt execution…", C["yellow"])
-                exec_future = self._moveit_execute_client.call_async(Trigger.Request())
-                self._crop_futures.append(exec_future)
-
-                def _on_exec_done(exec_fut):
-                    try:
-                        exec_result = exec_fut.result()
-                        if exec_result and exec_result.success:
-                            _log(exec_result.message or "Execution started.", C["green"])
-                        else:
-                            reason = exec_result.message if exec_result else "unknown failure"
-                            _log(f"Execution failed: {reason}", C["red"])
-                    except Exception as exc:
-                        _log(f"Execution service error: {exc}", C["red"])
-
-                exec_future.add_done_callback(_on_exec_done)
+                QTimer.singleShot(200, _after_regen)
             except Exception as exc:
                 _log(f"Path generation service error: {exc}", C["red"])
 
@@ -2796,8 +2960,7 @@ class VisionPipelineGUI(QMainWindow):
         if self._ros_worker:
             self._ros_log.append("[LAUNCH] Stopping process...")
             self._gazebo_log.append("[LAUNCH] Stopping process...")
-            self._ros_worker.abort()
-            self._ros_worker = None
+            self._ros_worker = self._abort_and_park_worker(self._ros_worker)
             self._set_ros_button_state(False)
             return
 
@@ -2815,8 +2978,8 @@ class VisionPipelineGUI(QMainWindow):
         self._ros_worker = RosLaunchWorker(script_path, [], env_vars=self._ros_launch_env)
         self._ros_worker.output_rviz.connect(self._ros_log.append)
         self._ros_worker.output_gazebo.connect(self._gazebo_log.append)
-        self._ros_worker.finished_ok.connect(self._on_ros_launch_finished)
-        self._ros_worker.finished_err.connect(self._on_ros_launch_finished)
+        self._ros_worker.finished_ok.connect(lambda w=self._ros_worker: self._on_ros_launch_finished(w))
+        self._ros_worker.finished_err.connect(lambda rc, w=self._ros_worker: self._on_ros_launch_finished(w, rc))
         self._ros_worker.start()
         self._set_ros_button_state(True)
 
@@ -2830,7 +2993,9 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
             self._ros_method.setEnabled(True)
 
-    def _on_ros_launch_finished(self, rc: Optional[int] = None) -> None:
+    def _on_ros_launch_finished(self, worker=None, rc: Optional[int] = None) -> None:
+        if worker is not None and self._ros_worker is not worker:
+            return
         self._ros_worker = None
         self._set_ros_button_state(False)
 
@@ -2850,8 +3015,7 @@ class VisionPipelineGUI(QMainWindow):
     def _ros_run_auto_test(self) -> None:
         if self._ros_test_worker:
             self._ros_log.append("[TEST] Stopping currently running test...")
-            self._ros_test_worker.abort()
-            self._ros_test_worker = None
+            self._ros_test_worker = self._abort_and_park_worker(self._ros_test_worker)
             self._test_btn.setText("▶️ Run Auto-Test")
             self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
             return
@@ -2868,31 +3032,34 @@ class VisionPipelineGUI(QMainWindow):
         self._ros_launch_env.clear()
         self._ros_test_worker = RosLaunchWorker(script_path, [shape], env_vars=self._ros_launch_env)
         self._ros_test_worker.output_rviz.connect(self._ros_log.append)
-        self._ros_test_worker.finished_ok.connect(self._on_ros_test_finished)
-        self._ros_test_worker.finished_err.connect(self._on_ros_test_finished)
+        self._ros_test_worker.finished_ok.connect(lambda w=self._ros_test_worker: self._on_ros_test_finished(w))
+        self._ros_test_worker.finished_err.connect(lambda rc, w=self._ros_test_worker: self._on_ros_test_finished(w, rc))
         self._ros_test_worker.start()
 
         self._test_btn.setText("🛑 Stop Test")
         self._test_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
 
-    def _on_ros_test_finished(self, rc: Optional[int] = None) -> None:
+    def _on_ros_test_finished(self, worker=None, rc: Optional[int] = None) -> None:
+        if worker is not None and self._ros_test_worker is not worker:
+            return
         self._ros_test_worker = None
         self._test_btn.setText("▶️ Run Auto-Test")
         self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
 
     def _inject_test_path(self) -> None:
-        """Publish a small synthetic straight-line path to /vision/welding_path.
+        """Publish the same conservative reachable path used by the shell injector.
 
         The YAML value for `ros2 topic pub` must be a single flat YAML mapping.
         """
-        # Three waypoints along Y axis at fixed X=0.4m, Z=0.45m
         path_yaml = (
             "{"
             "header: {frame_id: base_link}, "
             "poses: ["
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y: -0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.0, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}"
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.20, y: -0.08, z: 0.33}, orientation: {x: 0.707, y: 0.0, z: -0.707, w: 0.0}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.20, y: -0.04, z: 0.33}, orientation: {x: 0.707, y: 0.0, z: -0.707, w: 0.0}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.20, y:  0.00, z: 0.33}, orientation: {x: 0.707, y: 0.0, z: -0.707, w: 0.0}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.20, y:  0.04, z: 0.33}, orientation: {x: 0.707, y: 0.0, z: -0.707, w: 0.0}}}, "
+            "{header: {frame_id: base_link}, pose: {position: {x: 0.20, y:  0.08, z: 0.33}, orientation: {x: 0.707, y: 0.0, z: -0.707, w: 0.0}}}"
             "]}"
         )
 
@@ -2909,7 +3076,7 @@ class VisionPipelineGUI(QMainWindow):
         )
         self._start_transient_worker(worker)
         self._ros_log.append(
-            f'<b style="color:{C["yellow"]}">[Inject] Synthetic 3-point path published → '
+            f'<b style="color:{C["yellow"]}">[Inject] Conservative reachable test path published → '
             '/vision/welding_path</b>'
         )
 
@@ -3096,6 +3263,11 @@ class VisionPipelineGUI(QMainWindow):
                     worker.wait(1500)
                 except Exception:
                     pass
+        if hasattr(self, "_ros_timer"):
+            try:
+                self._ros_timer.stop()
+            except Exception:
+                pass
         ev.accept()
 
 
@@ -3105,6 +3277,7 @@ class VisionPipelineGUI(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
     app.setFont(QFont("Segoe UI", 11))
