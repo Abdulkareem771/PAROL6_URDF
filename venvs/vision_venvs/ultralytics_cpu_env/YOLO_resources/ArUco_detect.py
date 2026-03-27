@@ -11,7 +11,7 @@ SINGLE_IMAGE = project_dir / "data" / "some_images" / "aruco-marker-ID=6.png"
 # Select ArUco dictionary
 # -----------------------------
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
-
+#ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
 # Detector parameters
 parameters = aruco.DetectorParameters()
 
