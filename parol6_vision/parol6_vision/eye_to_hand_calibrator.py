@@ -1,4 +1,4 @@
-""" 
+"""
 First Run the ArUco node by the following code:
 
 ros2 run aruco_ros single \
@@ -6,7 +6,7 @@ ros2 run aruco_ros single \
     --ros-args --remap /camera_info:=/kinect2/sd/camera_info \
     --ros-args \
     -p marker_id:=6 \
-    -p marker_size:=0.0545 \
+    -p marker_size:=0.04575 \
     -p camera_frame:=kinect2_ir_optical_frame \
     -p marker_frame:=detected_marker_frame \
     -p corner_refinement:=SUBPIX \
@@ -14,6 +14,15 @@ ros2 run aruco_ros single \
     -p marker_dict:=DICT_ARUCO_ORIGINAL
 
 
+--- LATEST CALIBRATION RESULT (2026-03-28) ---
+Translation (meters): X=0.0193, Y=0.0149, Z=0.7888
+Quaternion: x=-0.7204, y=-0.6911, z=-0.0418, w=0.0395
+Euler (degrees): Roll=179.95, Pitch=-6.59, Yaw=87.63
+
+Suggested static transform (camera -> marker):
+ros2 run tf2_ros static_transform_publisher \
+    0.0193 0.0149 0.7888 -0.7204 -0.6911 -0.0418 0.0395 \
+    kinect2_ir_optical_frame detected_marker_frame
 """
 
 

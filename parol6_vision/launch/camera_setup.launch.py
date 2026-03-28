@@ -85,7 +85,7 @@ def generate_launch_description():
         name='static_transform_publisher_camera',
         # Tuned position: 0.5m in front of robot, 0.65m high, facing workspace
         # roll=-π/2, pitch=0, yaw=+π/2
-        arguments=['--x', '0.646', '--y', '0.0', '--z', '1.035',
+        arguments=['--x', '0.646', '--y', '0.1225', '--z', '1.015',
                    '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'

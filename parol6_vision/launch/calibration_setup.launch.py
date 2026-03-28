@@ -8,9 +8,10 @@ def generate_launch_description():
     # 1. CALIBRATION RESULTS (Replace these with your actual measurements)
     # =========================================================================
     
-    # Transform from ROBOT BASE to CALIBRATION CUBE (Your manual measurement)
+    # Camera -> Marker calibration result (2026-03-28)
+    # Translation: X=0.0193m, Y=0.0149m, Z=0.7888m  |  Euler: Roll=179.95, Pitch=-6.59, Yaw=87.63
     # Format: x y z qx qy qz qw child parent
-    base_to_cube = ["0.5", "0.0", "0.0", "0.0", "0.0", "0.0", "1.0", "base_link", "cube_marker_target"]
+    base_to_cube = ["0.0193", "0.0149", "0.7888", "-0.7204", "-0.6911", "-0.0418", "0.0395", "kinect2_ir_optical_frame", "detected_marker_frame"]
 
     # Transform from ROBOT BASE to KINECT (The result from Phase 4 script)
     # This is the "Gold" value that aligns your 3D world.
