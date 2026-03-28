@@ -32,7 +32,7 @@ set terminal qt 2 title "Error Distribution" size 700,500
 set title "Depth Error Distribution"
 set xlabel "Error (m)"
 set ylabel "Count"
-set yrange [0:]
+set yrange [1:]
 binwidth = 0.002
 bin(x, w) = w * floor(x/w + 0.5)
 set boxwidth binwidth
