@@ -241,6 +241,10 @@ class PathOptimizer(Node):
         # ---- Build WeldLineArray (0 or 1 entry) ----
         weld_array = WeldLineArray()
         weld_array.header = msg.header  # preserve captured image timestamp for depth sync
+        # Guarantee a non-empty frame_id so depth_matcher's TF lookup never fails
+        # with "Invalid argument empty string passed to lookupTransform".
+        if not weld_array.header.frame_id:
+            weld_array.header.frame_id = 'kinect2_rgb_optical_frame'
 
         if best_line is not None:
             weld_array.lines = [best_line]

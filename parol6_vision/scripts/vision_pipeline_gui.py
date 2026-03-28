@@ -1534,6 +1534,13 @@ class VisionPipelineGUI(QMainWindow):
         )
         pg_lay.addWidget(self._btn_pathgen)
 
+        self._btn_path_holder = NodeButton(
+            "Path Holder",
+            lambda: ["ros2", "run", "parol6_vision", "path_holder"],
+            self._log, "#cba6f7",
+        )
+        pg_lay.addWidget(self._btn_path_holder)
+
         launch_all_btn = QPushButton("🚀  Launch Full Pipeline (stages 1-3)")
         launch_all_btn.setStyleSheet(
             f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
@@ -3022,12 +3029,14 @@ class VisionPipelineGUI(QMainWindow):
         QTimer.singleShot(1200, self._btn_optimizer._toggle)
         QTimer.singleShot(1600, self._btn_depth._toggle)
         QTimer.singleShot(2000, self._btn_pathgen._toggle)
+        QTimer.singleShot(2400, self._btn_path_holder._toggle)
 
     def _stop_all(self) -> None:
         for btn in (self._btn_live_cam, self._btn_capture,
                     self._btn_crop_node,
                     self._btn_optimizer, self._btn_depth,
-                    self._btn_pathgen, self._btn_moveit):
+                    self._btn_pathgen, self._btn_path_holder,
+                    self._btn_moveit):
             btn.stop()
         self._stop_mode_node()
         self._ros_worker = self._abort_and_park_worker(self._ros_worker)

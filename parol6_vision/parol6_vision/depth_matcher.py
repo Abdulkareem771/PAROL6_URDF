@@ -158,23 +158,33 @@ class DepthMatcher(Node):
         self._cached_depth: Image | None = None
         self._cached_info: CameraInfo | None = None
 
+        # TRANSIENT_LOCAL so we receive the last-published depth even if
+        # depth_matcher starts AFTER the user pressed Capture.
+        # Publisher (capture_images_node) uses the same durability — must match.
+        from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
+        _latch_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
         self.create_subscription(
             Image,
             '/vision/captured_image_depth',
             self._on_depth,
-            10
+            _latch_qos,
         )
         self.create_subscription(
             CameraInfo,
             '/vision/captured_camera_info',
             self._on_info,
-            10
+            _latch_qos,
         )
         self.create_subscription(
             WeldLineArray,
             '/vision/weld_lines_2d',
             self._on_lines,
-            10
+            10,
         )
 
         self.bridge = CvBridge()

@@ -1,0 +1,253 @@
+# Stabilizing the PAROL6 Vision Pipeline
+
+This document records all architectural changes made to stabilize the PAROL6 welding-path vision pipeline, including the motivation for each change, the new pipeline structure, QoS contracts, and the correct operating workflow.
+
+---
+
+## 1. Background — Why the Pipeline Was Unstable
+
+The original pipeline had three core failure modes:
+
+| Failure | Root Cause |
+|---|---|
+| `depth_matcher` never fired | `ApproximateTimeSynchronizer` waited for RGB + Depth + 2D-lines to share the same timestamp. Manual lines are drawn long after capture — timestamps never match |
+| Markers stacked in RViz | No `DELETEALL` marker was published before new markers, so every new detection added to the existing set |
+| MoveIt "No path received yet" | `path_holder` was never launched from the GUI; `path_generator`'s output went nowhere. Separately, `moveit_controller` subscribed with `TRANSIENT_LOCAL` but `path_holder` published `VOLATILE` |
+| Camera TF totally wrong | Both `live_pipeline.launch.py` and `parol6_moveit_config/demo.launch.py` encoded the old camera position (x=1.2, z=0.65) instead of the real measured position |
+| Must capture twice | `depth_matcher` subscribed to `captured_image_depth` with `VOLATILE` QoS, while `capture_images_node` published with `TRANSIENT_LOCAL`. DDS silently drops TRANSIENT_LOCAL messages to VOLATILE late-joining subscribers |
+| Double-shutdown crash | All nodes called `rclpy.shutdown()` unconditionally on exit, causing `RCLError` when shutdown was already in progress |
+
+---
+
+## 2. New Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Stage 1 — Capture                         │
+│                                                                 │
+│  kinect2_bridge  ──►  capture_images_node                       │
+│  (live RGB+Depth)          │                                    │
+│                            ├──► /vision/captured_image_raw      │
+│                            ├──► /vision/captured_image_depth  ◄─┤ TRANSIENT_LOCAL
+│                            └──► /vision/captured_camera_info  ◄─┘ TRANSIENT_LOCAL
+│                                                                 │
+│                     crop_image_node                             │
+│  /vision/captured_image_raw ──► /vision/captured_image_color   │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Stage 2 — Line Detection                      │
+│                                                                 │
+│  manual_line_node or yolo_segment                               │
+│  /vision/captured_image_color ──► /vision/processing_mode/      │
+│                                   annotated_image               │
+│                                                                 │
+│  path_optimizer                                                 │
+│  annotated_image ──► /vision/weld_lines_2d                     │
+│                      (header.frame_id always set to            │
+│                       kinect2_rgb_optical_frame)                │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Stage 3 — 3D Projection                      │
+│                                                                 │
+│  depth_matcher (cache-based, no timestamp sync)                 │
+│  ┌──────────────────────────────────┐                          │
+│  │ Cached on arrival (TRANSIENT_LOCAL subscribers):           │
+│  │   /vision/captured_image_depth   ──► _cached_depth         │
+│  │   /vision/captured_camera_info   ──► _cached_info          │
+│  │                                                             │
+│  │ Triggered by:                                              │
+│  │   /vision/weld_lines_2d ──► synchronized_callback(         │
+│  │                               lines, _cached_depth,        │
+│  │                               _cached_info)                │
+│  └──────────────────────────────────┘                          │
+│                    │                                            │
+│                    ▼                                            │
+│             /vision/weld_lines_3d                              │
+│                    │                                            │
+│                    ▼                                            │
+│  path_generator (B-spline + orientation)                       │
+│             /vision/welding_path/generated                     │
+└─────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Stage 4 — Path Holding & Execution                 │
+│                                                                 │
+│  path_holder  (sole TRANSIENT_LOCAL publisher)                  │
+│  ┌─────────────────────────────────────────────────────┐       │
+│  │ Watches: /vision/welding_path/generated             │       │
+│  │ Watches: /vision/welding_path/injected              │       │
+│  │ Publishes: /vision/welding_path (TRANSIENT_LOCAL)   │       │
+│  │ Service: /path_holder/set_source  → force republish │       │
+│  └─────────────────────────────────────────────────────┘       │
+│                          │                                      │
+│                          ▼                                      │
+│  moveit_controller (TRANSIENT_LOCAL subscriber)                 │
+│  → Plans Home → Approach → Cartesian weld path → Return home   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. New Nodes
+
+### `path_holder.py`
+
+The **single authoritative publisher** for `/vision/welding_path`.
+
+- Subscribes to two staging topics:
+  - `/vision/welding_path/generated` — output from `path_generator`
+  - `/vision/welding_path/injected` — output from `inject_path_node` (GUI injection)
+- Caches both paths independently
+- Republishes the active source to `/vision/welding_path` with `TRANSIENT_LOCAL` durability
+- Exposes `/path_holder/set_source` service (Trigger) to force-republish the cached path — the GUI calls this before triggering MoveIt execution so late-joining `moveit_controller` receives the path
+
+### `inject_path_node.py`
+
+Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes a `Path` message to `/vision/inject_path` (VOLATILE), `inject_path_node` re-latches it to `/vision/welding_path/injected` (TRANSIENT_LOCAL) so it survives node restarts.
+
+---
+
+## 4. Changed Nodes
+
+### `capture_images_node.py`
+
+| What changed | Why |
+|---|---|
+| `captured_image_depth` publisher: `10` → `TRANSIENT_LOCAL RELIABLE` | depth_matcher may start *after* the user pressed Capture. TRANSIENT_LOCAL delivers the last captured depth immediately to any late joiner |
+| `captured_camera_info` publisher: `10` → `TRANSIENT_LOCAL RELIABLE` | Same reason as above |
+
+### `depth_matcher.py`
+
+| What changed | Why |
+|---|---|
+| Removed `ApproximateTimeSynchronizer` | Timestamps of captured depth vs. hand-drawn line differ by seconds/minutes — syncer never fired |
+| Added cache-based approach | `_on_depth()` and `_on_info()` cache the latest received depth/info; `_on_lines()` immediately calls the processing pipeline using cached data |
+| `captured_image_depth` subscriber: `10` → `TRANSIENT_LOCAL RELIABLE` | Must match publisher QoS for late-join delivery |
+| `captured_camera_info` subscriber: `10` → `TRANSIENT_LOCAL RELIABLE` | Must match publisher QoS |
+| Added `DELETEALL` marker before publishing new markers | Prevents marker accumulation in RViz when the weld line is moved |
+| Clears markers when 0 valid 3D lines produced | Stale markers no longer linger after a bad/failed frame |
+
+### `path_optimizer.py`
+
+| What changed | Why |
+|---|---|
+| `weld_lines_2d.header.frame_id` always set to `kinect2_rgb_optical_frame` if empty | The annotated image from the GUI canvas has no frame_id. An empty frame_id causes `depth_matcher`'s `lookupTransform` to fail with "Invalid argument empty string" |
+
+### `path_generator.py`
+
+| What changed | Why |
+|---|---|
+| Output topic: `/vision/welding_path` → `/vision/welding_path/generated` | Decoupled from direct publication; `path_holder` is now the sole publisher of `/vision/welding_path` |
+| `rclpy.shutdown()` guarded with `rclpy.ok()` | Prevents `RCLError: rcl_shutdown already called` on exit |
+
+### `moveit_controller.py`
+
+| What changed | Why |
+|---|---|
+| `/vision/welding_path` subscriber QoS: `VOLATILE` → `TRANSIENT_LOCAL RELIABLE` | Required to receive the latched path from `path_holder` |
+
+### `vision_pipeline_gui.py`
+
+| What changed | Why |
+|---|---|
+| Added **Path Holder** NodeButton in Stage 3 panel | Node was never started from the GUI |
+| Added path_holder to `_launch_full_pipeline()` | "🚀 Launch Full Pipeline" now starts all 4 backend nodes including path_holder |
+| Added path_holder to `_stop_all()` | Clean shutdown includes path_holder |
+| `_send_path_to_moveit()` 2-step sequence | (1) calls `/path_holder/set_source` → forces republish of cached path, waking late-joining `moveit_controller`; (2) waits 1 s then triggers execute service |
+| Removed subprocess-based path injection | Replaced with persistent ROS publisher (`inject_path_node`) |
+
+---
+
+## 5. Camera TF Fix
+
+**Old values (wrong):**
+```
+x=1.2, y=0.0, z=0.65
+roll=-1.5708, pitch=0.0, yaw=1.5708
+base_link → kinect2_link
+```
+
+**New values (real physical measurements from team):**
+```
+x=0.646, y=0.1225, z=1.015
+roll=-3.14159, pitch=0.0, yaw=1.603684
+base_link → kinect2_link
+```
+
+Updated in **both**:
+- `parol6_vision/launch/live_pipeline.launch.py` — static_tf_camera node
+- `parol6_moveit_config/launch/demo.launch.py` — static_transform_publisher_camera node
+
+> **Why it matters:** The old TF placed the camera 1.2 m in front of the robot at 0.65 m height. All 3D weld path waypoints were projected into open space well outside the robot's reachable workspace, causing OMPL to fail with "Unable to sample any valid states for goal tree" for every single waypoint.
+
+---
+
+## 6. QoS Contract Summary
+
+| Topic | Publisher | Subscriber |
+|---|---|---|
+| `/vision/captured_image_depth` | TRANSIENT_LOCAL RELIABLE depth=1 | TRANSIENT_LOCAL RELIABLE depth=1 |
+| `/vision/captured_camera_info` | TRANSIENT_LOCAL RELIABLE depth=1 | TRANSIENT_LOCAL RELIABLE depth=1 |
+| `/vision/weld_lines_2d` | VOLATILE (default 10) | VOLATILE (default 10) |
+| `/vision/weld_lines_3d` | VOLATILE (default 10) | VOLATILE (default 10) |
+| `/vision/welding_path/generated` | VOLATILE (default 10) | VOLATILE (default 10) |
+| `/vision/welding_path/injected` | TRANSIENT_LOCAL RELIABLE depth=1 | TRANSIENT_LOCAL RELIABLE depth=1 |
+| `/vision/welding_path` | TRANSIENT_LOCAL RELIABLE depth=1 (**path_holder only**) | TRANSIENT_LOCAL RELIABLE depth=1 |
+
+> ⚠️ **Rule:** Any subscriber that may start *after* the publisher must use matching `TRANSIENT_LOCAL` QoS or it will never receive the message. This is the most common silent failure mode in ROS2 latched topics.
+
+---
+
+## 7. Correct Operating Workflow
+
+```
+1. Start MoveIt:  launch_moveit_fake.sh  (or real_hw)
+   → publishes base_link TF + correct kinect2_link TF
+
+2. Start Kinect:  Live Kinect Camera (GUI)
+   → kinect2_bridge streams /kinect2/sd/image_depth_rect etc.
+
+3. Start pipeline (GUI "🚀 Launch Full Pipeline"):
+   → capture_images, crop_image, path_optimizer,
+     depth_matcher, path_generator, path_holder
+
+4. Start MoveIt Controller (GUI Stage 4)
+
+5. Press "S" (Capture):
+   → captured_image_depth LATCHED (depth_matcher receives immediately)
+
+6. Draw red line in Manual Red Line mode
+
+7. Press "Apply / Send Strokes":
+   → manual_line_node publishes annotated_image
+   → path_optimizer detects line → publishes weld_lines_2d
+   → depth_matcher uses cached depth → publishes weld_lines_3d
+   → path_generator fits spline → publishes to /welding_path/generated
+   → path_holder latches → /vision/welding_path
+   → moveit_controller receives path automatically
+
+8. Press "📡 Send Path → MoveIt":
+   → GUI calls /path_holder/set_source (republish cached path)
+   → waits 1 s → calls /moveit_controller/execute_welding_path
+   → MoveIt plans: Home → Approach → Weld path → Return home
+```
+
+---
+
+## 8. Troubleshooting Quick Reference
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `weld_lines_2d received but no captured depth cached yet` | depth_matcher started with VOLATILE QoS or capture not done yet | Ensure QoS matches; capture image first |
+| `Could not transform ... to base_link: frame does not exist` | MoveIt (robot_state_publisher) not running | Start `launch_moveit_fake.sh` first |
+| `Invalid argument "" passed to lookupTransform source_frame` | `weld_lines_2d` has empty `frame_id` | `path_optimizer` now always sets `kinect2_rgb_optical_frame` |
+| Markers accumulate in RViz | Old markers never cleared | `depth_matcher.publish_markers()` now sends `DELETEALL` first |
+| `path_holder not available, trying direct execute` | `path_holder` not running | Start Path Holder in Stage 3 before executing |
+| `No path received yet` in moveit_controller | QoS mismatch or path_holder not running | Check path_holder is up; check `/vision/welding_path` has 1 publisher |
+| `Unable to sample any valid states for goal tree` | Camera TF wrong → path waypoints outside workspace | Verify `demo.launch.py` has updated TF values |
+| Double shutdown `RCLError` on node exit | `rclpy.shutdown()` called twice | All nodes now guard with `if rclpy.ok(): rclpy.shutdown()` |
