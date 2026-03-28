@@ -1,7 +1,7 @@
 # Gnuplot script for Kinect2 depth calibration error visualization
 # Usage: gnuplot vision_work/plot_depth_error.gp
 
-DATAFILE = "vision_work/018436651247/plot.dat"
+DATAFILE = "vision_work/018436651247plot.dat"
 
 # --- Plot 1: Error scatter map (X, Y pixel colored by error) ---
 set terminal qt 0 title "Depth Error Heatmap" size 900,600

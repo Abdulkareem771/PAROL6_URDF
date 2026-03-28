@@ -1466,7 +1466,7 @@ class VisionPipelineGUI(QMainWindow):
         vis_tab = QTabWidget()
 
         previews = [
-            ("/kinect2/qhd/image_color_rect",           "📷 Live Camera"),
+            ("/kinect2/sd/image_color_rect",           "📷 Live Camera"),
             ("/vision/captured_image_raw",              "📸 Captured Frame"),
             ("/vision/processing_mode/annotated_image", "🔍 Processing Output"),
             ("/vision/processing_mode/debug_image",     "🧠 Mode Debug (YOLO/Color)"),

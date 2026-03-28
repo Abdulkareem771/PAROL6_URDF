@@ -1,42 +1,41 @@
 launch:
+  # ── Kinect bridge identity ────────────────────────────────────────────────────
+  - arg:
+      name: "base_name"
+      default: "kinect2"
 
-# ── Kinect bridge identity ────────────────────────────────────────────────────
-- arg:
-    name: "base_name"
-    default: "kinect2"
+  - arg:
+      name: "hole_fill_radius"
+      default: "0"
 
-- arg:
-    name: "hole_fill_radius"
-    default: "0"
+  - arg:
+      name: "ir_auto_exposure"
+      default: "false"
 
-- arg:
-    name: "ir_auto_exposure"
-    default: "false"
+  # GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
+  # such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
+  # to "cpu".
+  - arg:
+      name: "depth_method"
+      default: "cpu"
 
-# GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
-# such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
-# to "cpu".
-- arg:
-    name: "depth_method"
-    default: "cpu"
+  - arg:
+      name: "reg_method"
+      default: "cpu" # colour-depth registration
 
-- arg:
-    name: "reg_method"
-    default: "cpu"   # colour-depth registration
+  - arg:
+      name: "bilateral_filter"
+      default: "true"
 
-- arg:
-    name: "bilateral_filter"
-    default: "true"
+  - arg:
+      name: "edge_aware_filter"
+      default: "true"
 
-- arg:
-    name: "edge_aware_filter"
-    default: "true"
-
-- node:
-    pkg: "kinect2_bridge"
-    exec: "kinect2_bridge_node"
-    name: "kinect2_bridge_node"
-    param:
+  - node:
+      pkg: "kinect2_bridge"
+      exec: "kinect2_bridge_node"
+      name: "kinect2_bridge_node"
+      param:
         - name: "base_name"
           value: "$(var base_name)"
 
@@ -79,34 +78,30 @@ launch:
         # Bilateral + edge-aware filters add significant CPU cost.
         # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
-          value: "$(var bilateral_filter)"
+          value: false
 
         - name: "edge_aware_filter"
-          value: "$(var edge_aware_filter)"
+          value: false
 
         - name: "hole_fill_radius"
-          value: "$(var hole_fill_radius)"
+          value: 0
 
         - name: "ir_auto_exposure"
-          value: "$(var ir_auto_exposure)"
+          value: false
 
         - name: "worker_threads"
           value: 4
 
-- node:
-    pkg: "depth_image_proc"
-    exec: "point_cloud_xyzrgb_node"
-    name: "$(var base_name)_points_xyzrgb_sd"
-    remap:
-    -
-      from: "rgb/camera_info"
-      to: "/$(var base_name)/sd/camera_info"
-    -
-      from: "rgb/image_rect_color"
-      to: "/$(var base_name)/sd/image_color_rect"
-    -
-      from: "depth_registered/image_rect"
-      to: "/$(var base_name)/sd/image_depth_rect"
-    -
-      from: "points"
-      to: "/$(var base_name)/sd/points"
+  - node:
+      pkg: "depth_image_proc"
+      exec: "point_cloud_xyzrgb_node"
+      name: "$(var base_name)_points_xyzrgb_sd"
+      remap:
+        - from: "rgb/camera_info"
+          to: "/$(var base_name)/sd/camera_info"
+        - from: "rgb/image_rect_color"
+          to: "/$(var base_name)/sd/image_color_rect"
+        - from: "depth_registered/image_rect"
+          to: "/$(var base_name)/sd/image_depth_rect"
+        - from: "points"
+          to: "/$(var base_name)/sd/points"
