@@ -10,7 +10,7 @@ def generate_launch_description():
     
     # Transform from ROBOT BASE to CALIBRATION CUBE (Your manual measurement)
     # Format: x y z qx qy qz qw child parent
-    base_to_cube = ["0.5", "0.0", "0.0", "0.0", "0.0", "0.0", "1.0", "base_link", "cube_marker_target"]
+    base_to_cube = ["0.623", "0.08", "0.234", "0.0", "0.0", "0.0", "1.0", "base_link", "cube_marker_target"]
 
     # Transform from ROBOT BASE to KINECT (The result from Phase 4 script)
     # This is the "Gold" value that aligns your 3D world.
