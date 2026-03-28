@@ -16,8 +16,9 @@ The original pipeline had three core failure modes:
 | Camera TF totally wrong | Both `live_pipeline.launch.py` and `parol6_moveit_config/demo.launch.py` encoded the old camera position (x=1.2, z=0.65) instead of the real measured position |
 | Must capture twice | `depth_matcher` subscribed to `captured_image_depth` with `VOLATILE` QoS, while `capture_images_node` published with `TRANSIENT_LOCAL`. DDS silently drops TRANSIENT_LOCAL messages to VOLATILE late-joining subscribers |
 | Double-shutdown crash | All nodes called `rclpy.shutdown()` unconditionally on exit, causing `RCLError` when shutdown was already in progress |
-| **Message storm** (10+ identical paths/s) | `path_generator` called `generate_path()` on every single `weld_lines_3d` message with no debounce. `manual_line_node` publishes on every GUI frame, creating a cascade: depth_matcher → path_generator → path_holder → moveit_controller all firing in a tight loop |
-| **RViz TF warning**: `cannot transform L6 → base_link` | `kinect2_bridge` had `publish_tf: true` and published its own `kinect2_link` TF from internal calibration data, creating a competing TF tree that split the chain (`L6 → base_link` became unresolvable) |
+| **Message storm** (10+ identical paths/s) | `path_generator` had a 0.5 s gate but `depth_matcher._on_lines` had no rate limit, so it still fired on every `weld_lines_2d` at camera rate, generating fresh `weld_lines_3d` that bypassed the generator gate — storm persisted |
+| **RViz TF warning**: `cannot transform L6 → base_link` | `kinect2_bridge` published its own `kinect2_link` TF concurrently with our static TF, creating a duplicate-parent conflict. Fixed by targeting `kinect2` (bridge root) instead of `kinect2_link` in our static TF |
+| **OMPL approach fails** — `Unable to sample any valid states for goal tree` | Weld surface projected at z ≈ 0.045 m. With `approach_distance=0.05` the approach pose was at z=0.095 m — just **below** the robot workspace minimum z=0.10 m. All goal samples were invalid |
 
 ---
 
@@ -122,6 +123,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 |---|---|
 | `captured_image_depth` publisher: `10` → `TRANSIENT_LOCAL RELIABLE` | depth_matcher may start *after* the user pressed Capture. TRANSIENT_LOCAL delivers the last captured depth immediately to any late joiner |
 | `captured_camera_info` publisher: `10` → `TRANSIENT_LOCAL RELIABLE` | Same reason as above |
+| `rclpy.shutdown()` in `main()` guarded with `if rclpy.ok()` | The signal handler already calls shutdown on SIGINT. The unconditional `finally` call raised `RCLError: rcl_shutdown already called`, causing a noisy exit crash |
 
 ### `depth_matcher.py`
 
@@ -133,6 +135,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 | `captured_camera_info` subscriber: `10` → `TRANSIENT_LOCAL RELIABLE` | Must match publisher QoS |
 | Added `DELETEALL` marker before publishing new markers | Prevents marker accumulation in RViz when the weld line is moved |
 | Clears markers when 0 valid 3D lines produced | Stale markers no longer linger after a bad/failed frame |
+| Added **0.5 s rate-limit gate** in `_on_lines()` | `path_generator` had a gate but `depth_matcher` had none. Since `depth_matcher` is upstream, it was still firing on every `weld_lines_2d` frame (~camera rate), generating fresh `weld_lines_3d` that bypassed the downstream gate entirely. Adding the gate here is the true fix for the message storm |
 
 ### `path_optimizer.py`
 
@@ -160,6 +163,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 | What changed | Why |
 |---|---|
 | `/vision/welding_path` subscriber QoS: `VOLATILE` → `TRANSIENT_LOCAL RELIABLE` | Required to receive the latched path from `path_holder` |
+| `approach_distance` default: `0.05` → `0.15` m | Weld seam projected at z ≈ 0.045 m in `base_link`. With 5 cm offset, approach was at z=0.095 m — below workspace_min z=0.10 m. OMPL rejected all goal samples. At 15 cm, approach is at z ≈ 0.195 m, safely inside the reachable zone |
 
 ### `vision_pipeline_gui.py`
 

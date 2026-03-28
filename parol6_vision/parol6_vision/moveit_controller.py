@@ -100,7 +100,7 @@ class MoveItController(Node):
         self.declare_parameter('min_success_rates', [0.95, 0.95, 0.90])
         
         # Process offsets
-        self.declare_parameter('approach_distance', 0.05)
+        self.declare_parameter('approach_distance', 0.15)  # 15cm: weld surface ~z=0.045m → approach at z=0.195m (inside workspace)
         self.declare_parameter('weld_velocity', 0.01) # m/s
 
         # Auto-execute: if True, run sequence every time a new path arrives

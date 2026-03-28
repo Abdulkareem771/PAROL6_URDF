@@ -157,6 +157,8 @@ class DepthMatcher(Node):
 
         self._cached_depth: Image | None = None
         self._cached_info: CameraInfo | None = None
+        self._last_process_time: float = 0.0      # wall-clock seconds
+        self._min_process_interval: float = 0.5   # rate-limit: max 2 Hz processing
 
         # TRANSIENT_LOCAL so we receive the last-published depth even if
         # depth_matcher starts AFTER the user pressed Capture.
@@ -199,7 +201,16 @@ class DepthMatcher(Node):
         self._cached_info = msg
 
     def _on_lines(self, lines_msg: WeldLineArray) -> None:
-        """Process weld lines using the cached depth + camera_info."""
+        """
+        Process weld lines using the cached depth + camera_info.
+        Rate-limited to _min_process_interval seconds so a continuous stream
+        of weld_lines_2d (manual_line fires on every GUI frame at camera rate)
+        does not flood the depth → 3D → path pipeline.
+        """
+        import time
+        now = time.monotonic()
+        if now - self._last_process_time < self._min_process_interval:
+            return  # same line, too soon — drop
         if self._cached_depth is None:
             self.get_logger().warn(
                 'weld_lines_2d received but no captured depth cached yet '
@@ -211,6 +222,7 @@ class DepthMatcher(Node):
                 'weld_lines_2d received but no camera_info cached yet.'
             )
             return
+        self._last_process_time = now
         # Delegate to the main processing method using cached frames
         self.synchronized_callback(lines_msg, self._cached_depth, self._cached_info)
         
