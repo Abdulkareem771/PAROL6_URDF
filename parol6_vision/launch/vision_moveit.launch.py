@@ -104,11 +104,9 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Camera is 1.2 m in front of robot base, 1.0 m up, looking back+down
-        # yaw=pi  → faces toward -X (toward robot)
-        # pitch=+0.52 rad (+30° = tilts DOWN after yaw=π flip) → tilts down toward workspace
-        arguments=['--x', '0.245', '--y', '0.0', '--z', '1.035',
-                   '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
+        
+        arguments=['--x', '0.646', '--y', '0.0', '--z', '1.035',
+                   '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )

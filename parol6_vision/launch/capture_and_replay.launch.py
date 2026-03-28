@@ -144,8 +144,8 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_tf_camera',
         arguments=[
-            '--x', '0.245', '--y', '0.0', '--z', '1.014',
-            '--qx', '0.7071', '--qy', '0.0', '--qz', '0.0', '--qw', '0.7071',
+            '--x', '0.646', '--y', '0.0', '--z', '1.035',
+            '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
             '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link',
         ],
         output='log',
