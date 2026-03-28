@@ -136,10 +136,22 @@ class PathGenerator(Node):
         )
         
         self.latest_msg = None
+        self._last_gen_time: float = 0.0          # wall-clock seconds
+        self._min_gen_interval: float = 0.5       # seconds between path regenerations
         self.get_logger().info('Path Generator initialized')
         
     def callback(self, msg):
-        """Buffer latest message and generate path immediately (reactive, like path_optimizer)."""
+        """
+        Buffer latest message and generate path (reactive, like path_optimizer).
+        Rate-limited to at most once every _min_gen_interval seconds so a
+        continuous stream of weld_lines_3d messages (from manual_line firing on
+        every GUI frame) does not flood path_holder and moveit_controller.
+        """
+        import time
+        now = time.monotonic()
+        if now - self._last_gen_time < self._min_gen_interval:
+            return  # drop — same line, too soon
+        self._last_gen_time = now
         self.latest_msg = msg
         self.generate_path(msg)
             

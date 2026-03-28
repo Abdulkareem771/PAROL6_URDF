@@ -122,17 +122,20 @@ def generate_launch_description():
             )
         ]
 
-    # Camera TFs
+    # Camera TF — connects base_link to the root of kinect2_bridge's TF tree
     publish_camera_tf = LaunchConfiguration("publish_camera_tf")
-    
-    # Static TF (Base Link -> Kinect Base)
+
+    # Static TF (Base Link -> Kinect Root Frame)
     static_tf_camera = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
+        # Connects base_link → 'kinect2' (the root of kinect2_bridge's internal TF chain).
+        # kinect2_bridge with base_name_tf=kinect2 owns: kinect2→kinect2_link→optical frames.
+        # Targeting 'kinect2' (not 'kinect2_link') avoids a duplicate-parent TF conflict.
         arguments=['--x', '0.646', '--y', '0.1225', '--z', '1.015',
                    '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
-                   '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
+                   '--frame-id', 'base_link', '--child-frame-id', 'kinect2'],
         output='screen',
         condition=IfCondition(publish_camera_tf),
     )

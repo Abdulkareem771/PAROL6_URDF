@@ -31,7 +31,8 @@ launch:
           value: ""
 
         - name: "publish_tf"
-          value: true
+          value: true  # kinect2_bridge publishes kinect2→kinect2_link→optical frames
+          # Our static TF targets 'kinect2' (the root), not 'kinect2_link', to avoid conflict
 
         - name: "base_name_tf"
           value: "$(var base_name)"

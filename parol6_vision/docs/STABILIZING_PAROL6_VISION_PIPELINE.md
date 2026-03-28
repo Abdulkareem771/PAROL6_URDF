@@ -16,6 +16,8 @@ The original pipeline had three core failure modes:
 | Camera TF totally wrong | Both `live_pipeline.launch.py` and `parol6_moveit_config/demo.launch.py` encoded the old camera position (x=1.2, z=0.65) instead of the real measured position |
 | Must capture twice | `depth_matcher` subscribed to `captured_image_depth` with `VOLATILE` QoS, while `capture_images_node` published with `TRANSIENT_LOCAL`. DDS silently drops TRANSIENT_LOCAL messages to VOLATILE late-joining subscribers |
 | Double-shutdown crash | All nodes called `rclpy.shutdown()` unconditionally on exit, causing `RCLError` when shutdown was already in progress |
+| **Message storm** (10+ identical paths/s) | `path_generator` called `generate_path()` on every single `weld_lines_3d` message with no debounce. `manual_line_node` publishes on every GUI frame, creating a cascade: depth_matcher → path_generator → path_holder → moveit_controller all firing in a tight loop |
+| **RViz TF warning**: `cannot transform L6 → base_link` | `kinect2_bridge` had `publish_tf: true` and published its own `kinect2_link` TF from internal calibration data, creating a competing TF tree that split the chain (`L6 → base_link` became unresolvable) |
 
 ---
 
@@ -143,7 +145,15 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 | What changed | Why |
 |---|---|
 | Output topic: `/vision/welding_path` → `/vision/welding_path/generated` | Decoupled from direct publication; `path_holder` is now the sole publisher of `/vision/welding_path` |
+| Added **0.5 s rate-limit gate** in `callback()` | `manual_line_node` publishes on every GUI frame, causing `weld_lines_3d` to arrive continuously. Without a gate, path_generator → path_holder → moveit_controller all fire 10+ times/second for an unchanged line, flooding logs and wasting CPU |
 | `rclpy.shutdown()` guarded with `rclpy.ok()` | Prevents `RCLError: rcl_shutdown already called` on exit |
+
+### `kinect2_bridge_gpu.yaml`
+
+| What changed | Why |
+|---|---|
+| `publish_tf` kept `true` (unchanged) | kinect2_bridge must publish its internal chain `kinect2 → kinect2_link → optical frames` |
+| Our static TF child changed from `kinect2_link` → `kinect2` | We previously targeted `kinect2_link` directly, competing with kinect2_bridge which also claimed to be its parent. Changed to target `kinect2` (the bridge's root frame) so each frame has exactly one parent publisher |
 
 ### `moveit_controller.py`
 
@@ -165,25 +175,36 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 
 ## 5. Camera TF Fix
 
-**Old values (wrong):**
+**Old values (wrong — child was `kinect2_link` with incorrect position):**
 ```
 x=1.2, y=0.0, z=0.65
 roll=-1.5708, pitch=0.0, yaw=1.5708
-base_link → kinect2_link
+base_link → kinect2_link   ← WRONG: competed with kinect2_bridge's own kinect2→kinect2_link TF
 ```
 
-**New values (real physical measurements from team):**
+**New values (correct physical measurements, correct frame target):**
 ```
 x=0.646, y=0.1225, z=1.015
 roll=-3.14159, pitch=0.0, yaw=1.603684
-base_link → kinect2_link
+base_link → kinect2        ← CORRECT: we own only the root connection
+```
+
+**Resulting TF tree (no conflicts, each frame has exactly one parent):**
+```
+world
+  └── base_link                   ← demo.launch.py static TF
+        └── kinect2                ← OUR static TF (the one physical measurement we own)
+              └── kinect2_link         ← kinect2_bridge internal (from calibration)
+                    ├── kinect2_rgb_optical_frame
+                    ├── kinect2_ir_optical_frame
+                    └── (other optical frames)
 ```
 
 Updated in **both**:
-- `parol6_vision/launch/live_pipeline.launch.py` — static_tf_camera node
-- `parol6_moveit_config/launch/demo.launch.py` — static_transform_publisher_camera node
+- `parol6_vision/launch/live_pipeline.launch.py` — `static_tf_camera` node
+- `parol6_moveit_config/launch/demo.launch.py` — `static_transform_publisher_camera` node
 
-> **Why it matters:** The old TF placed the camera 1.2 m in front of the robot at 0.65 m height. All 3D weld path waypoints were projected into open space well outside the robot's reachable workspace, causing OMPL to fail with "Unable to sample any valid states for goal tree" for every single waypoint.
+> **Why it matters:** The old TF placed the camera 1.2 m in front of the robot at 0.65 m height. All 3D weld path waypoints were projected into open space well outside the robot's reachable workspace, causing OMPL to fail with "Unable to sample any valid states for goal tree" for every single waypoint. The competing TF publisher also split the tree making RViz unable to trace `L6 → base_link`.
 
 ---
 
@@ -207,7 +228,9 @@ Updated in **both**:
 
 ```
 1. Start MoveIt:  launch_moveit_fake.sh  (or real_hw)
-   → publishes base_link TF + correct kinect2_link TF
+   → publishes base_link TF + correct base_link → kinect2 static TF
+   → kinect2_bridge publishes kinect2 → kinect2_link → optical frames
+   → full TF chain: world → base_link → kinect2 → kinect2_link → optical frames
 
 2. Start Kinect:  Live Kinect Camera (GUI)
    → kinect2_bridge streams /kinect2/sd/image_depth_rect etc.
