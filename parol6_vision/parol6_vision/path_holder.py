@@ -79,6 +79,7 @@ class PathHolder(Node):
 
         # Cache for each source
         self._cache: dict[str, Path | None] = {s: None for s in _SOURCES}
+        self._last_published_hash: Optional[int] = None
 
         # ── QoS ───────────────────────────────────────────────────────────────
         latch_qos = QoSProfile(
@@ -164,6 +165,19 @@ class PathHolder(Node):
 
     def _publish(self, path: Path, *, reason: str = '') -> None:
         """Stamp and publish path to the authoritative topic + RViz markers."""
+        if not path.poses:
+            return
+            
+        first = path.poses[0].pose.position
+        last = path.poses[-1].pose.position
+        path_hash = hash((len(path.poses), first.x, first.y, first.z, last.x, last.y, last.z))
+        
+        if self._last_published_hash == path_hash:
+            self.get_logger().debug(f"Path content identical ({len(path.poses)} pts), skipping republish.")
+            return
+            
+        self._last_published_hash = path_hash
+        
         path.header.stamp = self.get_clock().now().to_msg()
         if not path.header.frame_id:
             path.header.frame_id = 'base_link'

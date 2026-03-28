@@ -458,6 +458,8 @@ class PathOptimizer(Node):
 
         contours = []
         for cnt in raw_contours:
+            if len(cnt) < 5:
+                continue
             try:
                 contours.append(cnt.reshape(-1, 2))
             except Exception as e:

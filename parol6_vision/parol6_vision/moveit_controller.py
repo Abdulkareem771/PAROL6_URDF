@@ -113,6 +113,12 @@ class MoveItController(Node):
         # Test mode: clamp incoming path into a conservative reachable workspace.
         # Useful to validate pipeline wiring even when vision points are out of reach.
         self.declare_parameter('enforce_reachable_test_path', False)
+
+        # Path offset — applied to every incoming waypoint before execution.
+        # Allows welding offset correction without re-running vision (in meters).
+        self.declare_parameter('path_offset_x', 0.0)  # positive = forward (+X)
+        self.declare_parameter('path_offset_y', 0.0)  # positive = left    (+Y)
+        self.declare_parameter('path_offset_z', 0.0)  # positive = up      (+Z)
         self.declare_parameter('test_workspace_min', [0.20, -0.35, 0.10])  # x,y,z
         self.declare_parameter('test_workspace_max', [0.65, 0.35, 0.55])   # x,y,z
         self.declare_parameter('test_min_radius_xy', 0.20)
@@ -195,6 +201,7 @@ class MoveItController(Node):
         self.latest_path = None
         self.execution_in_progress = False
         self._exec_lock = threading.Lock()
+        self._last_path_hash: int | None = None  # dedup guard against TRANSIENT_LOCAL burst
         self.get_logger().info('MoveIt Controller initialized')
 
     def _wait_async_result(self, future, timeout_sec=15.0):
@@ -222,7 +229,34 @@ class MoveItController(Node):
         return False
         
     def path_callback(self, msg):
-        """Buffer latest path; auto-execute if configured"""
+        """Buffer latest path (with live offset applied); auto-execute if configured"""
+        import copy as _copy
+
+        # Read live offset parameters — user can change them without restarting
+        ox = self.get_parameter('path_offset_x').value
+        oy = self.get_parameter('path_offset_y').value
+        oz = self.get_parameter('path_offset_z').value
+
+        if msg.poses and (ox or oy or oz):
+            # Apply offset — work on a deep copy so we don't mutate the DDS buffer
+            msg = _copy.deepcopy(msg)
+            for ps in msg.poses:
+                ps.pose.position.x += ox
+                ps.pose.position.y += oy
+                ps.pose.position.z += oz
+            if ox or oy or oz:
+                self.get_logger().info(
+                    f'Path offset applied: dx={ox*1000:.1f}mm  dy={oy*1000:.1f}mm  dz={oz*1000:.1f}mm'
+                )
+
+        if msg.poses:
+            first = msg.poses[0].pose.position
+            last = msg.poses[-1].pose.position
+            path_hash = hash((len(msg.poses), first.x, first.y, first.z, last.x, last.y, last.z))
+            if path_hash == self._last_path_hash:
+                return  # identical path already cached — skip log spam
+            self._last_path_hash = path_hash
+
         self.latest_path = msg
         self.get_logger().info(f'Received path with {len(msg.poses)} points')
         if self.auto_execute:

@@ -93,6 +93,7 @@ class PathGenerator(Node):
         self.declare_parameter('waypoint_spacing', 0.005) # 5mm spacing
         self.declare_parameter('approach_angle_deg', 45.0)
         self.declare_parameter('min_points_for_path', 5)
+        self.declare_parameter('max_waypoints', 80)  # cap to prevent OMPL failures
         
         self.k = self.get_parameter('spline_degree').value
         self.s = self.get_parameter('spline_smoothing').value
@@ -270,8 +271,13 @@ class PathGenerator(Node):
         total_len = cumulative_len[-1]
         
         # Number of waypoints
+        max_wp = self.get_parameter('max_waypoints').value
         num_waypoints = int(max(2, total_len / self.spacing))
         
+        if num_waypoints > max_wp:
+            self.get_logger().warn(f"Path over capacity ({num_waypoints} pts). Downsampling to {max_wp}.")
+            num_waypoints = max_wp
+            
         # Resample at equal arc-length intervals
         u_query = []
         target_dists = np.linspace(0, total_len, num_waypoints)
