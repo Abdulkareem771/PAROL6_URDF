@@ -22,11 +22,12 @@
    - 7.2 [Path Optimizer](#72-path-optimizer)
 8. [Stage 5: 2D → 3D Reconstruction — `depth_matcher`](#8-stage-5-2d--3d-reconstruction--depth_matcher)
 9. [Stage 6: Path Generation — `path_generator`](#9-stage-6-path-generation--path_generator)
-10. [Stage 7: Motion Execution — `moveit_controller`](#10-stage-7-motion-execution--moveit_controller)
-11. [Complete Topic & Message Flow Diagram](#11-complete-topic--message-flow-diagram)
-12. [Key Custom Messages (`parol6_msgs`)](#12-key-custom-messages-parol6_msgs)
-13. [Launch Files Summary](#13-launch-files-summary)
-14. [Conclusion](#14-conclusion)
+10. [Stage 7: Path Holding — `path_holder` and `inject_path_node`](#10-stage-7-path-holding--path_holder-and-inject_path_node)
+11. [Stage 8: Motion Execution — `moveit_controller`](#11-stage-8-motion-execution--moveit_controller)
+12. [Complete Topic & Message Flow Diagram](#12-complete-topic--message-flow-diagram)
+13. [Key Custom Messages (`parol6_msgs`)](#13-key-custom-messages-parol6_msgs)
+14. [Launch Files Summary](#14-launch-files-summary)
+15. [Conclusion](#15-conclusion)
 
 ---
 
@@ -48,7 +49,7 @@ The PAROL6 vision pipeline is a fully automated, vision-guided welding path dete
 
 ## 2. Pipeline Architecture
 
-The complete pipeline flows through **7 stages**. Each stage is an independent ROS 2 node that communicates exclusively through typed topics and services:
+The complete pipeline flows through **8 stages**. Each stage is an independent ROS 2 node that communicates exclusively through typed topics and services:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -63,7 +64,9 @@ The complete pipeline flows through **7 stages**. Each stage is an independent R
  ┌─────────────────┐
  │ capture_images  │  Stage 1 — Synchronized RGB+Depth capture (keyboard or timed trigger)
  └────────┬────────┘
-          │  /vision/captured_image_raw
+          │  /vision/captured_image_raw         (VOLATILE)
+          │  /vision/captured_image_depth       (TRANSIENT_LOCAL)
+          │  /vision/captured_camera_info       (TRANSIENT_LOCAL)
           ▼
  ┌─────────────────┐
  │ crop_image_node │  Stage 1b — Optional polygon mask / crop (ROI selection)
@@ -87,17 +90,24 @@ The complete pipeline flows through **7 stages**. Each stage is an independent R
                    │  /vision/weld_lines_2d  (WeldLineArray)
                    ▼
  ┌─────────────────┐
- │  depth_matcher  │  Stage 5 — 2D → 3D via depth image + TF2
+ │  depth_matcher  │  Stage 5 — Cache-based 2D → 3D projection via depth + TF2
  └────────┬────────┘
           │  /vision/weld_lines_3d  (WeldLine3DArray)
           ▼
  ┌─────────────────┐
  │ path_generator  │  Stage 6 — B-Spline smoothing + orientation generation
  └────────┬────────┘
-          │  /vision/welding_path  (nav_msgs/Path)
+          │  /vision/welding_path/generated  (TRANSIENT_LOCAL)
+          ▼
+ ┌────────────────────────────────────────────────┐
+ │  path_holder  │  Stage 7 — Authoritative path latch & mux
+ │  (also accepts /vision/welding_path/injected   │
+ │   from inject_path_node for GUI injection)     │
+ └────────┬───────────────────────────────────────┘
+          │  /vision/welding_path  (TRANSIENT_LOCAL)
           ▼
  ┌─────────────────────┐
- │ moveit_controller   │  Stage 7 — Cartesian motion execution via MoveIt2
+ │ moveit_controller   │  Stage 8 — Cartesian motion execution via MoveIt2
  └─────────────────────┘
 ```
 
@@ -110,11 +120,11 @@ The complete pipeline flows through **7 stages**. Each stage is an independent R
 
 ### Purpose
 
-This is the **entry point** of the vision pipeline. It subscribes to the Kinect v2 camera topics, synchronizes color and depth image streams using an approximate time synchronizer, and publishes matched image pairs to vision-internal topics upon a trigger event.
+This is the **entry point** of the vision pipeline. It subscribes to the Kinect v2 camera topics, synchronizes color and depth image streams using `message_filters.ApproximateTimeSynchronizer`, and publishes matched image pairs to vision-internal topics upon a trigger event.
 
 ### Design Rationale
 
-The node uses `message_filters.ApproximateTimeSynchronizer` with a 100 ms time tolerance to guarantee that each published color/depth pair corresponds to the **exact same physical moment in time**. This synchronization is critical for accurate 3D reconstruction later in the pipeline.
+The captured depth image and camera info are published with **`TRANSIENT_LOCAL` QoS** (depth = 1). This ensures that `depth_matcher`, which may start long after the user pressed *Capture*, still receives the last depth frame immediately on joining. The color image is published `VOLATILE` because it is only consumed during active processing.
 
 ### Capture Modes
 
@@ -127,15 +137,15 @@ Both modes also accept a ROS topic trigger (`/vision/capture_trigger`, `std_msgs
 
 ### Topic Interface
 
-| Direction | Topic | Message Type | Description |
-|-----------|-------|--------------|-------------|
-| Subscribed | `/kinect2/sd/image_color_rect` | `sensor_msgs/Image` | Rectified color |
-| Subscribed | `/kinect2/sd/image_depth_rect` | `sensor_msgs/Image` | Aligned depth |
-| Subscribed | `/kinect2/sd/camera_info` | `sensor_msgs/CameraInfo` | Camera intrinsics |
-| Subscribed | `/vision/capture_trigger` | `std_msgs/Empty` | GUI trigger |
-| Published | `/vision/captured_image_raw` | `sensor_msgs/Image` | Captured color frame |
-| Published | `/vision/captured_image_depth` | `sensor_msgs/Image` | Captured depth frame |
-| Published | `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | Relayed intrinsics |
+| Direction | Topic | Message Type | QoS | Description |
+|-----------|-------|--------------|-----|-------------|
+| Subscribed | `/kinect2/sd/image_color_rect` | `sensor_msgs/Image` | default | Rectified color |
+| Subscribed | `/kinect2/sd/image_depth_rect` | `sensor_msgs/Image` | default | Aligned depth |
+| Subscribed | `/kinect2/sd/camera_info` | `sensor_msgs/CameraInfo` | default | Camera intrinsics |
+| Subscribed | `/vision/capture_trigger` | `std_msgs/Empty` | default | GUI trigger |
+| Published | `/vision/captured_image_raw` | `sensor_msgs/Image` | VOLATILE | Captured color frame |
+| Published | `/vision/captured_image_depth` | `sensor_msgs/Image` | **TRANSIENT_LOCAL** | Captured depth frame |
+| Published | `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | **TRANSIENT_LOCAL** | Relayed intrinsics |
 
 ### Parameters
 
@@ -458,13 +468,10 @@ This node bridges the 2D computer vision world and the 3D robot space. It takes 
 
 ### Algorithm
 
-**Step 1 — Message Synchronization:**  
-Three streams are synchronized with `ApproximateTimeSynchronizer`:
-- `WeldLineArray` from Stage 4
-- Depth image (`/vision/captured_image_depth`)
-- Camera info (`/vision/captured_camera_info`)
+**Step 1 — Cache-Based Acquisition (no timestamp sync):**  
+Depth image and camera info are stored on arrival into `_cached_depth` / `_cached_info`. The `/vision/weld_lines_2d` subscriber triggers processing immediately using those caches. This replaces an older `ApproximateTimeSynchronizer` approach, which failed because the user draws the weld line *minutes after* the depth frame was captured — so timestamps never matched.
 
-This ensures depth values correspond to the same moment as the 2D detections.
+A **0.5 s rate-limit gate** in `_on_lines()` ensures the continuous stream of `weld_lines_2d` (fired at camera frame rate by `manual_line_node`) generates at most 2 depth-projection calls per second, preventing a downstream message storm.
 
 **Step 2 — Camera Intrinsics Parsing:**  
 From `CameraInfo.K` (the 3×3 intrinsic matrix):
@@ -482,7 +489,7 @@ Y = (v − cy) × Z / fy              # Camera-frame Y
 This produces a 3D point in the camera's optical frame.
 
 **Step 4 — TF2 Coordinate Transform:**  
-Each 3D point is transformed from the camera optical frame to `base_link` (the robot's base coordinate frame) using `tf2_geometry_msgs.do_transform_point()`. This makes the coordinates usable for robot motion planning.
+Each 3D point is transformed from the camera optical frame to `base_link` using `tf2_geometry_msgs.do_transform_point()`. A `DELETEALL` marker is published before each new marker set to prevent stale RViz accumulation.
 
 **Step 5 — Statistical Outlier Filtering:**  
 Points that deviate more than `outlier_std_threshold` (default: 2σ) standard deviations from the centroid distance are discarded. This removes depth sensor noise (common with time-of-flight cameras like Kinect).
@@ -494,13 +501,13 @@ A line is accepted only if:
 
 ### Topic Interface
 
-| Direction | Topic | Type |
-|-----------|-------|------|
-| Subscribed | `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` |
-| Subscribed | `/vision/captured_image_depth` | `sensor_msgs/Image` |
-| Subscribed | `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` |
-| Published | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` |
-| Published | `/depth_matcher/markers` | `visualization_msgs/MarkerArray` |
+| Direction | Topic | Type | QoS |
+|-----------|-------|------|-----|
+| Subscribed | `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` | VOLATILE |
+| Subscribed | `/vision/captured_image_depth` | `sensor_msgs/Image` | **TRANSIENT_LOCAL** |
+| Subscribed | `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | **TRANSIENT_LOCAL** |
+| Published | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` | VOLATILE |
+| Published | `/depth_matcher/markers` | `visualization_msgs/MarkerArray` | default |
 
 ### Parameters
 
@@ -513,7 +520,8 @@ A line is accepted only if:
 | `outlier_std_threshold` | `2.0` | σ-multiplier for outlier rejection |
 | `min_valid_points` | `10` | Minimum points per accepted line |
 | `min_depth_quality` | `0.6` | Minimum ratio of valid-depth pixels |
-| `sync_time_tolerance` | `0.5` s | Synchronizer time tolerance |
+| `depth_topic` | `/kinect2/sd/image_depth_rect` | Override depth source |
+| `camera_info_topic` | `/kinect2/sd/camera_info` | Override info source |
 
 ---
 
@@ -524,12 +532,12 @@ A line is accepted only if:
 
 ### Purpose
 
-Converts the raw 3D point cloud of the weld seam into a smooth, kinematically feasible **welding trajectory** (`nav_msgs/Path`) with full 6-DOF pose at each waypoint.
+Converts the raw 3D point cloud of the weld seam into a smooth, kinematically feasible **welding trajectory** (`nav_msgs/Path`) with full 6-DOF pose at each waypoint, then publishes it to `path_holder` which acts as the sole authoritative latch for downstream consumers.
 
 ### Algorithm
 
 **Step 1 — PCA Point Ordering:**  
-The incoming 3D points may be unordered or noisy. PCA is used again on the 3D point cloud to find the principal axis of the weld seam, then points are sorted along that axis.
+The incoming 3D points may be unordered or noisy. PCA is used on the 3D point cloud to find the principal axis of the weld seam, then points are sorted along that axis.
 
 **Step 2 — Duplicate Removal:**  
 Points within 0.1 mm of each other are deduplicated to prevent spline fitting failures.
@@ -539,25 +547,24 @@ Points within 0.1 mm of each other are deduplicated to prevent spline fitting fa
 
 > *"To mitigate sensor noise and ensure kinematic smoothness, raw 3D points are fitted with a cubic B-spline. The curve is then re-parameterized by arc length to generate equidistant waypoints, critical for maintaining constant heat input during welding."*
 
-**Step 4 — Arc-Length Resampling:**  
-The spline is evaluated at 10× the number of original points to create a fine-grained curve. Arc length is computed numerically. Waypoints are then re-sampled at **fixed Euclidean distance intervals** (default: 5 mm) to ensure constant tool velocity during execution.
+**Step 4 — Arc-Length Resampling with Waypoint Cap:**  
+The spline is evaluated at 10× the number of original points. Arc length is computed numerically. Waypoints are re-sampled at **fixed Euclidean distance intervals** (default: 5 mm). If the resulting count exceeds `max_waypoints` (default: 80), the path is **dynamically downsampled** to avoid OMPL planning failures from extreme path complexity.
 
 **Step 5 — Orientation Generation:**  
-Each waypoint receives a 6-DOF orientation derived from the curve tangent vector:
-```
-tangent   → X-axis (direction of travel)
-Y-axis    = cross(world_down, tangent)
-Z-axis    = cross(tangent, Y-axis)
-```
-A configurable **pitch angle** (default: 45°) is applied around the Y-axis to simulate a realistic welding torch approach angle. The rotation matrix is converted to a quaternion.
+Every waypoint is assigned a **fixed downward-facing quaternion** `(x=0.7071068, z=−0.7071068)`, which corresponds to the end-effector pointing straight down (−Z in `base_link`). This was confirmed by forward kinematics at the home position and is the correct orientation for welding on horizontal surfaces. The `approach_angle_deg` parameter is declared but does not alter this fixed quaternion in the current implementation.
+
+**Rate Limiting:**  
+A 0.5 s gate in `callback()` prevents the continuous stream of `weld_lines_3d` (fired at camera rate when the manual GUI is active) from flooding `path_holder` and `moveit_controller`.
 
 ### Topic Interface
 
-| Direction | Topic | Type |
-|-----------|-------|------|
-| Subscribed | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` |
-| Published | `/vision/welding_path` | `nav_msgs/Path` |
-| Published | `/path_generator/markers` | `visualization_msgs/MarkerArray` |
+| Direction | Topic | Type | QoS |
+|-----------|-------|------|-----|
+| Subscribed | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` | VOLATILE |
+| Published | `/vision/welding_path/generated` | `nav_msgs/Path` | **TRANSIENT_LOCAL** |
+| Published | `/path_generator/markers` | `visualization_msgs/MarkerArray` | default |
+
+> **Note:** `path_generator` no longer publishes directly to `/vision/welding_path`. It publishes to `/vision/welding_path/generated` and `path_holder` is the sole publisher of `/vision/welding_path`.
 
 ### Service
 
@@ -572,38 +579,64 @@ A configurable **pitch angle** (default: 45°) is applied around the Y-axis to s
 | `spline_degree` | `3` | B-spline degree (cubic) |
 | `spline_smoothing` | `0.005` | Smoothing factor `s` |
 | `waypoint_spacing` | `0.005` m | Distance between consecutive waypoints |
-| `approach_angle_deg` | `45.0` | Torch pitch angle |
-| `auto_generate` | `True` | Auto-publish on receiving 3D lines |
+| `max_waypoints` | `80` | Hard cap; oversized paths are downsampled |
+| `approach_angle_deg` | `45.0` | Declared parameter (orientation currently fixed) |
 | `min_points_for_path` | `5` | Minimum points required for spline |
 
 ---
 
-## 10. Stage 7: Motion Execution — `moveit_controller`
+## 10. Stage 7: Path Holding — `path_holder` and `inject_path_node`
+
+**Files:** `parol6_vision/path_holder.py`, `parol6_vision/inject_path_node.py`  
+**Node names:** `path_holder`, `inject_path_node`
+
+### Purpose
+
+`path_holder` is the **sole authoritative publisher** of `/vision/welding_path`. It acts as a multiplexer between two staging topics, re-latches the active path with `TRANSIENT_LOCAL` durability, and exposes a service so the GUI can force-republish the cached path to any late-joining `moveit_controller`.
+
+`inject_path_node` allows the GUI to bypass the camera pipeline by publishing a path directly to `/vision/welding_path/injected` (TRANSIENT_LOCAL), which `path_holder` then re-latches.
+
+### Topic Interface
+
+| Direction | Topic | Type | QoS |
+|-----------|-------|------|-----|
+| Subscribed | `/vision/welding_path/generated` | `nav_msgs/Path` | TRANSIENT_LOCAL |
+| Subscribed | `/vision/welding_path/injected` | `nav_msgs/Path` | TRANSIENT_LOCAL |
+| Published | `/vision/welding_path` | `nav_msgs/Path` | **TRANSIENT_LOCAL** |
+
+### Services
+
+| Service | Type | Description |
+|---------|------|-------------|
+| `/path_holder/set_source` | `std_srvs/Trigger` | Force-republish the currently cached path |
+| `/path_holder/get_status` | `std_srvs/Trigger` | Query current source and path availability |
+
+---
+
+## 11. Stage 8: Motion Execution — `moveit_controller`
 
 **File:** `parol6_vision/moveit_controller.py`  
 **Node name:** `moveit_controller`
 
 ### Purpose
 
-Executes the generated `nav_msgs/Path` welding trajectory using **MoveIt2**. Implements a robust 3-tier fallback strategy to handle the inherent brittleness of Cartesian path planning in constrained robotic environments.
+Executes the generated `nav_msgs/Path` welding trajectory using **MoveIt2**. Implements a robust 3-tier fallback strategy to handle the inherent brittleness of Cartesian path planning in constrained robotic environments. Subscribes to `/vision/welding_path` with `TRANSIENT_LOCAL` QoS to receive the latched path from `path_holder` even when starting after the path was published.
 
 ### Execution Sequence
 
-The controller runs three sequential phases:
+All three phases are **planned first, then executed back-to-back** to eliminate gaps between approach and weld motion:
 
 ```
-Phase A — Pre-Weld Approach
-  Move to a point 5 cm above the weld start
-  (Joint-space planning → guaranteed success)
-       ↓
-Phase B — Welding Motion
-  Cartesian path planning along the seam
-  Constant velocity execution
-  Multi-tier fallback if planning fails
-       ↓
-Phase C — Post-Weld Retract
-  Move safely away from the workpiece
+[Plan 1/3] Home trajectory       (joint-space, plan only)
+[Plan 2/3] Approach trajectory   (pose goal, 15 cm above weld start, plan only)
+[Plan 3/3] Cartesian weld traj   (Cartesian, with 3-tier fallback, plan only)
+                 ↓ all plans ready
+[Exec 1/3] Move to Home
+[Exec 2/3] Move to Approach Point
+[Exec 3/3] Execute Weld
 ```
+
+Path offset parameters (`path_offset_x/y/z`) are applied in `path_callback` to every incoming waypoint, allowing ±50 mm weld position correction without re-scanning.
 
 ### Cartesian Planning Fallback Strategy
 
@@ -615,19 +648,22 @@ Cartesian path planning can fail due to kinematic singularities, joint limits, o
 | 2 | 5 mm | 95% | Relaxed step to skip micro-singularities |
 | 3 | 10 mm | 90% | Coarse "get the job done" mode |
 
+If all Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, the node falls back to **joint-space moves to a coarse subset of waypoints** (`joint_waypoint_fallback_count`, default 8).
+
 > *"To overcome the inherent brittleness of Cartesian trajectory generation in constrained environments, a hierarchical fallback strategy was implemented. This dynamically adjusts the discretization resolution (2mm to 10mm), prioritizing geometric fidelity while ensuring system reliability."*
 
 ### Topic Interface
 
-| Direction | Topic | Type |
-|-----------|-------|------|
-| Subscribed | `/vision/welding_path` | `nav_msgs/Path` |
+| Direction | Topic | Type | QoS |
+|-----------|-------|------|-----|
+| Subscribed | `/vision/welding_path` | `nav_msgs/Path` | **TRANSIENT_LOCAL** |
 
-### Service
+### Services
 
 | Service | Description |
 |---------|-------------|
 | `~/execute_welding_path` | Manually trigger path execution |
+| `~/is_execution_idle` | Query execution state (idle + path available?) |
 
 ### MoveIt2 Interfaces
 
@@ -641,21 +677,24 @@ Cartesian path planning can fail due to kinematic singularities, joint limits, o
 |-----------|---------|-------------|
 | `planning_group` | `parol6_arm` | MoveIt planning group |
 | `base_frame` | `base_link` | Robot base frame |
-| `end_effector_link` | `link_6` | End-effector link name |
+| `end_effector_link` | `tcp_link` | End-effector link name |
 | `cartesian_step_sizes` | `[0.002, 0.005, 0.010]` | Fallback step sizes |
 | `min_success_rates` | `[0.95, 0.95, 0.90]` | Fallback success thresholds |
-| `approach_distance` | `0.05` m | Pre-weld approach offset |
+| `approach_distance` | `0.15` m | Pre-weld approach offset (15 cm keeps approach above z=0.10 m workspace floor) |
 | `weld_velocity` | `0.01` m/s | Target welding speed |
+| `path_offset_x/y/z` | `0.0` m | Live path offset correction (±50 mm range) |
+| `enable_joint_waypoint_fallback` | `True` | Enable coarse joint-space fallback |
+| `auto_execute` | `False` | Auto-execute on path receipt |
 
 ---
 
-## 11. Complete Topic & Message Flow Diagram
+## 12. Complete Topic & Message Flow Diagram
 
 ```
    /kinect2/sd/image_color_rect ──┐
-   /kinect2/sd/image_depth_rect ──┤──► capture_images_node ──► /vision/captured_image_raw
-   /kinect2/sd/camera_info      ──┘                       ├──► /vision/captured_image_depth
-                                                           └──► /vision/captured_camera_info
+   /kinect2/sd/image_depth_rect ──┤──► capture_images_node ──► /vision/captured_image_raw      [VOLATILE]
+   /kinect2/sd/camera_info      ──┘                       ├──► /vision/captured_image_depth     [TRANSIENT_LOCAL]
+                                                           └──► /vision/captured_camera_info     [TRANSIENT_LOCAL]
 
    /vision/captured_image_raw ──► crop_image_node ──► /vision/captured_image_color
 
@@ -665,19 +704,24 @@ Cartesian path planning can fail due to kinematic singularities, joint limits, o
 
    /vision/processing_mode/annotated_image ──► [red_line_detector OR path_optimizer] ──► /vision/weld_lines_2d
 
-   /vision/weld_lines_2d        ──┐
-   /vision/captured_image_depth ──┤──► depth_matcher ──► /vision/weld_lines_3d
-   /vision/captured_camera_info ──┘                  └──► /depth_matcher/markers
+   /vision/weld_lines_2d        ──► depth_matcher [0.5s gate] ──► /vision/weld_lines_3d
+   /vision/captured_image_depth ──► (cached → TRANSIENT_LOCAL)  └──► /depth_matcher/markers
+   /vision/captured_camera_info ──► (cached → TRANSIENT_LOCAL)
 
-   /vision/weld_lines_3d ──► path_generator ──► /vision/welding_path
-                                            └──► /path_generator/markers
+   /vision/weld_lines_3d ──► path_generator [0.5s gate] ──► /vision/welding_path/generated  [TRANSIENT_LOCAL]
+                                                          └──► /path_generator/markers
+
+   /vision/welding_path/generated ──┐
+   /vision/welding_path/injected  ──┤──► path_holder ──► /vision/welding_path  [TRANSIENT_LOCAL]
+   (from inject_path_node)        ──┘
 
    /vision/welding_path ──► moveit_controller ──► [Robot Execution via MoveIt2]
+                           [TRANSIENT_LOCAL sub]
 ```
 
 ---
 
-## 12. Key Custom Messages (`parol6_msgs`)
+## 13. Key Custom Messages (`parol6_msgs`)
 
 The pipeline uses two custom message types defined in the `parol6_msgs` package:
 
@@ -711,7 +755,7 @@ Array wrapper for multiple 3D weld lines, with a `std_msgs/Header`.
 
 ---
 
-## 13. Launch Files Summary
+## 14. Launch Files Summary
 
 | File | Description |
 |------|-------------|
@@ -727,17 +771,18 @@ Array wrapper for multiple 3D weld lines, with a `std_msgs/Header`.
 
 ---
 
-## 14. Conclusion
+## 15. Conclusion
 
 The PAROL6 vision pipeline achieves a fully automated, end-to-end solution for vision-guided welding:
 
-1. **Synchronized acquisition** ensures depth and color data are temporally aligned.
+1. **Synchronized acquisition** captures a temporally aligned RGB+Depth pair on demand; depth and camera info are latched with `TRANSIENT_LOCAL` QoS so late-starting nodes receive the last captured frame immediately.
 2. **ROI masking** focuses processing on the relevant workspace region.
 3. **Dual-mode seam detection** (HSV color or YOLO) provides flexibility for different workpiece types and lighting conditions.
 4. **Red line detection** extracts the operator-defined weld path using HSV segmentation, skeletonization, PCA ordering, and Douglas-Peucker simplification.
-5. **3D back-projection** with outlier filtering reconstructs the weld path in robot space.
-6. **B-spline smoothing** eliminates sensor noise and generates kinematically smooth trajectories with constant waypoint spacing.
-7. **Hierarchical Cartesian planning** ensures reliable execution even in constrained workspaces.
+5. **Cache-based 3D back-projection** with outlier filtering reconstructs the weld path in robot space without requiring timestamp-synchronization between capture and annotation events.
+6. **B-spline smoothing** with a dynamic waypoint cap eliminates sensor noise and generates kinematically smooth, OMPL-compatible trajectories with constant waypoint spacing.
+7. **Path holding** decouples generation from execution: `path_holder` re-latches the path so `moveit_controller` always receives a valid path regardless of startup order.
+8. **Hierarchical Cartesian planning** with a joint-space fallback ensures reliable execution even in constrained workspaces.
 
 The modular ROS 2 architecture allows any stage to be independently tested, replaced, or extended without disrupting the rest of the pipeline. Topic-based communication and standardized message types ensure loose coupling between nodes.
 

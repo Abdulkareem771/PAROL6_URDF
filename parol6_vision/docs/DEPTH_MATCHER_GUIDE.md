@@ -18,22 +18,28 @@ The `depth_matcher` node is the **3D reconstruction component** of the PAROL6 vi
 
 ## 2. Architecture & Data Flow
 
-### Input Sources (Synchronized)
-The node uses `message_filters.ApproximateTimeSynchronizer` to align three streams:
+### Input Sources (Cache-Based — No Timestamp Sync)
 
-1. **2D Detections** (`/vision/weld_lines_2d`) - From `path_optimizer` or `red_line_detector`
-2. **Depth Image** (`/vision/captured_image_depth`) - Captured aligned depth map (mm)
-3. **Camera Info** (`/vision/captured_camera_info`) - Intrinsic parameters
+Depth image and camera info are cached on arrival and used when a `weld_lines_2d` message triggers processing:
+
+1. **2D Detections** (`/vision/weld_lines_2d`) — From `path_optimizer` or `red_line_detector` — triggers processing
+2. **Depth Image** (`/vision/captured_image_depth`) — TRANSIENT_LOCAL subscriber; cached into `_cached_depth`
+3. **Camera Info** (`/vision/captured_camera_info`) — TRANSIENT_LOCAL subscriber; cached into `_cached_info`
+
+> **Why cache-based?** The user draws weld lines *minutes after* capturing the depth frame. `ApproximateTimeSynchronizer` failed because the timestamps never matched. The cache-based approach decouples timing: depth is stored once at capture, and used whenever a line arrives.
+
+A **0.5 s rate-limit gate** in `_on_lines()` prevents the continuous stream of `weld_lines_2d` (fired at camera rate) from flooding the pipeline with duplicate 3D projections.
 
 ### Processing Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                  Message Synchronization                │
+│            Cache-Based Acquisition (no sync)            │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐     │
 │  │ 2D Lines │  │  Depth   │  │  Camera Info     │     │
+│  │(trigger) │  │(cached)  │  │  (cached)        │     │
 │  └────┬─────┘  └────┬─────┘  └────┬─────────────┘     │
-│       └─────────────┼─────────────┘                     │
+│       └─────────────┼─────────────┘ (used from cache)  │
 └─────────────────────┼───────────────────────────────────┘
                       ▼
          ┌────────────────────────┐
@@ -136,18 +142,18 @@ Each 3D line includes quality indicators:
 
 ### Subscribed Topics
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` | 2D detections from `path_optimizer` or `red_line_detector` |
-| `/vision/captured_image_depth` | `sensor_msgs/Image` | Captured aligned depth image (16UC1, mm) |
-| `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | Camera intrinsic parameters |
+| Topic | Type | QoS | Description |
+|-------|------|-----|-------------|
+| `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` | VOLATILE | 2D detections from `path_optimizer` or `red_line_detector` — triggers processing |
+| `/vision/captured_image_depth` | `sensor_msgs/Image` | **TRANSIENT_LOCAL** | Captured aligned depth image (16UC1, mm); cached into `_cached_depth` |
+| `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | **TRANSIENT_LOCAL** | Camera intrinsic parameters; cached into `_cached_info` |
 
 ### Published Topics
 
 | Topic | Type | Description |
 |-------|------|-------------|
 | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` | 3D weld lines in base frame |
-| `/depth_matcher/markers` | `visualization_msgs/MarkerArray` | RViz visualization (3D points) |
+| `/depth_matcher/markers` | `visualization_msgs/MarkerArray` | RViz visualization (3D points; DELETEALL sent first to prevent accumulation) |
 
 ### Parameters
 
@@ -160,8 +166,8 @@ Each 3D line includes quality indicators:
 | `max_depth` | float | `2000.0` | Maximum valid depth (mm) |
 | `min_depth` | float | `300.0` | Minimum valid depth (mm) |
 | `min_depth_quality` | float | `0.6` | Minimum ratio of valid depth readings |
-| `sync_time_tolerance` | float | `0.5` | Time sync tolerance (seconds) |
-| `sync_queue_size` | int | `10` | Message synchronizer queue size |
+| `depth_topic` | string | `/kinect2/sd/image_depth_rect` | Override depth source topic |
+| `camera_info_topic` | string | `/kinect2/sd/camera_info` | Override camera info source topic |
 
 ---
 
@@ -366,24 +372,9 @@ min_depth_quality: 0.6    # Minimum % of valid depth readings
 - Challenging lighting conditions
 - Material with poor depth reflectivity (shiny/dark surfaces)
 
-### 7.4 Synchronization Tolerance
+### 7.4 Rate Limiting
 
-**Scenario:** "Could not synchronize messages" warnings
-
-**Parameter to adjust:**
-```yaml
-sync_time_tolerance: 0.5  # Seconds (default)
-```
-
-**Increase if:**
-- Using slower camera frame rates
-- Running on resource-constrained hardware
-- Network delays between nodes
-
-**Recommended values:**
-- **Fast systems (30 Hz camera):** `0.1` seconds
-- **Standard systems (15-30 Hz):** `0.5` seconds
-- **Slow systems (< 15 Hz):** `1.0` seconds
+The node has a built-in **0.5 s rate-limit gate** (`_min_process_interval`). If `weld_lines_2d` arrives faster than 2 Hz (e.g., `manual_line_node` fires at camera rate), the gate drops the excess calls. This is correct behaviour — the weld line has not changed, so no new 3D projection is needed.
 
 ---
 
@@ -409,13 +400,14 @@ ros2 topic hz /vision/captured_camera_info
 # Should show a non-zero rate
 ```
 
-**Check 4: Check synchronization**
+**Check 4: Check if depth was captured first**
 ```bash
-# Look for warnings in depth_matcher logs
-# "Could not synchronize..." means timing mismatch
+# Verify depth topic has TRANSIENT_LOCAL QoS (should show 1 publisher)
+ros2 topic info /vision/captured_image_depth --verbose
+# Look for: Durability: TRANSIENT_LOCAL
 ```
 
-**Solution:** Increase `sync_time_tolerance` parameter
+**Solution:** Capture an image first (`Press 's'` or use the GUI Capture button) before drawing weld lines. If `depth_matcher` starts after capture and topics have matching `TRANSIENT_LOCAL` QoS, it will receive the cached depth immediately.
 
 ### Issue 2: "TF Lookup Failed"
 
