@@ -92,14 +92,12 @@ class PathGenerator(Node):
         self.declare_parameter('spline_smoothing', 0.005) # 5mm variance allowed
         self.declare_parameter('waypoint_spacing', 0.005) # 5mm spacing
         self.declare_parameter('approach_angle_deg', 45.0)
-        self.declare_parameter('auto_generate', True)
         self.declare_parameter('min_points_for_path', 5)
         
         self.k = self.get_parameter('spline_degree').value
         self.s = self.get_parameter('spline_smoothing').value
         self.spacing = self.get_parameter('waypoint_spacing').value
         self.pitch_deg = self.get_parameter('approach_angle_deg').value
-        self.auto_gen = self.get_parameter('auto_generate').value
         self.min_pts = self.get_parameter('min_points_for_path').value
         
         # ============================================================
@@ -120,7 +118,7 @@ class PathGenerator(Node):
         )
         self.path_pub = self.create_publisher(
             Path,
-            '/vision/welding_path',
+            '/vision/welding_path/generated',  # path_holder is the sole publisher of /vision/welding_path
             path_qos
         )
         
@@ -141,10 +139,9 @@ class PathGenerator(Node):
         self.get_logger().info('Path Generator initialized')
         
     def callback(self, msg):
-        """Buffer latest message and auto-generate if enabled"""
+        """Buffer latest message and generate path immediately (reactive, like path_optimizer)."""
         self.latest_msg = msg
-        if self.auto_gen:
-            self.generate_path(msg)
+        self.generate_path(msg)
             
     def trigger_callback(self, request, response):
         """Service callback for manual triggering"""
@@ -372,7 +369,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

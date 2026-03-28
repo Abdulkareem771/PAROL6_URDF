@@ -90,8 +90,8 @@ def generate_launch_description():
         executable='static_transform_publisher',
         name='static_tf_camera',
         arguments=[
-            '--x', '1.2', '--y', '0.0', '--z', '0.65',
-            '--yaw', '1.5708', '--pitch', '0.0', '--roll', '-1.5708',
+            '--x', '0.646', '--y', '0.1225', '--z', '1.015',
+            '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
             '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link',
         ],
         output='log',
@@ -167,6 +167,25 @@ def generate_launch_description():
         output='screen',
     )
 
+    # ── Stage 4b: Inject Path Node ────────────────────────────────────
+    # Receives test paths from GUI and publishes to staging topic.
+    inject_path_node = Node(
+        package='parol6_vision',
+        executable='inject_path',
+        name='inject_path_node',
+        output='screen',
+    )
+
+    # ── Stage 4c: Path Holder (Authoritative Publisher) ───────────────
+    # Single authoritative TRANSIENT_LOCAL publisher on /vision/welding_path.
+    path_holder_node = Node(
+        package='parol6_vision',
+        executable='path_holder',
+        name='path_holder',
+        parameters=[{'active_source': 'generated'}],
+        output='screen',
+    )
+
     # ── Point Cloud (for RViz depth viz) ─────────────────────────────
     point_cloud_node = Node(
         package='depth_image_proc',
@@ -205,6 +224,8 @@ def generate_launch_description():
         path_optimizer_node,
         depth_matcher_node,
         path_generator_node,
+        inject_path_node,
+        path_holder_node,
         point_cloud_node,
         rviz_node,
     ])

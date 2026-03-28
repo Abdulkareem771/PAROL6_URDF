@@ -95,14 +95,25 @@ class CaptureImagesNode(Node):
         self._latest_depth: Image | None = None
 
         # ── Publishers ───────────────────────────────────────────────
+        # Colour: VOLATILE — new capture always replaces prior
         self._pub_color = self.create_publisher(
             Image, self._output_topic, 10
         )
+        # Depth + CameraInfo: TRANSIENT_LOCAL (latched) so consumers that start
+        # *after* capture (e.g. depth_matcher restarted from the GUI) still
+        # receive the most-recently captured frame without the user having to
+        # press Capture again.
+        from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
+        _latch_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self._pub_depth = self.create_publisher(
-            Image, '/vision/captured_image_depth', 10
+            Image, '/vision/captured_image_depth', _latch_qos
         )
         self._pub_camera_info = self.create_publisher(
-            CameraInfo, '/vision/captured_camera_info', 10
+            CameraInfo, '/vision/captured_camera_info', _latch_qos
         )
 
         # ── Synchronized subscribers (colour + depth) ─────────────────

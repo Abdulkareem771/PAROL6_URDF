@@ -83,10 +83,18 @@ class ManualLineAlignerNode(Node):
         self.get_logger().info('manual_line_aligner initialized.')
 
     def _load_config(self):
-        if not os.path.isfile(self._config_path):
+        # Primary: aligner's own config
+        cfg_path = self._config_path
+        # Fallback: load legacy fixed-mode strokes if aligner config is absent
+        _legacy_path = os.path.expanduser('~/.parol6/manual_line_config.json')
+        if not os.path.isfile(cfg_path) and os.path.isfile(_legacy_path):
+            cfg_path = _legacy_path
+            self.get_logger().warn(f'[Aligner] No aligner config found — falling back to legacy manual_line config.')
+
+        if not os.path.isfile(cfg_path):
             return
         try:
-            with open(self._config_path, 'r') as f:
+            with open(cfg_path, 'r') as f:
                 cfg = json.load(f)
             self._stroke_color = cfg.get('color', self._stroke_color)
             self._stroke_width = int(cfg.get('width', self._stroke_width))

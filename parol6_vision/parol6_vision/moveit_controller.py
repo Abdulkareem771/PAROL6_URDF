@@ -163,12 +163,13 @@ class MoveItController(Node):
             'move_action'
         )
         
-        # Input Path — request VOLATILE durability so we can receive from both
-        # normal publishers and transient-local test/injection publishers.
+        # Input Path — TRANSIENT_LOCAL so we receive the held path from path_holder
+        # even when joining after it was published. path_holder is the sole
+        # TRANSIENT_LOCAL publisher on /vision/welding_path, so no ambiguity.
         path_qos = QoSProfile(
-            depth=10,
+            depth=1,
             reliability=QoSReliabilityPolicy.RELIABLE,
-            durability=QoSDurabilityPolicy.VOLATILE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.sub = self.create_subscription(
             Path,
@@ -938,7 +939,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

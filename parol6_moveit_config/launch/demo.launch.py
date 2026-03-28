@@ -130,10 +130,8 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Position: x=1.2m, y=0.0, z=0.65m
-        # Orientation: roll=-π/2, pitch=0, yaw=+π/2 (approx -1.5708, 0.0, 1.5708)
-        arguments=['--x', '1.2', '--y', '0.0', '--z', '0.65',
-                   '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '1.5708',
+        arguments=['--x', '0.646', '--y', '0.1225', '--z', '1.015',
+                   '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen',
         condition=IfCondition(publish_camera_tf),

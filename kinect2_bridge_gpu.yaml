@@ -1,42 +1,29 @@
 launch:
+  - arg:
+      name: "base_name"
+      default: "kinect2"
 
-# ── Kinect bridge identity ────────────────────────────────────────────────────
-- arg:
-    name: "base_name"
-    default: "kinect2"
+  - arg:
+      name: "hole_fill_radius"
+      default: "0"
 
-- arg:
-    name: "hole_fill_radius"
-    default: "0"
+  - arg:
+      name: "ir_auto_exposure"
+      default: "false"
 
-- arg:
-    name: "ir_auto_exposure"
-    default: "false"
+  - arg:
+      name: "depth_method"
+      default: "cpu"
 
-# GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
-# such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
-# to "cpu".
-- arg:
-    name: "depth_method"
-    default: "cuda"
+  - arg:
+      name: "reg_method"
+      default: "opencl"
 
-- arg:
-    name: "reg_method"
-    default: "cuda"   # colour-depth registration
-
-- arg:
-    name: "bilateral_filter"
-    default: "true"
-
-- arg:
-    name: "edge_aware_filter"
-    default: "true"
-
-- node:
-    pkg: "kinect2_bridge"
-    exec: "kinect2_bridge_node"
-    name: "kinect2_bridge_node"
-    param:
+  - node:
+      pkg: "kinect2_bridge"
+      exec: "kinect2_bridge_node"
+      name: "kinect2_bridge_node"
+      param:
         - name: "base_name"
           value: "$(var base_name)"
 
@@ -49,17 +36,11 @@ launch:
         - name: "base_name_tf"
           value: "$(var base_name)"
 
-        # ── Frame rate ───────────────────────────────────────────────────────
-        # 15.0 matches the Kinect v2 hardware maximum for QHD.
-        # NOTE: With GPU processing enabled (opencl) this is achievable.
-        #       With cpu+bilateral+edge_aware the node degrades to ~0.3 Hz —
-        #       that was the regression.  Disable those filters if you must use
-        #       cpu mode.
         - name: "fps_limit"
-          value: 15.0
+          value: 1.0
 
         - name: "use_png"
-          value: false
+          value: true
 
         - name: "depth_method"
           value: "$(var depth_method)"
@@ -76,13 +57,11 @@ launch:
         - name: "queue_size"
           value: 5
 
-        # Bilateral + edge-aware filters add significant CPU cost.
-        # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
-          value: "$(var bilateral_filter)"
+          value: true
 
         - name: "edge_aware_filter"
-          value: "$(var edge_aware_filter)"
+          value: true
 
         - name: "hole_fill_radius"
           value: "$(var hole_fill_radius)"
@@ -93,20 +72,16 @@ launch:
         - name: "worker_threads"
           value: 4
 
-- node:
-    pkg: "depth_image_proc"
-    exec: "point_cloud_xyzrgb_node"
-    name: "$(var base_name)_points_xyzrgb_qhd"
-    remap:
-    -
-      from: "rgb/camera_info"
-      to: "/$(var base_name)/sd/camera_info"
-    -
-      from: "rgb/image_rect_color"
-      to: "/$(var base_name)/sd/image_color_rect"
-    -
-      from: "depth_registered/image_rect"
-      to: "/$(var base_name)/sd/image_depth_rect"
-    -
-      from: "points"
-      to: "/$(var base_name)/sd/points"
+  - node:
+      pkg: "depth_image_proc"
+      exec: "point_cloud_xyzrgb_node"
+      name: "$(var base_name)_points_xyzrgb_sd"
+      remap:
+        - from: "rgb/camera_info"
+          to: "/$(var base_name)/sd/camera_info"
+        - from: "rgb/image_rect_color"
+          to: "/$(var base_name)/sd/image_color_rect"
+        - from: "depth_registered/image_rect"
+          to: "/$(var base_name)/sd/image_depth_rect"
+        - from: "points"
+          to: "/$(var base_name)/sd/points"
