@@ -17,6 +17,7 @@
 6. [Stage 3: Seam Intersection Detection — Processing Mode Nodes](#6-stage-3-seam-intersection-detection--processing-mode-nodes)
    - 6.1 [Color Mode: HSV-Based Detection — `color_mode`](#61-color-mode-hsv-based-detection--color_mode)
    - 6.2 [YOLO Segmentation Mode — `yolo_segment`](#62-yolo-segmentation-mode--yolo_segment)
+   - 6.3 [Manual Line Mode — `manual_line`](#63-manual-line-mode--manual_line)
 7. [Stage 4: Red Weld Line Detection — `red_line_detector` and `path_optimizer`](#7-stage-4-red-weld-line-detection--red_line_detector-and-path_optimizer)
    - 7.1 [Red Line Detector](#71-red-line-detector)
    - 7.2 [Path Optimizer](#72-path-optimizer)
@@ -39,7 +40,8 @@ The PAROL6 vision pipeline is a fully automated, vision-guided welding path dete
 
 | Goal | Approach |
 |------|----------|
-| Detect weld seam location without physical markers | Two-color HSV or YOLO instance segmentation |
+| Detect weld seam location without physical markers | HSV color thresholding, YOLO segmentation, or manual stroke overlay |
+| Support fixed-fixture repeat jobs without re-detection | Manual line node with saved stroke persistence |
 | Achieve sub-pixel precision in 2D line detection | Skeletonization + PCA ordering |
 | Reconstruct 3D welding path from depth data | Pinhole back-projection + TF2 transform |
 | Generate smooth, kinematically feasible trajectories | Cubic B-spline fitting + arc-length resampling |
@@ -73,12 +75,12 @@ The complete pipeline flows through **8 stages**. Each stage is an independent R
  └────────┬────────┘
           │  /vision/captured_image_color
           ▼
- ┌────────────────────────────────────────┐
- │   Processing Mode (choose ONE mode)    │  Stage 3
- │  ┌──────────────┐  ┌────────────────┐  │
- │  │  color_mode  │  │ yolo_segment   │  │
- │  └──────────────┘  └────────────────┘  │
- └──────────────────┬─────────────────────┘
+ ┌────────────────────────────────────────────────────────────┐
+ │         Processing Mode (choose ONE mode)                  │  Stage 3
+ │  ┌──────────────┐  ┌────────────────┐  ┌───────────────┐  │
+ │  │  color_mode  │  │ yolo_segment   │  │  manual_line  │  │
+ │  └──────────────┘  └────────────────┘  └───────────────┘  │
+ └────────────────────────────┬───────────────────────────────┘
                     │  /vision/processing_mode/annotated_image
                     ▼
  ┌───────────────────────────────────────────────┐
@@ -237,11 +239,17 @@ This node provides an **offline testing path** for the pipeline. Instead of requ
 
 ## 6. Stage 3: Seam Intersection Detection — Processing Mode Nodes
 
-The pipeline supports **two interchangeable processing modes**. Both produce the same output topics so that downstream nodes are agnostic to which mode is active:
+The pipeline supports **three interchangeable processing modes**. All three produce identical output topics so that downstream nodes are completely agnostic to which mode is running:
 
-- `/vision/processing_mode/annotated_image` — image showing only the intersection region (red)
-- `/vision/processing_mode/debug_image` — full debug overlay
+- `/vision/processing_mode/annotated_image` — image showing the detected/drawn seam region
+- `/vision/processing_mode/debug_image` — full debug overlay with extra annotations
 - `/vision/processing_mode/seam_centroid` — pixel-space centroid (`geometry_msgs/PointStamped`)
+
+| Mode | Detection Strategy | Best Used When |
+|------|--------------------|----------------|
+| `color_mode` | HSV color thresholding | Workpieces are distinctly green & blue |
+| `yolo_segment` | YOLO instance segmentation | Arbitrary workpiece shapes / colors |
+| `manual_line` | Operator-drawn stroke overlay | Fixed fixture, deterministic path required |
 
 ---
 
@@ -369,6 +377,127 @@ This path is configurable via the `model_path` ROS parameter.
 | Published | `/vision/processing_mode/annotated_image` | `sensor_msgs/Image` |
 | Published | `/vision/processing_mode/debug_image` | `sensor_msgs/Image` |
 | Published | `/vision/processing_mode/seam_centroid` | `geometry_msgs/PointStamped` |
+
+---
+
+### 6.3 Manual Line Mode — `manual_line`
+
+**File:** `parol6_vision/manual_line_node.py`  
+**Node name:** `manual_line`
+
+#### Purpose
+
+Provides a **stroke-replay** processing mode in which the operator manually draws one or more polyline paths on a GUI panel. Those strokes are then **painted onto every subsequent incoming camera frame** in red and published through the standard `processing_mode` topics — making this node a fully interchangeable replacement for `color_mode` or `yolo_segment`.
+
+The defining feature is **persistence**: all strokes are serialised to `~/.parol6/manual_line_config.json` on every update, so the exact same seam annotation is replayed **automatically on every subsequent restart** — no re-drawing required for repeat jobs at the same fixture position.
+
+#### Workflow
+
+```
+1. Operator draws lines in the GUI's Manual Red Line panel.
+2. GUI serialises stroke data as JSON and calls ~/set_strokes service.
+3. Node paints the strokes on every new frame; saves config to disk.
+4. On next startup the node auto-loads the saved config and starts
+   painting immediately — no action required from the operator.
+5. To start fresh: GUI calls ~/reset_strokes → saved config is cleared.
+```
+
+#### Algorithm
+
+The node is a pure **overlay renderer** — no image-analysis algorithm runs between input and output:
+
+```
+┌──────────────────────────────────────────────────┐
+│  1. Image Decode                                 │
+│     CvBridge → BGR NumPy array                   │
+├──────────────────────────────────────────────────┤
+│  2. Stroke Painting                               │
+│     cv2.polylines() per stroke (anti-aliased)     │
+│     Simultaneously build binary stroke_mask       │
+├──────────────────────────────────────────────────┤
+│  3. Centroid Computation                          │
+│     ys, xs = np.where(stroke_mask > 0)            │
+│     cx = xs.mean();  cy = ys.mean()               │
+├──────────────────────────────────────────────────┤
+│  4. Publish annotated_image, debug_image,         │
+│     seam_centroid                                 │
+└──────────────────────────────────────────────────┘
+```
+
+**Step 2 Detail:** Each stored stroke is an ordered list of `[x, y]` pixel coordinates (a polyline). `cv2.polylines()` renders the stroke with `cv2.LINE_AA` anti-aliasing. A parallel binary `stroke_mask` (same thickness) is rendered separately so the centroid calculation is unaffected by the colour overlay.
+
+**Step 3 Detail:** The geometric centre of mass of **all painted pixels combined** across all strokes. This provides a meaningful single centroid even when multiple disjoint strokes are present. When no strokes are loaded, the centroid topic is **not published** for that frame.
+
+**No-stroke pass-through:** When the stroke list is empty, the annotated image is a pass-through (unchanged input frame) and a status badge is displayed on the debug image: `Manual Line — no strokes saved`.
+
+#### Config Persistence
+
+The full stroke state is saved to `~/.parol6/manual_line_config.json`:
+
+```json
+{
+  "color":   [0, 0, 255],
+  "width":   5,
+  "strokes": [
+    [[x1, y1], [x2, y2], ...],
+    [[x1, y1], [x2, y2], ...]
+  ]
+}
+```
+
+On startup, `_load_config()` silently restores this state. If the file does not exist the node starts with an empty stroke list and logs: `No saved config found — starting fresh.`
+
+#### Topic Interface
+
+| Direction | Topic | Type | Description |
+|-----------|-------|------|-------------|
+| Subscribed | `/vision/captured_image_color` | `sensor_msgs/Image` | Raw color frame (configurable) |
+| Published | `/vision/processing_mode/annotated_image` | `sensor_msgs/Image` (bgr8) | Frame with strokes painted in red |
+| Published | `/vision/processing_mode/debug_image` | `sensor_msgs/Image` (bgr8) | Same + centroid crosshair & status badge |
+| Published | `/vision/processing_mode/seam_centroid` | `geometry_msgs/PointStamped` | Pixel-space centroid of all strokes |
+
+#### Services
+
+| Service | Type | Description |
+|---------|------|-------------|
+| `~/set_strokes` | `std_srvs/Trigger` | Reload strokes from `strokes_json` parameter and save to disk |
+| `~/reset_strokes` | `std_srvs/Trigger` | Clear all strokes from memory and delete saved config |
+
+**Setting strokes from the command line:**
+```bash
+# 1. Write the JSON payload into the ROS parameter
+ros2 param set /manual_line strokes_json '[[[10,50],[200,50]],[[30,100],[180,100]]]'
+# 2. Trigger the service to load it
+ros2 service call /manual_line/set_strokes std_srvs/srv/Trigger {}
+```
+
+The `strokes_json` parameter accepts either a **plain JSON array** (list of polylines) or a **JSON object** with optional `color`, `width`, and `strokes` keys.
+
+#### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `image_topic` | string | `/vision/captured_image_color` | Input image topic |
+| `stroke_color` | int[] | `[0, 0, 255]` | BGR paint colour (default = red) |
+| `stroke_width` | int | `5` | Stroke thickness in pixels |
+| `strokes_json` | string | `""` | JSON-encoded stroke list; updated by `set_strokes` |
+| `publish_debug` | bool | `True` | Enable the debug overlay image |
+
+#### Comparison with Other Processing Modes
+
+| Feature | `manual_line` | `color_mode` | `yolo_segment` |
+|---------|---------------|-------------|----------------|
+| Detection strategy | Operator-drawn strokes | HSV thresholding | YOLO ML model |
+| Workpiece constraint | None | Must be green & blue | None (learned) |
+| Persistence across restarts | ✅ Saved to disk | ❌ | ❌ |
+| Path re-drawing needed | Only once per fixture | Every session | Every session |
+| Computation | Very lightweight | Lightweight | Heavy (GPU optional) |
+| Robustness to lighting changes | Fully immune | Sensitive | High |
+
+Use `manual_line` when:
+- The part is clamped in a **fixed fixture** and does not move between runs.
+- Automatic detection is unreliable due to lighting, reflections, or surface finish.
+- A **deterministic, reproducible** weld path defined by the operator is required.
 
 ---
 
@@ -698,9 +827,9 @@ If all Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, t
 
    /vision/captured_image_raw ──► crop_image_node ──► /vision/captured_image_color
 
-   /vision/captured_image_color ──► [color_mode OR yolo_segment] ──► /vision/processing_mode/annotated_image
-                                                                  ├──► /vision/processing_mode/debug_image
-                                                                  └──► /vision/processing_mode/seam_centroid
+   /vision/captured_image_color ──► [color_mode OR yolo_segment OR manual_line] ──► /vision/processing_mode/annotated_image
+                                                                                  ├──► /vision/processing_mode/debug_image
+                                                                                  └──► /vision/processing_mode/seam_centroid
 
    /vision/processing_mode/annotated_image ──► [red_line_detector OR path_optimizer] ──► /vision/weld_lines_2d
 
@@ -777,7 +906,7 @@ The PAROL6 vision pipeline achieves a fully automated, end-to-end solution for v
 
 1. **Synchronized acquisition** captures a temporally aligned RGB+Depth pair on demand; depth and camera info are latched with `TRANSIENT_LOCAL` QoS so late-starting nodes receive the last captured frame immediately.
 2. **ROI masking** focuses processing on the relevant workspace region.
-3. **Dual-mode seam detection** (HSV color or YOLO) provides flexibility for different workpiece types and lighting conditions.
+3. **Three-mode seam detection** (HSV color, YOLO segmentation, or manual stroke overlay) provides flexibility for different workpiece types, lighting conditions, and operational requirements. The manual mode additionally supports persistent stroke replay for fixed-fixture repeat jobs.
 4. **Red line detection** extracts the operator-defined weld path using HSV segmentation, skeletonization, PCA ordering, and Douglas-Peucker simplification.
 5. **Cache-based 3D back-projection** with outlier filtering reconstructs the weld path in robot space without requiring timestamp-synchronization between capture and annotation events.
 6. **B-spline smoothing** with a dynamic waypoint cap eliminates sensor noise and generates kinematically smooth, OMPL-compatible trajectories with constant waypoint spacing.
