@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Match the fake-hardware launcher: RViz must not inherit OpenCV's Qt plugin path.
+unset QT_QPA_PLATFORM_PLUGIN_PATH
+unset QT_PLUGIN_PATH
+
 if [ -z "${PAROL6_SERIAL_PORT}" ] || [ ! -e "${PAROL6_SERIAL_PORT}" ]; then
     DETECTED_PORT=$(ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null | head -n 1 || true)
     if [ ! -z "$DETECTED_PORT" ]; then
@@ -19,6 +23,9 @@ BAUD_RATE="${PAROL6_BAUD_RATE:-115200}"
 if [ -f /.dockerenv ]; then
     cd /workspace
     source install/setup.bash
+    export DISPLAY="${DISPLAY:-:1}"
+    export XAUTHORITY="${XAUTHORITY:-/tmp/.docker.xauth}"
+    export QT_X11_NO_MITSHM=1
     ros2 launch parol6_hardware real_robot_tested_single_motor.launch.py \
         serial_port:="${SERIAL_PORT}" \
         baud_rate:="${BAUD_RATE}"
@@ -34,5 +41,10 @@ else
     # to kill the orphaned ros2 processes INSIDE the container before exiting.
     trap 'echo "[LAUNCH] Propagating kill signal to container..."; docker exec parol6_dev pkill -INT -f "ros2" || true; exit 0' SIGINT SIGTERM
 
-    docker exec -i parol6_dev bash -lc "cd /workspace && source install/setup.bash && PAROL6_SERIAL_PORT='${SERIAL_PORT}' PAROL6_BAUD_RATE='${BAUD_RATE}' ./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh"
+    docker exec \
+        -e DISPLAY="${DISPLAY:-:0}" \
+        -e XAUTHORITY="/tmp/.docker.xauth" \
+        -e QT_X11_NO_MITSHM="1" \
+        -i parol6_dev bash -lc \
+        "export DISPLAY='${DISPLAY:-:0}'; export XAUTHORITY=/tmp/.docker.xauth; export QT_X11_NO_MITSHM=1; unset QT_QPA_PLATFORM_PLUGIN_PATH; unset QT_PLUGIN_PATH; cd /workspace && source install/setup.bash && PAROL6_SERIAL_PORT='${SERIAL_PORT}' PAROL6_BAUD_RATE='${BAUD_RATE}' ./scripts/launchers/launch_moveit_real_hw_tested_single_motor.sh"
 fi

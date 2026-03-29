@@ -768,7 +768,8 @@ class NodeButton(QWidget):
         
         def _handle_log(s):
             formatted = f'<span style="color:{C["text2"]}">[{self._label}] {s}</span>'
-            self._log.append(formatted) # Write to the main "All Nodes" log
+            if self._label != "Live Kinect Camera":
+                self._log.append(formatted) # Write to the main "All Nodes" log
             if hasattr(self, '_node_log'):
                 self._node_log.append(formatted) # Write to the dedicated tab
                 
@@ -1590,7 +1591,7 @@ class VisionPipelineGUI(QMainWindow):
         def _execute():
             _set_status(">> Executing weld path...", "#fab387")
             self._btn_moveit._start() # Run moveit node if not running
-            QTimer.singleShot(1500, self._moveit_execute) # trigger after a delay
+            QTimer.singleShot(1500, self._send_path_to_moveit) # trigger after a delay
         btn3.clicked.connect(_execute)
         glay3.addWidget(btn3)
         lay.addWidget(grp3)

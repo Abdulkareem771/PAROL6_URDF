@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+unset QT_QPA_PLATFORM_PLUGIN_PATH
+unset QT_PLUGIN_PATH
+
 source_workspace_setup() {
     # Colcon-generated setup scripts may read optional variables like
     # COLCON_TRACE without guarding for `set -u`.
@@ -28,6 +31,9 @@ if [ -f /.dockerenv ]; then
     # We are inside the container
     cd /workspace
     source_workspace_setup
+    export DISPLAY="${DISPLAY:-:1}"
+    export XAUTHORITY="${XAUTHORITY:-/tmp/.docker.xauth}"
+    export QT_X11_NO_MITSHM=1
 
     echo "Starting ros2_control hardware bringup on ${SERIAL_PORT}..."
     ros2 launch parol6_hardware real_robot.launch.py \
@@ -61,5 +67,10 @@ else
     # to kill the orphaned ros2 processes INSIDE the container before exiting.
     trap 'echo "[LAUNCH] Propagating kill signal to container..."; docker exec parol6_dev pkill -INT -f "ros2" || true; exit 0' SIGINT SIGTERM
 
-    docker exec -i parol6_dev bash -lc "cd /workspace && source install/setup.bash && PAROL6_SERIAL_PORT='${SERIAL_PORT}' PAROL6_BAUD_RATE='${BAUD_RATE}' ./scripts/launchers/launch_moveit_real_hw.sh"
+    docker exec \
+        -e DISPLAY="${DISPLAY:-:0}" \
+        -e XAUTHORITY="/tmp/.docker.xauth" \
+        -e QT_X11_NO_MITSHM="1" \
+        -i parol6_dev bash -lc \
+        "export DISPLAY='${DISPLAY:-:0}'; export XAUTHORITY=/tmp/.docker.xauth; export QT_X11_NO_MITSHM=1; unset QT_QPA_PLATFORM_PLUGIN_PATH; unset QT_PLUGIN_PATH; cd /workspace && source install/setup.bash && PAROL6_SERIAL_PORT='${SERIAL_PORT}' PAROL6_BAUD_RATE='${BAUD_RATE}' ./scripts/launchers/launch_moveit_real_hw.sh"
 fi
