@@ -10,8 +10,8 @@ Nodes started:
   4. depth_matcher    — lifts 2-D weld lines to 3-D using depth data
   5. path_generator   — produces the final Nav2 Path message for MoveIt
 
-Also sets up the required static TF tree so depth_matcher can project
-into 3-D: world → base_link → kinect2_link → kinect2_rgb_optical_frame.
+Also sets up the required static TF root so depth_matcher can project
+into 3-D: world → base_link → kinect2 → kinect2_link → kinect2_rgb_optical_frame.
 A point-cloud node (depth_image_proc) fuses colour + depth for RViz.
 
 Usage
@@ -89,26 +89,12 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_camera',
-        # Connects base_link → 'kinect2' (the root of kinect2_bridge's internal chain).
-        # kinect2_bridge with base_name_tf=kinect2 owns: kinect2→kinect2_link→optical frames.
-        # Targeting 'kinect2' (not 'kinect2_link') avoids a duplicate-parent TF conflict.
+        # Connects base_link to the root of the Kinect bridge TF tree.
+        # The bridge itself owns kinect2 -> kinect2_link -> optical frames.
         arguments=[
             '--x', '0.646', '--y', '0.1225', '--z', '1.015',
             '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
             '--frame-id', 'base_link', '--child-frame-id', 'kinect2',
-        ],
-        output='log',
-    )
-
-    static_tf_optical = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_optical',
-        arguments=[
-            '--x', '0.0', '--y', '0.0', '--z', '0.0',
-            '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '-1.5708',
-            '--frame-id', 'kinect2_link',
-            '--child-frame-id', 'kinect2_rgb_optical_frame',
         ],
         output='log',
     )
@@ -220,7 +206,6 @@ def generate_launch_description():
         # TFs
         static_tf_world,
         static_tf_camera,
-        static_tf_optical,
         # Pipeline
         capture_node,
         crop_node,

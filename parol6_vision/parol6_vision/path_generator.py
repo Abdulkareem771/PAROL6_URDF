@@ -270,13 +270,15 @@ class PathGenerator(Node):
         cumulative_len = np.insert(np.cumsum(seg_lengths), 0, 0)
         total_len = cumulative_len[-1]
         
-        # Number of waypoints
         max_wp = self.get_parameter('max_waypoints').value
-        num_waypoints = int(max(2, total_len / self.spacing))
-        
+        raw_num_waypoints = int(max(2, total_len / self.spacing))
+        num_waypoints = raw_num_waypoints
+
         if num_waypoints > max_wp:
-            self.get_logger().warn(f"Path over capacity ({num_waypoints} pts). Downsampling to {max_wp}.")
+            self.get_logger().warn(f"Path over capacity ({num_waypoints} pts). Downsampling to {max_wp} for OMPL stability.")
             num_waypoints = max_wp
+        else:
+            self.get_logger().info(f"Resampling path: total_len={total_len:.3f}m -> {num_waypoints} waypoints")
             
         # Resample at equal arc-length intervals
         u_query = []

@@ -140,6 +140,18 @@ def generate_launch_description():
         condition=IfCondition(publish_camera_tf),
     )
 
+    # Static TF (Kinect Root -> Kinect Link)
+    static_tf_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='static_transform_publisher_kinect_link',
+        arguments=['--x', '0.0', '--y', '0.0', '--z', '0.0',
+                   '--yaw', '0.0', '--pitch', '0.0', '--roll', '0.0',
+                   '--frame-id', 'kinect2', '--child-frame-id', 'kinect2_link'],
+        output='screen',
+        condition=IfCondition(publish_camera_tf),
+    )
+
     # Static TF (Kinect Link -> RGB Optical Frame)
     static_tf_optical = Node(
         package='tf2_ros',
@@ -175,6 +187,7 @@ def generate_launch_description():
             robot_state_publisher,
             ros2_control_node,
             static_tf_camera,
+            static_tf_link,
             static_tf_optical,
         ]
         + load_controllers

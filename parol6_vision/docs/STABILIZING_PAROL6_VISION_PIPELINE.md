@@ -185,6 +185,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 |---|---|
 | `/vision/welding_path` subscriber QoS: `VOLATILE` → `TRANSIENT_LOCAL RELIABLE` | Required to receive the latched path from `path_holder` |
 | `approach_distance` default: `0.05` → `0.15` m | Weld seam projected at z ≈ 0.045 m in `base_link`. With 5 cm offset, approach was at z=0.095 m — below workspace_min z=0.10 m. OMPL rejected all goal samples. At 15 cm, approach is at z ≈ 0.195 m, safely inside the reachable zone |
+| **Coordinate-Aware Logging** | Planning logs now output 4-decimal precision X, Y, Z coordinates and the frame_id. This allows immediate identification of the failing waypoint in RViz. |
 | **Path Offset Injection** | Added `path_offset_x/y/z` parameters. These are applied in `path_callback` by shifting every waypoint pose before storage. Allows for +/- 50mm fine-tuning of the weld bead without re-scanning. |
 
 ### `vision_pipeline_gui.py`
@@ -198,6 +199,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 | Removed subprocess-based path injection | Replaced with persistent ROS publisher (`inject_path_node`) |
 | **Manual Auto-Aligner Node** | Tightly incorporated and visualised the `manual_line_aligner_node` providing bounding box tracking and cross-frame stroke alignments out-of-the-box. |
 | **XYZ Path Offset Controls** | Added dedicated spinboxes in the "ROS Parameters" tab and integrated them into the execution flow. Values are in mm for user convenience and auto-converted to meters for ROS. |
+| **Reachability Safety Toggle** | Added "Enforce Reachable Workspace" checkbox. When enabled, `moveit_controller` clamps all waypoints to a known-safe 3D bounding volume and radial cylinder before planning. |
 
 ---
 

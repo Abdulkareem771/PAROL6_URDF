@@ -327,6 +327,10 @@ class MoveItController(Node):
         path is planned AFTER the approach move has already finished.
         """
         self.get_logger().info("STARTING WELDING SEQUENCE (pre-plan all phases)")
+        
+        # Refresh dynamic parameters
+        self.enforce_reachable_test_path = self.get_parameter('enforce_reachable_test_path').value
+        self.approach_dist = self.get_parameter('approach_distance').value
 
         # Optional test-mode normalization
         if self.enforce_reachable_test_path:
@@ -679,9 +683,10 @@ class MoveItController(Node):
         Returns a RobotTrajectory on success, or None on failure.
         """
         self.get_logger().info(
-            f'Planning approach: x={pose_stamped.pose.position.x:.3f}, '
-            f'y={pose_stamped.pose.position.y:.3f}, '
-            f'z={pose_stamped.pose.position.z:.3f}'
+            f'Planning approach: x={pose_stamped.pose.position.x:.4f}, '
+            f'y={pose_stamped.pose.position.y:.4f}, '
+            f'z={pose_stamped.pose.position.z:.4f} '
+            f'(frame={pose_stamped.header.frame_id})'
         )
         if not self._wait_for_action_server(
             self.move_group_client, 'move_action', self.move_group_wait_timeout
@@ -845,9 +850,10 @@ class MoveItController(Node):
         Sends a full MotionPlanRequest via the 'move_action' action server.
         """
         self.get_logger().info(
-            f'Approach target: x={pose_stamped.pose.position.x:.3f}, '
-            f'y={pose_stamped.pose.position.y:.3f}, '
-            f'z={pose_stamped.pose.position.z:.3f}'
+            f'Approach target: x={pose_stamped.pose.position.x:.4f}, '
+            f'y={pose_stamped.pose.position.y:.4f}, '
+            f'z={pose_stamped.pose.position.z:.4f} '
+            f'(frame={pose_stamped.header.frame_id})'
         )
 
         if not self._wait_for_action_server(

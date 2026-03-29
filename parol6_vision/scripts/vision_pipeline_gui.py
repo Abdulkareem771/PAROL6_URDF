@@ -1573,6 +1573,17 @@ class VisionPipelineGUI(QMainWindow):
         # Step 3. Execute
         grp3 = QGroupBox("Step 3: Execution")
         glay3 = QVBoxLayout(grp3)
+        
+        # Reachability Safety Toggle
+        safety_cb = QCheckBox("Enforce Reachable Workspace (Clamp)")
+        safety_cb.setToolTip("If enabled, waypoints outside the radial/box limits will be shifted to the nearest reachable point.")
+        def _set_safety(state):
+            val = (state == 2) # 2 is checked in PySide6
+            self.get_logger().info(f"Setting enforce_reachable_test_path to {val}")
+            self._set_ros_param("moveit_controller", "enforce_reachable_test_path", val)
+        safety_cb.stateChanged.connect(_set_safety)
+        glay3.addWidget(safety_cb)
+
         btn3 = QPushButton("WELD — Execute Path")
         btn3.setFixedHeight(45)
         btn3.setStyleSheet(f"background:#f38ba8; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
@@ -2386,6 +2397,17 @@ class VisionPipelineGUI(QMainWindow):
         mc_lay = QVBoxLayout(mc_grp)
         _add_param(mc_lay, "approach_distance", 0.15, "moveit_controller", "Approach Distance (m)", 0.01, 0.5, 0.01, True)
         _add_param(mc_lay, "weld_velocity", 0.01, "moveit_controller", "Weld Velocity (m/s)", 0.001, 0.1, 0.001, True)
+        _add_param(mc_lay, "joint_waypoint_fallback_count", 8, "moveit_controller", "Fallback Samples", 2, 50, 1)
+        
+        # Reachability Safety Toggle
+        safety_cb = QCheckBox("Enforce Reachable Workspace (Clamp)")
+        safety_cb.setToolTip("If enabled, waypoints outside the radial/box limits will be shifted to the nearest reachable point.")
+        def _set_safety(state):
+            val = safety_cb.isChecked()
+            self._set_ros_param("moveit_controller", "enforce_reachable_test_path", val)
+        safety_cb.stateChanged.connect(_set_safety)
+        mc_lay.addWidget(safety_cb)
+
         lay.addWidget(mc_grp)
 
         # ── Path Offset (welding correction) ──────────────────────────────────
