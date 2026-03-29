@@ -90,8 +90,10 @@ def generate_launch_description():
     )
 
     # Controller configuration
+    # Method 5 is the legacy single-motor-tested path and should keep using its
+    # dedicated controller tolerances rather than the generic real-hardware file.
     robot_controllers = PathJoinSubstitution([
-        FindPackageShare("parol6_hardware"), "config", "parol6_controllers.yaml",
+        FindPackageShare("parol6_moveit_config"), "config", "ros2_controllers_tested_single_motor.yaml",
     ])
 
     # =====================================================================
