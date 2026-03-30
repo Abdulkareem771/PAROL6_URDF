@@ -2805,8 +2805,11 @@ class VisionPipelineGUI(QMainWindow):
         if self._cal_enforcer_worker is not None:
             return
         cmd = ["ros2", "run", "parol6_vision", "camera_tf_enforcer"]
-        worker = NodeWorker("camera_tf_enforcer", _wrap_ros_command(cmd))
-        worker.output.connect(lambda t: self._log.append(f"<span style='color:#89b4fa'>[CamTF] {t}</span>"))
+        # NodeWorker(cmd) — passes raw list; NodeWorker wraps it internally
+        worker = NodeWorker(cmd)
+        worker.line_out.connect(
+            lambda t: self._log.append(f"<span style='color:#89b4fa'>[CamTF] {t}</span>")
+        )
         worker.finished.connect(self._cal_enforce_stopped)
         worker.start()
         self._cal_enforcer_worker = worker
@@ -2824,7 +2827,7 @@ class VisionPipelineGUI(QMainWindow):
 
     def _cal_enforce_stop(self) -> None:
         if self._cal_enforcer_worker is not None:
-            self._cal_enforcer_worker.stop()
+            self._cal_enforcer_worker.abort()  # correct method name
         self._cal_enforce_stopped()
 
     # ── Manual frame entry helpers ────────────────────────────────────────────
@@ -2936,33 +2939,45 @@ class VisionPipelineGUI(QMainWindow):
             "-p", "image_is_rectified:=True",
             "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
         ]
-        aruco_worker = NodeWorker("aruco_ros", _wrap_ros_command(aruco_cmd))
-        aruco_worker.output.connect(
-            lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_ros] {t}</span>")
-        )
-        aruco_worker.start()
-
-        cal_cmd = [
-            "ros2", "run", "parol6_vision", "eye_to_hand_calibrator",
-            "--ros-args",
-            "-p", f"marker_x:={mx:.4f}",
-            "-p", f"marker_y:={my:.4f}",
-            "-p", f"marker_z:={mz:.4f}",
-            "-p", f"samples_to_collect:={n_samples}",
-        ]
-        cal_worker = NodeWorker("eye_to_hand_calibrator", _wrap_ros_command(cal_cmd))
-        cal_worker.output.connect(self._aruco_log_append)
-        cal_worker.finished.connect(self._aruco_calibration_done)
-        QTimer.singleShot(2000, cal_worker.start)
-
-        self._aruco_workers = [aruco_worker, cal_worker]
-        self._aruco_run_btn.setEnabled(False)
-        self._aruco_stop_btn.setEnabled(True)
         self._aruco_log_append(
-            f"<b style='color:#89b4fa'>[GUI] ArUco calibration started — "
-            f"marker #{marker_id} ({marker_size*1000:.1f} mm), "
-            f"{n_samples} samples, marker @ ({mx:.3f}, {my:.3f}, {mz:.3f}) m</b>"
+            f"<b style='color:#89b4fa'>[GUI] ArUco calibration starting…</b>"
         )
+        try:
+            # NodeWorker(raw_cmd): NodeWorker.__init__ calls _wrap_ros_command internally
+            aruco_worker = NodeWorker(aruco_cmd)
+            aruco_worker.line_out.connect(
+                lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_ros] {t}</span>")
+            )
+            aruco_worker.start()
+
+            cal_cmd = [
+                "ros2", "run", "parol6_vision", "eye_to_hand_calibrator",
+                "--ros-args",
+                "-p", f"marker_x:={mx:.4f}",
+                "-p", f"marker_y:={my:.4f}",
+                "-p", f"marker_z:={mz:.4f}",
+                "-p", f"samples_to_collect:={n_samples}",
+            ]
+            cal_worker = NodeWorker(cal_cmd)
+            cal_worker.line_out.connect(self._aruco_log_append)
+            cal_worker.finished.connect(self._aruco_calibration_done)
+            QTimer.singleShot(2000, cal_worker.start)
+
+            self._aruco_workers = [aruco_worker, cal_worker]
+            self._aruco_run_btn.setEnabled(False)
+            self._aruco_stop_btn.setEnabled(True)
+            self._aruco_log_append(
+                f"<b style='color:#89b4fa'>[GUI] ArUco calibration started — "
+                f"marker #{marker_id} ({marker_size*1000:.1f} mm), "
+                f"{n_samples} samples, marker @ ({mx:.3f}, {my:.3f}, {mz:.3f}) m<br>"
+                f"aruco_ros launched; eye_to_hand_calibrator will start in 2 s…</b>"
+            )
+        except Exception as _exc:
+            self._aruco_log_append(
+                f"<span style='color:#f38ba8'>[GUI] ❌ Failed to launch: {_exc}</span>"
+            )
+            self._aruco_run_btn.setEnabled(True)
+            self._aruco_stop_btn.setEnabled(False)
 
     def _aruco_calibration_done(self) -> None:
         self._aruco_stop_btn.setEnabled(False)
@@ -2972,11 +2987,11 @@ class VisionPipelineGUI(QMainWindow):
             "Click \"Save & Enforce\" to apply the new camera frame live.</b>"
         )
         if self._aruco_workers:
-            self._aruco_workers[0].stop()   # stop aruco_ros
+            self._aruco_workers[0].abort()   # stop aruco_ros
 
     def _aruco_stop(self) -> None:
         for w in self._aruco_workers:
-            try: w.stop()
+            try: w.abort()  # correct method name
             except Exception: pass
         self._aruco_workers = []
         self._aruco_run_btn.setEnabled(True)
