@@ -239,24 +239,46 @@ class EyeToHandCalibrator(Node):
             'x': float(mx), 'y': float(my), 'z': float(mz)
         }
 
-        # ── Log result ───────────────────────────────────────────────────
+        # ── Log human-readable result ─────────────────────────────────────
         euler = result['_euler_deg']
+        # Camera → Marker (what ArUco detected)
+        cm_t = avg_t
+        cm_q = Rot.from_matrix(T_cam_marker[:3, :3]).as_quat()
+        cm_e = Rot.from_matrix(T_cam_marker[:3, :3]).as_euler('xyz', degrees=True)
         self.get_logger().info(
             f"\n{'='*55}\n"
-            f"  CALIBRATION RESULT: {result['frame_id']} → {result['child_frame_id']}\n"
+            f"  CAM → MARKER (raw ArUco detection)\n"
+            f"{'='*55}\n"
+            f"  X  = {cm_t[0]:.4f} m   Y  = {cm_t[1]:.4f} m   Z  = {cm_t[2]:.4f} m\n"
+            f"  Qx = {cm_q[0]:.4f}  Qy = {cm_q[1]:.4f}  Qz = {cm_q[2]:.4f}  Qw = {cm_q[3]:.4f}\n"
+            f"  (Euler: Roll={cm_e[0]:.2f}°  Pitch={cm_e[1]:.2f}°  Yaw={cm_e[2]:.2f}°)\n"
+            f"\n  CALIBRATION RESULT: {result['frame_id']} → {result['child_frame_id']}\n"
             f"{'='*55}\n"
             f"  X  = {result['x']:.4f} m\n"
             f"  Y  = {result['y']:.4f} m\n"
             f"  Z  = {result['z']:.4f} m\n"
-            f"  Qx = {result['qx']:.4f}\n"
-            f"  Qy = {result['qy']:.4f}\n"
-            f"  Qz = {result['qz']:.4f}\n"
-            f"  Qw = {result['qw']:.4f}\n"
-            f"  (Euler: Roll={euler['roll']}° Pitch={euler['pitch']}° Yaw={euler['yaw']}°)\n"
+            f"  Qx = {result['qx']:.4f}  Qy = {result['qy']:.4f}  Qz = {result['qz']:.4f}  Qw = {result['qw']:.4f}\n"
+            f"  (Euler: Roll={euler['roll']}°  Pitch={euler['pitch']}°  Yaw={euler['yaw']}°)\n"
             f"{'='*55}"
         )
 
-        # ── Save to yaml ─────────────────────────────────────────────────
+        # ── Machine-parseable lines (parsed by vision GUI) ────────────────
+        # Format: [CAL_<TAG>] x=V y=V z=V qx=V qy=V qz=V qw=V roll=V pitch=V yaw=V
+        self.get_logger().info(
+            f"[CAL_CAM_MARKER] "
+            f"x={cm_t[0]:.4f} y={cm_t[1]:.4f} z={cm_t[2]:.4f} "
+            f"qx={cm_q[0]:.4f} qy={cm_q[1]:.4f} qz={cm_q[2]:.4f} qw={cm_q[3]:.4f} "
+            f"roll={cm_e[0]:.2f} pitch={cm_e[1]:.2f} yaw={cm_e[2]:.2f}"
+        )
+        self.get_logger().info(
+            f"[CAL_BASE_CAM] "
+            f"x={result['x']:.4f} y={result['y']:.4f} z={result['z']:.4f} "
+            f"qx={result['qx']:.4f} qy={result['qy']:.4f} qz={result['qz']:.4f} qw={result['qw']:.4f} "
+            f"roll={euler['roll']} pitch={euler['pitch']} yaw={euler['yaw']} "
+            f"child={result['child_frame_id']}"
+        )
+
+        # ── Save to yaml ──────────────────────────────────────────────────
         out_path = Path(self.output_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, 'w') as f:

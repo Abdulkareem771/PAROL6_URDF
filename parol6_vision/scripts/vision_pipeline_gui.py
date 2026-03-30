@@ -2759,10 +2759,55 @@ class VisionPipelineGUI(QMainWindow):
         # Log area
         self._aruco_log = QTextEdit()
         self._aruco_log.setReadOnly(True)
-        self._aruco_log.setFixedHeight(180)
+        self._aruco_log.setFixedHeight(160)
         self._aruco_log.setFont(QFont("Monospace", 9))
         self._aruco_log.setStyleSheet("background:#11111b; color:#a6adc8;")
         aruco_lay.addWidget(self._aruco_log)
+
+        # ── Results panel: Camera→Marker + Final Frame ────────────────────
+        res_grp = QGroupBox("📐  Calibration Results")
+        res_grp.setStyleSheet("QGroupBox { border:1px solid #45475a; border-radius:5px; margin-top:4px; }")
+        res_lay = QHBoxLayout(res_grp)
+        res_lay.setSpacing(16)
+
+        def _make_result_col(title: str, colour: str):
+            """Create a labelled column widget; returns (QFrame, dict[key→QLabel])."""
+            col = QVBoxLayout()
+            hdr = QLabel(title)
+            hdr.setStyleSheet(f"font-weight:bold; color:{colour}; font-size:11px;")
+            col.addWidget(hdr)
+            labels = {}
+            for k in ('x', 'y', 'z', 'qx', 'qy', 'qz', 'qw', 'roll', 'pitch', 'yaw'):
+                row = QHBoxLayout()
+                nm = QLabel(f"{k}:")
+                nm.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
+                nm.setFixedWidth(38)
+                vl = QLabel("—")
+                vl.setStyleSheet(f"color:{colour}; font-family:Monospace; font-size:11px;")
+                row.addWidget(nm); row.addWidget(vl); row.addStretch()
+                col.addLayout(row)
+                labels[k] = vl
+            col.addStretch()
+            return col, labels
+
+        # Left: Camera → Marker (kinect2_ir_optical_frame → detected_marker_frame)
+        col_cm, self._res_cam_marker = _make_result_col(
+            "📷 Camera → Marker  (raw ArUco)", "#89b4fa"
+        )
+        res_lay.addLayout(col_cm)
+
+        sep = QFrame(); sep.setFrameShape(QFrame.VLine)
+        sep.setStyleSheet(f"color:{C['border']};")
+        res_lay.addWidget(sep)
+
+        # Right: base_link → kinect2_link (final calibrated frame)
+        col_bc, self._res_base_cam = _make_result_col(
+            "🎯 Final Frame: base_link → camera", "#a6e3a1"
+        )
+        res_lay.addLayout(col_bc)
+
+        aruco_lay.addWidget(res_grp)
+        self._aruco_results_grp = res_grp
 
         lay.addWidget(aruco_grp)
         lay.addStretch()
@@ -2770,6 +2815,7 @@ class VisionPipelineGUI(QMainWindow):
         self._aruco_workers: list = []
         QTimer.singleShot(200, self._cal_load_yaml)
         return tab
+
 
     # ── Camera frame helpers ──────────────────────────────────────────────────
 
