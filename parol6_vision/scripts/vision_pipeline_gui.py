@@ -2950,11 +2950,41 @@ class VisionPipelineGUI(QMainWindow):
             return
         self._aruco_log.append(txt)
         import re
+
+        # ── Progress tracking ─────────────────────────────────────────────
         m = re.search(r'Collected (\d+)/(\d+)', txt)
         if m:
             n, total = int(m.group(1)), int(m.group(2))
             self._aruco_progress.setMaximum(total)
             self._aruco_progress.setValue(n)
+
+        # ── Parse machine-readable result lines ───────────────────────────
+        def _parse_kv(line: str) -> dict:
+            out = {}
+            for token in line.split():
+                if '=' in token:
+                    k, v = token.split('=', 1)
+                    try:
+                        out[k] = float(v)
+                    except ValueError:
+                        out[k] = v
+            return out
+
+        def _fill_result(labels: dict, kv: dict) -> None:
+            for k, lbl in labels.items():
+                if k in kv:
+                    v = kv[k]
+                    lbl.setText(f"{v:.4f}" if isinstance(v, float) else str(v))
+
+        if '[CAL_CAM_MARKER]' in txt:
+            payload = txt.split('[CAL_CAM_MARKER]', 1)[1]
+            _fill_result(self._res_cam_marker, _parse_kv(payload))
+
+        if '[CAL_BASE_CAM]' in txt:
+            payload = txt.split('[CAL_BASE_CAM]', 1)[1]
+            _fill_result(self._res_base_cam, _parse_kv(payload))
+
+        # ── Completion / yaml saved ───────────────────────────────────────
         if 'Saved to' in txt or 'camera_tf.yaml' in txt:
             self._aruco_enforce_btn.setEnabled(True)
             self._aruco_progress.setValue(self._aruco_progress.maximum())
