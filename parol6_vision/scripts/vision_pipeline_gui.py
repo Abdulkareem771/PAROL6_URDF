@@ -1247,7 +1247,7 @@ class VisionPipelineGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PAROL6  ·  Vision Pipeline Launcher")
-        self.resize(1100, 680)
+        self.resize(1300, 850)
         self._latest_cropped_rgb: Optional[np.ndarray] = None
         self._crop_set_params_client = None
         self._crop_clear_client = None
@@ -2506,10 +2506,10 @@ class VisionPipelineGUI(QMainWindow):
           Bottom : ArUco auto-calibration launcher — runs aruco_detector + eye_to_hand_calibrator,
                    shows progress, and saves the new result when done.
         """
-        from PySide6.QtWidgets import QProgressBar
+        from PySide6.QtWidgets import QProgressBar, QScrollArea
 
-        tab = QWidget()
-        lay = QVBoxLayout(tab)
+        container = QWidget()
+        lay = QVBoxLayout(container)
         lay.setContentsMargins(12, 12, 12, 12)
         lay.setSpacing(10)
 
@@ -2814,7 +2814,12 @@ class VisionPipelineGUI(QMainWindow):
 
         self._aruco_workers: list = []
         QTimer.singleShot(200, self._cal_load_yaml)
-        return tab
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(container)
+        return scroll
 
 
     # ── Camera frame helpers ──────────────────────────────────────────────────
@@ -3001,6 +3006,7 @@ class VisionPipelineGUI(QMainWindow):
         self._aruco_progress.setValue(0)
         self._aruco_progress.setMaximum(n_samples)
         self._aruco_enforce_btn.setEnabled(False)
+        self._aruco_aborted = False
 
         aruco_cmd = [
             "ros2", "run", "parol6_vision", "aruco_detector",
@@ -3056,6 +3062,9 @@ class VisionPipelineGUI(QMainWindow):
     def _aruco_calibration_done(self) -> None:
         self._aruco_stop_btn.setEnabled(False)
         self._aruco_run_btn.setEnabled(True)
+        if getattr(self, '_aruco_aborted', False):
+            return  # Already logged during stop
+
         self._aruco_log_append(
             "<b style='color:#a6e3a1'>[GUI] ✅ Calibration finished. "
             "Click \"Save & Enforce\" to apply the new camera frame live.</b>"
@@ -3064,6 +3073,7 @@ class VisionPipelineGUI(QMainWindow):
             self._aruco_workers[0].abort()   # stop aruco_detector
 
     def _aruco_stop(self) -> None:
+        self._aruco_aborted = True
         for w in self._aruco_workers:
             try: w.abort()  # correct method name
             except Exception: pass
