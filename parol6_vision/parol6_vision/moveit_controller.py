@@ -237,6 +237,12 @@ class MoveItController(Node):
         oy = self.get_parameter('path_offset_y').value
         oz = self.get_parameter('path_offset_z').value
 
+        if msg.poses:
+            raw_first = msg.poses[0].pose.position
+            self.get_logger().info(
+                f'Raw first waypoint: x={raw_first.x:.4f}, y={raw_first.y:.4f}, z={raw_first.z:.4f}'
+            )
+
         if msg.poses and (ox or oy or oz):
             # Apply offset — work on a deep copy so we don't mutate the DDS buffer
             msg = _copy.deepcopy(msg)
@@ -245,8 +251,12 @@ class MoveItController(Node):
                 ps.pose.position.y += oy
                 ps.pose.position.z += oz
             if ox or oy or oz:
+                adj_first = msg.poses[0].pose.position
                 self.get_logger().info(
                     f'Path offset applied: dx={ox*1000:.1f}mm  dy={oy*1000:.1f}mm  dz={oz*1000:.1f}mm'
+                )
+                self.get_logger().info(
+                    f'Offset-adjusted first waypoint: x={adj_first.x:.4f}, y={adj_first.y:.4f}, z={adj_first.z:.4f}'
                 )
 
         if msg.poses:
@@ -635,10 +645,29 @@ class MoveItController(Node):
         )
         for n, idx in enumerate(indices, start=1):
             pose_stamped = copy.deepcopy(path.poses[idx])
-            ok = self.move_to_pose(
-                pose_stamped,
-                use_orientation_constraint=False
+            
+            px = pose_stamped.pose.position.x
+            py = pose_stamped.pose.position.y
+            pz = pose_stamped.pose.position.z
+            radius_xy = math.hypot(px, py)
+            
+            self.get_logger().info(f"Checking reachability for fallback point {n}/{len(indices)} (index={idx})...")
+            # Plan position-only move to verify reachability before execution
+            plan_traj = self.plan_pose(pose_stamped, use_orientation_constraint=False)
+            is_reachable = (plan_traj is not None)
+            
+            self.get_logger().info(
+                f"Waypoint fallback {n}/{len(indices)} (index={idx}):\n"
+                f"  Pose: x={px:.4f}, y={py:.4f}, z={pz:.4f}\n"
+                f"  XY Radius: {radius_xy:.4f}m\n"
+                f"  Reachable (Position-Only IK): {'YES' if is_reachable else 'NO'}"
             )
+            
+            if not is_reachable:
+                self.get_logger().error(f"Waypoint fallback aborted: target unreachable at index={idx}")
+                return False
+
+            ok = self.execute_trajectory_action(plan_traj)
             if not ok:
                 self.get_logger().error(
                     f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"

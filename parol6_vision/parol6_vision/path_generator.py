@@ -234,11 +234,19 @@ class PathGenerator(Node):
         return True
         
     def order_points_pca(self, points):
-        """Sort points along principal axis"""
+        """Sort points along principal axis and ensure stable directional flow"""
         pca = PCA(n_components=1)
         projected = pca.fit_transform(points)
         sorted_indices = np.argsort(projected.flatten())
-        return points[sorted_indices]
+        ordered = points[sorted_indices]
+        
+        # Enforce direction: start welding from the point closest to the robot base
+        dist_start = np.linalg.norm(ordered[0][:2])
+        dist_end = np.linalg.norm(ordered[-1][:2])
+        if dist_start > dist_end:
+            ordered = ordered[::-1]
+            
+        return ordered
         
     def remove_duplicates(self, points, tol=1e-4):
         """Remove duplicate points within tolerance"""
