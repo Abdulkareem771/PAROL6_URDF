@@ -5,8 +5,8 @@ ros2 run aruco_ros single \
     --ros-args --remap /image:=/kinect2/sd/image_color_rect \
     --ros-args --remap /camera_info:=/kinect2/sd/camera_info \
     --ros-args \
-    -p marker_id:=6 \
-    -p marker_size:=0.04575 \
+    -p marker_id:=104 \
+    -p marker_size:=0.156 \
     -p camera_frame:=kinect2_ir_optical_frame \
     -p marker_frame:=detected_marker_frame \
     -p corner_refinement:=SUBPIX \
