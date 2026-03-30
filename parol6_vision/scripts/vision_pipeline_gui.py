@@ -2266,6 +2266,10 @@ class VisionPipelineGUI(QMainWindow):
         crop_tab = self._build_crop_tab()
         tabs.addTab(crop_tab, "✂️  Crop Image")
 
+        # ── Tab 4b: Camera Calibration ─────────────────────────────────────
+        cal_tab = self._build_calibration_tab()
+        tabs.addTab(cal_tab, "📷  Cam Calibrate")
+
         # ── Tab 5: Settings ───────────────────────────────────────────────
         if ROS2_OK:
             settings_tab = self._build_settings_tab()
@@ -2488,9 +2492,508 @@ class VisionPipelineGUI(QMainWindow):
         return tab
 
 
+
+
+    # ── Camera Calibration Tab ────────────────────────────────────────────────
+
+    def _build_calibration_tab(self) -> QWidget:
+        """
+        📷 Camera Calibration Tab
+        ─────────────────────────
+        Two-panel tab:
+          Top    : Current calibration status (loaded from ~/.parol6/camera_tf.yaml)
+                   with Enforce (dynamic override) / Stop buttons.
+          Bottom : ArUco auto-calibration launcher — runs aruco_ros + eye_to_hand_calibrator,
+                   shows progress, and saves the new result when done.
+        """
+        from PySide6.QtWidgets import QProgressBar
+
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(10)
+
+        # ── Title bar ─────────────────────────────────────────────────────────
+        title = QLabel("📷  Camera Auto-Calibration (ArUco)")
+        title.setStyleSheet("font-size:16px; font-weight:bold; color:#cba6f7;")
+        lay.addWidget(title)
+
+        hint = QLabel(
+            "📌 Fix the camera frame (<b>base_link → kinect2_link</b>) without editing any node. "
+            "<b>Step 1</b>: <i>Enforce</i> the already-calibrated ArUco result immediately (no restart). "
+            "<b>Step 2</b>: Re-run ArUco calibration to refresh the frame if the camera moved."
+        )
+        hint.setTextFormat(Qt.RichText)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            f"background:{C['panel']}; border:1px solid #cba6f7; border-radius:6px;"
+            f" color:{C['text2']}; font-size:11px; padding:8px 10px;"
+        )
+        lay.addWidget(hint)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # GROUP 1 — CURRENT FRAME
+        # ─────────────────────────────────────────────────────────────────────
+        frame_grp = QGroupBox("💾 Current Camera Frame  (≈ ~/.parol6/camera_tf.yaml)")
+        frame_lay = QVBoxLayout(frame_grp)
+
+        self._cal_source_lbl = QLabel("Source: loading...")
+        self._cal_source_lbl.setStyleSheet(f"color:{C['text2']}; font-size:10px; font-style:italic;")
+        frame_lay.addWidget(self._cal_source_lbl)
+
+        # Values grid: x y z  qx qy qz qw  child_frame
+        vals_row = QHBoxLayout()
+        self._cal_val_labels: dict[str, QLabel] = {}
+        for key, colour in [('x','#89b4fa'),('y','#89b4fa'),('z','#89b4fa'),
+                             ('qx','#a6e3a1'),('qy','#a6e3a1'),('qz','#a6e3a1'),('qw','#a6e3a1')]:
+            col = QVBoxLayout()
+            col.setSpacing(2)
+            nm = QLabel(f"<b style='color:{colour}'>{key}</b>")
+            nm.setAlignment(Qt.AlignCenter)
+            col.addWidget(nm)
+            vl = QLabel("—")
+            vl.setAlignment(Qt.AlignCenter)
+            vl.setStyleSheet(f"color:{colour}; font-family:Monospace; font-size:12px;")
+            col.addWidget(vl)
+            vals_row.addLayout(col)
+            self._cal_val_labels[key] = vl
+
+        child_col = QVBoxLayout(); child_col.setSpacing(2)
+        child_col.addWidget(QLabel("<b>child frame</b>", alignment=Qt.AlignCenter))
+        self._cal_child_lbl = QLabel("—")
+        self._cal_child_lbl.setAlignment(Qt.AlignCenter)
+        self._cal_child_lbl.setStyleSheet("color:#fab387; font-family:Monospace; font-size:12px;")
+        child_col.addWidget(self._cal_child_lbl)
+        vals_row.addLayout(child_col)
+        frame_lay.addLayout(vals_row)
+
+        # Enforce / stop buttons
+        enforce_row = QHBoxLayout()
+        self._cal_enforce_btn = QPushButton("▶️  Enforce This Frame (Live Dynamic Override)")
+        self._cal_enforce_btn.setStyleSheet(
+            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        self._cal_enforce_btn.setToolTip(
+            "Starts camera_tf_enforcer node — publishes the calibrated camera frame\n"
+            "at 100 Hz, overriding the static TF from live_pipeline WITHOUT any restart."
+        )
+        self._cal_enforce_btn.clicked.connect(self._cal_enforce_start)
+        enforce_row.addWidget(self._cal_enforce_btn)
+
+        self._cal_stop_enforce_btn = QPushButton("⏹  Stop Override")
+        self._cal_stop_enforce_btn.setEnabled(False)
+        self._cal_stop_enforce_btn.clicked.connect(self._cal_enforce_stop)
+        enforce_row.addWidget(self._cal_stop_enforce_btn)
+
+        self._cal_enforce_status = QLabel("⚠️  Not active — pipeline uses static TF from launch file")
+        self._cal_enforce_status.setStyleSheet(f"color:{C['yellow']}; font-size:11px;")
+        enforce_row.addWidget(self._cal_enforce_status)
+        enforce_row.addStretch()
+        frame_lay.addLayout(enforce_row)
+        lay.addWidget(frame_grp)
+
+        self._cal_enforcer_worker = None
+
+        # ─────────────────────────────────────────────────────────────────────
+        # GROUP 2 — MANUAL FRAME ENTRY
+        # ─────────────────────────────────────────────────────────────────────
+        manual_grp = QGroupBox("✏️  Manual Frame Entry — paste ArUco result directly")
+        manual_grp.setStyleSheet("QGroupBox { border:1px solid #fab387; border-radius:6px; margin-top:6px; }")
+        man_lay = QVBoxLayout(manual_grp)
+
+        man_hint = QLabel(
+            "Enter the transform your teammate's calibration produced (<b>or any known value</b>). "
+            "This writes <code>~/.parol6/camera_tf.yaml</code> immediately and then enforces it live."
+        )
+        man_hint.setWordWrap(True)
+        man_hint.setTextFormat(Qt.RichText)
+        man_hint.setStyleSheet(f"font-size:11px; color:{C['text2']}; border:none;")
+        man_lay.addWidget(man_hint)
+
+        # Child frame selector
+        frame_sel_row = QHBoxLayout()
+        frame_sel_row.addWidget(QLabel("base_link  →  child frame:"))
+        self._man_child_combo = QComboBox()
+        self._man_child_combo.addItem("kinect2_link  (ArUco calibration result)", "kinect2_link")
+        self._man_child_combo.addItem("kinect2       (original launch-file default)", "kinect2")
+        self._man_child_combo.setMinimumWidth(280)
+        frame_sel_row.addWidget(self._man_child_combo)
+        frame_sel_row.addStretch()
+        man_lay.addLayout(frame_sel_row)
+
+        # Translation row
+        t_row = QHBoxLayout()
+        t_row.addWidget(QLabel("<b style='color:#89b4fa'>Translation (metres):</b>", objectName="tl"))
+        t_row.itemAt(0).widget().setTextFormat(Qt.RichText)
+        self._man_x = QDoubleSpinBox(); self._man_x.setRange(-10, 10); self._man_x.setDecimals(4); self._man_x.setFixedWidth(90)
+        self._man_y = QDoubleSpinBox(); self._man_y.setRange(-10, 10); self._man_y.setDecimals(4); self._man_y.setFixedWidth(90)
+        self._man_z = QDoubleSpinBox(); self._man_z.setRange(-10, 10); self._man_z.setDecimals(4); self._man_z.setFixedWidth(90)
+        # Pre-fill with ArUco-calibrated values from calibration_setup.launch.py
+        self._man_x.setValue(0.5550); self._man_y.setValue(0.1777); self._man_z.setValue(1.0016)
+        for lbl, w in [("X:", self._man_x), ("Y:", self._man_y), ("Z:", self._man_z)]:
+            t_row.addWidget(QLabel(lbl)); t_row.addWidget(w)
+        t_row.addStretch()
+        man_lay.addLayout(t_row)
+
+        # Quaternion row
+        q_row = QHBoxLayout()
+        q_row.addWidget(QLabel("<b style='color:#a6e3a1'>Quaternion (qx qy qz qw):</b>"))
+        q_row.itemAt(0).widget().setTextFormat(Qt.RichText)
+        self._man_qx = QDoubleSpinBox(); self._man_qx.setRange(-1, 1); self._man_qx.setDecimals(4); self._man_qx.setFixedWidth(90)
+        self._man_qy = QDoubleSpinBox(); self._man_qy.setRange(-1, 1); self._man_qy.setDecimals(4); self._man_qy.setFixedWidth(90)
+        self._man_qz = QDoubleSpinBox(); self._man_qz.setRange(-1, 1); self._man_qz.setDecimals(4); self._man_qz.setFixedWidth(90)
+        self._man_qw = QDoubleSpinBox(); self._man_qw.setRange(-1, 1); self._man_qw.setDecimals(4); self._man_qw.setFixedWidth(90)
+        # Pre-fill with ArUco-calibrated quaternion
+        self._man_qx.setValue(0.7078); self._man_qy.setValue(0.7058)
+        self._man_qz.setValue(0.0269); self._man_qw.setValue(0.0123)
+        for lbl, w in [("qx:", self._man_qx), ("qy:", self._man_qy), ("qz:", self._man_qz), ("qw:", self._man_qw)]:
+            q_row.addWidget(QLabel(lbl)); q_row.addWidget(w)
+        q_row.addStretch()
+        man_lay.addLayout(q_row)
+
+        # Buttons row
+        man_btn_row = QHBoxLayout()
+        man_save_btn = QPushButton("💾  Save & Enforce Now")
+        man_save_btn.setStyleSheet(
+            f"background:#fab387; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        man_save_btn.setToolTip(
+            "Writes the values above to ~/.parol6/camera_tf.yaml\n"
+            "then starts camera_tf_enforcer to apply them live."
+        )
+        man_save_btn.clicked.connect(self._man_save_and_enforce)
+        man_btn_row.addWidget(man_save_btn)
+
+        man_load_btn = QPushButton("🔄  Load from Current File")
+        man_load_btn.setToolTip("Populate the fields above from the currently saved camera_tf.yaml.")
+        man_load_btn.clicked.connect(self._man_load_from_yaml)
+        man_btn_row.addWidget(man_load_btn)
+
+        man_btn_row.addStretch()
+        self._man_status_lbl = QLabel("")
+        self._man_status_lbl.setStyleSheet(f"color:{C['green']}; font-size:11px;")
+        man_btn_row.addWidget(self._man_status_lbl)
+        man_lay.addLayout(man_btn_row)
+
+        lay.addWidget(manual_grp)
+
+        # ─────────────────────────────────────────────────────────────────────
+        # GROUP 3 — ARUCO AUTO-CALIBRATION
+        # ─────────────────────────────────────────────────────────────────────
+        aruco_grp = QGroupBox("🎯  ArUco Auto-Calibration (re-run to refresh camera frame)")
+
+        aruco_grp.setStyleSheet("QGroupBox { border:1px solid #89b4fa; border-radius:6px; margin-top:6px; }")
+        aruco_lay = QVBoxLayout(aruco_grp)
+
+        # Marker & samples config row
+        cfg_row = QHBoxLayout()
+        cfg_row.addWidget(QLabel("Marker ID:"))
+        self._aruco_id_spin = QSpinBox()
+        self._aruco_id_spin.setRange(0, 999); self._aruco_id_spin.setValue(6); self._aruco_id_spin.setFixedWidth(60)
+        cfg_row.addWidget(self._aruco_id_spin)
+
+        cfg_row.addSpacing(10); cfg_row.addWidget(QLabel("Size (mm):"))
+        self._aruco_size_spin = QDoubleSpinBox()
+        self._aruco_size_spin.setRange(1.0, 500.0); self._aruco_size_spin.setDecimals(2)
+        self._aruco_size_spin.setValue(45.75); self._aruco_size_spin.setFixedWidth(80)
+        cfg_row.addWidget(self._aruco_size_spin)
+
+        cfg_row.addSpacing(10); cfg_row.addWidget(QLabel("Samples:"))
+        self._aruco_samples_spin = QSpinBox()
+        self._aruco_samples_spin.setRange(5, 200); self._aruco_samples_spin.setValue(20); self._aruco_samples_spin.setFixedWidth(60)
+        cfg_row.addWidget(self._aruco_samples_spin)
+        cfg_row.addStretch()
+        aruco_lay.addLayout(cfg_row)
+
+        # Marker physical position row
+        mpos_row = QHBoxLayout()
+        mpos_row.addWidget(QLabel("Known marker pos in base_link (m):"))
+        self._aruco_mx = QDoubleSpinBox(); self._aruco_mx.setRange(-5,5); self._aruco_mx.setDecimals(4); self._aruco_mx.setValue(0.623); self._aruco_mx.setFixedWidth(80)
+        self._aruco_my = QDoubleSpinBox(); self._aruco_my.setRange(-5,5); self._aruco_my.setDecimals(4); self._aruco_my.setValue(0.080); self._aruco_my.setFixedWidth(80)
+        self._aruco_mz = QDoubleSpinBox(); self._aruco_mz.setRange(-5,5); self._aruco_mz.setDecimals(4); self._aruco_mz.setValue(0.234); self._aruco_mz.setFixedWidth(80)
+        for ax, w in [('X', self._aruco_mx), ('Y', self._aruco_my), ('Z', self._aruco_mz)]:
+            mpos_row.addWidget(QLabel(f"{ax}:"))
+            mpos_row.addWidget(w)
+        mpos_row.addStretch()
+        aruco_lay.addLayout(mpos_row)
+
+        # Progress bar
+        self._aruco_progress = QProgressBar()
+        self._aruco_progress.setRange(0, 20); self._aruco_progress.setValue(0)
+        self._aruco_progress.setFormat("%v / %m samples")
+        self._aruco_progress.setStyleSheet(
+            f"QProgressBar {{ background:{C['panel']}; border:1px solid {C['border']}; border-radius:4px; "
+            f"color:{C['text']}; text-align:center; }}"
+            f"QProgressBar::chunk {{ background:#89b4fa; border-radius:4px; }}"
+        )
+        aruco_lay.addWidget(self._aruco_progress)
+
+        # Run / Stop / Save buttons
+        btn_row = QHBoxLayout()
+        self._aruco_run_btn = QPushButton("▶️  Run ArUco Calibration")
+        self._aruco_run_btn.setStyleSheet(
+            f"background:#89b4fa; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        self._aruco_run_btn.clicked.connect(self._aruco_start)
+        btn_row.addWidget(self._aruco_run_btn)
+
+        self._aruco_stop_btn = QPushButton("⏹  Stop")
+        self._aruco_stop_btn.setEnabled(False)
+        self._aruco_stop_btn.clicked.connect(self._aruco_stop)
+        btn_row.addWidget(self._aruco_stop_btn)
+
+        self._aruco_enforce_btn = QPushButton("✅  Save & Enforce New Frame")
+        self._aruco_enforce_btn.setStyleSheet(
+            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        self._aruco_enforce_btn.setEnabled(False)
+        self._aruco_enforce_btn.clicked.connect(self._aruco_save_and_enforce)
+        btn_row.addWidget(self._aruco_enforce_btn)
+        btn_row.addStretch()
+        aruco_lay.addLayout(btn_row)
+
+        # Log area
+        self._aruco_log = QTextEdit()
+        self._aruco_log.setReadOnly(True)
+        self._aruco_log.setFixedHeight(180)
+        self._aruco_log.setFont(QFont("Monospace", 9))
+        self._aruco_log.setStyleSheet("background:#11111b; color:#a6adc8;")
+        aruco_lay.addWidget(self._aruco_log)
+
+        lay.addWidget(aruco_grp)
+        lay.addStretch()
+
+        self._aruco_workers: list = []
+        QTimer.singleShot(200, self._cal_load_yaml)
+        return tab
+
+    # ── Camera frame helpers ──────────────────────────────────────────────────
+
+    def _cal_load_yaml(self) -> None:
+        """Read ~/.parol6/camera_tf.yaml and update the Current Frame panel."""
+        import yaml as _yaml
+        from pathlib import Path as _Path
+        _path = _Path.home() / '.parol6' / 'camera_tf.yaml'
+        try:
+            with open(_path) as f:
+                cfg = _yaml.safe_load(f) or {}
+            at  = cfg.get('calibrated_at', '?')
+            by  = cfg.get('calibrated_by', '?')
+            self._cal_source_lbl.setText(f"Source: {_path}  ·  {at}  ·  {by}")
+            self._cal_source_lbl.setStyleSheet(f"color:{C['green']}; font-size:10px;")
+            for key in ('x','y','z','qx','qy','qz','qw'):
+                if key in cfg:
+                    self._cal_val_labels[key].setText(f"{float(cfg[key]):.4f}")
+                else:
+                    self._cal_val_labels[key].setText("—")
+            self._cal_child_lbl.setText(str(cfg.get('child_frame_id', '?')))
+        except FileNotFoundError:
+            self._cal_source_lbl.setText(f"⚠️  {_path} not found — pipeline uses hardcoded defaults")
+            self._cal_source_lbl.setStyleSheet(f"color:{C['yellow']}; font-size:10px;")
+            for lbl in self._cal_val_labels.values():
+                lbl.setText("—")
+        except Exception as e:
+            self._cal_source_lbl.setText(f"Error loading yaml: {e}")
+            self._cal_source_lbl.setStyleSheet(f"color:{C['red']}; font-size:10px;")
+
+    def _cal_enforce_start(self) -> None:
+        """Launch camera_tf_enforcer as a background process."""
+        if self._cal_enforcer_worker is not None:
+            return
+        cmd = ["ros2", "run", "parol6_vision", "camera_tf_enforcer"]
+        worker = NodeWorker("camera_tf_enforcer", _wrap_ros_command(cmd))
+        worker.output.connect(lambda t: self._log.append(f"<span style='color:#89b4fa'>[CamTF] {t}</span>"))
+        worker.finished.connect(self._cal_enforce_stopped)
+        worker.start()
+        self._cal_enforcer_worker = worker
+        self._cal_enforce_btn.setEnabled(False)
+        self._cal_stop_enforce_btn.setEnabled(True)
+        self._cal_enforce_status.setText("✅  ACTIVE — dynamic TF override running at 100 Hz")
+        self._cal_enforce_status.setStyleSheet(f"color:{C['green']}; font-size:11px; font-weight:bold;")
+
+    def _cal_enforce_stopped(self) -> None:
+        self._cal_enforcer_worker = None
+        self._cal_enforce_btn.setEnabled(True)
+        self._cal_stop_enforce_btn.setEnabled(False)
+        self._cal_enforce_status.setText("⚠️  Not active — pipeline uses static TF from launch file")
+        self._cal_enforce_status.setStyleSheet(f"color:{C['yellow']}; font-size:11px;")
+
+    def _cal_enforce_stop(self) -> None:
+        if self._cal_enforcer_worker is not None:
+            self._cal_enforcer_worker.stop()
+        self._cal_enforce_stopped()
+
+    # ── Manual frame entry helpers ────────────────────────────────────────────
+
+    def _man_save_and_enforce(self) -> None:
+        """Write spinbox values to camera_tf.yaml, reload display, start enforcer."""
+        import yaml as _yaml
+        import datetime
+        from pathlib import Path as _Path
+
+        child = self._man_child_combo.currentData()
+        cfg = {
+            'frame_id':       'base_link',
+            'child_frame_id': child,
+            'x':  round(self._man_x.value(),  4),
+            'y':  round(self._man_y.value(),  4),
+            'z':  round(self._man_z.value(),  4),
+            'qx': round(self._man_qx.value(), 4),
+            'qy': round(self._man_qy.value(), 4),
+            'qz': round(self._man_qz.value(), 4),
+            'qw': round(self._man_qw.value(), 4),
+            'calibrated_at': datetime.datetime.now().isoformat(timespec='seconds'),
+            'calibrated_by': 'manual entry (GUI)',
+        }
+        out = _Path.home() / '.parol6' / 'camera_tf.yaml'
+        out.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(out, 'w') as f:
+                _yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            self._man_status_lbl.setText(f"✅  Saved")
+            self._man_status_lbl.setStyleSheet(f"color:{C['green']}; font-size:11px;")
+        except Exception as e:
+            self._man_status_lbl.setText(f"❌  Save failed: {e}")
+            self._man_status_lbl.setStyleSheet(f"color:{C['red']}; font-size:11px;")
+            return
+        self._cal_load_yaml()
+        self._cal_enforce_stop()
+        QTimer.singleShot(500, self._cal_enforce_start)
+
+    def _man_load_from_yaml(self) -> None:
+        """Populate the manual-entry spinboxes from the currently saved yaml."""
+        import yaml as _yaml
+        from pathlib import Path as _Path
+        _path = _Path.home() / '.parol6' / 'camera_tf.yaml'
+        try:
+            with open(_path) as f:
+                cfg = _yaml.safe_load(f) or {}
+            self._man_x.setValue(float(cfg.get('x',  0)))
+            self._man_y.setValue(float(cfg.get('y',  0)))
+            self._man_z.setValue(float(cfg.get('z',  0)))
+            self._man_qx.setValue(float(cfg.get('qx', 0)))
+            self._man_qy.setValue(float(cfg.get('qy', 0)))
+            self._man_qz.setValue(float(cfg.get('qz', 0)))
+            self._man_qw.setValue(float(cfg.get('qw', 1)))
+            child = cfg.get('child_frame_id', 'kinect2_link')
+            for i in range(self._man_child_combo.count()):
+                if self._man_child_combo.itemData(i) == child:
+                    self._man_child_combo.setCurrentIndex(i)
+                    break
+            self._man_status_lbl.setText("✅  Loaded")
+            self._man_status_lbl.setStyleSheet(f"color:{C['green']}; font-size:11px;")
+        except FileNotFoundError:
+            self._man_status_lbl.setText("⚠️  File not found")
+            self._man_status_lbl.setStyleSheet(f"color:{C['yellow']}; font-size:11px;")
+        except Exception as e:
+            self._man_status_lbl.setText(f"❌  {e}")
+            self._man_status_lbl.setStyleSheet(f"color:{C['red']}; font-size:11px;")
+
+    # ── ArUco calibration helpers ─────────────────────────────────────────────
+
+    def _aruco_log_append(self, txt: str) -> None:
+
+        if not hasattr(self, '_aruco_log'):
+            return
+        self._aruco_log.append(txt)
+        import re
+        m = re.search(r'Collected (\d+)/(\d+)', txt)
+        if m:
+            n, total = int(m.group(1)), int(m.group(2))
+            self._aruco_progress.setMaximum(total)
+            self._aruco_progress.setValue(n)
+        if 'Saved to' in txt or 'camera_tf.yaml' in txt:
+            self._aruco_enforce_btn.setEnabled(True)
+            self._aruco_progress.setValue(self._aruco_progress.maximum())
+            QTimer.singleShot(1000, self._cal_load_yaml)
+
+    def _aruco_start(self) -> None:
+        """Launch aruco_ros single + eye_to_hand_calibrator."""
+        marker_id   = self._aruco_id_spin.value()
+        marker_size = self._aruco_size_spin.value() / 1000.0
+        n_samples   = self._aruco_samples_spin.value()
+        mx, my, mz  = self._aruco_mx.value(), self._aruco_my.value(), self._aruco_mz.value()
+
+        self._aruco_log.clear()
+        self._aruco_progress.setValue(0)
+        self._aruco_progress.setMaximum(n_samples)
+        self._aruco_enforce_btn.setEnabled(False)
+
+        aruco_cmd = [
+            "ros2", "run", "aruco_ros", "single",
+            "--ros-args",
+            "--remap", "/image:=/kinect2/sd/image_color_rect",
+            "--remap", "/camera_info:=/kinect2/sd/camera_info",
+            "-p", f"marker_id:={marker_id}",
+            "-p", f"marker_size:={marker_size:.5f}",
+            "-p", "camera_frame:=kinect2_ir_optical_frame",
+            "-p", "marker_frame:=detected_marker_frame",
+            "-p", "corner_refinement:=SUBPIX",
+            "-p", "image_is_rectified:=True",
+            "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
+        ]
+        aruco_worker = NodeWorker("aruco_ros", _wrap_ros_command(aruco_cmd))
+        aruco_worker.output.connect(
+            lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_ros] {t}</span>")
+        )
+        aruco_worker.start()
+
+        cal_cmd = [
+            "ros2", "run", "parol6_vision", "eye_to_hand_calibrator",
+            "--ros-args",
+            "-p", f"marker_x:={mx:.4f}",
+            "-p", f"marker_y:={my:.4f}",
+            "-p", f"marker_z:={mz:.4f}",
+            "-p", f"samples_to_collect:={n_samples}",
+        ]
+        cal_worker = NodeWorker("eye_to_hand_calibrator", _wrap_ros_command(cal_cmd))
+        cal_worker.output.connect(self._aruco_log_append)
+        cal_worker.finished.connect(self._aruco_calibration_done)
+        QTimer.singleShot(2000, cal_worker.start)
+
+        self._aruco_workers = [aruco_worker, cal_worker]
+        self._aruco_run_btn.setEnabled(False)
+        self._aruco_stop_btn.setEnabled(True)
+        self._aruco_log_append(
+            f"<b style='color:#89b4fa'>[GUI] ArUco calibration started — "
+            f"marker #{marker_id} ({marker_size*1000:.1f} mm), "
+            f"{n_samples} samples, marker @ ({mx:.3f}, {my:.3f}, {mz:.3f}) m</b>"
+        )
+
+    def _aruco_calibration_done(self) -> None:
+        self._aruco_stop_btn.setEnabled(False)
+        self._aruco_run_btn.setEnabled(True)
+        self._aruco_log_append(
+            "<b style='color:#a6e3a1'>[GUI] ✅ Calibration finished. "
+            "Click \"Save & Enforce\" to apply the new camera frame live.</b>"
+        )
+        if self._aruco_workers:
+            self._aruco_workers[0].stop()   # stop aruco_ros
+
+    def _aruco_stop(self) -> None:
+        for w in self._aruco_workers:
+            try: w.stop()
+            except Exception: pass
+        self._aruco_workers = []
+        self._aruco_run_btn.setEnabled(True)
+        self._aruco_stop_btn.setEnabled(False)
+        self._aruco_log_append("<span style='color:#f38ba8'>[GUI] Calibration stopped.</span>")
+
+    def _aruco_save_and_enforce(self) -> None:
+        """Reload display from yaml and kick-start the enforcer node."""
+        self._cal_load_yaml()
+        self._aruco_log_append("<b style='color:#a6e3a1'>[GUI] Saved. Starting enforcer...</b>")
+        self._cal_enforce_stop()
+        QTimer.singleShot(500, self._cal_enforce_start)
+
     # ── Crop Image Tab ────────────────────────────────────────────────────────
 
     def _build_crop_tab(self) -> QWidget:
+
         """
         ✂️ Crop Image Tab
         ─────────────────

@@ -33,6 +33,8 @@ launch file, as it lives in a different workspace:
 """
 
 import os
+import yaml
+from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
@@ -40,6 +42,49 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import get_package_share_directory
+from scipy.spatial.transform import Rotation as _Rot
+
+# ── Camera TF: read from calibration yaml or use defaults ────────────────────
+_CAMERA_TF_PATH = Path.home() / '.parol6' / 'camera_tf.yaml'
+_CAM_DEFAULTS = {
+    'frame_id':       'base_link',
+    'child_frame_id': 'kinect2',
+    'x': 0.646, 'y': 0.1225, 'z': 1.015,
+    'roll': -3.14159, 'pitch': 0.0, 'yaw': 1.603684,
+}
+_cam_cfg = dict(_CAM_DEFAULTS)
+if _CAMERA_TF_PATH.exists():
+    try:
+        with open(_CAMERA_TF_PATH) as _f:
+            _loaded = yaml.safe_load(_f) or {}
+        _cam_cfg.update({k: v for k, v in _loaded.items() if v is not None and not k.startswith('_')})
+        print(f"[live_pipeline] Using calibrated camera TF from {_CAMERA_TF_PATH}")
+        print(f"  {_cam_cfg['frame_id']} → {_cam_cfg['child_frame_id']}")
+        print(f"  xyz=({_cam_cfg['x']:.4f}, {_cam_cfg['y']:.4f}, {_cam_cfg['z']:.4f})")
+    except Exception as _e:
+        print(f"[live_pipeline] WARNING: Could not load {_CAMERA_TF_PATH}: {_e} — using defaults")
+else:
+    print(f"[live_pipeline] No camera_tf.yaml found — using hardcoded defaults")
+
+# Build static_transform_publisher positional args from config.
+# We support both quaternion (qx/qy/qz/qw) and euler (roll/pitch/yaw) formats.
+def _build_camera_tf_args(cfg: dict) -> list:
+    x = str(float(cfg.get('x', 0.0)))
+    y = str(float(cfg.get('y', 0.0)))
+    z = str(float(cfg.get('z', 0.0)))
+    if 'qx' in cfg:
+        qx = str(float(cfg['qx']))
+        qy = str(float(cfg['qy']))
+        qz = str(float(cfg['qz']))
+        qw = str(float(cfg['qw']))
+        return [x, y, z, qx, qy, qz, qw, cfg['frame_id'], cfg['child_frame_id']]
+    else:
+        roll  = float(cfg.get('roll',  0.0))
+        pitch = float(cfg.get('pitch', 0.0))
+        yaw   = float(cfg.get('yaw',   0.0))
+        q = _Rot.from_euler('xyz', [roll, pitch, yaw]).as_quat()
+        return [x, y, z, str(q[0]), str(q[1]), str(q[2]), str(q[3]),
+                cfg['frame_id'], cfg['child_frame_id']]
 
 
 def generate_launch_description():
@@ -89,13 +134,10 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_camera',
-        # Connects base_link to the root of the Kinect bridge TF tree.
-        # The bridge itself owns kinect2 -> kinect2_link -> optical frames.
-        arguments=[
-            '--x', '0.646', '--y', '0.1225', '--z', '1.015',
-            '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
-            '--frame-id', 'base_link', '--child-frame-id', 'kinect2',
-        ],
+        # TF values are loaded from ~/.parol6/camera_tf.yaml at launch time.
+        # If that file is missing, hardcoded defaults are used (see top of file).
+        # Use GUI "Cam Calibrate" tab or camera_tf_enforcer node for live override.
+        arguments=_build_camera_tf_args(_cam_cfg),
         output='log',
     )
 

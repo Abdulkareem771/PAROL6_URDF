@@ -44,6 +44,7 @@ setup(
             'manual_line_aligner = parol6_vision.manual_line_aligner_node:main',
             'vision_trajectory_executor = parol6_vision.vision_trajectory_executor:main',
             'eye_to_hand_calibrator = parol6_vision.eye_to_hand_calibrator:main',
+            'camera_tf_enforcer = parol6_vision.camera_tf_enforcer:main',
             'inject_path = parol6_vision.inject_path_node:main',
             'path_holder = parol6_vision.path_holder:main',
         ],
