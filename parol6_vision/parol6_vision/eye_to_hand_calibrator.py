@@ -116,7 +116,7 @@ class EyeToHandCalibrator(Node):
         self.declare_parameter('marker_qw', 1.0)
         # Camera TF chain params
         self.declare_parameter('camera_optical_frame', 'kinect2_ir_optical_frame')
-        self.declare_parameter('camera_link_frame',    'kinect2')
+        self.declare_parameter('camera_link_frame',    'kinect2_link')
         self.declare_parameter('base_frame',           'base_link')
         # Calibration quality
         self.declare_parameter('samples_to_collect', 20)
@@ -230,6 +230,20 @@ class EyeToHandCalibrator(Node):
             )
             T_base_link = T_base_cam
             output_child = self.source_frame
+
+        # ── Promote kinect2_link → kinect2 to prevent dual-parent TF conflict ──
+        # kinect2_bridge internally publishes kinect2 → kinect2_link (identity).
+        # If we let our enforcer also claim base_link → kinect2_link, kinect2_link
+        # ends up with two parents (kinect2 from bridge AND base_link from us).
+        # Since the kinect2 → kinect2_link transform is identity, T_base_kinect2
+        # == T_base_kinect2_link mathematically, so we just relabel the child.
+        if output_child == self.link_frame:
+            output_child = 'kinect2'
+            self.get_logger().info(
+                "[Calibrator] Promoting output frame: kinect2_link → kinect2\n"
+                "  (kinect2→kinect2_link is identity; re-labelling avoids a\n"
+                "   dual-parent TF conflict with kinect2_bridge's internal chain)"
+            )
 
         # ── Format result ────────────────────────────────────────────────
         result = _matrix_to_dict(T_base_link, self.base_frame, output_child)
