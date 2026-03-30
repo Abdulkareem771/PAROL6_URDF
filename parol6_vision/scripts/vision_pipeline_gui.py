@@ -2503,7 +2503,7 @@ class VisionPipelineGUI(QMainWindow):
         Two-panel tab:
           Top    : Current calibration status (loaded from ~/.parol6/camera_tf.yaml)
                    with Enforce (dynamic override) / Stop buttons.
-          Bottom : ArUco auto-calibration launcher — runs aruco_ros + eye_to_hand_calibrator,
+          Bottom : ArUco auto-calibration launcher — runs aruco_detector + eye_to_hand_calibrator,
                    shows progress, and saves the new result when done.
         """
         from PySide6.QtWidgets import QProgressBar
@@ -2991,7 +2991,7 @@ class VisionPipelineGUI(QMainWindow):
             QTimer.singleShot(1000, self._cal_load_yaml)
 
     def _aruco_start(self) -> None:
-        """Launch aruco_ros single + eye_to_hand_calibrator."""
+        """Launch aruco_detector + eye_to_hand_calibrator."""
         marker_id   = self._aruco_id_spin.value()
         marker_size = self._aruco_size_spin.value() / 1000.0
         n_samples   = self._aruco_samples_spin.value()
@@ -3003,16 +3003,14 @@ class VisionPipelineGUI(QMainWindow):
         self._aruco_enforce_btn.setEnabled(False)
 
         aruco_cmd = [
-            "ros2", "run", "aruco_ros", "single",
+            "ros2", "run", "parol6_vision", "aruco_detector",
             "--ros-args",
-            "--remap", "/image:=/kinect2/sd/image_color_rect",
-            "--remap", "/camera_info:=/kinect2/sd/camera_info",
+            "-p", "image_topic:=/kinect2/sd/image_color_rect",
+            "-p", "camera_info_topic:=/kinect2/sd/camera_info",
             "-p", f"marker_id:={marker_id}",
             "-p", f"marker_size:={marker_size:.5f}",
-            "-p", "camera_frame:=kinect2_ir_optical_frame",
+            "-p", "camera_optical_frame:=kinect2_ir_optical_frame",
             "-p", "marker_frame:=detected_marker_frame",
-            "-p", "corner_refinement:=SUBPIX",
-            "-p", "image_is_rectified:=True",
             "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
         ]
         self._aruco_log_append(
@@ -3022,7 +3020,7 @@ class VisionPipelineGUI(QMainWindow):
             # NodeWorker(raw_cmd): NodeWorker.__init__ calls _wrap_ros_command internally
             aruco_worker = NodeWorker(aruco_cmd)
             aruco_worker.line_out.connect(
-                lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_ros] {t}</span>")
+                lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_detector] {t}</span>")
             )
             aruco_worker.start()
 
@@ -3046,7 +3044,7 @@ class VisionPipelineGUI(QMainWindow):
                 f"<b style='color:#89b4fa'>[GUI] ArUco calibration started — "
                 f"marker #{marker_id} ({marker_size*1000:.1f} mm), "
                 f"{n_samples} samples, marker @ ({mx:.3f}, {my:.3f}, {mz:.3f}) m<br>"
-                f"aruco_ros launched; eye_to_hand_calibrator will start in 2 s…</b>"
+                f"aruco_detector launched; eye_to_hand_calibrator will start in 2 s…</b>"
             )
         except Exception as _exc:
             self._aruco_log_append(
@@ -3063,7 +3061,7 @@ class VisionPipelineGUI(QMainWindow):
             "Click \"Save & Enforce\" to apply the new camera frame live.</b>"
         )
         if self._aruco_workers:
-            self._aruco_workers[0].abort()   # stop aruco_ros
+            self._aruco_workers[0].abort()   # stop aruco_detector
 
     def _aruco_stop(self) -> None:
         for w in self._aruco_workers:
