@@ -26,8 +26,8 @@ def generate_launch_description():
         executable='single',
         name='aruco_single',
         parameters=[{
-            'marker_id': 6,
-            'marker_size': 0.04575,  # Change to your measured size in meters
+            'marker_id': 206,
+            'marker_size': 0.1568,  # Change to your measured size in meters
             'marker_frame': "detected_marker_frame",
             'reference_frame': "kinect2_ir_optical_frame",
             'corner_refinement': "SUBPIX",
