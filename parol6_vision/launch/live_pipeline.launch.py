@@ -10,8 +10,8 @@ Nodes started:
   4. depth_matcher    — lifts 2-D weld lines to 3-D using depth data
   5. path_generator   — produces the final Nav2 Path message for MoveIt
 
-Also sets up the required static TF tree so depth_matcher can project
-into 3-D: world → base_link → kinect2_link → kinect2_rgb_optical_frame.
+Also sets up the required static TF root so depth_matcher can project
+into 3-D: world → base_link → kinect2 → kinect2_link → kinect2_rgb_optical_frame.
 A point-cloud node (depth_image_proc) fuses colour + depth for RViz.
 
 Usage
@@ -89,21 +89,12 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_tf_camera',
-        arguments=['--x', '0.646', '--y', '0.1225', '--z', '1.015',
-                   '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
-                   '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
-        output='log',
-    )
-
-    static_tf_optical = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_optical',
+        # Connects base_link to the root of the Kinect bridge TF tree.
+        # The bridge itself owns kinect2 -> kinect2_link -> optical frames.
         arguments=[
-            '--x', '0.0', '--y', '0.0', '--z', '0.0',
-            '--roll', '-1.5708', '--pitch', '0.0', '--yaw', '-1.5708',
-            '--frame-id', 'kinect2_link',
-            '--child-frame-id', 'kinect2_rgb_optical_frame',
+            '--x', '0.646', '--y', '0.1225', '--z', '1.015',
+            '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
+            '--frame-id', 'base_link', '--child-frame-id', 'kinect2',
         ],
         output='log',
     )
@@ -165,6 +156,25 @@ def generate_launch_description():
         output='screen',
     )
 
+    # ── Stage 4b: Inject Path Node ────────────────────────────────────
+    # Receives test paths from GUI and publishes to staging topic.
+    inject_path_node = Node(
+        package='parol6_vision',
+        executable='inject_path',
+        name='inject_path_node',
+        output='screen',
+    )
+
+    # ── Stage 4c: Path Holder (Authoritative Publisher) ───────────────
+    # Single authoritative TRANSIENT_LOCAL publisher on /vision/welding_path.
+    path_holder_node = Node(
+        package='parol6_vision',
+        executable='path_holder',
+        name='path_holder',
+        parameters=[{'active_source': 'generated'}],
+        output='screen',
+    )
+
     # ── Point Cloud (for RViz depth viz) ─────────────────────────────
     point_cloud_node = Node(
         package='depth_image_proc',
@@ -196,13 +206,14 @@ def generate_launch_description():
         # TFs
         static_tf_world,
         static_tf_camera,
-        static_tf_optical,
         # Pipeline
         capture_node,
         crop_node,
         path_optimizer_node,
         depth_matcher_node,
         path_generator_node,
+        inject_path_node,
+        path_holder_node,
         point_cloud_node,
         rviz_node,
     ])

@@ -76,7 +76,7 @@ class DepthMatcher(Node):
     
     Subscribed Topics:
         /vision/weld_lines_2d (WeldLineArray): 2D detections
-        /vision/captured_image_depth (Image): Aligned depth image (replayed)
+        /kinect2/sd/image_depth_rect (Image): Live aligned depth image
         /kinect2/sd/camera_info (CameraInfo): Camera intrinsics
         
     Published Topics:
@@ -92,8 +92,7 @@ class DepthMatcher(Node):
         # ============================================================
         
         self.declare_parameter('target_frame', 'base_link')
-        self.declare_parameter('depth_scale', 1.0)  # mm to meters if needed (usually 0.001)
-        # Note: Kinect usually gives mm as uint16, CvBridge handles encoding
+        self.declare_parameter('depth_scale', 1.0)
         
         # Filtering
         self.declare_parameter('outlier_std_threshold', 2.0)
@@ -105,6 +104,11 @@ class DepthMatcher(Node):
         # Synchronization
         self.declare_parameter('sync_time_tolerance', 0.5) # seconds
         self.declare_parameter('sync_queue_size', 10)
+
+        # Input topics — use live kinect stream so sync always has fresh depth data.
+        # Override if you want to replay from bags or use a different camera.
+        self.declare_parameter('depth_topic', '/kinect2/sd/image_depth_rect')
+        self.declare_parameter('camera_info_topic', '/kinect2/sd/camera_info')
         
         # Get values
         self.target_frame = self.get_parameter('target_frame').value
@@ -145,31 +149,86 @@ class DepthMatcher(Node):
         # SYNCHRONIZED SUBSCRIBERS
         # ============================================================
         
-        self.lines_sub = message_filters.Subscriber(
-            self, WeldLineArray, '/vision/weld_lines_2d'
+        # ============================================================
+        # SUBSCRIBERS — Cache-based (no strict timestamp sync)
+        # ============================================================
+        # Design:  captured_image_depth and camera_info arrive once at capture
+        # time and are cached. weld_lines_2d arrives whenever the manual line
+        # (or path_optimizer) has a result and triggers processing using the
+        # most recently cached depth frame — regardless of timestamp difference.
+        # This is robust to static-capture + manual-draw workflows where the
+        # user draws a line long after the depth frame was captured.
+
+        self._cached_depth: Image | None = None
+        self._cached_info: CameraInfo | None = None
+        self._last_process_time: float = 0.0      # wall-clock seconds
+        self._min_process_interval: float = 0.5   # rate-limit: max 2 Hz processing
+
+        # TRANSIENT_LOCAL so we receive the last-published depth even if
+        # depth_matcher starts AFTER the user pressed Capture.
+        # Publisher (capture_images_node) uses the same durability — must match.
+        from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
+        _latch_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
         )
-        self.depth_sub = message_filters.Subscriber(
-            self, Image, '/vision/captured_image_depth'
+
+        self.create_subscription(
+            Image,
+            '/vision/captured_image_depth',
+            self._on_depth,
+            _latch_qos,
         )
-        self.info_sub = message_filters.Subscriber(
-            self, CameraInfo, '/vision/captured_camera_info'
+        self.create_subscription(
+            CameraInfo,
+            '/vision/captured_camera_info',
+            self._on_info,
+            _latch_qos,
         )
-        
-        # Use ApproximateTimeSynchronizer
-        # Kinect RGB and Depth timestamps may differ slightly (~1-30ms)
-        queue_size = self.get_parameter('sync_queue_size').value
-        tolerance = self.get_parameter('sync_time_tolerance').value
-        
-        self.sync = message_filters.ApproximateTimeSynchronizer(
-            [self.lines_sub, self.depth_sub, self.info_sub],
-            queue_size=queue_size,
-            slop=tolerance
+        self.create_subscription(
+            WeldLineArray,
+            '/vision/weld_lines_2d',
+            self._on_lines,
+            10,
         )
-        
-        self.sync.registerCallback(self.synchronized_callback)
-        
+
         self.bridge = CvBridge()
-        self.get_logger().info('Depth Matcher initialized with ApproximateTimeSynchronizer')
+        self.get_logger().info('Depth Matcher initialized (cache-based sync)')
+
+    def _on_depth(self, msg: Image) -> None:
+        """Cache the most recently captured depth image."""
+        self._cached_depth = msg
+
+    def _on_info(self, msg: CameraInfo) -> None:
+        """Cache the most recently received camera intrinsics."""
+        self._cached_info = msg
+
+    def _on_lines(self, lines_msg: WeldLineArray) -> None:
+        """
+        Process weld lines using the cached depth + camera_info.
+        Rate-limited to _min_process_interval seconds so a continuous stream
+        of weld_lines_2d (manual_line fires on every GUI frame at camera rate)
+        does not flood the depth → 3D → path pipeline.
+        """
+        import time
+        now = time.monotonic()
+        if now - self._last_process_time < self._min_process_interval:
+            return  # same line, too soon — drop
+        if self._cached_depth is None:
+            self.get_logger().warn(
+                'weld_lines_2d received but no captured depth cached yet '
+                '— capture an image first.'
+            )
+            return
+        if self._cached_info is None:
+            self.get_logger().warn(
+                'weld_lines_2d received but no camera_info cached yet.'
+            )
+            return
+        self._last_process_time = now
+        # Delegate to the main processing method using cached frames
+        self.synchronized_callback(lines_msg, self._cached_depth, self._cached_info)
         
     # ================================================================
     # MAIN CALLBACK
@@ -335,7 +394,8 @@ class DepthMatcher(Node):
                 'Possible causes: TF failure, invalid depth values (0/NaN), '
                 'points out of range (min/max depth), or aggressive outlier filtering.'
             )
-            
+            # Clear stale markers from the previous detection
+            self.publish_markers([])
     # ================================================================
     # UTIL FUNCTIONS
     # ================================================================
@@ -380,8 +440,14 @@ class DepthMatcher(Node):
     def publish_markers(self, lines_3d):
         """
         Visualize 3D points in RViz.
+        Publishes a DELETEALL first to clear stale markers from previous detections.
         """
         marker_array = MarkerArray()
+
+        # Always delete all previous markers first to prevent accumulation
+        delete_all = Marker()
+        delete_all.action = Marker.DELETEALL
+        marker_array.markers.append(delete_all)
         
         for idx, line in enumerate(lines_3d):
             # 1. Point Cloud Marker (SPHERE_LIST) - shows individual samples
@@ -422,7 +488,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

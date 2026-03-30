@@ -240,7 +240,11 @@ class PathOptimizer(Node):
 
         # ---- Build WeldLineArray (0 or 1 entry) ----
         weld_array = WeldLineArray()
-        weld_array.header = msg.header
+        weld_array.header = msg.header  # preserve captured image timestamp for depth sync
+        # Guarantee a non-empty frame_id so depth_matcher's TF lookup never fails
+        # with "Invalid argument empty string passed to lookupTransform".
+        if not weld_array.header.frame_id:
+            weld_array.header.frame_id = 'kinect2_rgb_optical_frame'
 
         if best_line is not None:
             weld_array.lines = [best_line]
@@ -266,7 +270,13 @@ class PathOptimizer(Node):
             debug_msg.header = msg.header
             self.debug_image_pub.publish(debug_msg)
 
-            markers = self.create_markers(weld_array.lines, msg.header)
+            # Build a header with a valid frame_id for RViz visualization.
+            # Pixel coords are mapped to z=0.45 m in the optical frame.
+            from std_msgs.msg import Header
+            viz_header = Header()
+            viz_header.stamp = self.get_clock().now().to_msg()
+            viz_header.frame_id = 'kinect2_rgb_optical_frame'
+            markers = self.create_markers(weld_array.lines, viz_header)
             self.markers_pub.publish(markers)
 
     # ================================================================
@@ -448,6 +458,8 @@ class PathOptimizer(Node):
 
         contours = []
         for cnt in raw_contours:
+            if len(cnt) < 5:
+                continue
             try:
                 contours.append(cnt.reshape(-1, 2))
             except Exception as e:
@@ -700,7 +712,8 @@ def main(args=None):
             f'{100.0 * node.detection_count / max(node.frame_count, 1):.1f}%'
         )
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

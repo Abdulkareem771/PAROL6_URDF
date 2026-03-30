@@ -54,7 +54,7 @@ flowchart LR
 | 1a | kinect2_bridge | External package (`/opt/kinect_ws`) |
 | 1b | capture_images | `parol6_vision/capture_images_node.py` |
 | 1c | crop_image | `parol6_vision/crop_image_node.py` |
-| 2 | color_mode **or** yolo_segment **or** Manual (GUI) | `parol6_vision/color_mode.py` · `yolo_segment.py` |
+| 2 | color_mode **or** yolo **or** Manual | `color_mode.py` · `yolo_segment.py` · `manual_line_aligner_node.py` |
 | 3a | path_optimizer | `parol6_vision/path_optimizer.py` |
 | 3b | depth_matcher | `parol6_vision/depth_matcher.py` |
 | 3c | path_generator | `parol6_vision/path_generator.py` |
@@ -168,9 +168,9 @@ ros2 launch ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml
 
 ---
 
-### 2.6 manual_line *(new — Session 3)*
+### 2.6 manual_line_aligner *(new — Session 3)*
 
-**Entry point:** `ros2 run parol6_vision manual_line`
+**Entry point:** `ros2 run parol6_vision manual_line_aligner`
 
 **Subscribed:** `/vision/captured_image_color`
 
@@ -182,14 +182,15 @@ ros2 launch ~/Desktop/PAROL6_URDF/kinect2_bridge_gpu.yaml
 **Services:**
 | Service | Type | Action |
 |---------|------|--------|
-| `~/set_strokes` | `std_srvs/Trigger` | Load strokes from `strokes_json` param + save config |
+| `~/set_strokes` | `std_srvs/Trigger` | Fixed mode: load strokes directly from `strokes_json` param |
+| `~/teach_reference` | `std_srvs/Trigger` | Adaptive mode: extract ORB features tightly using the `roi_polygon` provided in the JSON, then dynamically track the part geomtrically across live frames. |
 | `~/reset_strokes` | `std_srvs/Trigger` | Clear in-memory strokes + delete saved config |
 
-**Parameters:** `stroke_color` (int[3], BGR), `stroke_width` (int), `strokes_json` (str, set before calling set_strokes)
+**Parameters:** `stroke_color` (int[3], BGR), `stroke_width` (int), `strokes_json` (str, set before calling services), `publish_debug` (bool)
 
-**Persistent config:** `~/.parol6/manual_line_config.json` — loaded automatically on node startup.
+**Persistent config:** `~/.parol6/manual_aligner_config.json` — loaded automatically on node startup. Uses base64 encoding for massive ORB feature pools to evade param length crash limits.
 
-> **Use case:** Draw the weld seam once for a given fixture position. Config is saved and replayed on every subsequent node start — no re-drawing needed for repeat jobs.
+> **Use case:** Draw the weld seam once. If you also draw a boundary `roi_polygon` in the GUI, the node uses RANSAC + Affine Transform to dynamically rotate and translate the predefined strokes safely if the physical part shifts arbitrarily on the welder's table!
 
 ---
 
@@ -480,8 +481,8 @@ top -p $(pgrep -f kinect2_bridge_node)         # check CPU usage
 | 15 | `yolo_segment.py`: Fixed silent intersection failure due to letterbox-padded `result.masks.data` aspect-ratio squishing. Mapped polygons using `result.masks.xy` directly to original unpadded image coords. |
 | 16 | `yolo_segment.py`: Always publish debug image even when `< 2` masks detected; shows polygon outlines + status badge. |
 | 17 | `crop_image_node.py`: Auto-apply saved config on the very first incoming frame (no manual trigger needed). |
-| 18 | New `manual_line_node.py`: Full ROS 2 node consistent with `color_mode`/`yolo_segment`; persistent stroke config in `~/.parol6/manual_line_config.json`; auto-loads on startup; `set_strokes` and `reset_strokes` services. |
-| 19 | GUI: `ColorPickerWidget` reusable class (swatch + eyedropper); Manual Red Line sidebar sub-panel with inline `ManualCanvas`, brush size, straight-line mode (shift snap), Send/Reset Strokes buttons. |
+| 18 | New `manual_line_aligner_node.py`: Full computer vision alignment tracking for manual weld paths. Fully replaces `manual_line` with Affine validation, Lowe's Ratio test logic, and translation stabilization array filters. |
+| 19 | GUI: `ColorPickerWidget` reusable class (swatch + eyedropper); Manual Red Line sidebar sub-panel with inline `ManualCanvas`, brush size, Auto-Align bounding tooling (ROI polygon drawing), Send/Reset Strokes buttons. |
 
 ---
 
@@ -594,14 +595,16 @@ KNOWN GOTCHAS
 6. _manual_publish_ros caches publisher; don't create new one per click.
 7. YOLO model has a single class 'Object' — it generates ONE combined mask, not two separate ones. This is a training labelling issue. The intersection logic needs two separate masks to find the seam; until retrained with 2 classes, manual_line or color_mode should be used instead.
 8. crop_image auto-applies saved polygon on the first frame after node start. No manual trigger needed after setting up the workspace once.
-9. manual_line node saves strokes to ~/.parol6/manual_line_config.json and auto-loads on next startup.
+9. manual_line_aligner dynamically translates strokes based on taught ROI polygon features, tracking identical parts across table shifts without static fixtures.
+10. manual_line_aligner config: ~/.parol6/manual_aligner_config.json (auto-loads ORB descriptor templates directly).
 
 ALL BUGS FIXED UP TO 2026-03-26 (19 total across 3 sessions):
   See §9 of VISION_PIPELINE_DEVELOPER_GUIDE.md for full list.
 
 NEW IN SESSION 3
-  manual_line node: ros2 run parol6_vision manual_line
-  Config: ~/.parol6/manual_line_config.json (auto-loaded on startup)
+  manual_line_aligner node: ros2 run parol6_vision manual_line_aligner
+  Adaptive tracking of manual weld paths using ORB features and RANSAC Affine estimations.
+  Config: ~/.parol6/manual_aligner_config.json (auto-loaded on startup)
 
 FIRST STEPS
 1. Read VISION_PIPELINE_DEVELOPER_GUIDE.md

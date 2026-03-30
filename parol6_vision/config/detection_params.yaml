@@ -33,6 +33,19 @@ red_line_detector:
     min_confidence: 0.5             # Minimum confidence to publish
     max_lines_per_frame: 5          # Maximum detections
 
+# Path Optimizer Parameters (matches red_line_detector but for the singleton node)
+path_optimizer:
+  ros__parameters:
+    hsv_lower_1: [0, 100, 100]
+    hsv_upper_1: [10, 255, 255]
+    hsv_lower_2: [170, 100, 100]
+    hsv_upper_2: [180, 255, 255]
+    morphology_kernel_size: 5
+    erosion_iterations: 1
+    dilation_iterations: 5          # Higher dilation to close fragmented seam masks
+    douglas_peucker_epsilon: 2.0
+    min_confidence: 0.5
+
 # Depth Matcher Parameters
 depth_matcher:
   ros__parameters:

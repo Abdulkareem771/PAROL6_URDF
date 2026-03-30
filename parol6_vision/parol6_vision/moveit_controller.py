@@ -100,7 +100,7 @@ class MoveItController(Node):
         self.declare_parameter('min_success_rates', [0.95, 0.95, 0.90])
         
         # Process offsets
-        self.declare_parameter('approach_distance', 0.05)
+        self.declare_parameter('approach_distance', 0.15)  # 15cm: weld surface ~z=0.045m → approach at z=0.195m (inside workspace)
         self.declare_parameter('weld_velocity', 0.01) # m/s
 
         # Auto-execute: if True, run sequence every time a new path arrives
@@ -113,6 +113,12 @@ class MoveItController(Node):
         # Test mode: clamp incoming path into a conservative reachable workspace.
         # Useful to validate pipeline wiring even when vision points are out of reach.
         self.declare_parameter('enforce_reachable_test_path', False)
+
+        # Path offset — applied to every incoming waypoint before execution.
+        # Allows welding offset correction without re-running vision (in meters).
+        self.declare_parameter('path_offset_x', 0.0)  # positive = forward (+X)
+        self.declare_parameter('path_offset_y', 0.0)  # positive = left    (+Y)
+        self.declare_parameter('path_offset_z', 0.0)  # positive = up      (+Z)
         self.declare_parameter('test_workspace_min', [0.20, -0.35, 0.10])  # x,y,z
         self.declare_parameter('test_workspace_max', [0.65, 0.35, 0.55])   # x,y,z
         self.declare_parameter('test_min_radius_xy', 0.20)
@@ -163,9 +169,10 @@ class MoveItController(Node):
             'move_action'
         )
         
-        # Input Path — TRANSIENT_LOCAL (latching) so a message published before
-        # this node starts is still received. Must match the publisher's QoS.
-        latch_qos = QoSProfile(
+        # Input Path — TRANSIENT_LOCAL so we receive the held path from path_holder
+        # even when joining after it was published. path_holder is the sole
+        # TRANSIENT_LOCAL publisher on /vision/welding_path, so no ambiguity.
+        path_qos = QoSProfile(
             depth=1,
             reliability=QoSReliabilityPolicy.RELIABLE,
             durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
@@ -174,7 +181,7 @@ class MoveItController(Node):
             Path,
             '/vision/welding_path',
             self.path_callback,
-            latch_qos
+            path_qos
         )
         
         # Manual Trigger
@@ -194,6 +201,7 @@ class MoveItController(Node):
         self.latest_path = None
         self.execution_in_progress = False
         self._exec_lock = threading.Lock()
+        self._last_path_hash: int | None = None  # dedup guard against TRANSIENT_LOCAL burst
         self.get_logger().info('MoveIt Controller initialized')
 
     def _wait_async_result(self, future, timeout_sec=15.0):
@@ -221,7 +229,44 @@ class MoveItController(Node):
         return False
         
     def path_callback(self, msg):
-        """Buffer latest path; auto-execute if configured"""
+        """Buffer latest path (with live offset applied); auto-execute if configured"""
+        import copy as _copy
+
+        # Read live offset parameters — user can change them without restarting
+        ox = self.get_parameter('path_offset_x').value
+        oy = self.get_parameter('path_offset_y').value
+        oz = self.get_parameter('path_offset_z').value
+
+        if msg.poses:
+            raw_first = msg.poses[0].pose.position
+            self.get_logger().info(
+                f'Raw first waypoint: x={raw_first.x:.4f}, y={raw_first.y:.4f}, z={raw_first.z:.4f}'
+            )
+
+        if msg.poses and (ox or oy or oz):
+            # Apply offset — work on a deep copy so we don't mutate the DDS buffer
+            msg = _copy.deepcopy(msg)
+            for ps in msg.poses:
+                ps.pose.position.x += ox
+                ps.pose.position.y += oy
+                ps.pose.position.z += oz
+            if ox or oy or oz:
+                adj_first = msg.poses[0].pose.position
+                self.get_logger().info(
+                    f'Path offset applied: dx={ox*1000:.1f}mm  dy={oy*1000:.1f}mm  dz={oz*1000:.1f}mm'
+                )
+                self.get_logger().info(
+                    f'Offset-adjusted first waypoint: x={adj_first.x:.4f}, y={adj_first.y:.4f}, z={adj_first.z:.4f}'
+                )
+
+        if msg.poses:
+            first = msg.poses[0].pose.position
+            last = msg.poses[-1].pose.position
+            path_hash = hash((len(msg.poses), first.x, first.y, first.z, last.x, last.y, last.z))
+            if path_hash == self._last_path_hash:
+                return  # identical path already cached — skip log spam
+            self._last_path_hash = path_hash
+
         self.latest_path = msg
         self.get_logger().info(f'Received path with {len(msg.poses)} points')
         if self.auto_execute:
@@ -239,18 +284,25 @@ class MoveItController(Node):
             response.message = "Execution already in progress"
             return response
             
-        # Start execution in worker thread so callback doesn't block executor.
-        self._start_execution_async(self.latest_path, source='service')
+        # Freeze the exact path snapshot for this run so late republishes do not
+        # perturb the currently executing planning thread.
+        self._start_execution_async(copy.deepcopy(self.latest_path), source='service')
         response.success = True
         response.message = "Execution started"
         return response
 
     def get_execution_status(self, request, response):
-        """Service callback to check if execution is idle"""
+        """Report whether execution is idle and a path is available."""
         with self._exec_lock:
-            # If idle, return success=True
-            response.success = not self.execution_in_progress
-            response.message = "Idle" if not self.execution_in_progress else "Executing"
+            has_path = self.latest_path is not None
+            is_idle = not self.execution_in_progress
+            response.success = is_idle and has_path
+            if self.execution_in_progress:
+                response.message = "Executing"
+            elif not has_path:
+                response.message = "Idle, no path received yet"
+            else:
+                response.message = "Idle, path ready"
             return response
 
     def _start_execution_async(self, path, source='unknown'):
@@ -260,7 +312,7 @@ class MoveItController(Node):
                 return
             self.execution_in_progress = True
         self.get_logger().info(f'{source}: starting welding sequence thread')
-        t = threading.Thread(target=self._execution_worker, args=(path,), daemon=True)
+        t = threading.Thread(target=self._execution_worker, args=(copy.deepcopy(path),), daemon=True)
         t.start()
 
     def _execution_worker(self, path):
@@ -286,6 +338,10 @@ class MoveItController(Node):
         path is planned AFTER the approach move has already finished.
         """
         self.get_logger().info("STARTING WELDING SEQUENCE (pre-plan all phases)")
+        
+        # Refresh dynamic parameters
+        self.enforce_reachable_test_path = self.get_parameter('enforce_reachable_test_path').value
+        self.approach_dist = self.get_parameter('approach_distance').value
 
         # Optional test-mode normalization
         if self.enforce_reachable_test_path:
@@ -304,10 +360,9 @@ class MoveItController(Node):
 
         # Phase 2: Plan approach trajectory using home end-state as start
         self.get_logger().info("[Plan 2/3] Planning Approach trajectory…")
-        approach_pose = copy.deepcopy(path.poses[0])
-        approach_pose.pose.position.z += self.approach_dist
-        approach_traj = self.plan_pose(
-            approach_pose, start_state_traj=home_traj
+        approach_traj = self.plan_approach_with_fallback(
+            path.poses[0],
+            start_state_traj=home_traj,
         )
         if approach_traj is None:
             self.get_logger().error("Planning approach failed — aborting")
@@ -350,6 +405,71 @@ class MoveItController(Node):
 
         self.get_logger().info("Sequence Complete")
         return True
+
+    def _candidate_approach_distances(self):
+        """
+        Generate a short, deterministic list of lift distances to try.
+
+        The workspace photo and current weld setup suggest a mostly planar task
+        with one primary downward orientation, so we keep orientation stable and
+        vary only how aggressively we lift above the first weld point.
+        """
+        raw_candidates = [
+            float(self.approach_dist),
+            min(float(self.approach_dist), 0.10),
+            min(float(self.approach_dist), 0.05),
+            0.0,
+        ]
+        distances = []
+        for distance in raw_candidates:
+            distance = max(0.0, distance)
+            if all(abs(distance - existing) > 1e-6 for existing in distances):
+                distances.append(distance)
+        return distances
+
+    def plan_approach_with_fallback(self, first_pose_stamped, start_state_traj=None):
+        """
+        Plan the pre-weld approach using a small fallback ladder.
+
+        We keep the weld pose orientation as the primary target, but if MoveIt
+        cannot solve the lifted pose with strict constraints we progressively:
+          1. relax orientation tolerance
+          2. drop orientation constraint entirely
+          3. reduce the Z lift distance
+        """
+        attempt_no = 0
+        orientation_modes = [
+            ("strict", True, 0.20),
+            ("relaxed", True, 0.60),
+            ("position_only", False, 0.20),
+        ]
+
+        for lift_distance in self._candidate_approach_distances():
+            for mode_name, use_orientation, tolerance in orientation_modes:
+                attempt_no += 1
+                approach_pose = copy.deepcopy(first_pose_stamped)
+                approach_pose.pose.position.z += lift_distance
+                q = approach_pose.pose.orientation
+                self.get_logger().info(
+                    f"Approach attempt {attempt_no}: lift={lift_distance:.3f}m "
+                    f"mode={mode_name} "
+                    f"quat=({q.x:.3f}, {q.y:.3f}, {q.z:.3f}, {q.w:.3f})"
+                )
+                traj = self.plan_pose(
+                    approach_pose,
+                    start_state_traj=start_state_traj,
+                    use_orientation_constraint=use_orientation,
+                    orientation_tolerance_xyz=tolerance,
+                )
+                if traj is not None:
+                    self.get_logger().info(
+                        f"Approach succeeded on attempt {attempt_no} "
+                        f"(lift={lift_distance:.3f}m, mode={mode_name})"
+                    )
+                    return traj
+
+        self.get_logger().error("All approach planning attempts failed")
+        return None
 
     def _make_path_reachable(self, path: Path) -> Path:
         """Clamp path positions into a conservative reachable workspace for test validation."""
@@ -525,10 +645,29 @@ class MoveItController(Node):
         )
         for n, idx in enumerate(indices, start=1):
             pose_stamped = copy.deepcopy(path.poses[idx])
-            ok = self.move_to_pose(
-                pose_stamped,
-                use_orientation_constraint=False
+            
+            px = pose_stamped.pose.position.x
+            py = pose_stamped.pose.position.y
+            pz = pose_stamped.pose.position.z
+            radius_xy = math.hypot(px, py)
+            
+            self.get_logger().info(f"Checking reachability for fallback point {n}/{len(indices)} (index={idx})...")
+            # Plan position-only move to verify reachability before execution
+            plan_traj = self.plan_pose(pose_stamped, use_orientation_constraint=False)
+            is_reachable = (plan_traj is not None)
+            
+            self.get_logger().info(
+                f"Waypoint fallback {n}/{len(indices)} (index={idx}):\n"
+                f"  Pose: x={px:.4f}, y={py:.4f}, z={pz:.4f}\n"
+                f"  XY Radius: {radius_xy:.4f}m\n"
+                f"  Reachable (Position-Only IK): {'YES' if is_reachable else 'NO'}"
             )
+            
+            if not is_reachable:
+                self.get_logger().error(f"Waypoint fallback aborted: target unreachable at index={idx}")
+                return False
+
+            ok = self.execute_trajectory_action(plan_traj)
             if not ok:
                 self.get_logger().error(
                     f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"
@@ -638,9 +777,10 @@ class MoveItController(Node):
         Returns a RobotTrajectory on success, or None on failure.
         """
         self.get_logger().info(
-            f'Planning approach: x={pose_stamped.pose.position.x:.3f}, '
-            f'y={pose_stamped.pose.position.y:.3f}, '
-            f'z={pose_stamped.pose.position.z:.3f}'
+            f'Planning approach: x={pose_stamped.pose.position.x:.4f}, '
+            f'y={pose_stamped.pose.position.y:.4f}, '
+            f'z={pose_stamped.pose.position.z:.4f} '
+            f'(frame={pose_stamped.header.frame_id})'
         )
         if not self._wait_for_action_server(
             self.move_group_client, 'move_action', self.move_group_wait_timeout
@@ -804,9 +944,10 @@ class MoveItController(Node):
         Sends a full MotionPlanRequest via the 'move_action' action server.
         """
         self.get_logger().info(
-            f'Approach target: x={pose_stamped.pose.position.x:.3f}, '
-            f'y={pose_stamped.pose.position.y:.3f}, '
-            f'z={pose_stamped.pose.position.z:.3f}'
+            f'Approach target: x={pose_stamped.pose.position.x:.4f}, '
+            f'y={pose_stamped.pose.position.y:.4f}, '
+            f'z={pose_stamped.pose.position.z:.4f} '
+            f'(frame={pose_stamped.header.frame_id})'
         )
 
         if not self._wait_for_action_server(
@@ -932,7 +1073,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

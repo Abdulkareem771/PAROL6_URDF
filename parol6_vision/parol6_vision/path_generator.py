@@ -48,6 +48,7 @@ THESIS-READY STATEMENTS
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
 from parol6_msgs.msg import WeldLine3DArray
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
@@ -91,14 +92,13 @@ class PathGenerator(Node):
         self.declare_parameter('spline_smoothing', 0.005) # 5mm variance allowed
         self.declare_parameter('waypoint_spacing', 0.005) # 5mm spacing
         self.declare_parameter('approach_angle_deg', 45.0)
-        self.declare_parameter('auto_generate', True)
         self.declare_parameter('min_points_for_path', 5)
+        self.declare_parameter('max_waypoints', 80)  # cap to prevent OMPL failures
         
         self.k = self.get_parameter('spline_degree').value
         self.s = self.get_parameter('spline_smoothing').value
         self.spacing = self.get_parameter('waypoint_spacing').value
         self.pitch_deg = self.get_parameter('approach_angle_deg').value
-        self.auto_gen = self.get_parameter('auto_generate').value
         self.min_pts = self.get_parameter('min_points_for_path').value
         
         # ============================================================
@@ -112,10 +112,15 @@ class PathGenerator(Node):
             10
         )
         
+        path_qos = QoSProfile(
+            depth=1,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.path_pub = self.create_publisher(
             Path,
-            '/vision/welding_path',
-            10
+            '/vision/welding_path/generated',  # path_holder is the sole publisher of /vision/welding_path
+            path_qos
         )
         
         self.marker_pub = self.create_publisher(
@@ -132,13 +137,24 @@ class PathGenerator(Node):
         )
         
         self.latest_msg = None
+        self._last_gen_time: float = 0.0          # wall-clock seconds
+        self._min_gen_interval: float = 0.5       # seconds between path regenerations
         self.get_logger().info('Path Generator initialized')
         
     def callback(self, msg):
-        """Buffer latest message and auto-generate if enabled"""
+        """
+        Buffer latest message and generate path (reactive, like path_optimizer).
+        Rate-limited to at most once every _min_gen_interval seconds so a
+        continuous stream of weld_lines_3d messages (from manual_line firing on
+        every GUI frame) does not flood path_holder and moveit_controller.
+        """
+        import time
+        now = time.monotonic()
+        if now - self._last_gen_time < self._min_gen_interval:
+            return  # drop — same line, too soon
+        self._last_gen_time = now
         self.latest_msg = msg
-        if self.auto_gen:
-            self.generate_path(msg)
+        self.generate_path(msg)
             
     def trigger_callback(self, request, response):
         """Service callback for manual triggering"""
@@ -218,11 +234,19 @@ class PathGenerator(Node):
         return True
         
     def order_points_pca(self, points):
-        """Sort points along principal axis"""
+        """Sort points along principal axis and ensure stable directional flow"""
         pca = PCA(n_components=1)
         projected = pca.fit_transform(points)
         sorted_indices = np.argsort(projected.flatten())
-        return points[sorted_indices]
+        ordered = points[sorted_indices]
+        
+        # Enforce direction: start welding from the point closest to the robot base
+        dist_start = np.linalg.norm(ordered[0][:2])
+        dist_end = np.linalg.norm(ordered[-1][:2])
+        if dist_start > dist_end:
+            ordered = ordered[::-1]
+            
+        return ordered
         
     def remove_duplicates(self, points, tol=1e-4):
         """Remove duplicate points within tolerance"""
@@ -254,9 +278,16 @@ class PathGenerator(Node):
         cumulative_len = np.insert(np.cumsum(seg_lengths), 0, 0)
         total_len = cumulative_len[-1]
         
-        # Number of waypoints
-        num_waypoints = int(max(2, total_len / self.spacing))
-        
+        max_wp = self.get_parameter('max_waypoints').value
+        raw_num_waypoints = int(max(2, total_len / self.spacing))
+        num_waypoints = raw_num_waypoints
+
+        if num_waypoints > max_wp:
+            self.get_logger().warn(f"Path over capacity ({num_waypoints} pts). Downsampling to {max_wp} for OMPL stability.")
+            num_waypoints = max_wp
+        else:
+            self.get_logger().info(f"Resampling path: total_len={total_len:.3f}m -> {num_waypoints} waypoints")
+            
         # Resample at equal arc-length intervals
         u_query = []
         target_dists = np.linspace(0, total_len, num_waypoints)
@@ -366,7 +397,8 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

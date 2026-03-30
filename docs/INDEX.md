@@ -97,6 +97,21 @@ Welcome to the PAROL6 Robot documentation! This index will help you find the inf
 
 ---
 
+### 7. **[GIT_MERGE_REBASE_IDE_GUIDE.md](GIT_MERGE_REBASE_IDE_GUIDE.md)** - Safe Branch Integration Guide
+**Best for:** Merging teammate commits, rebasing safely, and understanding what IDE git buttons are doing
+
+**Contents:**
+- Ahead/behind branch status explained
+- Safe `merge --no-commit` workflow
+- Safe `rebase` workflow
+- Permission-denied merge failures with generated files
+- What IDE pull/sync/rebase buttons usually do
+- Recovery commands and backup-branch patterns
+
+**Start here if:** Your branch diverged from the remote branch or the IDE is asking you to sync
+
+---
+
 ## 🚀 Quick Navigation
 
 ### I want to...

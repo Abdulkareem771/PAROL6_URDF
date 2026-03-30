@@ -15,7 +15,7 @@ def generate_launch_description():
 
     # Transform from ROBOT BASE to KINECT (The result from Phase 4 script)
     # This is the "Gold" value that aligns your 3D world.
-    base_to_camera = ["1.24", "-0.05", "1.42", "0.0", "0.707", "0.0", "0.707", "base_link", "kinect_link"]
+    base_to_camera = ["0.5550", "0.1777", "1.0016", "0.7078", "0.7058", "0.0269", "0.0123", "base_link", "kinect2_link"]
 
     # =========================================================================
     # 2. NODES
@@ -27,16 +27,16 @@ def generate_launch_description():
         executable='single',
         name='aruco_single',
         parameters=[{
-            'marker_id': 0,
-            'marker_size': 0.1,  # Change to your measured size in meters
-            'marker_frame': "detected_cube_marker",
-            'reference_frame': "kinect_rgb_optical_frame",
+            'marker_id': 6,
+            'marker_size': 0.04575,  # Change to your measured size in meters
+            'marker_frame': "detected_marker_frame",
+            'reference_frame': "kinect2_ir_optical_frame",
             'corner_refinement': "SUBPIX",
-            'marker_dict': "DICT_4X4_50"  # Based on the image you provided
+            'marker_dict': "DICT_ARUCO_ORIGINAL"  # Based on the image you provided
         }],
         remappings=[
-            ('/image', '/kinect/rgb/image_rect_color'),
-            ('/camera_info', '/kinect/rgb/camera_info')
+            ('/image', '/kinect2/sd/image_color_rect'),
+            ('/camera_info', '/kinect2/sd/camera_info')
         ]
     )
 

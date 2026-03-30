@@ -24,6 +24,7 @@ class AutoTestRunner(Node):
         self.path_pub = self.create_publisher(Path, '/vision/welding_path', latch_qos)
         self.client = self.create_client(Trigger, '/moveit_controller/execute_welding_path')
         self.status_client = self.create_client(Trigger, '/moveit_controller/is_execution_idle')
+        self.pathgen_client = self.create_client(Trigger, '/path_generator/trigger_path_generation')
         self.controller_proc = None
 
     def run(self):
@@ -87,8 +88,45 @@ class AutoTestRunner(Node):
             if not path_received:
                 self.get_logger().warn("Could not confirm path delivery — proceeding anyway.")
         else:
-            self.get_logger().info("Live Camera Mode selected. Waiting 3s for real vision path...")
-            time.sleep(3.0)
+            self.get_logger().info("Live Camera Mode selected. Waiting for real vision path...")
+            if self.pathgen_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info("Requesting path_generator to republish the latest path...")
+                regen_fut = self.pathgen_client.call_async(Trigger.Request())
+                rclpy.spin_until_future_complete(self, regen_fut, timeout_sec=2.0)
+                try:
+                    regen_res = regen_fut.result()
+                    if regen_res is not None:
+                        if regen_res.success:
+                            self.get_logger().info(f"path_generator response: {regen_res.message}")
+                        else:
+                            self.get_logger().warn(f"path_generator could not regenerate path: {regen_res.message}")
+                except Exception as e:
+                    self.get_logger().warn(f"path_generator trigger failed: {e}")
+            else:
+                self.get_logger().warn("path_generator trigger service is not available.")
+
+            path_ready = False
+            for attempt in range(15):
+                if self.status_client.wait_for_service(timeout_sec=0.5):
+                    check_fut = self.status_client.call_async(Trigger.Request())
+                    rclpy.spin_until_future_complete(self, check_fut, timeout_sec=1.0)
+                    try:
+                        r = check_fut.result()
+                        if r is not None and r.success:
+                            path_ready = True
+                            self.get_logger().info(f"Vision path became ready: {r.message}")
+                            break
+                    except Exception:
+                        pass
+                self.get_logger().info(
+                    f"Waiting for real vision path... ({attempt + 1}/15)"
+                )
+                time.sleep(1.0)
+
+            if not path_ready:
+                self.get_logger().error("Timed out waiting for a real vision path.")
+                self.cleanup()
+                return
 
 
         # 5. Call execute service

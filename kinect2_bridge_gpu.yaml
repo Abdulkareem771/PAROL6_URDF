@@ -1,5 +1,4 @@
 launch:
-  # ── Kinect bridge identity ────────────────────────────────────────────────────
   - arg:
       name: "base_name"
       default: "kinect2"
@@ -12,24 +11,24 @@ launch:
       name: "ir_auto_exposure"
       default: "false"
 
-  # GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
-  # such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
-  # to "cpu".
-  - arg:
-      name: "depth_method"
-      default: "cpu"
+# GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
+# such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
+# to "cpu".
+- arg:
+    name: "depth_method"
+    default: "cpu"
 
-  - arg:
-      name: "reg_method"
-      default: "cpu" # colour-depth registration
+- arg:
+    name: "reg_method"
+    default: "cpu"   # colour-depth registration
 
-  - arg:
-      name: "bilateral_filter"
-      default: "true"
+- arg:
+    name: "bilateral_filter"
+    default: "true"
 
-  - arg:
-      name: "edge_aware_filter"
-      default: "true"
+- arg:
+    name: "edge_aware_filter"
+    default: "true"
 
   - node:
       pkg: "kinect2_bridge"
@@ -43,22 +42,17 @@ launch:
           value: ""
 
         - name: "publish_tf"
-          value: true
+          value: true  # kinect2_bridge publishes kinect2→kinect2_link→optical frames
+          # Our static TF targets 'kinect2' (the root), not 'kinect2_link', to avoid conflict
 
         - name: "base_name_tf"
           value: "$(var base_name)"
 
-        # ── Frame rate ───────────────────────────────────────────────────────
-        # 15.0 matches the Kinect v2 hardware maximum for QHD.
-        # NOTE: With GPU processing enabled (opencl) this is achievable.
-        #       With cpu+bilateral+edge_aware the node degrades to ~0.3 Hz —
-        #       that was the regression.  Disable those filters if you must use
-        #       cpu mode.
         - name: "fps_limit"
           value: 1.0
 
         - name: "use_png"
-          value: false
+          value: true
 
         - name: "depth_method"
           value: "$(var depth_method)"
@@ -75,13 +69,11 @@ launch:
         - name: "queue_size"
           value: 5
 
-        # Bilateral + edge-aware filters add significant CPU cost.
-        # Leave true for GPU mode.  Set false if using depth_method:cpu.
         - name: "bilateral_filter"
-          value: false
+          value: true
 
         - name: "edge_aware_filter"
-          value: false
+          value: true
 
         - name: "hole_fill_radius"
           value: 0

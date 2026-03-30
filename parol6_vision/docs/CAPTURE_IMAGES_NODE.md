@@ -17,9 +17,13 @@ By selectively capturing frames instead of continuously streaming them, the pipe
 
 ### Published Topics
 
-- `/vision/captured_image_raw` (`sensor_msgs/Image`): The captured colour frame. The topic name can be overridden using the `output_topic` parameter.
-- `/vision/captured_image_depth` (`sensor_msgs/Image`): The correspondingly synced depth frame.
-- `/vision/captured_camera_info` (`sensor_msgs/CameraInfo`): Relayed `CameraInfo` stream for downstream mathematical projections.
+| Topic | Type | QoS | Description |
+|-------|------|-----|-------------|
+| `/vision/captured_image_raw` | `sensor_msgs/Image` | VOLATILE | Captured colour frame (topic overridable via `output_topic`) |
+| `/vision/captured_image_depth` | `sensor_msgs/Image` | **TRANSIENT_LOCAL** | Captured depth frame — latched so `depth_matcher` receives it even if it starts after capture |
+| `/vision/captured_camera_info` | `sensor_msgs/CameraInfo` | **TRANSIENT_LOCAL** | Relayed intrinsics — latched for the same reason |
+
+> **QoS Note:** `captured_image_depth` and `captured_camera_info` use `TRANSIENT_LOCAL RELIABLE` durability (depth=1). This is the fix for the original pipeline failure where `depth_matcher` started *after* the user pressed Capture and never received the depth frame. Any subscriber for these topics must use matching `TRANSIENT_LOCAL` QoS.
 
 ### Parameters
 

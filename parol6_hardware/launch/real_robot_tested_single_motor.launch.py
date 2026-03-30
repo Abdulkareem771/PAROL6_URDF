@@ -48,13 +48,21 @@ def generate_launch_description():
     # =====================================================================
     # ROBOT DESCRIPTION (xacro → URDF with ros2_control tags)
     # =====================================================================
+    # The included PAROL6 base URDF already carries a demo-only ros2_control block
+    # (`parol6_ros2_control` with mock_components/GenericSystem). Strip that block
+    # from the xacro output so ros2_control_node only sees the real PAROL6Hardware.
     robot_description_content = Command([
+        "bash", " -lc ",
+        "'",
         PathJoinSubstitution([FindExecutable(name="xacro")]),
         " ",
         PathJoinSubstitution([FindPackageShare("parol6_hardware"), "urdf", "parol6.urdf.xacro"]),
         " use_ros2_control:=true",
         " serial_port:=", serial_port,
         " baud_rate:=", baud_rate,
+        " | perl -0pe ",
+        "\"s#<ros2_control name=\\\"parol6_ros2_control\\\" type=\\\"system\\\">.*?</ros2_control>##s\"",
+        "'",
     ])
     robot_description = {
         "robot_description": ParameterValue(robot_description_content, value_type=str)
@@ -82,8 +90,10 @@ def generate_launch_description():
     )
 
     # Controller configuration
+    # Method 5 is the legacy single-motor-tested path and should keep using its
+    # dedicated controller tolerances rather than the generic real-hardware file.
     robot_controllers = PathJoinSubstitution([
-        FindPackageShare("parol6_hardware"), "config", "parol6_controllers.yaml",
+        FindPackageShare("parol6_moveit_config"), "config", "ros2_controllers_tested_single_motor.yaml",
     ])
 
     # =====================================================================

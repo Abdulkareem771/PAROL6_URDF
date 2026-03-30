@@ -24,6 +24,7 @@ from __future__ import annotations
 import faulthandler
 faulthandler.enable()
 
+import copy
 import os
 import sys
 import shlex
@@ -38,7 +39,7 @@ from PySide6.QtWidgets import (
     QButtonGroup, QTextEdit, QScrollArea, QFrame, QTabWidget,
     QSizePolicy, QGridLayout, QGraphicsView, QGraphicsScene,
     QGraphicsPixmapItem, QSpinBox, QComboBox, QSlider, QDialog, QDialogButtonBox,
-    QFileDialog, QMessageBox, QCheckBox, QLineEdit,
+    QFileDialog, QMessageBox, QCheckBox, QLineEdit, QDoubleSpinBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPointF, QRectF
 from PySide6.QtGui import (
@@ -52,11 +53,19 @@ ROS2_IMPORT_ERROR = ""
 try:
     import rclpy
     from rclpy.node import Node
-    from rclpy.qos import qos_profile_sensor_data
+    from rclpy.qos import (
+        qos_profile_sensor_data,
+        QoSProfile,
+        QoSDurabilityPolicy,
+        QoSReliabilityPolicy,
+    )
     from rclpy.parameter import Parameter as RclpyParameter
+    from nav_msgs.msg import Path as ROSPath
     from sensor_msgs.msg import Image as ROSImage
+    from std_msgs.msg import Empty
     from std_srvs.srv import Trigger
     from rcl_interfaces.srv import SetParameters
+    from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
     from cv_bridge import CvBridge
     ROS2_OK = True
 except Exception as exc:
@@ -222,6 +231,21 @@ class NodeWorker(QThread):
         self._proc: Optional[subprocess.Popen] = None
 
     def run(self) -> None:
+        # Prevent duplicates: iteratively extract match string and kill existing
+        match_str = ""
+        if len(self._display_cmd) >= 4 and self._display_cmd[0] == "ros2" and self._display_cmd[1] == "run":
+            pkg, node = self._display_cmd[2], self._display_cmd[3]
+            match_str = f"ros2 run {pkg} {node}"
+        elif any("kinect2_bridge" in arg for arg in self._display_cmd):
+            match_str = "kinect2_bridge"
+
+        if match_str:
+            import time
+            pkill_cmd = f"pkill -TERM -f '{match_str}'"
+            self.line_out.emit(f"<b style='color:#FF5555'>[KILL] Neutralizing existing '{match_str}' nodes...</b>")
+            subprocess.run(pkill_cmd, shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            time.sleep(0.4) # Wait for term to flush
+
         self.line_out.emit(f"[RUN] $ {' '.join(self._display_cmd)}")
         try:
             ROS_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -234,6 +258,7 @@ class NodeWorker(QThread):
                 bufsize=1,
                 env=self._env,
                 cwd=str(WORKSPACE_DIR),
+                start_new_session=True,  # CRITICAL: Ensures we can kill the entire process tree later!
             )
             for line in self._proc.stdout:
                 self.line_out.emit(line.rstrip())
@@ -252,10 +277,94 @@ class NodeWorker(QThread):
     def abort(self) -> None:
         if self._proc and self._proc.poll() is None:
             try:
-                os.kill(self._proc.pid, signal.SIGINT)
+                # Send SIGINT to the process *group* so the shell and all children (e.g., ROS nodes) catch it
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGINT)
                 self._proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                self._proc.terminate()
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+
+
+class RosLaunchWorker(QThread):
+    """Replica of the firmware configurator launch worker for the ROS tab."""
+    output_rviz = Signal(str)
+    output_gazebo = Signal(str)
+    finished_ok = Signal()
+    finished_err = Signal(int)
+
+    def __init__(self, script_path: str, args: list[str], env_vars: Optional[dict[str, str]] = None, parent=None):
+        super().__init__(parent)
+        self._script_path = script_path
+        self._args = args
+        self._env_vars = env_vars or {}
+        self._proc: Optional[subprocess.Popen] = None
+
+    def run(self) -> None:
+        cmd = [self._script_path] + self._args
+        msg = f"[LAUNCH] $ {' '.join(cmd)}"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+
+        try:
+            env = os.environ.copy()
+            env.update(self._env_vars)
+            if "PATH" in env:
+                env["PATH"] += os.pathsep + "/usr/local/bin:/usr/bin:/bin"
+            else:
+                env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
+
+            self._proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+                cwd=str(WORKSPACE_DIR),
+                start_new_session=True,
+            )
+            for line in self._proc.stdout:
+                line = line.rstrip()
+                lower = line.lower()
+                if "ign" in lower or "gazebo" in lower or "/usr/bin/ruby" in lower or "spawn" in lower:
+                    self.output_gazebo.emit(line)
+                else:
+                    self.output_rviz.emit(line)
+            self._proc.wait()
+            rc = self._proc.returncode
+        except Exception as exc:
+            msg = f"[LAUNCH] ERROR: {exc}"
+            self.output_rviz.emit(msg)
+            self.output_gazebo.emit(msg)
+            rc = -1
+
+        msg = "[LAUNCH] Process Exited." if rc == 0 else f"[LAUNCH] ❌ Stopped (code {rc})"
+        self.output_rviz.emit(msg)
+        self.output_gazebo.emit(msg)
+
+        if rc == 0:
+            self.finished_ok.emit()
+        else:
+            self.finished_err.emit(rc)
+
+    def abort(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGINT)
+            except ProcessLookupError:
+                pass
+
+            try:
+                self._proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            except ProcessLookupError:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -348,6 +457,9 @@ class ManualCanvas(QGraphicsView):
         # Straight-line mode
         self._straight_line_mode = False
         self._sl_waypoints: list[list[int]] = []   # waypoints for current straight-line stroke
+        
+        self._roi_mode = False
+        self._roi_polygon: list[list[int]] = []
 
         self._bg_item = self._scene.addPixmap(QPixmap())
         self._bg_item.setZValue(0)
@@ -369,10 +481,22 @@ class ManualCanvas(QGraphicsView):
         self._straight_line_mode = enabled
         if not enabled:
             self._finish_sl_stroke()
+            
+    def set_roi_mode(self, enabled: bool) -> None:
+        """Toggle ROI drawing mode."""
+        self._roi_mode = enabled
+        if not enabled:
+            if len(self._sl_waypoints) >= 3:
+                self._roi_polygon = self._sl_waypoints.copy()
+            self._sl_waypoints = []
+            self._refresh_mask()
 
     def get_strokes(self) -> list[list[list[int]]]:
         """Return all recorded strokes as a list of point lists for serialisation."""
         return self._all_strokes.copy()
+        
+    def get_roi_polygon(self) -> list[list[int]]:
+        return getattr(self, '_roi_polygon', []).copy()
 
     def load_image(self, rgb: np.ndarray) -> None:
         if self._placeholder_proxy.isVisible():
@@ -396,6 +520,7 @@ class ManualCanvas(QGraphicsView):
         self._all_strokes = []
         self._current_stroke = []
         self._sl_waypoints = []
+        self._roi_polygon = []
 
     def _refresh_mask(self) -> None:
         if self._mask_arr is None or self._mask_item is None:
@@ -471,7 +596,7 @@ class ManualCanvas(QGraphicsView):
         h, w = self._mask_arr.shape[:2]
         in_bounds = 0 <= sp.x() < w and 0 <= sp.y() < h
 
-        if self._straight_line_mode:
+        if self._straight_line_mode or self._roi_mode:
             if ev.button() == Qt.LeftButton and in_bounds:
                 ix, iy = int(sp.x()), int(sp.y())
                 # Snap to H/V if Shift held
@@ -483,15 +608,25 @@ class ManualCanvas(QGraphicsView):
                         ix = px   # snap vertical
                 if self._sl_waypoints:
                     prev = self._sl_waypoints[-1]
+                    color = (255, 100, 0, 255) if self._roi_mode else (255, 0, 0, 255)
                     cv2.line(self._mask_arr,
                              (prev[0], prev[1]), (ix, iy),
-                             (255, 0, 0, 255), self._brush, lineType=cv2.LINE_AA)
+                             color, self._brush, lineType=cv2.LINE_AA)
                     self._refresh_mask()
                 self._sl_waypoints.append([ix, iy])
                 ev.accept()
                 return
             elif ev.button() == Qt.RightButton:
-                self._finish_sl_stroke()
+                if self._roi_mode:
+                    if len(self._sl_waypoints) >= 3:
+                        first = self._sl_waypoints[0]
+                        last = self._sl_waypoints[-1]
+                        cv2.line(self._mask_arr, (last[0], last[1]), (first[0], first[1]), (255, 100, 0, 255), self._brush, cv2.LINE_AA)
+                        self._roi_polygon = self._sl_waypoints.copy()
+                        self._refresh_mask()
+                    self._sl_waypoints = []
+                else:
+                    self._finish_sl_stroke()
                 ev.accept()
                 return
         else:
@@ -596,12 +731,13 @@ class NodeButton(QWidget):
 
     def stop(self) -> None:
         if self._worker:
-            self._worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._worker)
-            self._worker.finished.connect(lambda rc, w=self._worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
+            worker = self._worker
             self._worker = None
+            try:
+                worker.abort()
+            except Exception:
+                pass
+            self._park_worker(worker)
         elif self._check_external_running() and self._external_stop_cmd:
             subprocess.run(
                 self._external_stop_cmd,
@@ -632,19 +768,38 @@ class NodeButton(QWidget):
         
         def _handle_log(s):
             formatted = f'<span style="color:{C["text2"]}">[{self._label}] {s}</span>'
-            self._log.append(formatted) # Write to the main "All Nodes" log
+            if self._label != "Live Kinect Camera":
+                self._log.append(formatted) # Write to the main "All Nodes" log
             if hasattr(self, '_node_log'):
                 self._node_log.append(formatted) # Write to the dedicated tab
                 
         self._worker.line_out.connect(_handle_log)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished.connect(lambda rc, w=self._worker: self._on_finished(w, rc))
         self._worker.start()
         self._set_running()
         if self._on_started:
             self._on_started()
 
-    def _on_finished(self, rc: int) -> None:
-        self._worker = None
+    def _park_worker(self, worker: NodeWorker) -> None:
+        host = self.window()
+        if hasattr(host, "_park_worker"):
+            host._park_worker(worker)
+            return
+        if not hasattr(self, "_graveyard"):
+            self._graveyard = []
+        if worker not in self._graveyard:
+            self._graveyard.append(worker)
+            worker.finished.connect(
+                lambda rc, w=worker: self._graveyard.remove(w)
+                if w in getattr(self, "_graveyard", []) else None
+            )
+
+    def _on_finished(self, worker: NodeWorker, rc: int) -> None:
+        if self._worker is worker:
+            self._worker = None
+        if self._worker is not None and self._worker.isRunning():
+            self._set_running()
+            return
         if self._check_external_running():
             self._set_running()
         else:
@@ -1096,7 +1251,11 @@ class VisionPipelineGUI(QMainWindow):
         self._latest_cropped_rgb: Optional[np.ndarray] = None
         self._crop_set_params_client = None
         self._crop_clear_client = None
+        self._moveit_execute_client = None
+        self._path_holder_set_source_client = None
+        self._inject_path_pub = None  # persistent publisher → /vision/inject_path
         self._crop_futures = []
+        self._graveyard: list = []
         self._trigger_workers: list = []  # keeps NodeWorker threads alive until done
 
         # ROS 2 preview infrastructure (optional)
@@ -1121,9 +1280,25 @@ class VisionPipelineGUI(QMainWindow):
             self._crop_set_params_client = self._ros_node.create_client(SetParameters, "/crop_image/set_parameters")
             self._crop_clear_client  = self._ros_node.create_client(Trigger, "/crop_image/clear_roi")
             self._crop_reload_client = self._ros_node.create_client(Trigger, "/crop_image/reload_roi")
+            self._moveit_execute_client = self._ros_node.create_client(Trigger, "/moveit_controller/execute_welding_path")
+            # path_holder source switching: set the parameter first, then call the service
+            self._path_holder_set_params_client = self._ros_node.create_client(
+                SetParameters, "/path_holder/set_parameters"
+            )
+            self._path_holder_set_source_client = self._ros_node.create_client(
+                Trigger, "/path_holder/set_source"
+            )
             self._manual_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line/set_parameters")
             self._manual_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line/set_strokes")
+            self._aligner_set_params_client = self._ros_node.create_client(SetParameters, "/manual_line_aligner/set_parameters")
+            self._aligner_teach_client = self._ros_node.create_client(Trigger, "/manual_line_aligner/teach_reference")
+            self._aligner_set_strokes_client = self._ros_node.create_client(Trigger, "/manual_line_aligner/set_strokes")
+            self._manual_teach_client = self._ros_node.create_client(Trigger, "/manual_line_aligner/teach_reference")
             self._manual_cropped_sub = None
+            # Persistent publisher → inject_path_node (no subprocess, no DDS race)
+            self._inject_path_pub = self._ros_node.create_publisher(
+                ROSPath, "/vision/inject_path", 10
+            )
             if CV2_OK:
                 self._manual_cropped_sub = self._ros_node.create_subscription(
                     ROSImage,
@@ -1131,6 +1306,31 @@ class VisionPipelineGUI(QMainWindow):
                     self._manual_topic_image_cb,
                     qos_profile_sensor_data,
                 )
+
+            # Real-time welding path monitor — updates the Simple dashboard status
+            # when an actual path arrives from path_holder (TRANSIENT_LOCAL).
+            _path_qos = rclpy.qos.QoSProfile(
+                depth=1,
+                reliability=rclpy.qos.QoSReliabilityPolicy.RELIABLE,
+                durability=rclpy.qos.QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            )
+            self._weld_path_sub = self._ros_node.create_subscription(
+                ROSPath,
+                "/vision/welding_path",
+                self._on_weld_path_received,
+                _path_qos,
+            )
+            # Also subscribe to depth topic to confirm capture
+            self._depth_confirm_sub = self._ros_node.create_subscription(
+                ROSImage,
+                "/vision/captured_image_depth",
+                self._on_depth_confirmed,
+                rclpy.qos.QoSProfile(
+                    depth=1,
+                    reliability=rclpy.qos.QoSReliabilityPolicy.RELIABLE,
+                    durability=rclpy.qos.QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                ),
+            )
 
         self._build_ui()
         if not ROS2_OK and ROS2_IMPORT_ERROR:
@@ -1197,8 +1397,12 @@ class VisionPipelineGUI(QMainWindow):
         splitter.setStyleSheet(f"QSplitter::handle{{background:{C['border']};}}")
         root.addWidget(splitter)
 
-        sidebar = self._build_sidebar()
-        splitter.addWidget(sidebar)
+        sidebar_tabs = QTabWidget()
+        sidebar_tabs.addTab(self._build_simple_sidebar(), "🎯 Simple Workflow")
+        sidebar_tabs.addTab(self._build_sidebar(), "🔧 Advanced Nodes")
+        splitter.addWidget(sidebar_tabs)
+        # Start the real node-liveness poller after the sidebar status box is wired up
+        QTimer.singleShot(500, self._start_simple_status_poller)
 
         tabs = self._build_tabs()
         splitter.addWidget(tabs)
@@ -1206,6 +1410,228 @@ class VisionPipelineGUI(QMainWindow):
         splitter.setSizes([360, 1040])
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
+
+    def _build_simple_sidebar(self) -> QWidget:
+        """A streamlined 3-button dashboard for production."""
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(16, 24, 16, 16)
+        lay.setSpacing(24)
+
+        title = QLabel("Production Workflow")
+        title.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title.setStyleSheet(f"color:{C['accent']};")
+        lay.addWidget(title)
+
+        desc = QLabel(
+            "Quickly run the end-to-end vision pipeline without managing "
+            "individual micro-nodes. Ensure the robot and camera are connected."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color:{C['text2']};")
+        lay.addWidget(desc)
+
+        # ── Status feedback box (defined early so button lambdas can reference it) ─
+        # This is a forward-declared helper; the widget is added at the end.
+        _status_lbl_holder: list = []  # mutable container so inner lambdas can update it
+
+        def _set_status(msg: str, color: str = "#a6e3a1"):
+            if _status_lbl_holder:
+                lbl = _status_lbl_holder[0]
+                lbl.setText(msg)
+                lbl.setStyleSheet(
+                    f"font-size:12px; font-weight:bold; color:{color};"
+                    " padding:4px; border:none;"
+                )
+
+        # 0. ROS / MoveIt launch (mini panel)
+        grp0 = QGroupBox("Step 0: ROS / MoveIt")
+        glay0 = QVBoxLayout(grp0)
+        glay0.setSpacing(6)
+
+        mode_r0 = QHBoxLayout()
+        mode_r0.addWidget(QLabel("Method:"))
+        self._simple_ros_method = QComboBox()
+        self._simple_ros_method.addItem("M2 — Gazebo + MoveIt (Simulated)",            "launch_moveit_with_gazebo.sh")
+        self._simple_ros_method.addItem("M3 — Fake HW (Standalone RViz)",               "launch_moveit_fake.sh")
+        self._simple_ros_method.addItem("M5 — Real HW (Tested Single-Motor Legacy)",    "launch_moveit_real_hw_tested_single_motor.sh")
+        self._simple_ros_method.setCurrentIndex(1)  # default to M3 (safest)
+        mode_r0.addWidget(self._simple_ros_method, 1)
+        glay0.addLayout(mode_r0)
+
+        r0_btns = QHBoxLayout()
+        r0_launch_btn = QPushButton("RUN — Launch MoveIt")
+        r0_launch_btn.setStyleSheet(
+            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:5px; padding:5px 10px;"
+        )
+        def _simple_ros_launch():
+            _set_status(">> Launching MoveIt...", "#f9e2af")
+            # Mirror _ros_launch_toggle but using the mini sidebar dropdown
+            script = self._simple_ros_method.currentData()
+            for i in range(self._ros_method.count()):
+                if self._ros_method.itemData(i) == script:
+                    self._ros_method.setCurrentIndex(i)
+                    break
+            self._ros_launch_toggle()
+            # Real confirmation will arrive via node liveness poller (no fake timer)
+        r0_launch_btn.clicked.connect(_simple_ros_launch)
+        r0_btns.addWidget(r0_launch_btn)
+
+        r0_kill_btn = QPushButton("STOP — Kill All")
+        r0_kill_btn.setStyleSheet(
+            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:5px; padding:5px 10px;"
+        )
+        r0_kill_btn.clicked.connect(self._ros_kill_all_nodes)
+        r0_btns.addWidget(r0_kill_btn)
+        glay0.addLayout(r0_btns)
+
+        # Link to open the full ROS tab
+        ros_link = QLabel("<a href='#ros_tab' style='color:#cba6f7;'>→ Open Full ROS Launch Tab</a>")
+        ros_link.setTextFormat(Qt.RichText)
+        ros_link.setStyleSheet("font-size:10px;")
+        def _goto_ros_tab():
+            # Jump to the ROS launch tab in the main panel
+            if hasattr(self, '_main_tabs') and hasattr(self, '_ros_launch_tab'):
+                idx = self._main_tabs.indexOf(self._ros_launch_tab)
+                if idx >= 0:
+                    self._main_tabs.setCurrentIndex(idx)
+        ros_link.linkActivated.connect(lambda _: _goto_ros_tab())
+        glay0.addWidget(ros_link)
+        lay.addWidget(grp0)
+
+        # 1. Start Pipeline
+        grp1 = QGroupBox("Step 1: Initialization")
+        glay1 = QVBoxLayout(grp1)
+        btn1 = QPushButton("START — Full Pipeline")
+        btn1.setFixedHeight(45)
+        btn1.setStyleSheet(f"background:#89b4fa; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
+        def _start_pipeline():
+            _set_status(">> Starting pipeline nodes...", "#89b4fa")
+            self._ros_log.append("<b style='color:#89b4fa'>[Simple Run] Starting Pipeline...</b>")
+            self._btn_live_cam._start()
+            self._btn_capture._start()
+            self._btn_crop_node._start()
+            self._btn_optimizer._start()
+            self._btn_depth._start()
+            self._btn_pathgen._start()
+            # Real confirmation arrives via node liveness poller (no fake timer)
+        btn1.clicked.connect(_start_pipeline)
+        glay1.addWidget(btn1)
+        lay.addWidget(grp1)
+
+        # 2. Capture & Map
+        grp2 = QGroupBox("Step 2: Scanning")
+        glay2 = QVBoxLayout(grp2)
+        glay2.setSpacing(10)  # Add space to prevent overlap
+        glay2.setContentsMargins(10, 15, 10, 10)
+
+        # Mode selector row
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Mode:"))
+        self._simple_mode_combo = QComboBox()
+        self._simple_mode_combo.addItem("Manual Red Line", "manual")
+        self._simple_mode_combo.addItem("YOLO Detection", "yolo")
+        self._simple_mode_combo.addItem("Color Threshold", "color")
+        mode_row.addWidget(self._simple_mode_combo, 1)
+        glay2.addLayout(mode_row)
+
+        btn2 = QPushButton("SCAN — Capture && Process")
+        btn2.setFixedHeight(45)
+        btn2.setStyleSheet("background:#a6e3a1; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
+        def _capture_and_map():
+            _set_status("[CAP] Capturing frame...", "#89dceb")
+            self._ros_log.append("<b style='color:#a6e3a1'>[Simple Run] Requesting Frame Capture...</b>")
+            if not self._ros_node:
+                self._ros_log.append("ROS node offline.")
+                _set_status("❌ ROS node offline.", "#f38ba8")
+                return
+            pub = self._ros_node.create_publisher(Empty, "/vision/capture_trigger", 10)
+            pub.publish(Empty())
+            # Real confirmation arrives via _on_depth_confirmed ROS callback (no fake timer)
+        btn2.clicked.connect(_capture_and_map)
+        glay2.addWidget(btn2)
+
+        # Dynamic hint based on selected mode
+        _mode_hints = {
+            "manual": "<i>Capture, then switch to the <b>Manual Red Line</b> tab, draw your weld path, and click <b>📤 Send Strokes</b>.</i>",
+            "yolo":   "<i>Capture — YOLO will auto-detect objects and publish weld lines. Check the <b>YOLO Debug</b> preview.</i>",
+            "color":  "<i>Capture — the Color Threshold node will segment the red weld line automatically from the image.</i>",
+        }
+        info2 = QLabel(_mode_hints["manual"])
+        info2.setWordWrap(True)
+        info2.setStyleSheet("font-size:10px; color:#6c7086;")
+        glay2.addWidget(info2)
+
+        def _update_hint(idx):
+            mode_key = self._simple_mode_combo.itemData(idx)
+            info2.setText(_mode_hints.get(mode_key, ""))
+        self._simple_mode_combo.currentIndexChanged.connect(_update_hint)
+
+        lay.addWidget(grp2)
+
+        # Step 3. Execute
+        grp3 = QGroupBox("Step 3: Execution")
+        glay3 = QVBoxLayout(grp3)
+        
+        # Reachability Safety Toggle
+        safety_cb = QCheckBox("Enforce Reachable Workspace (Clamp)")
+        safety_cb.setToolTip("If enabled, waypoints outside the radial/box limits will be shifted to the nearest reachable point.")
+        def _set_safety(state):
+            val = (state == 2) # 2 is checked in PySide6
+            self.get_logger().info(f"Setting enforce_reachable_test_path to {val}")
+            self._set_ros_param("moveit_controller", "enforce_reachable_test_path", val)
+        safety_cb.stateChanged.connect(_set_safety)
+        glay3.addWidget(safety_cb)
+
+        btn3 = QPushButton("WELD — Execute Path")
+        btn3.setFixedHeight(45)
+        btn3.setStyleSheet(f"background:#f38ba8; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
+        def _execute():
+            _set_status(">> Executing weld path...", "#fab387")
+            self._btn_moveit._start() # Run moveit node if not running
+            QTimer.singleShot(1500, self._send_path_to_moveit) # trigger after a delay
+        btn3.clicked.connect(_execute)
+        glay3.addWidget(btn3)
+        lay.addWidget(grp3)
+
+        # ── Status feedback box ────────────────────────────────────────────
+        status_box = QFrame()
+        status_box.setFrameShape(QFrame.StyledPanel)
+        status_box.setStyleSheet(
+            "border:1px solid #45475a; border-radius:8px; "
+            f"background:{C['panel']}; padding:2px;"
+        )
+        sb_lay = QVBoxLayout(status_box)
+        sb_lay.setContentsMargins(10, 8, 10, 8)
+        sb_lay.setSpacing(2)
+
+        status_title = QLabel("Pipeline Status")
+        status_title.setStyleSheet("font-size:10px; font-weight:bold; color:#6c7086; border:none;")
+        sb_lay.addWidget(status_title)
+
+        self._simple_status_label = QLabel("⏸  Idle — press Step 0 to begin.")
+        self._simple_status_label.setWordWrap(True)
+        self._simple_status_label.setTextFormat(Qt.RichText)
+        self._simple_status_label.setStyleSheet(
+            "font-size:12px; font-weight:bold; color:#a6e3a1;"
+            " padding:4px; border:none;"
+        )
+        sb_lay.addWidget(self._simple_status_label)
+        lay.addWidget(status_box)
+
+        def _set_status(msg: str, color: str = "#a6e3a1"):
+            self._simple_status_label.setText(msg)
+            self._simple_status_label.setStyleSheet(
+                f"font-size:12px; font-weight:bold; color:{color};"
+                " padding:4px; border:none;"
+            )
+        # Expose so other methods can push status updates
+        self._simple_set_status = _set_status
+
+        lay.addStretch()
+        return tab
 
     def _build_sidebar(self) -> QWidget:
         wrap = QScrollArea()
@@ -1297,6 +1723,7 @@ class VisionPipelineGUI(QMainWindow):
             ("🔮  YOLO Segment",       "yolo"),
             ("🎨  Color Mode",          "color"),
             ("✏️  Manual Red Line",     "manual"),
+            ("🎯  Auto-Align Mode",     "align"),
         ]
         for label, key in modes:
             rb = QRadioButton(label)
@@ -1305,13 +1732,17 @@ class VisionPipelineGUI(QMainWindow):
             mg_lay.addWidget(rb)
         self._mode_buttons.buttons()[0].setChecked(True)
 
-        # Switch to Manual Red Line tab when manual mode is selected
+        # Switch to Manual Red Line or Auto-Align tab when those modes are selected
         def _on_mode_selected(btn):
-            if btn.property('mode_key') == 'manual':
+            key = btn.property('mode_key')
+            if key == 'manual':
                 if hasattr(self, '_main_tabs') and hasattr(self, '_manual_tab_index'):
                     self._main_tabs.setCurrentIndex(self._manual_tab_index)
                 if CV2_OK and getattr(self, '_latest_cropped_rgb', None) is not None:
                     self.manual_image_ready.emit(self._latest_cropped_rgb.copy())
+            elif key == 'align':
+                if hasattr(self, '_main_tabs') and hasattr(self, '_align_tab_index'):
+                    self._main_tabs.setCurrentIndex(self._align_tab_index)
 
         self._mode_buttons.buttonClicked.connect(_on_mode_selected)
 
@@ -1371,6 +1802,13 @@ class VisionPipelineGUI(QMainWindow):
             self._log, "#f9e2af",
         )
         pg_lay.addWidget(self._btn_pathgen)
+
+        self._btn_path_holder = NodeButton(
+            "Path Holder",
+            lambda: ["ros2", "run", "parol6_vision", "path_holder"],
+            self._log, "#cba6f7",
+        )
+        pg_lay.addWidget(self._btn_path_holder)
 
         launch_all_btn = QPushButton("🚀  Launch Full Pipeline (stages 1-3)")
         launch_all_btn.setStyleSheet(
@@ -1528,6 +1966,16 @@ class VisionPipelineGUI(QMainWindow):
         ros_pub_btn.clicked.connect(self._manual_publish_ros)
         row1.addWidget(ros_pub_btn)
         
+        save_prof_btn = QPushButton("💾  Save Profile As...")
+        save_prof_btn.clicked.connect(self._manual_save_profile)
+        save_prof_btn.setStyleSheet(f"background:{C['panel']}; border:1px solid {C['border']}; border-radius:4px; padding:4px;")
+        row1.addWidget(save_prof_btn)
+
+        load_prof_btn = QPushButton("📂  Load Profile...")
+        load_prof_btn.clicked.connect(self._manual_load_profile)
+        load_prof_btn.setStyleSheet(f"background:{C['panel']}; border:1px solid {C['border']}; border-radius:4px; padding:4px;")
+        row1.addWidget(load_prof_btn)
+
         row1.addStretch()
         mt_lay.addLayout(row1)
 
@@ -1614,6 +2062,97 @@ class VisionPipelineGUI(QMainWindow):
         tabs.addTab(manual_tab, "✏️  Manual Red Line")
         self._manual_tab_index = tabs.indexOf(manual_tab)
 
+        # ── Tab 2b: Auto-Align (manual_line_aligner) ───────────────────────────
+        align_tab = QWidget()
+        at_lay = QVBoxLayout(align_tab)
+        at_lay.setContentsMargins(8, 8, 8, 8)
+
+        align_hint = QLabel(
+            "<b>🎯 Auto-Align Workflow:</b>  "
+            "1) Load the latest cropped frame.  "
+            "2) Check <b>📐 Straight-line</b> and draw your <b>weld strokes</b> (red).  "
+            "3) Check <b>🔲 Draw ROI Boundary</b> and click a polygon around the part (orange), right-click to close.  "
+            "4) Click <b>📤 Teach &amp; Send</b> to teach the node — it will auto-align on every future frame."
+        )
+        align_hint.setTextFormat(Qt.RichText)
+        align_hint.setWordWrap(True)
+        align_hint.setStyleSheet(
+            f"background:#1e1a2e; border:1px solid #cba6f7; border-radius:6px;"
+            f" color:{C['text']}; font-size:11px; padding:6px 10px; margin-bottom:4px;"
+        )
+        at_lay.addWidget(align_hint)
+
+        # Toolbar Row A1
+        a_row1 = QHBoxLayout()
+        a_load_btn = QPushButton("📥  Use Latest Cropped Frame")
+        a_load_btn.clicked.connect(self._align_use_latest_cropped)
+        a_row1.addWidget(a_load_btn)
+        a_row1.addStretch()
+        at_lay.addLayout(a_row1)
+
+        # Toolbar Row A2: Drawing Tools
+        a_row2 = QHBoxLayout()
+        a_row2.addWidget(QLabel("Brush (px):"))
+        self._align_brush_spin = QSpinBox()
+        self._align_brush_spin.setRange(1, 80)
+        self._align_brush_spin.setValue(5)
+        a_row2.addWidget(self._align_brush_spin)
+        a_row2.addSpacing(8)
+
+        self._align_straight_check = QCheckBox("📐  Straight-line strokes")
+        self._align_straight_check.stateChanged.connect(
+            lambda s: self._align_canvas.set_straight_line_mode(s == Qt.Checked)
+            if getattr(self, '_align_canvas', None) else None
+        )
+        a_row2.addWidget(self._align_straight_check)
+        a_row2.addSpacing(8)
+
+        self._align_roi_check = QCheckBox("🔲  Draw ROI Boundary (orange)")
+        self._align_roi_check.setToolTip("Click polygon vertices around the part, right-click to close.")
+        self._align_roi_check.stateChanged.connect(self._on_align_roi_toggled)
+        a_row2.addWidget(self._align_roi_check)
+        a_row2.addSpacing(8)
+
+        a_clear_btn = QPushButton("🗑  Clear")
+        a_clear_btn.clicked.connect(
+            lambda: self._align_canvas.clear_mask() if getattr(self, '_align_canvas', None) and CV2_OK else None
+        )
+        a_row2.addWidget(a_clear_btn)
+
+        teach_btn = QPushButton("📤  Teach & Send")
+        teach_btn.setToolTip("Send strokes + ROI to manual_line_aligner (teach_reference service).")
+        teach_btn.setStyleSheet(f"background:#a6e3a1; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
+        teach_btn.clicked.connect(self._align_teach_send)
+        a_row2.addWidget(teach_btn)
+
+        a_reset_btn = QPushButton("🔄  Reset")
+        a_reset_btn.setStyleSheet(f"background:{C['red']}; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
+        a_reset_btn.clicked.connect(self._align_reset)
+        a_row2.addWidget(a_reset_btn)
+        a_row2.addStretch()
+        at_lay.addLayout(a_row2)
+
+        align_canvas_hint = QLabel("Strokes = red weld path.  ROI boundary = orange polygon (right-click to close).")
+        align_canvas_hint.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
+        at_lay.addWidget(align_canvas_hint)
+
+        # Separate canvas for Auto-Align (doesn't share state with Manual)
+        self._align_canvas = ManualCanvas()
+        self._align_brush_spin.valueChanged.connect(
+            lambda v: self._align_canvas.set_brush(v) if getattr(self, '_align_canvas', None) else None
+        )
+        at_lay.addWidget(self._align_canvas, stretch=1)
+
+        self._align_log = QTextEdit()
+        self._align_log.setReadOnly(True)
+        self._align_log.setFixedHeight(90)
+        self._align_log.setFont(QFont("Monospace", 9))
+        self._align_log.setStyleSheet(f"background:{C['bg']}; color:{C['text']}; border:1px solid {C['border']}; border-radius:4px;")
+        at_lay.addWidget(self._align_log)
+
+        tabs.addTab(align_tab, "🎯  Auto-Align")
+        self._align_tab_index = tabs.indexOf(align_tab)
+
         # ── Tab 3: ROS Launch (firmware-configurator style ─ exact replica) ──
         ros_tab = QWidget()
         rt_lay = QVBoxLayout(ros_tab)
@@ -1649,10 +2188,8 @@ class VisionPipelineGUI(QMainWindow):
 
         self._ros_method = QComboBox()
         self._ros_method.setMinimumWidth(300)
-        self._ros_method.addItem("Method 1: Gazebo Only (Simulation World)",                    "launch_gazebo_only.sh")
         self._ros_method.addItem("Method 2: Gazebo AND MoveIt (Simulated)",                     "launch_moveit_with_gazebo.sh")
         self._ros_method.addItem("Method 3: MoveIt Fake (Standalone RViz)",                     "launch_moveit_fake.sh")
-        self._ros_method.addItem("Method 4: MoveIt Real Hardware",                              "launch_moveit_real_hw.sh")
         self._ros_method.addItem("Method 5: MoveIt Real Hardware (Tested Single-Motor Legacy)", "launch_moveit_real_hw_tested_single_motor.sh")
         cl.addWidget(QLabel("Target:"))
         cl.addWidget(self._ros_method)
@@ -1671,7 +2208,7 @@ class VisionPipelineGUI(QMainWindow):
             " border:none; border-radius:6px; padding:5px 14px;"
         )
         ros_kill_btn.setToolTip("Forcefully kills all Gazebo, RViz, and MoveIt processes to clean up the environment.")
-        ros_kill_btn.clicked.connect(self._kill_all)
+        ros_kill_btn.clicked.connect(self._ros_kill_all_nodes)
         cl.addWidget(ros_kill_btn)
 
         cl.addSpacing(20)
@@ -1719,14 +2256,20 @@ class VisionPipelineGUI(QMainWindow):
 
         rt_lay.addLayout(logs_row)
 
-        self._ros_worker: Optional[NodeWorker] = None
-        self._ros_test_worker: Optional[NodeWorker] = None
+        self._ros_worker: Optional[RosLaunchWorker] = None
+        self._ros_test_worker: Optional[RosLaunchWorker] = None
+        self._ros_launch_env: dict[str, str] = {}
         self._launchers_dir = str(WORKSPACE_DIR / "scripts" / "launchers")
         tabs.addTab(ros_tab, "🚀  ROS Launch")
 
         # ── Tab 4: Crop Image ─────────────────────────────────────────────
         crop_tab = self._build_crop_tab()
         tabs.addTab(crop_tab, "✂️  Crop Image")
+
+        # ── Tab 5: Settings ───────────────────────────────────────────────
+        if ROS2_OK:
+            settings_tab = self._build_settings_tab()
+            tabs.addTab(settings_tab, "⚙️  ROS Parameters")
 
         # ── Tab 5: Console Log ────────────────────────────────────────────
         log_tab = QWidget()
@@ -1786,6 +2329,164 @@ class VisionPipelineGUI(QMainWindow):
         tabs.addTab(log_tab, "📋  Console Logs")
 
         return tabs
+
+    # ── Settings Tab ──────────────────────────────────────────────────────────
+
+    def _build_settings_tab(self) -> QWidget:
+        """
+        ⚙️ Settings Tab
+        ─────────────────
+        Dynamic ROS parameter adjustment for live nodes.
+        """
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(8)
+
+        def _add_param(parent_lay, name, default, node_name, label_text, min_val, max_val, step=1, double=False):
+            row = QHBoxLayout()
+            label = QLabel(f"<b>{label_text}</b>  <span style='color:{C['text2']}'>({name})</span>")
+            label.setMinimumWidth(250)
+            row.addWidget(label)
+            
+            spin = QDoubleSpinBox() if double else QSpinBox()
+            if double:
+                spin.setDecimals(3)
+            spin.setRange(min_val, max_val)
+            spin.setSingleStep(step)
+            spin.setValue(default)
+            spin.setMinimumWidth(120)
+            row.addWidget(spin)
+            
+            apply_btn = QPushButton("Apply")
+            
+            def _apply():
+                val = spin.value()
+                req = SetParameters.Request()
+                p = Parameter()
+                p.name = name
+                pv = ParameterValue()
+                if double:
+                    pv.type = ParameterType.PARAMETER_DOUBLE
+                    pv.double_value = float(val)
+                else:
+                    pv.type = ParameterType.PARAMETER_INTEGER
+                    pv.integer_value = int(val)
+                p.value = pv
+                req.parameters = [p]
+                
+                cli = self._ros_node.create_client(SetParameters, f'/{node_name}/set_parameters')
+                if not cli.wait_for_service(timeout_sec=1.0):
+                    self._ros_log.append(f"<b style='color:#ff5555'>[Settings] Service /{node_name}/set_parameters offline</b>")
+                    return
+                # Call async and forget — if it's up, it'll apply
+                cli.call_async(req)
+                self._ros_log.append(f"<b style='color:#55ff55'>[Settings] Applied {name}={val} to {node_name}</b>")
+                
+            apply_btn.clicked.connect(_apply)
+            row.addWidget(apply_btn)
+            row.addStretch()
+            parent_lay.addLayout(row)
+
+        pg_grp = QGroupBox("Path Generator (/path_generator)")
+        pg_lay = QVBoxLayout(pg_grp)
+        _add_param(pg_lay, "max_waypoints", 80, "path_generator", "Max Waypoints Cap", 10, 1000, 10)
+        _add_param(pg_lay, "waypoint_spacing", 0.005, "path_generator", "Waypoint Spacing (m)", 0.001, 0.05, 0.001, True)
+        lay.addWidget(pg_grp)
+
+        mc_grp = QGroupBox("MoveIt Controller (/moveit_controller)")
+        mc_lay = QVBoxLayout(mc_grp)
+        _add_param(mc_lay, "approach_distance", 0.15, "moveit_controller", "Approach Distance (m)", 0.01, 0.5, 0.01, True)
+        _add_param(mc_lay, "weld_velocity", 0.01, "moveit_controller", "Weld Velocity (m/s)", 0.001, 0.1, 0.001, True)
+        _add_param(mc_lay, "joint_waypoint_fallback_count", 8, "moveit_controller", "Fallback Samples", 2, 50, 1)
+        
+        # Reachability Safety Toggle
+        safety_cb = QCheckBox("Enforce Reachable Workspace (Clamp)")
+        safety_cb.setToolTip("If enabled, waypoints outside the radial/box limits will be shifted to the nearest reachable point.")
+        def _set_safety(state):
+            val = safety_cb.isChecked()
+            self._set_ros_param("moveit_controller", "enforce_reachable_test_path", val)
+        safety_cb.stateChanged.connect(_set_safety)
+        mc_lay.addWidget(safety_cb)
+
+        lay.addWidget(mc_grp)
+
+        # ── Path Offset (welding correction) ──────────────────────────────────
+        offset_grp = QGroupBox("🎯 Path Offset — Welding Correction (/moveit_controller)")
+        offset_grp.setStyleSheet(f"QGroupBox {{ border:1px solid #fab387; border-radius:6px; margin-top:6px; }}")
+        offset_lay = QVBoxLayout(offset_grp)
+
+        offset_hint = QLabel(
+            "Apply a <b>static XYZ offset</b> (mm) to every waypoint before execution. "
+            "Useful when the detected path needs fine correction for weld bead placement "
+            "without re-running vision. "
+            "<span style='color:#fab387;'>⚠️ Values are in <b>mm</b> in the GUI but stored as <b>meters</b> in ROS.</span>"
+        )
+        offset_hint.setWordWrap(True)
+        offset_hint.setTextFormat(Qt.RichText)
+        offset_hint.setStyleSheet(f"font-size:11px; color:{C['text2']}; border:none;")
+        offset_lay.addWidget(offset_hint)
+
+        spin_row = QHBoxLayout()
+        offset_spins = {}
+        for axis, color in [("X", "#89b4fa"), ("Y", "#a6e3a1"), ("Z", "#fab387")]:
+            col = QVBoxLayout()
+            lbl = QLabel(f"<b style='color:{color}'>{axis} offset (mm)</b>")
+            lbl.setAlignment(Qt.AlignCenter)
+            col.addWidget(lbl)
+            sp = QDoubleSpinBox()
+            sp.setRange(-50.0, 50.0)
+            sp.setSingleStep(0.5)
+            sp.setDecimals(1)
+            sp.setValue(0.0)
+            sp.setMinimumWidth(90)
+            sp.setAlignment(Qt.AlignCenter)
+            col.addWidget(sp)
+            spin_row.addLayout(col)
+            offset_spins[axis] = sp
+        offset_lay.addLayout(spin_row)
+
+        def _apply_offset():
+            req = SetParameters.Request()
+            for axis, param_name in [("X", "path_offset_x"), ("Y", "path_offset_y"), ("Z", "path_offset_z")]:
+                val_m = offset_spins[axis].value() / 1000.0  # mm → m
+                p = Parameter()
+                p.name = param_name
+                pv = ParameterValue()
+                pv.type = ParameterType.PARAMETER_DOUBLE
+                pv.double_value = val_m
+                p.value = pv
+                req.parameters.append(p)
+            cli = self._ros_node.create_client(SetParameters, '/moveit_controller/set_parameters')
+            if not cli.wait_for_service(timeout_sec=1.0):
+                self._ros_log.append("<b style='color:#ff5555'>[Offset] moveit_controller offline</b>")
+                return
+            cli.call_async(req)
+            dx = offset_spins["X"].value()
+            dy = offset_spins["Y"].value()
+            dz = offset_spins["Z"].value()
+            self._ros_log.append(
+                f"<b style='color:#fab387'>[Offset] Applied: X={dx:+.1f}mm  Y={dy:+.1f}mm  Z={dz:+.1f}mm</b>"
+            )
+
+        apply_all_btn = QPushButton("✅  Apply All 3 Offsets")
+        apply_all_btn.setStyleSheet(
+            f"background:#fab387; color:{C['bg']}; font-weight:bold;"
+            " border:none; border-radius:6px; padding:5px 14px;"
+        )
+        apply_all_btn.clicked.connect(_apply_offset)
+        reset_offset_btn = QPushButton("↩  Reset to Zero")
+        reset_offset_btn.clicked.connect(lambda: [sp.setValue(0.0) for sp in offset_spins.values()] or _apply_offset())
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(apply_all_btn)
+        btn_row.addWidget(reset_offset_btn)
+        btn_row.addStretch()
+        offset_lay.addLayout(btn_row)
+        lay.addWidget(offset_grp)
+
+        lay.addStretch()
+        return tab
+
 
     # ── Crop Image Tab ────────────────────────────────────────────────────────
 
@@ -2459,6 +3160,77 @@ class VisionPipelineGUI(QMainWindow):
         self._trigger_workers.append(worker)
         worker.start()
 
+    def _start_transient_worker(self, worker: NodeWorker) -> None:
+        """Keep short-lived workers alive until their thread fully exits."""
+        if not hasattr(self, "_trigger_workers"):
+            self._trigger_workers = []
+        self._trigger_workers.append(worker)
+        worker.finished.connect(
+            lambda rc, w=worker: self._trigger_workers.remove(w)
+            if w in self._trigger_workers else None
+        )
+        worker.start()
+
+    def _park_worker(self, worker) -> None:
+        """Keep aborted workers alive until their QThread fully exits."""
+        if worker is None:
+            return
+        if worker not in self._graveyard:
+            self._graveyard.append(worker)
+            worker.finished.connect(
+                lambda *_, w=worker: self._graveyard.remove(w)
+                if w in self._graveyard else None
+            )
+
+    def _abort_and_park_worker(self, worker, wait_ms: int = 0):
+        if worker is None:
+            return None
+        try:
+            worker.abort()
+        except Exception:
+            pass
+        self._park_worker(worker)
+        if wait_ms > 0:
+            try:
+                worker.wait(wait_ms)
+            except Exception:
+                pass
+        return None
+
+    def _switch_path_holder_source(self, source: str) -> None:
+        """
+        Tell path_holder to switch its active source.
+        Sets the parameter first, then calls ~/set_source.
+        Returns immediately; result is logged asynchronously.
+        """
+        if not (ROS2_OK and self._ros_node):
+            return
+        try:
+            from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+            pv = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=source)
+            req = SetParameters.Request()
+            req.parameters = [Parameter(name='active_source', value=pv)]
+            fut_param = self._path_holder_set_params_client.call_async(req)
+
+            def _after_param(f):
+                # Now call ~/set_source to apply
+                if self._path_holder_set_source_client.service_is_ready():
+                    fut_svc = self._path_holder_set_source_client.call_async(Trigger.Request())
+                    def _on_switch(sf):
+                        try:
+                            r = sf.result()
+                            color = C['green'] if r.success else C['red']
+                            html = f'<span style="color:{color}">[PathHolder] {r.message}</span>'
+                            self._log.append(html)
+                            if hasattr(self, '_ros_log'):
+                                self._ros_log.append(html)
+                        except Exception:
+                            pass
+                    fut_svc.add_done_callback(_on_switch)
+            fut_param.add_done_callback(_after_param)
+        except Exception as exc:
+            self._log.append(f'<span style="color:{C["red"]}">[PathHolder] Source switch error: {exc}</span>')
+
     def _selected_mode(self) -> str:
         for btn in self._mode_buttons.buttons():
             if btn.isChecked():
@@ -2471,6 +3243,7 @@ class VisionPipelineGUI(QMainWindow):
             "yolo":   ["ros2", "run", "parol6_vision", "yolo_segment"],
             "color":  ["ros2", "run", "parol6_vision", "color_mode"],
             "manual": ["ros2", "run", "parol6_vision", "manual_line"],
+            "align":  ["ros2", "run", "parol6_vision", "manual_line_aligner"],
         }
         cmd = cmds.get(mode)
         if not cmd:
@@ -2486,7 +3259,9 @@ class VisionPipelineGUI(QMainWindow):
                 self._mode_log.append(styled)
                 
         self._mode_worker.line_out.connect(_log_mode)
-        self._mode_worker.finished.connect(self._on_mode_finished)
+        self._mode_worker.finished.connect(
+            lambda rc, w=self._mode_worker: self._on_mode_finished(w, rc)
+        )
         self._mode_worker.start()
         self._btn_start_mode.setEnabled(False)
         self._btn_stop_mode.setEnabled(True)
@@ -2495,27 +3270,109 @@ class VisionPipelineGUI(QMainWindow):
         )
 
     def _stop_mode_node(self) -> None:
-        if self._mode_worker:
-            self._mode_worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._mode_worker)
-            self._mode_worker.finished.connect(lambda rc, w=self._mode_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
-            self._mode_worker = None
+        self._mode_worker = self._abort_and_park_worker(self._mode_worker)
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
-    def _on_mode_finished(self, rc: int) -> None:
-        self._mode_worker = None
+    def _on_mode_finished(self, worker: NodeWorker, rc: int) -> None:
+        if self._mode_worker is worker:
+            self._mode_worker = None
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
     # ── Manual Red Line actions ───────────────────────────────────────────────
 
+    def _on_roi_toggled(self, state: int) -> None:
+        """Legacy handler — kept for compatibility but ROI is now in Auto-Align tab."""
+        pass
+
     def _on_straight_line_toggled(self, state: int) -> None:
         """Toggle straight-line drawing mode on the canvas."""
         if hasattr(self, '_canvas') and CV2_OK:
             self._canvas.set_straight_line_mode(bool(state))
+
+    # ── Auto-Align tab actions ─────────────────────────────────────────────────
+
+    def _on_align_roi_toggled(self, state: int) -> None:
+        if state == Qt.Checked:
+            if hasattr(self, '_align_straight_check'): self._align_straight_check.setChecked(False)
+            if getattr(self, '_align_canvas', None):
+                self._align_canvas.set_roi_mode(True)
+        else:
+            if getattr(self, '_align_canvas', None):
+                self._align_canvas.set_roi_mode(False)
+
+    def _align_use_latest_cropped(self) -> None:
+        if not CV2_OK:
+            return
+        rgb = getattr(self, '_latest_cropped_rgb', None)
+        if rgb is not None and getattr(self, '_align_canvas', None):
+            self._align_canvas.load_image(rgb.copy())
+        else:
+            if hasattr(self, '_align_log'):
+                self._align_log.append('<span style="color:#f9e2af">[Align] No cropped frame yet — trigger a capture first.</span>')
+
+    def _align_teach_send(self) -> None:
+        """Serialise align canvas strokes+ROI and call manual_line_aligner/teach_reference."""
+        if not (ROS2_OK and CV2_OK):
+            self._align_log.append('<span style="color:#f38ba8">[Align] ROS2 + cv2 required.</span>')
+            return
+        strokes = getattr(self, '_align_canvas', None) and self._align_canvas.get_strokes()
+        roi_polygon = getattr(self, '_align_canvas', None) and self._align_canvas.get_roi_polygon()
+        if not strokes:
+            self._align_log.append('<span style="color:#f9e2af">[Align] Draw weld strokes first.</span>')
+            return
+        if not roi_polygon:
+            self._align_log.append('<span style="color:#f9e2af">[Align] Draw an ROI boundary first (check the ROI checkbox).</span>')
+            return
+        import json
+        payload = {'color': [0, 0, 255], 'width': self._align_brush_spin.value(),
+                   'strokes': strokes, 'roi_polygon': roi_polygon}
+        json_str = json.dumps(payload)
+        self._align_log.append(f'<span style="color:#a6e3a1">[Align] Teaching {len(strokes)} stroke(s) + {len(roi_polygon)}-pt ROI…</span>')
+
+        if not hasattr(self, '_aligner_set_params_client') or self._aligner_set_params_client is None:
+            self._align_log.append('<span style="color:#f38ba8">[Align] Aligner ROS client not ready.</span>')
+            return
+
+        from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+        pv = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=json_str)
+        req = SetParameters.Request()
+        req.parameters = [Parameter(name='strokes_json', value=pv)]
+        future = self._aligner_set_params_client.call_async(req)
+
+        def _on_param_set(fut):
+            try:
+                result = fut.result()
+                if result and result.results and result.results[0].successful:
+                    svc_w = NodeWorker([
+                        "ros2", "service", "call", "/manual_line_aligner/teach_reference",
+                        "std_srvs/srv/Trigger", "{}",
+                    ])
+                    svc_w.line_out.connect(lambda s: self._align_log.append(f'<span style="color:#a6e3a1">[Align] {s}</span>'))
+                    self._trigger_workers.append(svc_w)
+                    svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in self._trigger_workers else None)
+                    svc_w.start()
+                else:
+                    msg = result.results[0].reason if result and result.results else 'unknown'
+                    self._align_log.append(f'<span style="color:#f38ba8">[Align] Param set failed: {msg}</span>')
+            except Exception as e:
+                self._align_log.append(f'<span style="color:#f38ba8">[Align] Error: {e}</span>')
+        future.add_done_callback(_on_param_set)
+
+    def _align_reset(self) -> None:
+        if getattr(self, '_align_canvas', None) and CV2_OK:
+            self._align_canvas.clear_mask()
+        if not ROS2_OK:
+            return
+        svc_w = NodeWorker([
+            "ros2", "service", "call", "/manual_line_aligner/reset_strokes",
+            "std_srvs/srv/Trigger", "{}",
+        ])
+        svc_w.line_out.connect(lambda s: self._align_log.append(f'<span style="color:#f9e2af">[Align] {s}</span>'))
+        self._trigger_workers.append(svc_w)
+        svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
+        svc_w.start()
 
     def _manual_log_append(self, html: str) -> None:
         """Append to both the global log and the manual-specific log panel."""
@@ -2529,6 +3386,8 @@ class VisionPipelineGUI(QMainWindow):
             self._manual_log_append('<span style="color:#f38ba8">[Manual] ROS2 + cv2 required.</span>')
             return
         strokes = self._canvas.get_strokes()
+        roi_polygon = getattr(self._canvas, 'get_roi_polygon', lambda: [])()
+        
         if not strokes:
             self._manual_log_append('<span style="color:#f9e2af">[Manual] No strokes to send — draw something first.</span>')
             return
@@ -2536,6 +3395,9 @@ class VisionPipelineGUI(QMainWindow):
         w_px = self._manual_brush_spin.value()
         import json
         payload = {'color': [c.blue(), c.green(), c.red()], 'width': w_px, 'strokes': strokes}
+        if roi_polygon:
+            payload['roi_polygon'] = roi_polygon
+            
         json_str = json.dumps(payload)
         self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Sending {len(strokes)} stroke(s) → /manual_line/set_strokes…</span>')
         
@@ -2555,7 +3417,6 @@ class VisionPipelineGUI(QMainWindow):
             try:
                 result = fut.result()
                 if result and result.results and result.results[0].successful:
-                    # Now call the set_strokes service
                     svc_w = NodeWorker([
                         "ros2", "service", "call", "/manual_line/set_strokes",
                         "std_srvs/srv/Trigger", "{}",
@@ -2589,14 +3450,14 @@ class VisionPipelineGUI(QMainWindow):
             "std_srvs/srv/Trigger", "{}",
         ])
         svc_w.line_out.connect(
-            lambda s: self._log.append(
+            lambda s: self._manual_log_append(
                 f'<span style="color:#f9e2af">[Manual] {s}</span>'
             )
         )
         self._trigger_workers.append(svc_w)
         svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
         svc_w.start()
-        self._log.append('<span style="color:#f9e2af">[Manual] Reset sent → /manual_line/reset_strokes</span>')
+        self._manual_log_append('<span style="color:#f9e2af">[Manual] Reset sent → /manual_line/reset_strokes</span>')
         self._btn_start_mode.setEnabled(True)
         self._btn_stop_mode.setEnabled(False)
 
@@ -2608,60 +3469,115 @@ class VisionPipelineGUI(QMainWindow):
         QTimer.singleShot(1200, self._btn_optimizer._toggle)
         QTimer.singleShot(1600, self._btn_depth._toggle)
         QTimer.singleShot(2000, self._btn_pathgen._toggle)
+        QTimer.singleShot(2400, self._btn_path_holder._toggle)
 
     def _stop_all(self) -> None:
         for btn in (self._btn_live_cam, self._btn_capture,
                     self._btn_crop_node,
                     self._btn_optimizer, self._btn_depth,
-                    self._btn_pathgen, self._btn_moveit):
+                    self._btn_pathgen, self._btn_path_holder,
+                    self._btn_moveit):
             btn.stop()
         self._stop_mode_node()
-        if self._ros_worker:
-            self._ros_worker.abort()
-            if not hasattr(self, "_graveyard"):
-                self._graveyard = []
-            self._graveyard.append(self._ros_worker)
-            self._ros_worker.finished.connect(lambda rc, w=self._ros_worker: self._graveyard.remove(w) if w in getattr(self, "_graveyard", []) else None)
-            self._ros_worker = None
+        self._ros_worker = self._abort_and_park_worker(self._ros_worker)
+        self._ros_test_worker = self._abort_and_park_worker(self._ros_test_worker)
 
     def _send_path_to_moveit(self) -> None:
-        """Call the moveit_controller trigger service."""
-        worker = NodeWorker(
-            ["ros2", "service", "call",
-             "/moveit_controller/execute_welding_path",
-             "std_srvs/srv/Trigger", "{}"],
+        """
+        Two-step sequence so moveit_controller always receives the path before execute:
+          1. Call path_holder/set_source  →  forces path_holder to republish the
+             cached path as a fresh TRANSIENT_LOCAL message, waking any late-joining
+             moveit_controller subscriber.
+          2. After 1 s (DDS delivery), call execute_welding_path trigger service.
+        """
+        def _log(msg: str, color: str = C["accent"]) -> None:
+            html = f'<span style="color:{color}">[MoveIt] {msg}</span>'
+            self._log.append(html)
+            if hasattr(self, "_ros_log"):
+                self._ros_log.append(html)
+
+        if not ROS2_OK or self._ros_node is None:
+            _log("ROS 2 client unavailable in GUI.", C["red"])
+            return
+
+        if self._moveit_execute_client is None:
+            _log("MoveIt execute client not ready.", C["red"])
+            return
+
+        if not self._moveit_execute_client.wait_for_service(timeout_sec=1.0):
+            _log("/moveit_controller/execute_welding_path is not available.", C["red"])
+            return
+
+        # ── Step 1: force path_holder to republish cached path ──────────────
+        def _do_execute():
+            """Called 1 s after path_holder refresh to trigger MoveIt."""
+            _log("Triggering MoveIt execution…", C["yellow"])
+            exec_future = self._moveit_execute_client.call_async(Trigger.Request())
+            self._crop_futures.append(exec_future)
+
+            def _on_exec_done(exec_fut):
+                try:
+                    exec_result = exec_fut.result()
+                    if exec_result and exec_result.success:
+                        _log(exec_result.message or "Execution started.", C["green"])
+                    else:
+                        reason = exec_result.message if exec_result else "unknown failure"
+                        _log(f"Execution failed: {reason}", C["red"])
+                except Exception as exc:
+                    _log(f"Execution service error: {exc}", C["red"])
+            exec_future.add_done_callback(_on_exec_done)
+
+        path_holder_ready = (
+            hasattr(self, "_path_holder_set_source_client")
+            and self._path_holder_set_source_client is not None
+            and self._path_holder_set_source_client.service_is_ready()
         )
-        worker.line_out.connect(
-            lambda s: self._log.append(
-                f'<span style="color:{C["accent"]}">[MoveIt] {s}</span>'
-            )
-        )
-        worker.start()
+
+        if path_holder_ready:
+            _log("Refreshing path_holder cache → moveit_controller…", C["yellow"])
+            refresh_future = self._path_holder_set_source_client.call_async(Trigger.Request())
+            self._crop_futures.append(refresh_future)
+
+            def _on_refresh_done(fut):
+                try:
+                    res = fut.result()
+                    if res and res.success:
+                        _log(f"Path refreshed: {res.message}", C["text2"])
+                    else:
+                        reason = res.message if res else "no response"
+                        _log(f"path_holder refresh: {reason} (continuing anyway)", C["yellow"])
+                except Exception as exc:
+                    _log(f"path_holder refresh error: {exc} (continuing anyway)", C["yellow"])
+                # Always proceed to execute after refresh attempt
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(1000, _do_execute)
+
+            refresh_future.add_done_callback(_on_refresh_done)
+        else:
+            # path_holder not available — try execute directly
+            _log("path_holder not available, trying direct execute…", C["yellow"])
+            _do_execute()
+
+
 
     def _launch_vision_moveit(self) -> None:
         worker = NodeWorker(
             ["ros2", "launch", "parol6_vision", "vision_moveit.launch.py"],
         )
         worker.line_out.connect(self._log.append)
-        worker.start()
+        self._start_transient_worker(worker)
 
     # ── ROS Launch Tab actions ─────────────────────────────────────────────
 
     def _ros_launch_toggle(self) -> None:
-        if self._ros_worker and self._ros_worker.isRunning():
-            self._ros_log.append("[LAUNCH] Stopping...")
-            self._gazebo_log.append("[LAUNCH] Stopping...")
-            self._ros_worker.abort()
-            self._ros_worker = None
-            self._ros_launch_btn.setText("\U0001f680 Launch")
-            self._ros_launch_btn.setStyleSheet(
-                f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
-                " border:none; border-radius:6px; padding:5px 14px;"
-            )
-            self._ros_method.setEnabled(True)
+        if self._ros_worker:
+            self._ros_log.append("[LAUNCH] Stopping process...")
+            self._gazebo_log.append("[LAUNCH] Stopping process...")
+            self._ros_worker = self._abort_and_park_worker(self._ros_worker)
+            self._set_ros_button_state(False)
             return
 
-        script_name = self._ros_method.currentData()   # e.g. 'launch_moveit_fake.sh'
+        script_name = self._ros_method.currentData()
         script_path = os.path.join(self._launchers_dir, script_name)
 
         self._ros_log.clear()
@@ -2671,46 +3587,50 @@ class VisionPipelineGUI(QMainWindow):
             self._ros_log.append(f"[LAUNCH] \u274c Error: Cannot find script {script_path}")
             return
 
-        worker = NodeWorker([script_path])
+        self._ros_launch_env.clear()
+        self._ros_worker = RosLaunchWorker(script_path, [], env_vars=self._ros_launch_env)
+        self._ros_worker.output_rviz.connect(self._ros_log.append)
+        self._ros_worker.output_gazebo.connect(self._gazebo_log.append)
+        self._ros_worker.finished_ok.connect(lambda w=self._ros_worker: self._on_ros_launch_finished(w))
+        self._ros_worker.finished_err.connect(lambda rc, w=self._ros_worker: self._on_ros_launch_finished(w, rc))
+        self._ros_worker.start()
+        self._set_ros_button_state(True)
 
-        def _route_line(s: str):
-            lo = s.lower()
-            if any(k in lo for k in ("ign", "gazebo", "/usr/bin/ruby", "spawn")):
-                self._gazebo_log.append(s)
-            else:
-                self._ros_log.append(s)
+    def _set_ros_button_state(self, is_running: bool) -> None:
+        if is_running:
+            self._ros_launch_btn.setText("🛑 Stop")
+            self._ros_launch_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
+            self._ros_method.setEnabled(False)
+        else:
+            self._ros_launch_btn.setText("🚀 Launch")
+            self._ros_launch_btn.setStyleSheet("background:#a6e3a1; color:#1e1e2e; font-weight:bold;")
+            self._ros_method.setEnabled(True)
 
-        worker.line_out.connect(_route_line)
-        worker.finished.connect(self._on_ros_launch_finished)
-        self._ros_worker = worker
-        worker.start()
-
-        self._ros_launch_btn.setText("\u25a0 Stop")
-        self._ros_launch_btn.setStyleSheet(
-            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
-        self._ros_method.setEnabled(False)
-
-    def _on_ros_launch_finished(self, rc: int) -> None:
+    def _on_ros_launch_finished(self, worker=None, rc: Optional[int] = None) -> None:
+        if worker is not None and self._ros_worker is not worker:
+            return
         self._ros_worker = None
-        self._ros_launch_btn.setText("\U0001f680 Launch")
-        self._ros_launch_btn.setStyleSheet(
-            f"background:{C['green']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
-        self._ros_method.setEnabled(True)
+        self._set_ros_button_state(False)
+
+    def _ros_kill_all_nodes(self) -> None:
+        self._ros_log.append("[LAUNCH] ⚠️ Sending KILL signal to all Gazebo/RViz/MoveIt processes...")
+        cmd = "pkill -9 -f 'ros2|rviz2|ign|gazebo|ruby|move_group|parameter_bridge|robot_state_publisher|launch_'"
+        if os.path.exists("/.dockerenv"):
+            full_cmd = ["bash", "-c", cmd]
+        else:
+            full_cmd = ["docker", "exec", "parol6_dev", "bash", "-c", cmd]
+        try:
+            subprocess.run(full_cmd, check=False)
+            self._ros_log.append("[LAUNCH] ✅ Kill command executed. Zombie processes terminated.")
+        except Exception as exc:
+            self._ros_log.append(f"[LAUNCH] ❌ Error executing kill: {exc}")
 
     def _ros_run_auto_test(self) -> None:
-        if self._ros_test_worker and self._ros_test_worker.isRunning():
+        if self._ros_test_worker:
             self._ros_log.append("[TEST] Stopping currently running test...")
-            self._ros_test_worker.abort()
-            self._ros_test_worker = None
-            self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
-            self._test_btn.setStyleSheet(
-                f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
-                " border:none; border-radius:6px; padding:5px 14px;"
-            )
+            self._ros_test_worker = self._abort_and_park_worker(self._ros_test_worker)
+            self._test_btn.setText("▶️ Run Auto-Test")
+            self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
             return
 
         script_path = os.path.join(self._launchers_dir, "launch_auto_test.sh")
@@ -2719,76 +3639,94 @@ class VisionPipelineGUI(QMainWindow):
             return
 
         shape = self._test_shape_combo.currentText()
-        self._ros_log.append(f"\n[TEST] Launching Auto-Test ({shape})...")
+        self._ros_log.append(f"\n[TEST] Launching comprehensive Auto-Test ({shape})...")
         self._ros_log.append("[TEST] Spawning moveit_controller and waiting for services...")
 
-        worker = NodeWorker([script_path, shape])
-        worker.line_out.connect(self._ros_log.append)
-        worker.finished.connect(self._on_ros_test_finished)
-        self._ros_test_worker = worker
-        worker.start()
+        self._ros_launch_env.clear()
+        self._ros_test_worker = RosLaunchWorker(script_path, [shape], env_vars=self._ros_launch_env)
+        self._ros_test_worker.output_rviz.connect(self._ros_log.append)
+        self._ros_test_worker.finished_ok.connect(lambda w=self._ros_test_worker: self._on_ros_test_finished(w))
+        self._ros_test_worker.finished_err.connect(lambda rc, w=self._ros_test_worker: self._on_ros_test_finished(w, rc))
+        self._ros_test_worker.start()
 
-        self._test_btn.setText("\u25a0 Stop Test")
-        self._test_btn.setStyleSheet(
-            f"background:{C['red']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
+        self._test_btn.setText("🛑 Stop Test")
+        self._test_btn.setStyleSheet("background:#f38ba8; color:#1e1e2e; font-weight:bold;")
 
-    def _on_ros_test_finished(self, rc: int = 0) -> None:
+    def _on_ros_test_finished(self, worker=None, rc: Optional[int] = None) -> None:
+        if worker is not None and self._ros_test_worker is not worker:
+            return
         self._ros_test_worker = None
-        self._test_btn.setText("\u25b6\ufe0f Run Auto-Test")
-        self._test_btn.setStyleSheet(
-            f"background:{C['yellow']}; color:{C['bg']}; font-weight:bold;"
-            " border:none; border-radius:6px; padding:5px 14px;"
-        )
+        self._test_btn.setText("▶️ Run Auto-Test")
+        self._test_btn.setStyleSheet("background:#f9e2af; color:#1e1e2e; font-weight:bold;")
 
     def _inject_test_path(self) -> None:
-        """Publish a small synthetic straight-line path to /vision/welding_path.
+        """Send the conservative reachable test path through inject_path_node.
 
-        The YAML value for `ros2 topic pub` must be a single flat YAML mapping.
+        Uses the GUI's persistent ROS publisher to /vision/inject_path.
+        inject_path_node re-latches it to /vision/welding_path/injected and
+        path_holder picks it up when source is 'injected'.
+        No subprocess, no DDS discovery race.
         """
-        # Three waypoints along Y axis at fixed X=0.4m, Z=0.45m
-        path_yaml = (
-            "{"
-            "header: {frame_id: base_link}, "
-            "poses: ["
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y: -0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.0, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}, "
-            "{header: {frame_id: base_link}, pose: {position: {x: 0.4, y:  0.1, z: 0.45}, orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707}}}"
-            "]}"
-        )
-
-        worker = NodeWorker(
-            ["ros2", "topic", "pub", "--once",
-             "/vision/welding_path", "nav_msgs/msg/Path", path_yaml],
-        )
-        worker.line_out.connect(
-            lambda s: self._ros_log.append(
-                f'<span style="color:{C["yellow"]}">[Inject] {s}</span>'
+        if not (ROS2_OK and self._ros_node and self._inject_path_pub):
+            self._log.append(
+                f'<span style="color:{C["red"]}">[Inject] ROS unavailable.</span>'
             )
+            return
+
+        from geometry_msgs.msg import Pose, Point, Quaternion
+        path = ROSPath()
+        path.header.frame_id = 'base_link'
+        path.header.stamp = self._ros_node.get_clock().now().to_msg()
+
+        # FK-confirmed home: x=0.20, z=0.33 — 5 lateral waypoints
+        waypoints = [
+            (-0.08, 0.33), (-0.04, 0.33), (0.00, 0.33), (0.04, 0.33), (0.08, 0.33)
+        ]
+        for y, z in waypoints:
+            from geometry_msgs.msg import PoseStamped
+            ps = PoseStamped()
+            ps.header = path.header
+            ps.pose.position.x = 0.20
+            ps.pose.position.y = y
+            ps.pose.position.z = z
+            ps.pose.orientation.x = 0.707
+            ps.pose.orientation.y = 0.0
+            ps.pose.orientation.z = -0.707
+            ps.pose.orientation.w = 0.0
+            path.poses.append(ps)
+
+        self._inject_path_pub.publish(path)
+        self._log.append(
+            f'<b style="color:{C["yellow"]}">[Inject] Test path ({len(path.poses)} poses) → '
+            '/vision/inject_path → inject_path_node → path_holder</b>'
         )
-        worker.start()
-        self._ros_log.append(
-            f'<b style="color:{C["yellow"]}">[Inject] Synthetic 3-point path published → '
-            '/vision/welding_path</b>'
-        )
+        if hasattr(self, '_ros_log'):
+            self._ros_log.append(
+                f'<b style="color:{C["yellow"]}">[Inject] Published {len(path.poses)}-waypoint '
+                'test path. Switching path_holder source → injected.</b>'
+            )
+        # Switch path_holder to serve the injected path
+        self._switch_path_holder_source('injected')
+
 
     def _kill_all(self) -> None:
-        """Stop all managed workers then kill stray background ROS processes.
-
-        Uses SIGINT first (allows clean ROS graph deregistration) then SIGTERM
-        after a short delay. SIGKILL (-9) is intentionally avoided so that nodes
-        can call rclpy.shutdown() and cleanly remove themselves from the graph.
-        """
+        """Stop managed workers, then signal stray ROS processes to exit."""
         self._stop_all()
-        # SIGINT → gives nodes time to deregister; SIGTERM as fallback
         cmd = (
             "pkill -INT -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' ; "
             "sleep 1 ; "
-            "pkill -TERM -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' 2>/dev/null || true"
+            "pkill -TERM -f 'rviz2|move_group|ros2_control_node|ros2 run parol6' "
+            "2>/dev/null || true"
         )
         subprocess.Popen(["bash", "-c", cmd])
-        self._ros_log.append("[KILL] Sent SIGINT to all stray ROS 2 processes (SIGTERM fallback after 1 s).")
+        self._ros_log.append(
+            "[KILL] Sent SIGINT to stray ROS 2 processes "
+            "(SIGTERM fallback after 1 s)."
+        )
+
+    def _ros_kill_all(self) -> None:
+        """Compatibility wrapper for older signal/slot hookups."""
+        self._kill_all()
 
     def _kill_camera_processes(self) -> None:
         cmd = "pkill -INT -f 'kinect2_bridge_node|kinect2_bridge_gpu|kinect2_bridge_launch'"
@@ -2814,7 +3752,9 @@ class VisionPipelineGUI(QMainWindow):
         return [
             "bash", "-c",
             "source /opt/ros/humble/setup.bash && "
-            "source /opt/kinect_ws/install/setup.bash 2>/dev/null || true && "
+            "if [ -f /opt/kinect_ws/install/setup.bash ]; then "
+            "source /opt/kinect_ws/install/setup.bash; "
+            "fi && "
             f"ros2 launch {WORKSPACE_DIR}/kinect2_bridge_gpu.yaml {args}"
         ]
 
@@ -2834,6 +3774,74 @@ class VisionPipelineGUI(QMainWindow):
                 return
             rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             self._canvas.load_image(rgb)
+
+    def _on_weld_path_received(self, msg) -> None:
+        """Real callback: fires when an actual welding path arrives from path_holder."""
+        n = len(msg.poses)
+        if n == 0:
+            return
+        fn = getattr(self, '_simple_set_status', None)
+        if fn:
+            fn(f"[PATH] Ready! ({n} waypoints) - Proceed to Step 3", "#a6e3a1")
+
+    def _on_depth_confirmed(self, msg) -> None:
+        """Real callback: fires when captured depth image arrives, confirming capture."""
+        fn = getattr(self, '_simple_set_status', None)
+        if fn:
+            fn("[SCAN] Depth confirmed - Generating path...", "#f9e2af")
+
+    def _start_simple_status_poller(self) -> None:
+        """Start a QTimer that polls real NodeWorker process states every 2 seconds.
+        
+        Updates the status box with a truthful summary of which pipeline nodes
+        are actually alive according to the OS process table — no fake timer tricks.
+        """
+        def _is_alive(worker) -> bool:
+            if worker is None:
+                return False
+            proc = getattr(worker, '_proc', None)
+            if proc is None:
+                # May not have started ever
+                thread = getattr(worker, '_worker', None)
+                if thread:
+                    proc = getattr(thread, '_proc', None)
+            return proc is not None and proc.poll() is None
+
+        def _poll_nodes():
+            fn = getattr(self, '_simple_set_status', None)
+            if not fn:
+                return
+
+            cam_up    = _is_alive(getattr(self, '_btn_live_cam', None))
+            cap_up    = _is_alive(getattr(self, '_btn_capture', None))
+            crop_up   = _is_alive(getattr(self, '_btn_crop_node', None))
+            opt_up    = _is_alive(getattr(self, '_btn_optimizer', None))
+            depth_up  = _is_alive(getattr(self, '_btn_depth', None))
+            gen_up    = _is_alive(getattr(self, '_btn_pathgen', None))
+            moveit_up = _is_alive(getattr(self, '_btn_moveit', None))
+
+            # Build a compact node health row
+            nodes = [
+                ("Cam", cam_up), ("Cap", cap_up), ("Crop", crop_up),
+                ("Opt", opt_up), ("Depth", depth_up), ("Gen", gen_up),
+                ("MoveIt", moveit_up),
+            ]
+            up   = [name for name, alive in nodes if alive]
+            down = [name for name, alive in nodes if not alive]
+
+            if not any(alive for _, alive in nodes):
+                return
+
+            if all(alive for _, alive in nodes):
+                fn("[OK] All nodes online - System Ready.", "#a6e3a1")
+            else:
+                up_str   = " ".join(up)   or "--"
+                down_str = " ".join(down) or "--"
+                fn(f"(WARN) Online: {up_str} | Offline: {down_str}", "#f9e2af")
+
+        self._simple_poller = QTimer(self)
+        self._simple_poller.timeout.connect(_poll_nodes)
+        self._simple_poller.start(2000)  # every 2 s
 
     def _manual_topic_image_cb(self, msg: "ROSImage") -> None:
         """Cache the latest cropped frame and auto-load into canvas if Manual mode is active."""
@@ -2912,6 +3920,60 @@ class VisionPipelineGUI(QMainWindow):
         except Exception as exc:
             self._log.append(f'[Manual] Publish error: {exc}')
 
+    def _manual_save_profile(self) -> None:
+        """Save the current drawn strokes as a JSON profile via an OS dialog."""
+        strokes = getattr(self, '_canvas', None) and self._canvas.get_strokes()
+        if not strokes:
+            QMessageBox.warning(self, "No Strokes", "Please draw strokes before saving a profile.")
+            return
+
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Stroke Profile", "", "JSON Files (*.json)"
+        )
+        if not out_path:
+            return
+
+        c = getattr(self, '_manual_color_picker', None) 
+        if c: c = c.get_color()
+        else: c = QColor(255, 0, 0)
+        
+        w_px = getattr(self, '_manual_brush_spin', None)
+        w_px = w_px.value() if w_px else 5
+        
+        payload = {
+            'color': [c.blue(), c.green(), c.red()],
+            'width': w_px,
+            'strokes': strokes
+        }
+        
+        import json
+        try:
+            with open(out_path, 'w') as f:
+                json.dump(payload, f, indent=2)
+            self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Saved {len(strokes)} strokes to {out_path}</span>')
+        except Exception as e:
+            QMessageBox.critical(self, "Save Failed", f"Could not save profile:\n{e}")
+
+    def _manual_load_profile(self) -> None:
+        """Load strokes from a JSON profile via an OS dialog."""
+        in_path, _ = QFileDialog.getOpenFileName(
+            self, "Load Stroke Profile", "", "JSON Files (*.json)"
+        )
+        if not in_path:
+            return
+
+        import json
+        try:
+            with open(in_path, 'r') as f:
+                payload = json.load(f)
+            
+            strokes = payload.get('strokes', [])
+            if hasattr(self, '_canvas'):
+                self._canvas.load_strokes(strokes)
+            self._manual_log_append(f'<span style="color:#a6e3a1">[Manual] Loaded {len(strokes)} strokes from {in_path}</span>')
+        except Exception as e:
+            QMessageBox.critical(self, "Load Failed", f"Could not load profile:\n{e}")
+
     # ── Legacy Launcher ────────────────────────────────────────────────────
 
     def _launch_legacy(self) -> None:
@@ -2931,6 +3993,32 @@ class VisionPipelineGUI(QMainWindow):
 
     def closeEvent(self, ev) -> None:
         self._stop_all()
+        for worker in list(getattr(self, "_trigger_workers", [])):
+            try:
+                worker.abort()
+                worker.wait(1500)
+            except Exception:
+                pass
+        for worker in list(getattr(self, "_graveyard", [])):
+            try:
+                worker.wait(1500)
+            except Exception:
+                pass
+        for worker in (
+            getattr(self, "_mode_worker", None),
+            getattr(self, "_ros_worker", None),
+            getattr(self, "_ros_test_worker", None),
+        ):
+            if worker is not None:
+                try:
+                    worker.wait(1500)
+                except Exception:
+                    pass
+        if hasattr(self, "_ros_timer"):
+            try:
+                self._ros_timer.stop()
+            except Exception:
+                pass
         ev.accept()
 
 
@@ -2940,6 +4028,7 @@ class VisionPipelineGUI(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    signal.signal(signal.SIGINT, lambda *_: app.quit())
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
     app.setFont(QFont("Segoe UI", 11))
