@@ -2729,6 +2729,52 @@ class VisionPipelineGUI(QMainWindow):
         mpos_row.addStretch()
         aruco_lay.addLayout(mpos_row)
 
+        # ── Configuration Persistence ─────────────────────────────────────────
+        # Restore previously saved calibration settings before connecting signals
+        try:
+            import yaml as _yaml
+            from pathlib import Path as _Path
+            with open(_Path.home() / '.parol6' / 'aruco_gui_cfg.yaml', 'r') as f:
+                c = _yaml.safe_load(f) or {}
+            idx = self._aruco_backend_combo.findData(c.get('backend', 'custom'))
+            if idx >= 0: self._aruco_backend_combo.setCurrentIndex(idx)
+            if 'marker_id' in c: self._aruco_id_spin.setValue(int(c['marker_id']))
+            if 'marker_size' in c: self._aruco_size_spin.setValue(float(c['marker_size']))
+            if 'samples' in c: self._aruco_samples_spin.setValue(int(c['samples']))
+            if 'mx' in c: self._aruco_mx.setValue(float(c['mx']))
+            if 'my' in c: self._aruco_my.setValue(float(c['my']))
+            if 'mz' in c: self._aruco_mz.setValue(float(c['mz']))
+        except Exception:
+            pass
+
+        def _save_cfg(*args):
+            import yaml as _yaml
+            from pathlib import Path as _Path
+            cfg = {
+                'backend': self._aruco_backend_combo.currentData(),
+                'marker_id': self._aruco_id_spin.value(),
+                'marker_size': self._aruco_size_spin.value(),
+                'samples': self._aruco_samples_spin.value(),
+                'mx': self._aruco_mx.value(),
+                'my': self._aruco_my.value(),
+                'mz': self._aruco_mz.value()
+            }
+            out = _Path.home() / '.parol6' / 'aruco_gui_cfg.yaml'
+            try:
+                out.parent.mkdir(parents=True, exist_ok=True)
+                with open(out, 'w') as f:
+                    _yaml.dump(cfg, f, default_flow_style=False)
+            except Exception: pass
+
+        self._aruco_backend_combo.currentIndexChanged.connect(_save_cfg)
+        self._aruco_id_spin.valueChanged.connect(_save_cfg)
+        self._aruco_size_spin.valueChanged.connect(_save_cfg)
+        self._aruco_samples_spin.valueChanged.connect(_save_cfg)
+        self._aruco_mx.valueChanged.connect(_save_cfg)
+        self._aruco_my.valueChanged.connect(_save_cfg)
+        self._aruco_mz.valueChanged.connect(_save_cfg)
+        # ─────────────────────────────────────────────────────────────────────
+
         # Progress bar
         self._aruco_progress = QProgressBar()
         self._aruco_progress.setRange(0, 20); self._aruco_progress.setValue(0)
