@@ -2687,6 +2687,16 @@ class VisionPipelineGUI(QMainWindow):
         aruco_grp.setStyleSheet("QGroupBox { border:1px solid #89b4fa; border-radius:6px; margin-top:6px; }")
         aruco_lay = QVBoxLayout(aruco_grp)
 
+        # Backend selection row
+        back_row = QHBoxLayout()
+        back_row.addWidget(QLabel("Backend Node:"))
+        self._aruco_backend_combo = QComboBox()
+        self._aruco_backend_combo.addItem("Custom OpenCV (aruco_detector)", "custom")
+        self._aruco_backend_combo.addItem("ROS Library (aruco_ros single)", "ros_pkg")
+        back_row.addWidget(self._aruco_backend_combo)
+        back_row.addStretch()
+        aruco_lay.addLayout(back_row)
+
         # Marker & samples config row
         cfg_row = QHBoxLayout()
         cfg_row.addWidget(QLabel("Marker ID:"))
@@ -3001,6 +3011,7 @@ class VisionPipelineGUI(QMainWindow):
         marker_size = self._aruco_size_spin.value() / 1000.0
         n_samples   = self._aruco_samples_spin.value()
         mx, my, mz  = self._aruco_mx.value(), self._aruco_my.value(), self._aruco_mz.value()
+        backend     = self._aruco_backend_combo.currentData()
 
         self._aruco_log.clear()
         self._aruco_progress.setValue(0)
@@ -3008,25 +3019,43 @@ class VisionPipelineGUI(QMainWindow):
         self._aruco_enforce_btn.setEnabled(False)
         self._aruco_aborted = False
 
-        aruco_cmd = [
-            "ros2", "run", "parol6_vision", "aruco_detector",
-            "--ros-args",
-            "-p", "image_topic:=/kinect2/sd/image_color_rect",
-            "-p", "camera_info_topic:=/kinect2/sd/camera_info",
-            "-p", f"marker_id:={marker_id}",
-            "-p", f"marker_size:={marker_size:.5f}",
-            "-p", "camera_optical_frame:=kinect2_ir_optical_frame",
-            "-p", "marker_frame:=detected_marker_frame",
-            "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
-        ]
+        if backend == "custom":
+            aruco_cmd = [
+                "ros2", "run", "parol6_vision", "aruco_detector",
+                "--ros-args",
+                "-p", "image_topic:=/kinect2/sd/image_color_rect",
+                "-p", "camera_info_topic:=/kinect2/sd/camera_info",
+                "-p", f"marker_id:={marker_id}",
+                "-p", f"marker_size:={marker_size:.5f}",
+                "-p", "camera_optical_frame:=kinect2_ir_optical_frame",
+                "-p", "marker_frame:=detected_marker_frame",
+                "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
+            ]
+            node_name = "aruco_detector"
+        else:
+            aruco_cmd = [
+                "ros2", "run", "aruco_ros", "single",
+                "--ros-args",
+                "--remap", "/image:=/kinect2/sd/image_color_rect",
+                "--remap", "/camera_info:=/kinect2/sd/camera_info",
+                "-p", f"marker_id:={marker_id}",
+                "-p", f"marker_size:={marker_size:.5f}",
+                "-p", "camera_frame:=kinect2_ir_optical_frame",
+                "-p", "marker_frame:=detected_marker_frame",
+                "-p", "corner_refinement:=SUBPIX",
+                "-p", "image_is_rectified:=True",
+                "-p", "marker_dict:=DICT_ARUCO_ORIGINAL",
+            ]
+            node_name = "aruco_ros"
+
         self._aruco_log_append(
-            f"<b style='color:#89b4fa'>[GUI] ArUco calibration starting…</b>"
+            f"<b style='color:#89b4fa'>[GUI] ArUco calibration starting using {node_name}…</b>"
         )
         try:
             # NodeWorker(raw_cmd): NodeWorker.__init__ calls _wrap_ros_command internally
             aruco_worker = NodeWorker(aruco_cmd)
             aruco_worker.line_out.connect(
-                lambda t: self._aruco_log_append(f"<span style='color:#a6adc8'>[aruco_detector] {t}</span>")
+                lambda t, n=node_name: self._aruco_log_append(f"<span style='color:#a6adc8'>[{n}] {t}</span>")
             )
             aruco_worker.start()
 
@@ -3050,7 +3079,7 @@ class VisionPipelineGUI(QMainWindow):
                 f"<b style='color:#89b4fa'>[GUI] ArUco calibration started — "
                 f"marker #{marker_id} ({marker_size*1000:.1f} mm), "
                 f"{n_samples} samples, marker @ ({mx:.3f}, {my:.3f}, {mz:.3f}) m<br>"
-                f"aruco_detector launched; eye_to_hand_calibrator will start in 2 s…</b>"
+                f"{node_name} launched; eye_to_hand_calibrator will start in 2 s…</b>"
             )
         except Exception as _exc:
             self._aruco_log_append(
