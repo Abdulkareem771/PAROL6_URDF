@@ -2615,8 +2615,8 @@ class VisionPipelineGUI(QMainWindow):
         frame_sel_row = QHBoxLayout()
         frame_sel_row.addWidget(QLabel("base_link  →  child frame:"))
         self._man_child_combo = QComboBox()
-        self._man_child_combo.addItem("kinect2_link  (ArUco calibration result)", "kinect2_link")
-        self._man_child_combo.addItem("kinect2       (original launch-file default)", "kinect2")
+        self._man_child_combo.addItem("kinect2       (ArUco / Bridge Root)", "kinect2")
+        self._man_child_combo.addItem("kinect2_link  (Alternative)", "kinect2_link")
         self._man_child_combo.setMinimumWidth(280)
         frame_sel_row.addWidget(self._man_child_combo)
         frame_sel_row.addStretch()
@@ -2989,7 +2989,7 @@ class VisionPipelineGUI(QMainWindow):
             self._man_qy.setValue(float(cfg.get('qy', 0)))
             self._man_qz.setValue(float(cfg.get('qz', 0)))
             self._man_qw.setValue(float(cfg.get('qw', 1)))
-            child = cfg.get('child_frame_id', 'kinect2_link')
+            child = cfg.get('child_frame_id', 'kinect2')
             for i in range(self._man_child_combo.count()):
                 if self._man_child_combo.itemData(i) == child:
                     self._man_child_combo.setCurrentIndex(i)

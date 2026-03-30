@@ -116,7 +116,7 @@ class EyeToHandCalibrator(Node):
         self.declare_parameter('marker_qw', 1.0)
         # Camera TF chain params
         self.declare_parameter('camera_optical_frame', 'kinect2_ir_optical_frame')
-        self.declare_parameter('camera_link_frame',    'kinect2_link')
+        self.declare_parameter('camera_link_frame',    'kinect2')
         self.declare_parameter('base_frame',           'base_link')
         # Calibration quality
         self.declare_parameter('samples_to_collect', 20)

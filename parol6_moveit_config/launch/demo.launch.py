@@ -178,7 +178,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "publish_camera_tf",
-                default_value="true",
+                default_value="false",
                 description="Publish static TF for the camera relative to base_link",
             ),
             move_group_node,
