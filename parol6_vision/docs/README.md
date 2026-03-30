@@ -32,9 +32,11 @@ Complete snapshot capture workflow:
 - **`TESTING_GUIDE.md`** - Unit and integration tests for vision pipeline
 - **`GAZEBO_PATH_EXEC_CHECKLIST.md`** - End-to-end validation (Path Generator → MoveIt → Gazebo)
 - **`MOVEIT_CONTROLLER_DEBUG_CONTEXT.md`** - Known execution failure signatures and recovery
+- **`MOVEIT_CONTROLLER_GUIDE.md`** - Execution model, approach fallback ladder, and controller behavior
 
 ### 📋 Implementation & Planning
 - **`implementation_plan.md`** - Original vision pipeline architecture
+- **`OMPL_MOVEIT_PLANNER.md`** - MoveIt/OMPL planning notes and failure diagnosis
 
 ---
 
@@ -49,6 +51,8 @@ parol6_vision/docs/
 │   └── KINECT_SNAPSHOT_GUIDE.md
 ├── RVIZ_SETUP_GUIDE.md           # Visualization setup
 ├── TESTING_GUIDE.md              # Test procedures
+├── MOVEIT_CONTROLLER_GUIDE.md    # Controller behavior and planning flow
+├── OMPL_MOVEIT_PLANNER.md        # OMPL / MoveIt reference
 └── implementation_plan.md        # Architecture details
 ```
 

@@ -274,8 +274,9 @@ class MoveItController(Node):
             response.message = "Execution already in progress"
             return response
             
-        # Start execution in worker thread so callback doesn't block executor.
-        self._start_execution_async(self.latest_path, source='service')
+        # Freeze the exact path snapshot for this run so late republishes do not
+        # perturb the currently executing planning thread.
+        self._start_execution_async(copy.deepcopy(self.latest_path), source='service')
         response.success = True
         response.message = "Execution started"
         return response
@@ -301,7 +302,7 @@ class MoveItController(Node):
                 return
             self.execution_in_progress = True
         self.get_logger().info(f'{source}: starting welding sequence thread')
-        t = threading.Thread(target=self._execution_worker, args=(path,), daemon=True)
+        t = threading.Thread(target=self._execution_worker, args=(copy.deepcopy(path),), daemon=True)
         t.start()
 
     def _execution_worker(self, path):
@@ -349,10 +350,9 @@ class MoveItController(Node):
 
         # Phase 2: Plan approach trajectory using home end-state as start
         self.get_logger().info("[Plan 2/3] Planning Approach trajectory…")
-        approach_pose = copy.deepcopy(path.poses[0])
-        approach_pose.pose.position.z += self.approach_dist
-        approach_traj = self.plan_pose(
-            approach_pose, start_state_traj=home_traj
+        approach_traj = self.plan_approach_with_fallback(
+            path.poses[0],
+            start_state_traj=home_traj,
         )
         if approach_traj is None:
             self.get_logger().error("Planning approach failed — aborting")
@@ -395,6 +395,71 @@ class MoveItController(Node):
 
         self.get_logger().info("Sequence Complete")
         return True
+
+    def _candidate_approach_distances(self):
+        """
+        Generate a short, deterministic list of lift distances to try.
+
+        The workspace photo and current weld setup suggest a mostly planar task
+        with one primary downward orientation, so we keep orientation stable and
+        vary only how aggressively we lift above the first weld point.
+        """
+        raw_candidates = [
+            float(self.approach_dist),
+            min(float(self.approach_dist), 0.10),
+            min(float(self.approach_dist), 0.05),
+            0.0,
+        ]
+        distances = []
+        for distance in raw_candidates:
+            distance = max(0.0, distance)
+            if all(abs(distance - existing) > 1e-6 for existing in distances):
+                distances.append(distance)
+        return distances
+
+    def plan_approach_with_fallback(self, first_pose_stamped, start_state_traj=None):
+        """
+        Plan the pre-weld approach using a small fallback ladder.
+
+        We keep the weld pose orientation as the primary target, but if MoveIt
+        cannot solve the lifted pose with strict constraints we progressively:
+          1. relax orientation tolerance
+          2. drop orientation constraint entirely
+          3. reduce the Z lift distance
+        """
+        attempt_no = 0
+        orientation_modes = [
+            ("strict", True, 0.20),
+            ("relaxed", True, 0.60),
+            ("position_only", False, 0.20),
+        ]
+
+        for lift_distance in self._candidate_approach_distances():
+            for mode_name, use_orientation, tolerance in orientation_modes:
+                attempt_no += 1
+                approach_pose = copy.deepcopy(first_pose_stamped)
+                approach_pose.pose.position.z += lift_distance
+                q = approach_pose.pose.orientation
+                self.get_logger().info(
+                    f"Approach attempt {attempt_no}: lift={lift_distance:.3f}m "
+                    f"mode={mode_name} "
+                    f"quat=({q.x:.3f}, {q.y:.3f}, {q.z:.3f}, {q.w:.3f})"
+                )
+                traj = self.plan_pose(
+                    approach_pose,
+                    start_state_traj=start_state_traj,
+                    use_orientation_constraint=use_orientation,
+                    orientation_tolerance_xyz=tolerance,
+                )
+                if traj is not None:
+                    self.get_logger().info(
+                        f"Approach succeeded on attempt {attempt_no} "
+                        f"(lift={lift_distance:.3f}m, mode={mode_name})"
+                    )
+                    return traj
+
+        self.get_logger().error("All approach planning attempts failed")
+        return None
 
     def _make_path_reachable(self, path: Path) -> Path:
         """Clamp path positions into a conservative reachable workspace for test validation."""

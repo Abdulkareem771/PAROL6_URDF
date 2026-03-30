@@ -104,7 +104,8 @@ class TestMoveItController(unittest.TestCase):
     def test_execute_welding_sequence(self):
         """Test full execution sequence logic"""
         # Mock helpers
-        self.node.move_to_pose = MagicMock(return_value=True)
+        self.node.plan_to_home = MagicMock(return_value=RobotTrajectory())
+        self.node.plan_approach_with_fallback = MagicMock(return_value=RobotTrajectory())
         self.node.plan_cartesian_with_fallback = MagicMock(return_value=RobotTrajectory())
         self.node.execute_trajectory_action = MagicMock(return_value=True)
         
@@ -115,9 +116,46 @@ class TestMoveItController(unittest.TestCase):
         
         self.assertTrue(success)
         # Verify sequence calls
-        self.node.move_to_pose.assert_called_once() # Approach
+        self.node.plan_to_home.assert_called_once()
+        self.node.plan_approach_with_fallback.assert_called_once()
         self.node.plan_cartesian_with_fallback.assert_called_once() # Plan Weld
-        self.node.execute_trajectory_action.assert_called_once() # Execute Weld
+        self.assertEqual(self.node.execute_trajectory_action.call_count, 3)
+
+    def test_plan_approach_with_fallback_relaxes_constraints(self):
+        """Approach planning should fall back to position-only before giving up."""
+        first_pose = PoseStamped()
+        first_pose.pose.position.x = 0.46
+        first_pose.pose.position.y = 0.05
+        first_pose.pose.position.z = 0.23
+        first_pose.pose.orientation.x = 0.707
+        first_pose.pose.orientation.z = -0.707
+
+        self.node.approach_dist = 0.15
+        self.node.plan_pose = MagicMock(side_effect=[None, None, RobotTrajectory()])
+
+        traj = self.node.plan_approach_with_fallback(first_pose, start_state_traj=RobotTrajectory())
+
+        self.assertIsNotNone(traj)
+        self.assertEqual(self.node.plan_pose.call_count, 3)
+        third_call = self.node.plan_pose.call_args_list[2]
+        self.assertFalse(third_call.kwargs['use_orientation_constraint'])
+
+    def test_trigger_execution_uses_snapshot_copy(self):
+        """Service-triggered execution should pass a copy of the cached path."""
+        path = Path()
+        pose = PoseStamped()
+        pose.pose.position.x = 0.1
+        path.poses = [pose]
+        self.node.latest_path = path
+        self.node._start_execution_async = MagicMock()
+
+        response = type('Resp', (), {})()
+        result = self.node.trigger_execution(None, response)
+
+        self.assertTrue(result.success)
+        started_path = self.node._start_execution_async.call_args.args[0]
+        self.assertIsNot(started_path, path)
+        self.assertEqual(len(started_path.poses), 1)
 
     def test_make_path_reachable_clamps_to_workspace(self):
         """Test that points outside workspace bounds are clamped into bounds."""

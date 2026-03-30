@@ -10,7 +10,8 @@ This document covers how OMPL (Open Motion Planning Library) is configured and u
 moveit_controller.py
         │
         ├─ plan_to_home()            → MoveGroup action (joint-space)
-        ├─ plan_pose()               → MoveGroup action (Cartesian-space approach)
+        ├─ plan_approach_with_fallback()
+        │      └─ plan_pose()        → MoveGroup action (approach retries)
         └─ plan_cartesian_with_fallback()
                 ├─ compute_cartesian_path  → Cartesian arc (inline waypoints)
                 └─ fallback: plan each waypoint as joint-space goal
@@ -51,9 +52,12 @@ Phase 1 — Home
   MoveGroup: RRTConnect, max 10s
 
 Phase 2 — Approach
-  approach_pose = path.poses[0] with z += approach_distance
-  plan_pose(approach_pose, start_state=home_end_state)
-  MoveGroup: RRTConnect, max 10s
+  plan_approach_with_fallback(path.poses[0], start_state=home_end_state)
+    attempt A: z += approach_distance, strict orientation
+    attempt B: same lift, relaxed orientation
+    attempt C: same lift, position-only
+    attempt D/E/F: shorter lift distances with same retry ladder
+  MoveGroup: RRTConnect, max 10s per attempt
 
 Phase 3 — Cartesian Weld
   for step_size in [0.005, 0.01, 0.02]:
@@ -65,6 +69,18 @@ Phase 3 — Cartesian Weld
 All phases planned BEFORE any execution starts.
 Execution: Home → Approach → Weld (back-to-back, no gaps).
 ```
+
+### 3.1 Approach Fallback Ladder
+
+The approach phase is now intentionally more forgiving than the weld phase.
+
+- The weld path keeps the path generator's primary downward welding orientation.
+- The approach planner first tries that same orientation with the configured lift.
+- If OMPL cannot solve it, the controller relaxes orientation tolerance.
+- If that still fails, it retries as a position-only goal.
+- If the lifted pose itself is the issue, it repeats the same ladder with shorter lifts, down to the first weld pose.
+
+This matches the current physical task well: a largely planar workspace with one main welding attitude, where pre-approach does not need a richer orientation family to be useful.
 
 ---
 
@@ -85,6 +101,15 @@ This means the **goal pose itself is unreachable** — not that the path to it i
 ### 4.2 `Catastrophic failure` (error code 99999)
 
 MoveGroup returned error code **99999** — this is a generic "planning failed" code from MoveIt's action server. Always appears alongside one of the OMPL-specific error messages above.
+
+In the current controller, this is most commonly seen in the **approach phase**, not the Cartesian weld phase. The most useful next diagnostic is to inspect the logged approach attempts:
+
+- `lift=...`
+- `mode=strict`
+- `mode=relaxed`
+- `mode=position_only`
+
+If only `strict` fails but `position_only` succeeds, the issue is orientation constraint tightness rather than raw reachability.
 
 ### 4.3 Cartesian path fraction too low
 
@@ -149,13 +174,17 @@ The `RRTConnect` planner is bidirectional — it builds a tree from both the sta
 ```
 OMPL fails
     │
-    ├─ "Unable to sample valid states for goal tree"
+    ├─ Approach attempt logs show all retries failed
     │       │
     │       ├─ Check: ros2 topic echo /vision/welding_path --once
     │       │   → inspect first pose z value
     │       │
     │       ├─ If z < 0.10 m:
     │       │   → Increase approach_distance OR fix camera TF
+    │       │
+    │       ├─ If strict fails but position-only succeeds:
+    │       │   → Keep fixed weld orientation, but treat approach as looser
+    │       │     pre-positioning rather than a full weld-pose lock
     │       │
     │       └─ If z OK:
     │           → Check tcp_link collision geometry in URDF
