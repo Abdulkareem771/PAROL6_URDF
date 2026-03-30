@@ -1,3 +1,22 @@
+""" 
+First Run the ArUco node by the following code:
+
+ros2 run aruco_ros single \
+    --ros-args --remap /image:=/kinect2/sd/image_color_rect \
+    --ros-args --remap /camera_info:=/kinect2/sd/camera_info \
+    --ros-args \
+    -p marker_id:=6 \
+    -p marker_size:=0.04575 \
+    -p camera_frame:=kinect2_ir_optical_frame \
+    -p marker_frame:=detected_marker_frame \
+    -p corner_refinement:=SUBPIX \
+    -p image_is_rectified:=True \
+    -p marker_dict:=DICT_ARUCO_ORIGINAL
+
+
+"""
+
+
 import rclpy
 from rclpy.node import Node
 from tf2_ros import Buffer, TransformListener, TransformException
@@ -10,9 +29,9 @@ class EyeToHandCalibrator(Node):
         super().__init__('eye_to_hand_calibrator')
 
         # --- CONFIGURATION ---
-        self.source_frame = 'kinect_rgb_optical_frame' # Camera Frame
-        self.target_frame = 'cube_marker'               # ArUco Marker Frame
-        self.samples_to_collect = 100
+        self.source_frame = 'kinect2_ir_optical_frame' # Camera Frame
+        self.target_frame = 'detected_marker_frame'               # ArUco Marker Frame
+        self.samples_to_collect = 20
         # ---------------------
 
         self.tf_buffer = Buffer()

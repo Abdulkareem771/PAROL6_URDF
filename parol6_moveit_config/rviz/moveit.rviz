@@ -4,17 +4,17 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
         - /MotionPlanning1/Scene Geometry1
         - /MotionPlanning1/Scene Robot1
         - /MotionPlanning1/Planning Request1
         - /MotionPlanning1/Planning Metrics1
         - /MotionPlanning1/Planned Path1
+        - /TF1/Frames1
+        - /TF1/Tree1
         - /MarkerArray1/Topic1
         - /MarkerArray2/Topic1
-        - /Path1/Status1
       Splitter Ratio: 0.6000000238418579
-    Tree Height: 140
+    Tree Height: 244
   - Class: rviz_common/Transformation
     Name: Transformation
 Visualization Manager:
@@ -104,6 +104,11 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          tcp_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           world:
             Alpha: 1
             Show Axes: false
@@ -189,6 +194,11 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          tcp_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           world:
             Alpha: 1
             Show Axes: false
@@ -203,13 +213,29 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        L1:
+          Value: true
+        L2:
+          Value: true
+        L3:
+          Value: true
+        L4:
+          Value: true
+        L5:
+          Value: true
+        L6:
+          Value: true
         base_link:
+          Value: true
+        detected_marker_frame:
           Value: true
         kinect2_ir_optical_frame:
           Value: true
         kinect2_link:
           Value: true
         kinect2_rgb_optical_frame:
+          Value: true
+        tcp_link:
           Value: true
         world:
           Value: true
@@ -221,10 +247,19 @@ Visualization Manager:
       Tree:
         world:
           base_link:
+            L1:
+              L2:
+                L3:
+                  L4:
+                    L5:
+                      L6:
+                        tcp_link:
+                          {}
             kinect2_link:
               kinect2_rgb_optical_frame:
                 kinect2_ir_optical_frame:
-                  {}
+                  detected_marker_frame:
+                    {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -259,7 +294,7 @@ Visualization Manager:
         Reliability Policy: Best Effort
         Value: /kinect2/sd/points
       Use Fixed Frame: true
-      Use rainbow: false
+      Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
@@ -278,8 +313,7 @@ Visualization Manager:
       Enabled: true
       Name: Weld Lines 3D (Depth Matcher)
       Namespaces:
-        weld_connectivity: true
-        weld_points: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -292,7 +326,7 @@ Visualization Manager:
       Enabled: true
       Name: Path Orientations (Path Generator arrows)
       Namespaces:
-        orientation: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -342,6 +376,34 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /vision/welding_path
       Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /aruco_single/result
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /aruco_single/debug
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -386,7 +448,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 2.4058785438537598
+      Distance: 1.528073787689209
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -401,10 +463,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5047970414161682
+      Pitch: 0.5397971272468567
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 5.258644104003906
+      Yaw: 5.123659610748291
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 2.5
@@ -489,14 +551,16 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 779
+  Height: 704
   Hide Left Dock: false
   Hide Right Dock: false
+  Image:
+    collapsed: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001c9000002b5fc0200000004fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000003b000001690000016900fffffffb000000100044006900730070006c00610079007301000001aa000000c7000000c700fffffffb0000001c005400720061006e00730066006f0072006d006100740069006f006e0100000277000000790000007900ffffff00000387000002b500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000001560000026afc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067000000003b000001740000016900fffffffb000000100044006900730070006c006100790073010000003b0000012f000000c700fffffffb0000001c005400720061006e00730066006f0072006d006100740069006f006e0100000170000000a00000007900fffffffb0000000a0049006d00610067006501000002160000008f0000002800ffffff000000020000055600000106fc0100000001fb0000000a0049006d00610067006502000000fe0000004b00000412000002b5000003fa0000026a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Transformation:
     collapsed: false
   Width: 1366
