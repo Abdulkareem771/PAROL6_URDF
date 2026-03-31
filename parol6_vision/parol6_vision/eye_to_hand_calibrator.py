@@ -212,11 +212,10 @@ class EyeToHandCalibrator(Node):
         T_base_cam = T_base_marker @ np.linalg.inv(T_cam_marker)
         # T_base_cam is base_link → kinect2_ir_optical_frame
 
-        # ── Convert to kinect2_link (look up from live TF) ───────────────
-        # Use a generous timeout so we get a fresh static TF even if the
-        # kinect2_bridge just started.  We NEVER fall back to saving the
-        # optical frame directly — that would give kinect2_ir_optical_frame
-        # two parents (bridge chain + our enforcer) and cause the toggling.
+        # ── Step 1: base_link → kinect2_link  (accurate, uses working TF) ───
+        # kinect2_link → kinect2_ir_optical_frame is a static TF published by
+        # kinect2_bridge. Use a generous timeout so a transient 1“2 ms race
+        # does not cause the lookup to fail immediately.
         lookup_timeout = rclpy.duration.Duration(seconds=5)
         try:
             link_to_optical = self.tf_buffer.lookup_transform(
@@ -226,8 +225,7 @@ class EyeToHandCalibrator(Node):
                 timeout=lookup_timeout,
             )
             T_link_optical = _tf_to_matrix(link_to_optical.transform)
-            # T_base_link = T_base_cam * inv(T_link_to_optical)
-            T_base_link = T_base_cam @ np.linalg.inv(T_link_optical)
+            T_base_kinect2_link = T_base_cam @ np.linalg.inv(T_link_optical)
         except TransformException as ex:
             self.get_logger().error(
                 f"[Calibrator] ❌ ABORT — Could not look up "
@@ -237,22 +235,41 @@ class EyeToHandCalibrator(Node):
             )
             return  # ← abort WITHOUT touching the yaml
 
-        # ── Promote kinect2_link → kinect2 to prevent dual-parent TF conflict ──
-        # kinect2_bridge internally publishes kinect2 → kinect2_link (identity).
-        # Publishing base_link → kinect2_link would give kinect2_link two parents;
-        # re-labelling to kinect2 keeps the chain clean:
-        #   base_link → kinect2  (our enforcer)
-        #               ↓
-        #            kinect2_link (bridge)
-        output_child = 'kinect2'
-        self.get_logger().info(
-            "[Calibrator] Output frame: base_link → kinect2\n"
-            "  (kinect2→kinect2_link is identity; labelling as kinect2 avoids\n"
-            "   dual-parent conflict with kinect2_bridge's internal chain)"
-        )
+        # ── Step 2: promote to kinect2 (parent) to avoid dual-parent conflict ──
+        # kinect2_bridge publishes kinect2 → kinect2_link. If our enforcer
+        # also claims base_link → kinect2_link, that frame gets two parents → toggling.
+        # Instead: look up the ACTUAL kinect2→kinect2_link TF and compose
+        # it correctly so we publish base_link → kinect2 (the real root).
+        try:
+            root_to_link = self.tf_buffer.lookup_transform(
+                'kinect2',         # root frame kinect2_bridge publishes from
+                self.link_frame,   # kinect2_link
+                rclpy.time.Time(),
+                timeout=lookup_timeout,
+            )
+            T_root_to_link = _tf_to_matrix(root_to_link.transform)
+            # T_base_kinect2 = T_base_kinect2_link @ inv(T_kinect2_to_kinect2_link)
+            T_base_root = T_base_kinect2_link @ np.linalg.inv(T_root_to_link)
+            output_child = 'kinect2'
+            self.get_logger().info(
+                "[Calibrator] Output frame: base_link → kinect2  "
+                "(correctly composed via live kinect2→kinect2_link TF)"
+            )
+        except TransformException as ex:
+            # kinect2 root frame not found — bridge may not publish it.
+            # Save as kinect2_link (accurate math) with a warning.
+            T_base_root = T_base_kinect2_link
+            output_child = self.link_frame   # kinect2_link
+            self.get_logger().warn(
+                f"[Calibrator] Could not look up kinect2→kinect2_link: {ex}\n"
+                f"  Saving as base_link → {output_child}.\n"
+                "  ⚠️  If kinect2_bridge is running with publish_tf=true, "
+                "you may see TF toggling. Set publish_tf: false in "
+                "kinect2_bridge_gpu.yaml to resolve."
+            )
 
         # ── Format result ────────────────────────────────────────────────
-        result = _matrix_to_dict(T_base_link, self.base_frame, output_child)
+        result = _matrix_to_dict(T_base_root, self.base_frame, output_child)
         result['calibrated_at'] = datetime.datetime.now().isoformat(timespec='seconds')
         result['calibrated_by'] = 'eye_to_hand_calibrator (ArUco)'
         result['marker_position_base_link'] = {
