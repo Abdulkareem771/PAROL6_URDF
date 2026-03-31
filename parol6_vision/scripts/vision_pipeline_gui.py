@@ -4420,8 +4420,8 @@ class VisionPipelineGUI(QMainWindow):
             # For CPU, reg_method is CPU, and expensive filters must be disabled to hit 15Hz
             args = "depth_method:=cpu reg_method:=cpu bilateral_filter:=false edge_aware_filter:=false fps_limit:=15.0"
         elif backend == "opencl":
-            # OpenCL reg_method is opencl_cpu
-            args = "depth_method:=opencl reg_method:=opencl_cpu fps_limit:=15.0"
+            # OpenCL depth is unsupported on this system, so use opencl for reg_method only
+            args = "depth_method:=cpu reg_method:=opencl fps_limit:=15.0"
         else:
             # CUDA reg_method is cuda
             args = "depth_method:=cuda reg_method:=cuda fps_limit:=15.0"

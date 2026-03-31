@@ -14,21 +14,25 @@ launch:
 # GPU-accelerated processing via OpenCL (requires ocl-icd-libopencl1 + an ICD
 # such as nvidia.icd or intel-opencl-icd).  To fall back to CPU-only set these
 # to "cpu".
-- arg:
-    name: "depth_method"
-    default: "cpu"
+  - arg:
+      name: "depth_method"
+      default: "cpu"
 
-- arg:
-    name: "reg_method"
-    default: "cpu"   # colour-depth registration
+  - arg:
+      name: "reg_method"
+      default: "cpu"   # colour-depth registration
 
-- arg:
-    name: "bilateral_filter"
-    default: "true"
+  - arg:
+      name: "bilateral_filter"
+      default: "true"
 
-- arg:
-    name: "edge_aware_filter"
-    default: "true"
+  - arg:
+      name: "edge_aware_filter"
+      default: "true"
+
+  - arg:
+      name: "fps_limit"
+      default: "30.0"
 
   - node:
       pkg: "kinect2_bridge"
@@ -49,7 +53,7 @@ launch:
           value: "$(var base_name)"
 
         - name: "fps_limit"
-          value: 1.0
+          value: "$(var fps_limit)"
 
         - name: "use_png"
           value: true

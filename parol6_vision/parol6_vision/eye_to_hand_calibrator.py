@@ -63,6 +63,9 @@ from tf2_ros import Buffer, TransformListener, TransformException
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import PoseStamped
+
 DEFAULT_OUTPUT = str(Path.home() / '.parol6' / 'camera_tf.yaml')
 
 
@@ -135,6 +138,18 @@ class EyeToHandCalibrator(Node):
 
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # ── Dummy subscribers for lazy publishers ──────────────────────────
+        # aruco_ros uses image_transport, meaning it will NOT process frames or
+        # broadcast the detected_marker_frame TF unless someone subscribes to its
+        # direct output topics. We subscribe to them here and discard messages just
+        # to "wake it up" during the life of the calibrator node.
+        self._dummy_img_sub1 = self.create_subscription(
+            Image, '/aruco_single/result', lambda msg: None, 1)
+        self._dummy_img_sub2 = self.create_subscription(
+            Image, '/aruco_single/result/image', lambda msg: None, 1)
+        self._dummy_pose_sub = self.create_subscription(
+            PoseStamped, '/aruco_single/pose', lambda msg: None, 1)
 
         self.get_logger().info(
             f"Eye-to-hand calibration starting.\n"
@@ -245,6 +260,7 @@ class EyeToHandCalibrator(Node):
         #               ↓
         #            kinect2_link (bridge)
         output_child = 'kinect2'
+        T_base_root = T_base_link   # alias: kinect2→kinect2_link is identity
         self.get_logger().info(
             "[Calibrator] Output frame: base_link → kinect2\n"
             "  (kinect2→kinect2_link is identity; labelling as kinect2 avoids\n"
