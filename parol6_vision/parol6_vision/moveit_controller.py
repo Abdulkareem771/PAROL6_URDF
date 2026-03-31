@@ -110,6 +110,9 @@ class MoveItController(Node):
         self.declare_parameter('enable_joint_waypoint_fallback', True)
         self.declare_parameter('joint_waypoint_fallback_count', 8)
 
+        # Return to home after successful weld execution
+        self.declare_parameter('return_home_after_weld', True)
+
         # Test mode: clamp incoming path into a conservative reachable workspace.
         # Useful to validate pipeline wiring even when vision points are out of reach.
         self.declare_parameter('enforce_reachable_test_path', False)
@@ -316,6 +319,7 @@ class MoveItController(Node):
         t.start()
 
     def _execution_worker(self, path):
+        ok = False
         try:
             ok = self.execute_welding_sequence(path)
             self.get_logger().info(f'Execution finished: success={ok}')
@@ -324,6 +328,25 @@ class MoveItController(Node):
         finally:
             with self._exec_lock:
                 self.execution_in_progress = False
+
+        # ── Return to home after any successful weld (Cartesian OR fallback) ──
+        if ok and self.get_parameter('return_home_after_weld').value:
+            self.get_logger().info("Welding complete ✅  Returning to home position…")
+            try:
+                home_return_traj = self.plan_to_home()
+                if home_return_traj is not None:
+                    if self.execute_trajectory_action(home_return_traj):
+                        self.get_logger().info("[Return] Robot back at home position.")
+                    else:
+                        self.get_logger().warn(
+                            "[Return] Return-to-home execution failed — robot may need manual recovery."
+                        )
+                else:
+                    self.get_logger().warn(
+                        "[Return] Could not plan return-to-home trajectory — robot stayed at weld end-point."
+                    )
+            except Exception as exc:
+                self.get_logger().error(f'[Return] Exception during return-to-home: {exc}')
 
     # ================================================================
     # EXECUTION SEQUENCE

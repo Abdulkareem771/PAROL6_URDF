@@ -2101,7 +2101,7 @@ class VisionPipelineGUI(QMainWindow):
 
         self._align_straight_check = QCheckBox("📐  Straight-line strokes")
         self._align_straight_check.stateChanged.connect(
-            lambda s: self._align_canvas.set_straight_line_mode(s == Qt.Checked)
+            lambda s: self._align_canvas.set_straight_line_mode(bool(s))
             if getattr(self, '_align_canvas', None) else None
         )
         a_row2.addWidget(self._align_straight_check)
@@ -3971,7 +3971,8 @@ class VisionPipelineGUI(QMainWindow):
     # ── Auto-Align tab actions ─────────────────────────────────────────────────
 
     def _on_align_roi_toggled(self, state: int) -> None:
-        if state == Qt.Checked:
+        enabled = bool(state)  # PySide6: stateChanged emits int; Qt.Checked is CheckState enum (not int 2)
+        if enabled:
             if hasattr(self, '_align_straight_check'): self._align_straight_check.setChecked(False)
             if getattr(self, '_align_canvas', None):
                 self._align_canvas.set_roi_mode(True)
