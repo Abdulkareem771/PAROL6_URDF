@@ -213,37 +213,43 @@ class EyeToHandCalibrator(Node):
         # T_base_cam is base_link → kinect2_ir_optical_frame
 
         # ── Convert to kinect2_link (look up from live TF) ───────────────
+        # Use a generous timeout so we get a fresh static TF even if the
+        # kinect2_bridge just started.  We NEVER fall back to saving the
+        # optical frame directly — that would give kinect2_ir_optical_frame
+        # two parents (bridge chain + our enforcer) and cause the toggling.
+        lookup_timeout = rclpy.duration.Duration(seconds=5)
         try:
             link_to_optical = self.tf_buffer.lookup_transform(
-                self.link_frame,         # kinect2_link
-                self.source_frame,       # kinect2_ir_optical_frame
-                rclpy.time.Time()
+                self.link_frame,   # kinect2_link
+                self.source_frame, # kinect2_ir_optical_frame
+                rclpy.time.Time(), # latest available
+                timeout=lookup_timeout,
             )
             T_link_optical = _tf_to_matrix(link_to_optical.transform)
             # T_base_link = T_base_cam * inv(T_link_to_optical)
             T_base_link = T_base_cam @ np.linalg.inv(T_link_optical)
-            output_child = self.link_frame
         except TransformException as ex:
-            self.get_logger().warn(
-                f"[Calibrator] Could not look up {self.link_frame}→{self.source_frame}: {ex}\n"
-                f"Falling back: saving base_link → {self.source_frame} directly."
+            self.get_logger().error(
+                f"[Calibrator] ❌ ABORT — Could not look up "
+                f"{self.link_frame}→{self.source_frame} after "
+                f"{lookup_timeout.nanoseconds // 1_000_000_000} s: {ex}\n"
+                "  Is kinect2_bridge running?  camera_tf.yaml NOT updated."
             )
-            T_base_link = T_base_cam
-            output_child = self.source_frame
+            return  # ← abort WITHOUT touching the yaml
 
         # ── Promote kinect2_link → kinect2 to prevent dual-parent TF conflict ──
         # kinect2_bridge internally publishes kinect2 → kinect2_link (identity).
-        # If we let our enforcer also claim base_link → kinect2_link, kinect2_link
-        # ends up with two parents (kinect2 from bridge AND base_link from us).
-        # Since the kinect2 → kinect2_link transform is identity, T_base_kinect2
-        # == T_base_kinect2_link mathematically, so we just relabel the child.
-        if output_child == self.link_frame:
-            output_child = 'kinect2'
-            self.get_logger().info(
-                "[Calibrator] Promoting output frame: kinect2_link → kinect2\n"
-                "  (kinect2→kinect2_link is identity; re-labelling avoids a\n"
-                "   dual-parent TF conflict with kinect2_bridge's internal chain)"
-            )
+        # Publishing base_link → kinect2_link would give kinect2_link two parents;
+        # re-labelling to kinect2 keeps the chain clean:
+        #   base_link → kinect2  (our enforcer)
+        #               ↓
+        #            kinect2_link (bridge)
+        output_child = 'kinect2'
+        self.get_logger().info(
+            "[Calibrator] Output frame: base_link → kinect2\n"
+            "  (kinect2→kinect2_link is identity; labelling as kinect2 avoids\n"
+            "   dual-parent conflict with kinect2_bridge's internal chain)"
+        )
 
         # ── Format result ────────────────────────────────────────────────
         result = _matrix_to_dict(T_base_link, self.base_frame, output_child)
