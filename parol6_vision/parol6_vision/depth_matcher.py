@@ -117,6 +117,10 @@ class DepthMatcher(Node):
         self.max_depth = self.get_parameter('max_depth').value
         self.min_depth = self.get_parameter('min_depth').value
         self.min_quality = self.get_parameter('min_depth_quality').value
+
+        # Static depth bias correction (mm). Positive = measured too far, negative = too close.
+        self.declare_parameter('depth_offset_mm', -10.0)  # -10 mm corrects the observed +1 cm bias
+        self.depth_offset_mm = self.get_parameter('depth_offset_mm').value
         
         # ============================================================
         # TF LISTENER
@@ -311,8 +315,8 @@ class DepthMatcher(Node):
                 if d_raw == 0 or d_raw > self.max_depth or d_raw < self.min_depth:
                     continue
                 
-                # Convert mm to meters
-                depth_m = float(d_raw) / 1000.0
+                # Apply static depth bias correction (mm), then convert to meters
+                depth_m = (float(d_raw) + self.depth_offset_mm) / 1000.0
                 
                 # Pinhole Back-projection to Camera Frame
                 # X = (u - cx) * Z / fx

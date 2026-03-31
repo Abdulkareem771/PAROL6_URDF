@@ -69,14 +69,23 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
-    ros2_controllers_yaml = os.path.join(pkg_moveit, 'config', 'ros2_controllers.yaml')
+    # For fake hardware execution, we must swap the hardcoded Gazebo plugin with the mock system.
+    fake_robot_description = {
+        "robot_description": moveit_config.robot_description["robot_description"].replace(
+            "ign_ros2_control/IgnitionSystem", 
+            "mock_components/GenericSystem"
+        )
+    }
+
+    ros2_controllers_yaml = os.path.join(pkg_moveit, 'config', 'ros2_controllers_sim.yaml')
 
     # ── 1. Bag Player (conditional) ────────────────────────────────────
     bag_path = '/workspace/rosbag2_2026_01_26-23_26_59'
     play_bag = ExecuteProcess(
         cmd=['ros2', 'bag', 'play', bag_path, '--loop',
              '--remap', '/tf_static:=/tf_static_bag_discard',
-             '--remap', '/tf:=/tf_bag_discard'],
+             '--remap', '/tf:=/tf_bag_discard',
+             '--clock'],
         output='screen',
         condition=IfCondition(use_bag)
     )
@@ -95,11 +104,9 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='static_transform_publisher_camera',
-        # Camera is 1.2 m in front of robot base, 1.0 m up, looking back+down
-        # yaw=pi  → faces toward -X (toward robot)
-        # pitch=+0.52 rad (+30° = tilts DOWN after yaw=π flip) → tilts down toward workspace
-        arguments=['--x', '0.2', '--y', '0.0', '--z', '1.0',
-                   '--yaw', '3.14159', '--pitch', '0.0', '--roll', '-3.14159',
+        
+        arguments=['--x', '0.646', '--y', '0.1225', '--z', '1.015',
+                   '--yaw', '1.603684', '--pitch', '0.0', '--roll', '-3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'kinect2_link'],
         output='screen'
     )
@@ -170,6 +177,7 @@ def generate_launch_description():
             'step_size': 0.02,
             'jump_threshold': 1.5,
             'auto_execute': True,
+            'use_sim_time': True,
         }],
     )
 
@@ -192,14 +200,17 @@ def generate_launch_description():
         package='moveit_ros_move_group',
         executable='move_group',
         output='screen',
-        parameters=[moveit_config.to_dict()],
+        parameters=[
+            {**moveit_config.to_dict(), **fake_robot_description},
+            {"use_sim_time": True},
+        ],
     )
 
     # ── 6. ros2_control (FakeSystem) ───────────────────────────────────
     ros2_control_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
-        parameters=[moveit_config.robot_description, ros2_controllers_yaml],
+        parameters=[fake_robot_description, ros2_controllers_yaml],
         output='both',
     )
 
@@ -223,7 +234,7 @@ def generate_launch_description():
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='both',
-        parameters=[moveit_config.robot_description],
+        parameters=[fake_robot_description],
     )
 
     # ── 8. RViz  (vision_debug.rviz = vision overlays + MotionPlanning) ─
@@ -234,10 +245,11 @@ def generate_launch_description():
         name='rviz2',
         arguments=['-d', rviz_config],
         parameters=[
-            moveit_config.robot_description,
+            fake_robot_description,
             moveit_config.robot_description_semantic,
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
+            {"use_sim_time": True},
         ],
         output='screen',
     )
