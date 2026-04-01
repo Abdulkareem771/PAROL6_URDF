@@ -103,6 +103,7 @@ class CameraTFEnforcer(Node):
 
         self._broadcaster = tf2_ros.TransformBroadcaster(self)
         self._tf_msg: TransformStamped | None = None
+        self._bridge_gap_msg: TransformStamped | None = None
 
         self._load()
 
@@ -126,12 +127,32 @@ class CameraTFEnforcer(Node):
             f"  xyz = ({t.x:.4f}, {t.y:.4f}, {t.z:.4f})"
         )
 
+        # ── Bridge gap: kinect2 → kinect2_link (identity) ──────────────────
+        # kinect2_bridge publishes its internal TF tree rooted at 'kinect2_link',
+        # NOT at 'kinect2'. Without this connector, the two trees are disjoint:
+        #   base_link → kinect2          (our enforcer, calibrated)
+        #   kinect2_link → optical frames (bridge, floating island)
+        # Publishing kinect2 → kinect2_link (identity) joins them into one tree.
+        gap = TransformStamped()
+        gap.header.frame_id  = 'kinect2'
+        gap.child_frame_id   = 'kinect2_link'
+        gap.transform.rotation.w = 1.0  # identity quaternion
+        self._bridge_gap_msg = gap
+        self.get_logger().info(
+            "[CameraTFEnforcer] Also publishing identity bridge: kinect2 → kinect2_link"
+        )
+
     # ------------------------------------------------------------------
     def _publish(self):
         if self._tf_msg is None:
             return
-        self._tf_msg.header.stamp = self.get_clock().now().to_msg()
-        self._broadcaster.sendTransform(self._tf_msg)
+        now = self.get_clock().now().to_msg()
+        self._tf_msg.header.stamp = now
+        transforms = [self._tf_msg]
+        if self._bridge_gap_msg is not None:
+            self._bridge_gap_msg.header.stamp = now
+            transforms.append(self._bridge_gap_msg)
+        self._broadcaster.sendTransform(transforms)
 
 
 def main(args=None):

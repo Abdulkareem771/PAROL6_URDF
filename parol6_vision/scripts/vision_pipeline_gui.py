@@ -499,18 +499,44 @@ class ManualCanvas(QGraphicsView):
         return getattr(self, '_roi_polygon', []).copy()
 
     def load_image(self, rgb: np.ndarray) -> None:
+        """Load a new background image and RESET all strokes/ROI."""
         if self._placeholder_proxy.isVisible():
             self._placeholder_proxy.setVisible(False)
-            
+
         self._base_img = rgb  # KEEP ALIVE
         h, w = rgb.shape[:2]
         qimg = QImage(rgb.data, w, h, int(rgb.strides[0]), QImage.Format_RGB888)
-        
+
         self._bg_item.setPixmap(QPixmap.fromImage(qimg))
         self._mask_arr = np.zeros((h, w, 4), dtype=np.uint8)
         self._refresh_mask()
         self.setSceneRect(QRectF(0, 0, w, h))
         self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
+        self._update_cursor()
+
+    def load_image_only(self, rgb: np.ndarray) -> None:
+        """Swap the background image WITHOUT clearing strokes or ROI.
+
+        Use this to verify that saved strokes are still aligned when the
+        same piece is placed in a (possibly different) location — the strokes
+        stay at their original pixel coordinates so any misalignment is
+        immediately visible as a visual offset.
+        """
+        if self._placeholder_proxy.isVisible():
+            self._placeholder_proxy.setVisible(False)
+
+        new_h, new_w = rgb.shape[:2]
+        self._base_img = rgb
+        qimg = QImage(rgb.data, new_w, new_h, int(rgb.strides[0]), QImage.Format_RGB888)
+        self._bg_item.setPixmap(QPixmap.fromImage(qimg))
+
+        # If canvas has never had an image, initialise a blank mask so strokes work
+        if self._mask_arr is None:
+            self._mask_arr = np.zeros((new_h, new_w, 4), dtype=np.uint8)
+
+        self.setSceneRect(QRectF(0, 0, new_w, new_h))
+        self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
+        self._refresh_mask()
         self._update_cursor()
 
     def clear_mask(self) -> None:
@@ -521,6 +547,31 @@ class ManualCanvas(QGraphicsView):
         self._current_stroke = []
         self._sl_waypoints = []
         self._roi_polygon = []
+
+    def load_strokes(self, strokes: list, roi_polygon: list | None = None) -> None:
+        """Replay a saved strokes list (and optional ROI polygon) onto the mask."""
+        self._all_strokes = []
+        if self._mask_arr is not None:
+            self._mask_arr[:, :, :] = 0  # clear alpha only path
+        for stroke in strokes:
+            if len(stroke) < 1:
+                continue
+            for i in range(1, len(stroke)):
+                if self._mask_arr is not None:
+                    cv2.line(self._mask_arr,
+                             tuple(stroke[i - 1]), tuple(stroke[i]),
+                             (255, 0, 0, 255), self._brush, cv2.LINE_AA)
+            self._all_strokes.append(list(stroke))
+        if roi_polygon:
+            self._roi_polygon = list(roi_polygon)
+            if self._mask_arr is not None and len(roi_polygon) >= 2:
+                for i in range(len(roi_polygon)):
+                    p1 = tuple(roi_polygon[i])
+                    p2 = tuple(roi_polygon[(i + 1) % len(roi_polygon)])
+                    cv2.line(self._mask_arr, p1, p2,
+                             (255, 100, 0, 255), self._brush, cv2.LINE_AA)
+        if self._mask_arr is not None:
+            self._refresh_mask()
 
     def _refresh_mask(self) -> None:
         if self._mask_arr is None or self._mask_item is None:
@@ -2069,10 +2120,9 @@ class VisionPipelineGUI(QMainWindow):
 
         align_hint = QLabel(
             "<b>🎯 Auto-Align Workflow:</b>  "
-            "1) Load the latest cropped frame.  "
-            "2) Check <b>📐 Straight-line</b> and draw your <b>weld strokes</b> (red).  "
-            "3) Check <b>🔲 Draw ROI Boundary</b> and click a polygon around the part (orange), right-click to close.  "
-            "4) Click <b>📤 Teach &amp; Send</b> to teach the node — it will auto-align on every future frame."
+            "<b>Session 1 (teach):</b> Load frame → draw red weld strokes → draw orange ROI boundary → Save Profile → Publish as ROS.  "
+            "<b>Session 2 (verify):</b> Load Profile → click <b>📷 Update Frame</b> to swap in the live camera view while keeping saved strokes — "
+            "visually confirm the strokes still land on the new piece position, then Publish as ROS."
         )
         align_hint.setTextFormat(Qt.RichText)
         align_hint.setWordWrap(True)
@@ -2082,11 +2132,25 @@ class VisionPipelineGUI(QMainWindow):
         )
         at_lay.addWidget(align_hint)
 
-        # Toolbar Row A1
+        # Toolbar Row A1: frame loading
         a_row1 = QHBoxLayout()
-        a_load_btn = QPushButton("📥  Use Latest Cropped Frame")
+        a_load_btn = QPushButton("📥  Load Frame & Draw  (Session 1)")
+        a_load_btn.setToolTip("Load the latest cropped camera frame and reset strokes. Use this for a new piece.")
         a_load_btn.clicked.connect(self._align_use_latest_cropped)
         a_row1.addWidget(a_load_btn)
+
+        a_update_btn = QPushButton("📷  Update Frame – Keep Strokes  (Session 2)")
+        a_update_btn.setToolTip(
+            "Swap the background to the current live camera frame WITHOUT clearing strokes or ROI.\n"
+            "Use this to verify that saved strokes from a previous run still line up\n"
+            "with the new piece position before publishing."
+        )
+        a_update_btn.setStyleSheet(
+            f"background:#313244; color:#cdd6f4; border:1px solid #89b4fa; border-radius:5px; padding:4px 8px;"
+        )
+        a_update_btn.clicked.connect(self._align_update_frame_keep_strokes)
+        a_row1.addWidget(a_update_btn)
+
         a_row1.addStretch()
         at_lay.addLayout(a_row1)
 
@@ -2118,30 +2182,79 @@ class VisionPipelineGUI(QMainWindow):
             lambda: self._align_canvas.clear_mask() if getattr(self, '_align_canvas', None) and CV2_OK else None
         )
         a_row2.addWidget(a_clear_btn)
+        a_row2.addStretch()
+        at_lay.addLayout(a_row2)
 
-        teach_btn = QPushButton("📤  Teach & Send")
-        teach_btn.setToolTip("Send strokes + ROI to manual_line_aligner (teach_reference service).")
-        teach_btn.setStyleSheet(f"background:#a6e3a1; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
-        teach_btn.clicked.connect(self._align_teach_send)
-        a_row2.addWidget(teach_btn)
+        # Row 3: save/load profile + publish (mirrors Manual Red Line workflow)
+        a_row3 = QHBoxLayout()
+        a_save_btn = QPushButton("💾  Save Profile")
+        a_save_btn.setToolTip("Save current strokes + ROI to a JSON file for later reuse.")
+        a_save_btn.clicked.connect(self._align_save_profile)
+        a_row3.addWidget(a_save_btn)
+
+        a_load_btn2 = QPushButton("📂  Load Profile")
+        a_load_btn2.setToolTip("Load saved strokes + ROI from a JSON file.")
+        a_load_btn2.clicked.connect(self._align_load_profile)
+        a_row3.addWidget(a_load_btn2)
+
+        publish_btn = QPushButton("📤  Publish as ROS")
+        publish_btn.setToolTip("Publish the annotated image directly to /vision/processing_mode/annotated_image.")
+        publish_btn.setStyleSheet(f"background:#a6e3a1; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
+        publish_btn.clicked.connect(self._align_publish_ros)
+        a_row3.addWidget(publish_btn)
 
         a_reset_btn = QPushButton("🔄  Reset")
         a_reset_btn.setStyleSheet(f"background:{C['red']}; color:{C['bg']}; font-weight:bold; border:none; border-radius:5px; padding:4px 8px;")
         a_reset_btn.clicked.connect(self._align_reset)
-        a_row2.addWidget(a_reset_btn)
-        a_row2.addStretch()
-        at_lay.addLayout(a_row2)
+        a_row3.addWidget(a_reset_btn)
+        a_row3.addStretch()
+        at_lay.addLayout(a_row3)
 
         align_canvas_hint = QLabel("Strokes = red weld path.  ROI boundary = orange polygon (right-click to close).")
         align_canvas_hint.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
         at_lay.addWidget(align_canvas_hint)
 
-        # Separate canvas for Auto-Align (doesn't share state with Manual)
+        # Canvas row: drawing area on left, live preview thumbnail on right
+        canvas_row = QHBoxLayout()
+
         self._align_canvas = ManualCanvas()
         self._align_brush_spin.valueChanged.connect(
             lambda v: self._align_canvas.set_brush(v) if getattr(self, '_align_canvas', None) else None
         )
-        at_lay.addWidget(self._align_canvas, stretch=1)
+        canvas_row.addWidget(self._align_canvas, stretch=1)
+
+        # Preview panel — shows the last published annotated image as a thumbnail
+        preview_panel = QFrame()
+        preview_panel.setFixedWidth(200)
+        preview_panel.setStyleSheet(
+            f"background:{C['panel']}; border:1px solid {C['border']}; border-radius:6px;"
+        )
+        pp_lay = QVBoxLayout(preview_panel)
+        pp_lay.setContentsMargins(6, 6, 6, 6)
+        pp_lay.setSpacing(4)
+        pp_title = QLabel("📷 Preview")
+        pp_title.setStyleSheet(f"color:{C['text2']}; font-size:10px; font-weight:bold; border:none;")
+        pp_title.setAlignment(Qt.AlignCenter)
+        pp_lay.addWidget(pp_title)
+
+        self._align_preview_lbl = QLabel()
+        self._align_preview_lbl.setFixedSize(188, 140)
+        self._align_preview_lbl.setAlignment(Qt.AlignCenter)
+        self._align_preview_lbl.setStyleSheet(
+            f"background:{C['bg']}; border:1px solid {C['border']}; border-radius:4px; color:{C['text2']}; font-size:10px;"
+        )
+        self._align_preview_lbl.setText("Not published yet")
+        self._align_preview_lbl.setWordWrap(True)
+        pp_lay.addWidget(self._align_preview_lbl)
+
+        self._align_preview_status = QLabel("—")
+        self._align_preview_status.setStyleSheet(f"color:{C['text2']}; font-size:9px; border:none;")
+        self._align_preview_status.setAlignment(Qt.AlignCenter)
+        self._align_preview_status.setWordWrap(True)
+        pp_lay.addWidget(self._align_preview_status)
+        pp_lay.addStretch()
+        canvas_row.addWidget(preview_panel)
+        at_lay.addLayout(canvas_row, stretch=1)
 
         self._align_log = QTextEdit()
         self._align_log.setReadOnly(True)
@@ -3990,67 +4103,184 @@ class VisionPipelineGUI(QMainWindow):
             if hasattr(self, '_align_log'):
                 self._align_log.append('<span style="color:#f9e2af">[Align] No cropped frame yet — trigger a capture first.</span>')
 
-    def _align_teach_send(self) -> None:
-        """Serialise align canvas strokes+ROI and call manual_line_aligner/teach_reference."""
-        if not (ROS2_OK and CV2_OK):
-            self._align_log.append('<span style="color:#f38ba8">[Align] ROS2 + cv2 required.</span>')
+    def _align_update_frame_keep_strokes(self) -> None:
+        """Swap the canvas background to the current live camera frame WITHOUT
+        clearing strokes or ROI — Session 2 verification workflow.
+
+        After loading a saved profile the user can click this to see if their
+        saved strokes still land on the new piece position before publishing.
+        """
+        if not CV2_OK:
             return
-        strokes = getattr(self, '_align_canvas', None) and self._align_canvas.get_strokes()
-        roi_polygon = getattr(self, '_align_canvas', None) and self._align_canvas.get_roi_polygon()
-        if not strokes:
-            self._align_log.append('<span style="color:#f9e2af">[Align] Draw weld strokes first.</span>')
+        canvas = getattr(self, '_align_canvas', None)
+        if canvas is None:
             return
-        if not roi_polygon:
-            self._align_log.append('<span style="color:#f9e2af">[Align] Draw an ROI boundary first (check the ROI checkbox).</span>')
+        rgb = getattr(self, '_latest_cropped_rgb', None)
+        if rgb is None:
+            if hasattr(self, '_align_log'):
+                self._align_log.append(
+                    '<span style="color:#f9e2af">[Align] No live frame available — '
+                    'make sure the capture node is running.</span>'
+                )
+            return
+
+        canvas.load_image_only(rgb.copy())
+
+        # Snapshot a thumbnail right away so the preview panel updates
+        try:
+            img_bgr = canvas.get_annotated_bgr()
+            if img_bgr is not None:
+                roi = canvas.get_roi_polygon()
+                if roi and len(roi) >= 2:
+                    pts = np.array(roi, dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(img_bgr, [pts], isClosed=True, color=(0, 100, 255), thickness=2)
+                rgb_prev = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                h, w = rgb_prev.shape[:2]
+                qimg = QImage(rgb_prev.data, w, h, int(rgb_prev.strides[0]), QImage.Format_RGB888)
+                pix = QPixmap.fromImage(qimg).scaled(188, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                if hasattr(self, '_align_preview_lbl'):
+                    self._align_preview_lbl.setPixmap(pix)
+                    self._align_preview_lbl.setText('')
+                if hasattr(self, '_align_preview_status'):
+                    n_s = len(canvas.get_strokes())
+                    n_r = len(canvas.get_roi_polygon())
+                    self._align_preview_status.setText(f'Verify: {n_s} stroke(s) | {n_r}-pt ROI')
+        except Exception:
+            pass
+
+        if hasattr(self, '_align_log'):
+            self._align_log.append(
+                '<b style="color:#89b4fa">[Align] 📷 Frame updated — strokes/ROI preserved. '
+                'Check alignment visually, then click Publish as ROS.</b>'
+            )
+
+    def _align_publish_ros(self) -> None:
+        """Publish the annotated align canvas image directly as a ROS topic.
+
+        This mirrors Manual Red Line's 'Publish as ROS' — one click, no service
+        handshake required.  The annotated image (red strokes + orange ROI outline)
+        is published to /vision/processing_mode/annotated_image.
+        """
+        if not CV2_OK:
+            self._align_log.append('<span style="color:#f38ba8">[Align] cv2 required.</span>')
+            return
+        canvas = getattr(self, '_align_canvas', None)
+        if canvas is None:
+            return
+        img_bgr = canvas.get_annotated_bgr()
+        if img_bgr is None:
+            self._align_log.append('<span style="color:#f9e2af">[Align] Load an image and draw strokes first.</span>')
+            return
+
+        # Draw the ROI polygon outline in orange on the published image
+        roi = canvas.get_roi_polygon()
+        if roi and len(roi) >= 2:
+            pts = np.array(roi, dtype=np.int32).reshape((-1, 1, 2))
+            cv2.polylines(img_bgr, [pts], isClosed=True, color=(0, 100, 255), thickness=2)
+
+        if ROS2_OK and self._ros_node:
+            try:
+                if not hasattr(self, '_align_annotated_pub') or self._align_annotated_pub is None:
+                    self._align_annotated_pub = self._ros_node.create_publisher(
+                        ROSImage, '/vision/processing_mode/annotated_image', 1
+                    )
+                msg = self._bridge.cv2_to_imgmsg(img_bgr, encoding='bgr8')
+                self._align_annotated_pub.publish(msg)
+                self._align_log.append(
+                    f'<b style="color:#a6e3a1">[Align] Published to /vision/processing_mode/annotated_image ✅</b>'
+                )
+            except Exception as exc:
+                self._align_log.append(f'<span style="color:#f38ba8">[Align] Publish error: {exc}</span>')
+        else:
+            self._align_log.append('<span style="color:#f9e2af">[Align] ROS2 not available — image not published.</span>')
+
+        # Update the preview thumbnail (always, even without ROS)
+        try:
+            rgb_prev = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            h, w = rgb_prev.shape[:2]
+            qimg = QImage(rgb_prev.data, w, h, int(rgb_prev.strides[0]), QImage.Format_RGB888)
+            pix = QPixmap.fromImage(qimg).scaled(
+                188, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            if hasattr(self, '_align_preview_lbl'):
+                self._align_preview_lbl.setPixmap(pix)
+                self._align_preview_lbl.setText('')
+            n_strokes = len(canvas.get_strokes())
+            n_roi = len(roi)
+            if hasattr(self, '_align_preview_status'):
+                self._align_preview_status.setText(
+                    f'{n_strokes} stroke(s)  |  {n_roi}-pt ROI'
+                )
+        except Exception:
+            pass
+
+    def _align_save_profile(self) -> None:
+        """Save current strokes + ROI polygon to a JSON file."""
+        canvas = getattr(self, '_align_canvas', None)
+        if not canvas:
+            return
+        strokes  = canvas.get_strokes()
+        roi      = canvas.get_roi_polygon()
+        if not strokes and not roi:
+            QMessageBox.warning(self, "Nothing to Save", "Draw strokes or an ROI boundary first.")
+            return
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Auto-Align Profile", "", "JSON Files (*.json)"
+        )
+        if not out_path:
             return
         import json
-        payload = {'color': [0, 0, 255], 'width': self._align_brush_spin.value(),
-                   'strokes': strokes, 'roi_polygon': roi_polygon}
-        json_str = json.dumps(payload)
-        self._align_log.append(f'<span style="color:#a6e3a1">[Align] Teaching {len(strokes)} stroke(s) + {len(roi_polygon)}-pt ROI…</span>')
+        payload = {
+            'strokes':     strokes,
+            'roi_polygon': roi,
+            'brush':       self._align_brush_spin.value(),
+        }
+        try:
+            with open(out_path, 'w') as f:
+                json.dump(payload, f, indent=2)
+            self._align_log.append(
+                f'<span style="color:#a6e3a1">[Align] Saved {len(strokes)} stroke(s) + '
+                f'{len(roi)}-pt ROI → {out_path}</span>'
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Save Failed", str(exc))
 
-        if not hasattr(self, '_aligner_set_params_client') or self._aligner_set_params_client is None:
-            self._align_log.append('<span style="color:#f38ba8">[Align] Aligner ROS client not ready.</span>')
+    def _align_load_profile(self) -> None:
+        """Load strokes + ROI polygon from a JSON file and redraw on the canvas."""
+        canvas = getattr(self, '_align_canvas', None)
+        if not canvas:
             return
-
-        from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
-        pv = ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=json_str)
-        req = SetParameters.Request()
-        req.parameters = [Parameter(name='strokes_json', value=pv)]
-        future = self._aligner_set_params_client.call_async(req)
-
-        def _on_param_set(fut):
-            try:
-                result = fut.result()
-                if result and result.results and result.results[0].successful:
-                    svc_w = NodeWorker([
-                        "ros2", "service", "call", "/manual_line_aligner/teach_reference",
-                        "std_srvs/srv/Trigger", "{}",
-                    ])
-                    svc_w.line_out.connect(lambda s: self._align_log.append(f'<span style="color:#a6e3a1">[Align] {s}</span>'))
-                    self._trigger_workers.append(svc_w)
-                    svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in self._trigger_workers else None)
-                    svc_w.start()
-                else:
-                    msg = result.results[0].reason if result and result.results else 'unknown'
-                    self._align_log.append(f'<span style="color:#f38ba8">[Align] Param set failed: {msg}</span>')
-            except Exception as e:
-                self._align_log.append(f'<span style="color:#f38ba8">[Align] Error: {e}</span>')
-        future.add_done_callback(_on_param_set)
+        in_path, _ = QFileDialog.getOpenFileName(
+            self, "Load Auto-Align Profile", "", "JSON Files (*.json)"
+        )
+        if not in_path:
+            return
+        import json
+        try:
+            with open(in_path, 'r') as f:
+                payload = json.load(f)
+            strokes  = payload.get('strokes', [])
+            roi      = payload.get('roi_polygon', [])
+            brush    = payload.get('brush', self._align_brush_spin.value())
+            self._align_brush_spin.setValue(brush)
+            canvas.clear_mask()
+            canvas.load_strokes(strokes, roi_polygon=roi)
+            self._align_log.append(
+                f'<span style="color:#a6e3a1">[Align] Loaded {len(strokes)} stroke(s) + '
+                f'{len(roi)}-pt ROI from {in_path}</span>'
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Load Failed", str(exc))
 
     def _align_reset(self) -> None:
         if getattr(self, '_align_canvas', None) and CV2_OK:
             self._align_canvas.clear_mask()
-        if not ROS2_OK:
-            return
-        svc_w = NodeWorker([
-            "ros2", "service", "call", "/manual_line_aligner/reset_strokes",
-            "std_srvs/srv/Trigger", "{}",
-        ])
-        svc_w.line_out.connect(lambda s: self._align_log.append(f'<span style="color:#f9e2af">[Align] {s}</span>'))
-        self._trigger_workers.append(svc_w)
-        svc_w.finished.connect(lambda r, w=svc_w: self._trigger_workers.remove(w) if w in getattr(self, "_trigger_workers", []) else None)
-        svc_w.start()
+        if hasattr(self, '_align_preview_lbl'):
+            self._align_preview_lbl.clear()
+            self._align_preview_lbl.setText('Not published yet')
+        if hasattr(self, '_align_preview_status'):
+            self._align_preview_status.setText('—')
+        self._align_log.append('<span style="color:#f9e2af">[Align] Canvas cleared.</span>')
 
     def _manual_log_append(self, html: str) -> None:
         """Append to both the global log and the manual-specific log panel."""
