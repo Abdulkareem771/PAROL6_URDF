@@ -6,26 +6,26 @@ joint_limits:
     max_acceleration: 2.0  # Prevents excessive mechanical stress on gearbox
   joint_L2:
     has_velocity_limits: true
-    max_velocity: 4.0  # Direct drive
+    max_velocity: 0.5  # Match firmware 0.5 rad/s
     has_acceleration_limits: true
-    max_acceleration: 3.0  # Direct drive
+    max_acceleration: 0.5
   joint_L3:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 0.8  # Match firmware 0.8 rad/s
     has_acceleration_limits: true
-    max_acceleration: 4.0
+    max_acceleration: 0.8
   joint_L4:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 1.5  # Match firmware 1.5 rad/s
     has_acceleration_limits: true
-    max_acceleration: 4.0
+    max_acceleration: 1.5
   joint_L5:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 1.5  # Match firmware 1.5 rad/s
     has_acceleration_limits: true
-    max_acceleration: 4.0
+    max_acceleration: 1.5
   joint_L6:
     has_velocity_limits: true
-    max_velocity: 6.0
+    max_velocity: 1.5  # Match firmware 1.5 rad/s
     has_acceleration_limits: true
-    max_acceleration: 4.0
+    max_acceleration: 1.5

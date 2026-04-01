@@ -186,36 +186,36 @@ class AutoTestRunner(Node):
         path.header.frame_id = 'base_link'
         path.header.stamp = self.get_clock().now().to_msg()
         
-        # Center of reachable test area for ZY-plane patterns:
-        # keep X constant and draw larger motions in Y/Z so they are visible.
-        cx, cy, cz = 0.24, 0.0, 0.16
+        # Center of reachable test area for XY-plane patterns (tabletop):
+        # Shifted outwards (+X) and low (+Z) to draw on the ground plane
+        cx, cy, cz = 0.29, 0.0, 0.005
         points = []
 
         if shape == 'Straight':
-            # Straight vertical stroke in ZY plane (6 cm in +Z)
+            # Straight horizontal stroke in XY plane (12 cm in +Y)
             for i in range(7):
-                points.append((cx, cy, cz + i * 0.01))
+                points.append((cx, cy + i * 0.02 - 0.06, cz))
         elif shape == 'Curve':
-            # Arc in ZY plane (quarter circle, 3 cm radius)
-            r = 0.03
-            for i in range(7):
-                theta = (math.pi / 2.0) * (i / 6.0)  # 0 -> pi/2
-                points.append((cx, cy + r * math.sin(theta), cz + r * (1 - math.cos(theta))))
+            # Arc in XY plane (quarter circle, 8 cm radius)
+            r = 0.08
+            for i in range(31):
+                theta = (math.pi / 2.0) * (i / 30.0)  # 0 -> pi/2
+                points.append((cx + r * math.cos(theta) - r, cy + r * math.sin(theta), cz))
         elif shape == 'Circle':
-            # Full circle in ZY plane (6 cm diameter)
-            r = 0.03
-            for i in range(13):
-                theta = (2 * math.pi / 12.0) * i
-                points.append((cx, cy + r * math.sin(theta), cz + r * math.cos(theta)))
+            # Full circle in XY plane (10 cm diameter)
+            r = 0.05
+            for i in range(61):
+                theta = (2 * math.pi / 60.0) * i
+                points.append((cx + r * math.cos(theta), cy + r * math.sin(theta), cz))
         elif shape == 'ZigZag':
-            # Zig-zag in ZY plane: alternate Y while rising Z (6 cm tall)
+            # Zig-zag in XY plane: alternate X while moving Y (12 cm long, 8cm wide)
             for i in range(7):
-                y_val = cy + (0.02 if i % 2 == 1 else -0.02)
-                z_val = cz + i * 0.01
-                points.append((cx, y_val, z_val))
+                x_val = cx + (0.04 if i % 2 == 1 else -0.04)
+                y_val = cy + i * 0.02 - 0.06
+                points.append((x_val, y_val, cz))
         else: # default straight
             for i in range(7):
-                points.append((cx, cy, cz + i * 0.01))
+                points.append((cx, cy + i * 0.02 - 0.06, cz))
 
         for (x, y, z) in points:
             pose = PoseStamped()

@@ -131,6 +131,10 @@ src/kinect2_ros2/color images to calibrate/*
 parol6_vision/data/images_captured/*
 test_yolo_segment_node/*
 test_color_node/*
+core.2188
+.gitignore
+core.2430
+
 parol6_firmware/.pio/libdeps/blackpill_f411ce/integrity.dat
 parol6_firmware/.pio/libdeps/debug_stage3/integrity.dat
 parol6_firmware/.pio/libdeps/debug_stage4/integrity.dat
