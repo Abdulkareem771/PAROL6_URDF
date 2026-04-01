@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from asyncio import Future
+from concurrent.futures import Future
 import rclpy
 from parol6_vision.moveit_controller import MoveItController
 from nav_msgs.msg import Path
@@ -100,6 +100,22 @@ class TestMoveItController(unittest.TestCase):
         self.assertIsNone(traj)
         # Should have tried all 3 steps
         self.assertEqual(self.node.cartesian_client.call_async.call_count, 3)
+
+    def test_jump_threshold_is_nonzero(self):
+        """jump_threshold must never be 0.0 — that allows random IK elbow flips (Bug 1 guard)."""
+        self.node.cartesian_client.wait_for_service.return_value = True
+        self.node.cartesian_client.call_async.return_value = self.create_mock_future(1.0)
+
+        path = Path()
+        path.poses = [PoseStamped()]
+
+        self.node.plan_cartesian_with_fallback(path)
+
+        sent_req = self.node.cartesian_client.call_async.call_args[0][0]
+        self.assertGreater(
+            sent_req.jump_threshold, 0.0,
+            "jump_threshold=0.0 disables elbow-flip detection and causes random EE motion"
+        )
 
     def test_execute_welding_sequence(self):
         """Test full execution sequence logic"""

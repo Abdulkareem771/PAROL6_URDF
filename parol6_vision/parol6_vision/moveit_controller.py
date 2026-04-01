@@ -98,6 +98,11 @@ class MoveItController(Node):
         # Fallback Strategy Config
         self.declare_parameter('cartesian_step_sizes', [0.002, 0.005, 0.010])
         self.declare_parameter('min_success_rates', [0.95, 0.95, 0.90])
+        # Jump threshold (radians): maximum allowed joint-space jump between
+        # consecutive IK solutions in compute_cartesian_path.  0.0 disables
+        # the check entirely — that is the root cause of random elbow flips.
+        # 5.0 rad is generous enough for PAROL6 but still blocks large flips.
+        self.declare_parameter('cartesian_jump_threshold', 5.0)
         
         # Process offsets
         self.declare_parameter('approach_distance', 0.15)  # 15cm: weld surface ~z=0.045m → approach at z=0.195m (inside workspace)
@@ -129,6 +134,7 @@ class MoveItController(Node):
         self.ee_link = self.get_parameter('end_effector_link').value
         self.step_sizes = self.get_parameter('cartesian_step_sizes').value
         self.thresholds = self.get_parameter('min_success_rates').value
+        self.jump_threshold = float(self.get_parameter('cartesian_jump_threshold').value)
         self.approach_dist = self.get_parameter('approach_distance').value
         self.auto_execute = self.get_parameter('auto_execute').value
         self.move_group_wait_timeout = float(self.get_parameter('move_group_wait_timeout_sec').value)
@@ -558,7 +564,9 @@ class MoveItController(Node):
             req.link_name = self.ee_link  # CRITICAL: tell MoveIt which link to plan for
             req.waypoints = waypoints
             req.max_step = step
-            req.jump_threshold = 0.0
+            # Use configured jump threshold — never 0.0, which would allow
+            # the IK solver to freely flip elbow configurations (Bug 1 fix).
+            req.jump_threshold = self.jump_threshold
             req.avoid_collisions = True
             if start_state is not None:
                 req.start_state = start_state
@@ -577,21 +585,25 @@ class MoveItController(Node):
             if res.fraction >= threshold:
                 self.get_logger().info(f"Success! Planned fraction: {res.fraction:.2f}")
                 trajectory = res.solution
-                self._ensure_trajectory_timing(trajectory)
+                # Pass the actual step size so timing matches weld_velocity (Bug 4 fix)
+                self._ensure_trajectory_timing(trajectory, step_size=step)
                 return trajectory
             else:
                 self.get_logger().warn(f"Fraction too low: {res.fraction:.2f} < {threshold}")
                 
         return None
 
-    def _ensure_trajectory_timing(self, trajectory):
+    def _ensure_trajectory_timing(self, trajectory, step_size: float = None):
         """
         Ensure all JointTrajectory points have proper time_from_start.
 
         compute_cartesian_path may return a trajectory where all time_from_start
-        values are zero, causing Gazebo's JointTrajectoryController to silently
-        hang (never completing the action result). This adds linear timing at
-        0.5 seconds per waypoint when zero times are detected.
+        values are zero, causing the JointTrajectoryController to silently hang.
+
+        When `step_size` is provided (Cartesian step in metres), timing is
+        derived from the configured `weld_velocity` parameter so that actual
+        execution speed matches the desired welding feed rate (Bug 4 fix).
+        Fallback: joint-space moves use a conservative 0.5 s/pt floor.
         """
         from builtin_interfaces.msg import Duration as RosDuration
 
@@ -608,8 +620,15 @@ class MoveItController(Node):
             )
             return
 
-        # Add linear timing: 0.5s per waypoint
-        dt = 0.5
+        # Compute dt: time per waypoint based on weld velocity and step size.
+        # For Cartesian paths step_size is the max_step used in planning.
+        # Minimum 0.1 s/pt prevents commanding dangerously fast joint moves.
+        weld_vel = float(self.get_parameter('weld_velocity').value)  # m/s
+        if step_size is not None and step_size > 0 and weld_vel > 0:
+            dt = max(0.1, step_size / weld_vel)
+        else:
+            dt = 0.5  # conservative fallback for joint-space trajectories
+
         for i, pt in enumerate(points):
             total_sec = (i + 1) * dt
             pt.time_from_start = RosDuration(
@@ -618,8 +637,12 @@ class MoveItController(Node):
             )
         total_time = len(points) * dt
         self.get_logger().info(
-            f"Added linear timing to {len(points)} trajectory points "
-            f"(total={total_time:.1f}s, {dt}s/pt)"
+            f"Added velocity-based timing to {len(points)} trajectory points "
+            f"(dt={dt:.3f}s/pt, total={total_time:.1f}s, "
+            f"step={step_size*1000:.1f}mm, vel={weld_vel*1000:.1f}mm/s)"
+            if step_size else
+            f"Added fallback timing to {len(points)} trajectory points "
+            f"(dt={dt:.3f}s/pt, total={total_time:.1f}s)"
         )
 
     def execute_waypoint_fallback(self, path: Path) -> bool:
@@ -643,6 +666,7 @@ class MoveItController(Node):
         self.get_logger().info(
             f"Waypoint fallback: executing {len(indices)}/{total} sampled waypoints"
         )
+        prev_traj = None  # seed IK family forward so OMPL stays in the same elbow config
         for n, idx in enumerate(indices, start=1):
             pose_stamped = copy.deepcopy(path.poses[idx])
             
@@ -652,8 +676,14 @@ class MoveItController(Node):
             radius_xy = math.hypot(px, py)
             
             self.get_logger().info(f"Checking reachability for fallback point {n}/{len(indices)} (index={idx})...")
-            # Plan position-only move to verify reachability before execution
-            plan_traj = self.plan_pose(pose_stamped, use_orientation_constraint=False)
+            # Plan position-only move seeded from the PREVIOUS waypoint's end state.
+            # Seeding is critical: without it OMPL picks a fresh IK solution at each
+            # waypoint (possibly a different elbow config) causing random-looking motion.
+            plan_traj = self.plan_pose(
+                pose_stamped,
+                start_state_traj=prev_traj,
+                use_orientation_constraint=False,
+            )
             is_reachable = (plan_traj is not None)
             
             self.get_logger().info(
@@ -673,6 +703,8 @@ class MoveItController(Node):
                     f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"
                 )
                 return False
+            # Advance the IK seed so the next plan starts from this waypoint's config
+            prev_traj = plan_traj
 
         self.get_logger().info("Waypoint fallback execution completed")
         return True
@@ -823,11 +855,16 @@ class MoveItController(Node):
         goal.request.goal_constraints = [goal_constraints]
         goal.planning_options.plan_only = True  # PLAN ONLY
 
-        # Seed the planner from the previous trajectory's final state
+        # Seed the planner from the previous trajectory's final state.
+        # If no explicit start state, set is_diff=True so MoveIt always uses
+        # the actual robot state from the planning scene monitor instead of
+        # an all-zeros default joint state (which causes random IK solutions).
         if start_state_traj is not None:
             rs = self._extract_end_state(start_state_traj)
             if rs is not None:
                 goal.request.start_state = rs
+        else:
+            goal.request.start_state.is_diff = True
 
         future = self.move_group_client.send_goal_async(goal)
         try:

@@ -60,10 +60,12 @@ class TestPathGenerator(unittest.TestCase):
         
         waypoints, tangents = self.node.fit_bspline_and_resample(points)
         
-        # Check resampling count
-        # Total length approx 1.0m. Spacing default 0.005m (5mm).
-        # Expected ~200 points
-        expected_count = int(1.0 / 0.005)
+        # Check resampling count.
+        # Total length approx 1.0m. Spacing default 0.005m (5mm) → ~200 pts,
+        # BUT max_waypoints=80 cap is applied for OMPL stability, so expect 80.
+        max_wp = self.node.get_parameter('max_waypoints').value
+        raw_expected = int(1.0 / 0.005)
+        expected_count = min(raw_expected, max_wp)
         self.assertAlmostEqual(len(waypoints), expected_count, delta=5)
         
         # Check smoothness: mean Y should be close to 0
@@ -75,28 +77,38 @@ class TestPathGenerator(unittest.TestCase):
         self.assertTrue(np.all(t_x > 0.9), "Tangents should be aligned with X axis")
 
     def test_compute_orientation(self):
-        """Test orientation generation logic"""
-        # Case 1: Tangent along X axis (1, 0, 0)
-        tangent = np.array([1.0, 0.0, 0.0])
+        """Tangent-based orientation: different tangents must produce different quaternions"""
+        tangent_x = np.array([1.0, 0.0, 0.0])
+        tangent_y = np.array([0.0, 1.0, 0.0])
         pitch_deg = 45.0
-        
-        quat = self.node.compute_orientation(tangent, pitch_deg)
-        
-        # If Tangent=X, Down=-Z.
-        # Check if quaternion represents expected rotation.
-        # This is a bit complex math-wise to assert exactly without a reference implementation.
-        # But we can check norm is 1.
-        norm = math.sqrt(quat.x**2 + quat.y**2 + quat.z**2 + quat.w**2)
-        self.assertAlmostEqual(norm, 1.0)
-        
-        # Case 2: Verify consistency (same input -> same output)
-        quat2 = self.node.compute_orientation(tangent, pitch_deg)
-        self.assertEqual(quat.w, quat2.w)
+
+        quat_x = self.node.compute_orientation(tangent_x, pitch_deg)
+        quat_y = self.node.compute_orientation(tangent_y, pitch_deg)
+
+        # Both must be unit quaternions
+        for q in (quat_x, quat_y):
+            norm = math.sqrt(q.x**2 + q.y**2 + q.z**2 + q.w**2)
+            self.assertAlmostEqual(norm, 1.0, places=5,
+                msg="Quaternion must be unit length")
+
+        # Orientations must differ for different tangent directions
+        same = (
+            math.isclose(quat_x.x, quat_y.x, abs_tol=1e-4) and
+            math.isclose(quat_x.y, quat_y.y, abs_tol=1e-4) and
+            math.isclose(quat_x.z, quat_y.z, abs_tol=1e-4) and
+            math.isclose(quat_x.w, quat_y.w, abs_tol=1e-4)
+        )
+        self.assertFalse(same,
+            "Quaternions for +X and +Y tangents must differ (tangent-aware orientation)")
+
+        # Consistency: same input → same output
+        quat_x2 = self.node.compute_orientation(tangent_x, pitch_deg)
+        self.assertAlmostEqual(quat_x.w, quat_x2.w, places=5)
         
     def test_generate_path_end_to_end(self):
         """Test full pipeline with mock message"""
         msg = WeldLine3DArray()
-        msg.header.frame_id = "base_link"
+        msg.header.frame_id = "kinect2_rgb_optical_frame"  # camera frame
         
         line = WeldLine3D()
         line.confidence = 1.0
@@ -116,6 +128,24 @@ class TestPathGenerator(unittest.TestCase):
         # Verify published path
         path_arg = self.node.path_pub.publish.call_args[0][0]
         self.assertGreater(len(path_arg.poses), 0)
+
+    def test_path_frame_id_is_base_link(self):
+        """Published path frame_id must be 'base_link', not the camera optical frame (Bug 3 guard)"""
+        msg = WeldLine3DArray()
+        msg.header.frame_id = 'kinect2_rgb_optical_frame'
+
+        line = WeldLine3D()
+        line.confidence = 1.0
+        for i in range(10):
+            p = Point()
+            p.x, p.y, p.z = float(i) * 0.01, 0.0, 0.0
+            line.points.append(p)
+        msg.lines = [line]
+
+        self.node.generate_path(msg)
+        path_arg = self.node.path_pub.publish.call_args[0][0]
+        self.assertEqual(path_arg.header.frame_id, 'base_link',
+            "Path must be published in 'base_link' frame for MoveIt Cartesian planning")
 
 if __name__ == '__main__':
     unittest.main()

@@ -91,7 +91,7 @@ class PathGenerator(Node):
         self.declare_parameter('spline_degree', 3)
         self.declare_parameter('spline_smoothing', 0.005) # 5mm variance allowed
         self.declare_parameter('waypoint_spacing', 0.005) # 5mm spacing
-        self.declare_parameter('approach_angle_deg', 45.0)
+        self.declare_parameter('approach_angle_deg', 10.0)
         self.declare_parameter('min_points_for_path', 5)
         self.declare_parameter('max_waypoints', 80)  # cap to prevent OMPL failures
         
@@ -222,7 +222,13 @@ class PathGenerator(Node):
             
         # 5. Publish Path
         path_msg = Path()
-        path_msg.header = msg.header
+        # Copy the timestamp from the vision message but force the frame_id to
+        # 'base_link' — the robot planning frame.  The depth_matcher already
+        # transforms 3-D points into base_link; the msg.header.frame_id still
+        # carries the camera optical frame string which would make MoveIt plan
+        # in the wrong coordinate system (Bug 3 fix).
+        path_msg.header.stamp = msg.header.stamp
+        path_msg.header.frame_id = 'base_link'
         path_msg.poses = poses
         
         self.path_pub.publish(path_msg)
@@ -324,16 +330,55 @@ class PathGenerator(Node):
         
     def compute_orientation(self, tangent, pitch_deg):
         """
-        Generates orientation quaternion for PAROL6.
-        Uses a downward-facing EE orientation that matches the robot's natural
-        home pose (confirmed via FK: x=0.7071, z=-0.7071, w=0).
-        This is the correct orientation for welding on a horizontal surface.
-        Previously used y=0.7071, w=0.7071 (pointing +X forward) which caused
-        IK fraction=0.02 because the robot cannot reach that pose configuration.
+        Generates orientation quaternion for PAROL6 from the weld seam tangent.
+
+        The torch approach axis (z_tool) is a blend of the curve tangent and
+        the world-down vector (-Z) weighted by the pitch angle.  This ensures
+        the EE orientation **varies smoothly** along the seam so that IK always
+        has a consistent preferred elbow configuration instead of jumping between
+        equivalent solutions at each waypoint (Bug 2 fix).
+
+        Frame convention (PAROL6):
+          z_tool  — approach direction (into the workpiece)
+          y_tool  — lateral direction perpendicular to z_tool and world-Z
+          x_tool  — cross(y_tool, z_tool)  →  along-seam direction
+
+        Args:
+            tangent (np.ndarray): Unit 3-vector along the weld seam.
+            pitch_deg (float): Torch pitch angle from vertical (degrees).
+
+        Returns:
+            geometry_msgs.msg.Quaternion
         """
-        # EE pointing straight down (-Z in base_link)
-        # Confirmed by FK at joints=[0,0,0,0,0,0]: x=0.7071, y≈0, z=-0.7071, w≈0
-        return Quaternion(x=0.7071068, y=0.0, z=-0.7071068, w=0.0)
+        pitch_rad = math.radians(pitch_deg)
+
+        # z_tool: blend of tangent (lateral tilt) and downward (-Z) component
+        down = np.array([0.0, 0.0, -1.0])
+        z_tool = math.sin(pitch_rad) * np.asarray(tangent, dtype=float) + math.cos(pitch_rad) * down
+        norm_z = np.linalg.norm(z_tool)
+        if norm_z < 1e-9:
+            # Degenerate: tangent antiparallel to down — fall back to pure-down
+            z_tool = down.copy()
+        else:
+            z_tool /= norm_z
+
+        # y_tool: lateral axis — cross(world_up, z_tool)
+        world_up = np.array([0.0, 0.0, 1.0])
+        y_tool = np.cross(world_up, z_tool)
+        norm_y = np.linalg.norm(y_tool)
+        if norm_y < 1e-9:
+            # z_tool is parallel to world_up — pick a fixed lateral direction
+            y_tool = np.array([0.0, 1.0, 0.0])
+        else:
+            y_tool /= norm_y
+
+        # x_tool: forward along seam
+        x_tool = np.cross(y_tool, z_tool)
+        x_tool /= max(np.linalg.norm(x_tool), 1e-9)
+
+        # Build rotation matrix R = [x_tool | y_tool | z_tool] (column vectors)
+        R = np.column_stack((x_tool, y_tool, z_tool))
+        return self.rotation_matrix_to_quaternion(R)
         
     def rotation_matrix_to_quaternion(self, R):
         """Manual implementation of rotation matrix to quat"""
