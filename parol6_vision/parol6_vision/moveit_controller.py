@@ -412,12 +412,15 @@ class MoveItController(Node):
         if not weld_traj:
             if self.enable_joint_waypoint_fallback:
                 self.get_logger().warn("Falling back to joint-space waypoint execution")
-                # Fallback must execute on its own (plan+execute inside loop)
+                # Execute home + approach first, then chain the fallback from approach endpoint
                 if not self.execute_trajectory_action(home_traj):
                     return False
                 if not self.execute_trajectory_action(approach_traj):
                     return False
-                return self.execute_waypoint_fallback(path)
+                # Pass approach_traj so the first fallback waypoint chains from
+                # the approach end-state (short down-move) rather than re-planning
+                # from scratch (full hoist-and-plunge cycle).
+                return self.execute_waypoint_fallback(path, start_state_traj=approach_traj)
             return False
 
         # ── EXECUTION PHASE (all plans ready, execute back-to-back) ──────────
@@ -796,12 +799,19 @@ class MoveItController(Node):
             f"{len(points)} pts, new total={new_total:.2f}s"
         )
 
-    def execute_waypoint_fallback(self, path: Path) -> bool:
+    def execute_waypoint_fallback(self, path: Path, start_state_traj=None) -> bool:
         """
-        Fallback execution path:
-        - Select a coarse subset of waypoints.
-        - Move with joint-space planning to each waypoint.
-        This trades smooth Cartesian motion for robustness.
+        Improved fallback execution path:
+        - Select a coarse subset of waypoints from the path.
+        - Pre-plan ALL segments before executing ANY of them (avoids "freeze" during weld).
+        - Each segment is planned from the END STATE of the previous segment so the
+          robot moves point-to-point along the path without full re-approach hoist-and-plunge.
+
+        Args:
+            path: The full weld path (nav_msgs/Path).
+            start_state_traj: Optional trajectory whose final joint state seeds the first
+                              waypoint plan.  Typically the approach trajectory so planning
+                              is consistent with where the robot actually ended up.
         """
         total = len(path.poses)
         if total == 0:
@@ -815,36 +825,56 @@ class MoveItController(Node):
             indices = sorted({int(i * (total - 1) / (desired - 1)) for i in range(desired)})
 
         self.get_logger().info(
-            f"Waypoint fallback: executing {len(indices)}/{total} sampled waypoints"
+            f"Waypoint fallback: pre-planning {len(indices)}/{total} sampled waypoints "
+            f"(chained start states — no re-hoisting between points)"
         )
+
+        # ── Phase 1: Pre-plan all segments ───────────────────────────────────
+        planned_trajs = []
+        prev_traj = start_state_traj  # chain: each plan seeds from previous end state
+
         for n, idx in enumerate(indices, start=1):
             pose_stamped = copy.deepcopy(path.poses[idx])
-            
             px = pose_stamped.pose.position.x
             py = pose_stamped.pose.position.y
             pz = pose_stamped.pose.position.z
-            radius_xy = math.hypot(px, py)
-            
-            self.get_logger().info(f"Checking reachability for fallback point {n}/{len(indices)} (index={idx})...")
-            # Plan position-only move to verify reachability before execution
-            plan_traj = self.plan_pose(pose_stamped, use_orientation_constraint=False)
-            is_reachable = (plan_traj is not None)
-            
+
             self.get_logger().info(
-                f"Waypoint fallback {n}/{len(indices)} (index={idx}):\n"
-                f"  Pose: x={px:.4f}, y={py:.4f}, z={pz:.4f}\n"
-                f"  XY Radius: {radius_xy:.4f}m\n"
-                f"  Reachable (Position-Only IK): {'YES' if is_reachable else 'NO'}"
+                f"[FallbackPlan {n}/{len(indices)}] Planning to "
+                f"x={px:.4f}, y={py:.4f}, z={pz:.4f} (index={idx})"
             )
-            
-            if not is_reachable:
-                self.get_logger().error(f"Waypoint fallback aborted: target unreachable at index={idx}")
+
+            # Position-only so orientation singularities don't block path following
+            traj = self.plan_pose(
+                pose_stamped,
+                start_state_traj=prev_traj,
+                use_orientation_constraint=False,
+            )
+
+            if traj is None:
+                self.get_logger().error(
+                    f"[FallbackPlan] Could not plan to waypoint {n}/{len(indices)} "
+                    f"(index={idx}) — aborting"
+                )
                 return False
 
-            ok = self.execute_trajectory_action(plan_traj)
+            planned_trajs.append((n, idx, px, py, pz, traj))
+            prev_traj = traj  # seed next plan from this end state
+
+        self.get_logger().info(
+            f"Waypoint fallback: all {len(planned_trajs)} segments pre-planned — executing…"
+        )
+
+        # ── Phase 2: Execute pre-planned segments back-to-back ───────────────
+        for n, idx, px, py, pz, traj in planned_trajs:
+            self.get_logger().info(
+                f"[FallbackExec {n}/{len(planned_trajs)}] Moving to "
+                f"x={px:.4f}, y={py:.4f}, z={pz:.4f}"
+            )
+            ok = self.execute_trajectory_action(traj)
             if not ok:
                 self.get_logger().error(
-                    f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"
+                    f"Waypoint fallback failed at point {n}/{len(planned_trajs)} (index={idx})"
                 )
                 return False
 

@@ -2546,22 +2546,71 @@ class VisionPipelineGUI(QMainWindow):
 
         spin_row = QHBoxLayout()
         offset_spins = {}
+        _axis_ranges = {"X": (-500.0, 500.0), "Y": (-500.0, 500.0), "Z": (-1000.0, 1000.0)}
         for axis, color in [("X", "#89b4fa"), ("Y", "#a6e3a1"), ("Z", "#fab387")]:
             col = QVBoxLayout()
+            col.setSpacing(2)
             lbl = QLabel(f"<b style='color:{color}'>{axis} offset (mm)</b>")
             lbl.setAlignment(Qt.AlignCenter)
             col.addWidget(lbl)
             sp = QDoubleSpinBox()
-            sp.setRange(-50.0, 50.0)
-            sp.setSingleStep(0.5)
+            lo, hi = _axis_ranges[axis]
+            sp.setRange(lo, hi)
+            sp.setSingleStep(5.0)   # 5 mm per click — usable for large offsets
             sp.setDecimals(1)
             sp.setValue(0.0)
-            sp.setMinimumWidth(90)
+            sp.setMinimumWidth(100)
             sp.setAlignment(Qt.AlignCenter)
+            sp.setToolTip(f"Range: {lo:.0f} mm to {hi:.0f} mm. You can also type directly.")
             col.addWidget(sp)
+            # Direct-type entry (QLineEdit mirrors the spinner; press Enter to apply)
+            entry = QLineEdit("0.0")
+            entry.setPlaceholderText(f"Type {axis} mm…")
+            entry.setAlignment(Qt.AlignCenter)
+            entry.setMaximumHeight(24)
+            entry.setStyleSheet(
+                f"background:#181825; color:{color}; border:1px solid {color};"
+                " border-radius:3px; font-size:11px; padding:1px 4px;"
+            )
+            entry.setToolTip(f"Type any {axis} value in mm and press Enter")
+            def _make_entry_handler(spinner, ax_entry):
+                def _on_entry():
+                    try:
+                        v = float(ax_entry.text().replace(',', '.'))
+                        spinner.setValue(v)
+                    except ValueError:
+                        pass
+                return _on_entry
+            entry.returnPressed.connect(_make_entry_handler(sp, entry))
+            # Keep entry in sync when spinner changes via arrows
+            def _make_spin_sync(ax_entry):
+                def _sync(v): ax_entry.setText(f"{v:.1f}")
+                return _sync
+            sp.valueChanged.connect(_make_spin_sync(entry))
+            col.addWidget(entry)
             spin_row.addLayout(col)
             offset_spins[axis] = sp
         offset_lay.addLayout(spin_row)
+
+        # Quick-preset row for common large Z corrections
+        preset_row = QHBoxLayout()
+        preset_lbl = QLabel("Quick Z presets:")
+        preset_lbl.setStyleSheet(f"color:{C['text2']}; font-size:10px;")
+        preset_row.addWidget(preset_lbl)
+        for z_mm in [100, 200, 300, 350, 400, 500]:
+            pb = QPushButton(f"+{z_mm}")
+            pb.setFixedHeight(22)
+            pb.setStyleSheet(
+                f"background:#313244; color:#fab387; border:1px solid #fab387;"
+                " border-radius:3px; font-size:10px; padding:0 4px;"
+            )
+            def _make_preset(z):
+                def _set(): offset_spins["Z"].setValue(float(z))
+                return _set
+            pb.clicked.connect(_make_preset(z_mm))
+            preset_row.addWidget(pb)
+        preset_row.addStretch()
+        offset_lay.addLayout(preset_row)
 
         def _apply_offset():
             req = SetParameters.Request()
