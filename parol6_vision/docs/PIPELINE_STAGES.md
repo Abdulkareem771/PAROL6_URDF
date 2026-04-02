@@ -1,4 +1,4 @@
-# PAROL6 Vision Pipeline — Stage-by-Stage Documentation
+# Vision Workflow — Stage-by-Stage Documentation
 
 **Package:** `parol6_vision` (ROS 2 Humble)  
 **Date:** April 2026  
@@ -8,9 +8,9 @@
 
 ## Overview
 
-The PAROL6 Vision Pipeline is a 7-stage, fully automated, vision-guided welding path detection and execution system. Each stage is an independent ROS 2 node that communicates exclusively through typed topics and services. The final output is a smooth 3D welding trajectory executed by the PAROL6 6-DOF robot arm via MoveIt2.
+The Vision Workflow is a 7-stage, fully automated, vision-guided welding path detection and execution system. Each stage is an independent ROS 2 node that communicates exclusively through typed topics and services. The final output is a smooth 3D welding trajectory executed by the PAROL6 6-DOF robot arm via MoveIt2.
 
-![PAROL6 Final Pipeline Diagram](/home/osama/.gemini/antigravity/brain/a85f6842-c918-4ff2-8886-572f893ecdfd/parol6_vision_pipeline_diagram_v3_final_1775079429707.png)
+![Vision Workflow Final Diagram](/home/osama/.gemini/antigravity/brain/a85f6842-c918-4ff2-8886-572f893ecdfd/parol6_vision_workflow_final_1775161021469.png)
 
 ---
 
@@ -306,4 +306,4 @@ Stage 7: moveit_controller   ── Cartesian execution via MoveIt2
 
 ---
 
-*Documentation generated from `GRADUATION_DOCUMENT.md` — PAROL6 Vision Pipeline, March / April 2026.*
+*Documentation generated from `GRADUATION_DOCUMENT.md` — Vision Workflow, March / April 2026.*
