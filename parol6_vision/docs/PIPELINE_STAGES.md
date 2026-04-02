@@ -10,7 +10,7 @@
 
 The Vision Workflow is a 7-stage, fully automated, vision-guided welding path detection and execution system. Each stage is an independent ROS 2 node that communicates exclusively through typed topics and services. The final output is a smooth 3D welding trajectory executed by the PAROL6 6-DOF robot arm via MoveIt2.
 
-![Vision Workflow Final Diagram](/home/osama/.gemini/antigravity/brain/a85f6842-c918-4ff2-8886-572f893ecdfd/parol6_vision_workflow_final_1775161021469.png)
+![Vision Workflow Final Semantic Diagram](/home/osama/.gemini/antigravity/brain/a85f6842-c918-4ff2-8886-572f893ecdfd/parol6_vision_workflow_v5_final_1775164865822.png)
 
 ---
 
@@ -48,7 +48,7 @@ Precise synchronization at this stage is critical. If the color image and depth 
 
 ---
 
-## Stage 2 — Image Relay / Crop (`crop_image_node`)
+## Stage 2 — Region of Interest Identify (`crop_image_node`)
 
 **File:** `parol6_vision/crop_image_node.py`  
 **Node name:** `crop_image`
@@ -84,9 +84,9 @@ Removing irrelevant background regions from the camera view before processing dr
 
 ---
 
-## Stage 3 — Seam Intersection Detection (Processing Mode Nodes)
+## Stage 3 — Multi-Model 2D Path Detection (Processing Mode)
 
-**Nodes:** `color_mode`, `yolo_segment`, or `manual_line` (run **exactly one**)
+**Modes:** Color Mode (`color_mode`), AI Mode (`yolo_segment`), or Manual Mode (`manual_line`) (run **exactly one**)
 
 ### Role
 
@@ -100,9 +100,9 @@ Different workpieces, environments, and operational requirements call for differ
 
 | Mode | Strategy | Best For |
 |------|----------|----------|
-| `color_mode` | HSV thresholding on green & blue workpieces | Controlled lighting, distinctly colored parts |
-| `yolo_segment` | YOLOv8 instance segmentation (ML model) | Arbitrary workpiece shapes, variable lighting |
-| `manual_line` | Operator-drawn polyline strokes overlaid on frames | Fixed fixtures, deterministic or repeated jobs |
+| **Color Mode** | HSV thresholding on green & blue workpieces | Controlled lighting, distinctly colored parts |
+| **AI Mode** | YOLOv8 instance segmentation (ML model) | Arbitrary workpiece shapes, variable lighting |
+| **Manual Mode** | Operator-drawn polyline strokes overlaid on frames | Fixed fixtures, deterministic or repeated jobs |
 
 ### Shared Output Topics
 
@@ -159,7 +159,7 @@ The annotated image from Stage 3 shows *where* the seam region is, but the exact
 
 ---
 
-## Stage 5 — 2D → 3D Reconstruction (`depth_matcher`)
+## Stage 5 — 2D-to-3D Reconstruction (`depth_matcher`)
 
 **File:** `parol6_vision/depth_matcher.py`  
 **Node name:** `depth_matcher`
@@ -281,24 +281,24 @@ If all Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, t
 Kinect v2 Camera
     │  (RGB + Depth + CameraInfo)
     ▼
-Stage 1: capture_images      ── triggers on keyboard / timed / topic
+Stage 1: Image Capture        ── triggers on keyboard / timed / topic
     │  /vision/captured_image_raw       (VOLATILE)
     │  /vision/captured_image_depth     (TRANSIENT_LOCAL)
     │  /vision/captured_camera_info     (TRANSIENT_LOCAL)
     ▼
-Stage 2: crop_image_node     ── polygon mask / crop ROI
+Stage 2: Region of Interest Identify  ── polygon mask / crop ROI
     │  /vision/captured_image_color
     ▼
-Stage 3: [color_mode | yolo_segment | manual_line]   ── pick ONE
+Stage 3: [Color Mode | AI Mode | Manual Mode]
     │  /vision/processing_mode/annotated_image
     ▼
 Stage 4: path_optimizer      ── red line extraction + PCA ordering
     │  /vision/weld_lines_2d  (WeldLineArray)
     ▼
-Stage 5: depth_matcher       ── pinhole back-projection + TF2
+Stage 5: 2D-to-3D Reconstruction       ── pinhole back-projection + TF2
     │  /vision/weld_lines_3d  (WeldLine3DArray)
     ▼
-Stage 6: path_generator      ── B-spline smoothing + arc-length resample
+Stage 6: Path Generation      ── B-spline smoothing + arc-length resample
     │  /vision/welding_path   (nav_msgs/Path, TRANSIENT_LOCAL)
     ▼
 Stage 7: moveit_controller   ── Cartesian execution via MoveIt2
