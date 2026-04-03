@@ -2,6 +2,9 @@
 
 **Understanding the PAROL6 ROS 2 Control Pipeline**
 
+> [!NOTE]
+> **Current Implementation (2026):** The system has migrated from the Python `real_robot_driver` described below to a **C++ `ros2_control` Hardware Interface** (`parol6_hardware/src/parol6_system.cpp`). The firmware targets a **STM32 Blackpill** over `/dev/ttyACM0` instead of `/dev/ttyUSB0`. The updated serial protocol sends `<SEQ,J1_pos,J1_vel,...,J6_vel>` (position + velocity) and receives `<ACK,SEQ,...,H#>` with homing status. All architecture descriptions below remain valid reference material.
+
 This guide explains how commands flow from RViz to the ESP32 through the ROS system.
 
 ---
@@ -130,6 +133,9 @@ trajectory:
 
 ### 3. Robot Driver (Hardware Interface)
 
+> [!WARNING]
+> **Superseded (2026):** The Python driver below has been replaced by the `parol6_hardware::PAROL6System` C++ plugin loaded by `ros2_control`. The plugin lives in `parol6_hardware/src/parol6_system.cpp` and communicates with the **STM32 Blackpill** at 115200 baud over `/dev/ttyACM0`. The Python node below is kept for reference.
+
 **File:** `parol6_driver/parol6_driver/real_robot_driver.py`  
 **Node:** `real_robot_driver`
 
@@ -202,19 +208,29 @@ def execute_callback(self, goal_handle):
 
 ### 4. Serial Communication
 
-**Port:** `/dev/ttyUSB0` (USB-to-Serial adapter)  
+**Port:** `/dev/ttyUSB0` (USB-to-Serial adapter) *(Legacy — current: `/dev/ttyACM0`)*  
 **Baud Rate:** 115200  
 **Protocol:** Text-based, newline-terminated
 
-**Message Format:**
+**Legacy Message Format (positions only):**
 ```
 TX (PC → ESP32): <SEQ,J1,J2,J3,J4,J5,J6>\n
 RX (ESP32 → PC): <ACK,SEQ,TIMESTAMP_US>\n
 ```
 
+**Current Message Format (Blackpill, positions + velocities + homing status):**
+```
+TX (PC → Blackpill): <SEQ,J1_pos,J1_vel,J2_pos,J2_vel,...,J6_pos,J6_vel>\n
+RX (Blackpill → PC): <ACK,SEQ,J1_pos,J2_pos,...,J6_pos,J1_vel,...,J6_vel,H#>\n
+  H0=idle  H1=homing  H2=complete  H3=error
+```
+
 ### 5. ESP32 Firmware
 
-**File:** `esp32_benchmark_idf/main/benchmark_main.c`  
+> [!NOTE]
+> **Superseded (2026):** The ESP32 firmware below was an early prototype. The current firmware targets **STM32 Blackpill F411CE** built with PlatformIO. It handles homing sequences, limit switch bitmasks, and closed-loop position/velocity feedback. See `parol6_firmware/` for the current source.
+
+**File (Legacy):** `esp32_benchmark_idf/main/benchmark_main.c`  
 **See:** [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for details
 
 **What it does:**

@@ -2,6 +2,9 @@
 
 This document outlines the core ROS 2 topics, services, and nodes for the PAROL6 robot. Use this guide to integrate your specific modules (Hardware/ESP32, Perception/Camera, etc.).
 
+> [!NOTE]
+> **Current Implementation (2026):** The hardware integration now uses the **`parol6_hardware` C++ `ros2_control` plugin** (`parol6_system.cpp`) instead of the manual bridge node described in Section 2. The plugin communicates with a **STM32 Blackpill** at 115200 baud over `/dev/ttyACM0`. The vision pipeline (Section 3) is fully operational via the `parol6_vision` package.
+
 ---
 
 ## 🧠 1. Core Control System (MoveIt & ROS 2 Control)
@@ -25,6 +28,14 @@ The core system uses **MoveIt 2** for motion planning and **ROS 2 Control** for 
 ---
 
 ## 🔌 2. Hardware Layer (ESP32 Team)
+
+> [!WARNING]
+> **Superseded (2026):** The bridge-node approach below (Method A and Method B) was an intermediate design. The project now uses **Method C: the `parol6_hardware` C++ Hardware Interface plugin** which is loaded automatically by `ros2_control`. See `parol6_hardware/src/parol6_system.cpp` for the implementation.
+>
+> **Current serial protocol (Blackpill):**
+> - TX: `<SEQ,J1_pos,J1_vel,...,J6_vel>\n`
+> - RX: `<ACK,SEQ,J1_pos,...,J6_vel,H#>\n` (H# = homing status)
+> - Device: `/dev/ttyACM0` at 115200 baud
 
 For the team connecting the physical robot (ESP32) to ROS 2.
 

@@ -2,11 +2,14 @@
 
 This is a comprehensive technical description of the PAROL6 project, verifying all branches and configurations directly from the source code.
 
+> [!NOTE]
+> **Current Implementation (2026):** The hardware layer has transitioned from the ESP32 + Micro-ROS stack described in this document to a **STM32 Blackpill (F411CE)** running PlatformIO firmware, communicating via ASCII UART over `/dev/ttyACM0`. The ROS-side driver is now a **C++ `ros2_control` Hardware Interface plugin** (`parol6_hardware/src/parol6_system.cpp`) instead of the Python bridge. All other sections (simulation, MoveIt, launch) remain accurate.
+
 ## 1. Project Overview
 *   **Robot**: PAROL6 (6-DOF Robotic Arm).
 *   **Simulation**: Ignition Gazebo (primary) & Gazebo Classic (legacy).
 *   **Control Stack**: ROS 2 Humble + MoveIt 2 + ros2_control.
-*   **Middleware**: Micro-ROS for ESP32.
+*   **Middleware**: Micro-ROS for ESP32 *(Legacy — see note above; current: Blackpill ASCII UART)*.
 
 ## 2. Docker Architecture
 The container content is defined by `Dockerfile` and built via `scripts/setup/rebuild_image.sh`.
@@ -205,6 +208,10 @@ This table provides a "Standard Usage" guide for the primary system components, 
 ## 10. Common Developer Workflows
 
 ### **A. How to Insert the Microcontroller (Micro-ROS Layer)**
+
+> [!WARNING]
+> **Superseded (2026):** This section describes the original Micro-ROS/ESP32 integration path. The project now uses a **STM32 Blackpill** with PlatformIO firmware and communicates via the `parol6_hardware` C++ plugin. See `docs/ROS2_CONTROL_IMPLEMENTATION_PLAN.md` and `docs/LAUNCH_METHODS.md` for the current approach. This section is kept for historical reference.
+
 To transition from Simulation to Real Hardware, you replace the **Ignition/Bridge** layer with the **Micro-ROS Layer**.
 1.  **The Concept**: The ESP32 acts as a "Hardware Bridge". It must run a Micro-ROS node that talks to the PC via USB Serial (UART) or Wi-Fi (UDP).
 2.  **Data Flow**:
