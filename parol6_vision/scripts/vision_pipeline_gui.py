@@ -1603,25 +1603,34 @@ class VisionPipelineGUI(QMainWindow):
         # 1. Start Pipeline
         grp1 = QGroupBox("Step 1: Initialization")
         glay1 = QVBoxLayout(grp1)
-        btn1 = QPushButton("START — Full Pipeline")
-        btn1.setFixedHeight(45)
-        btn1.setStyleSheet(f"background:#89b4fa; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
+        
+        btn_cam = QPushButton("📷 Run Camera")
+        btn_cam.setFixedHeight(35)
+        btn_cam.setStyleSheet(f"background:#a6e3a1; color:#11111b; font-weight:bold; font-size:13px; border-radius:6px;")
+        btn_cam.clicked.connect(lambda: [
+            self._btn_live_cam._start(),
+            self._btn_capture._start()
+        ])
+        glay1.addWidget(btn_cam)
+
+        btn_pipe = QPushButton("⚙️ Run Pipeline")
+        btn_pipe.setFixedHeight(35)
+        btn_pipe.setStyleSheet(f"background:#89b4fa; color:#11111b; font-weight:bold; font-size:13px; border-radius:6px;")
         def _start_pipeline():
             _set_status(">> Starting pipeline nodes...", "#89b4fa")
             self._ros_log.append("<b style='color:#89b4fa'>[Simple Run] Starting Pipeline...</b>")
-            self._btn_live_cam._start()
-            self._btn_capture._start()
             self._btn_crop_node._start()
             self._btn_optimizer._start()
             self._btn_depth._start()
             self._btn_pathgen._start()
-            # Real confirmation arrives via node liveness poller (no fake timer)
-        btn1.clicked.connect(_start_pipeline)
-        glay1.addWidget(btn1)
+            if hasattr(self, '_btn_path_mux'):
+                self._btn_path_mux._start()
+        btn_pipe.clicked.connect(_start_pipeline)
+        glay1.addWidget(btn_pipe)
         lay.addWidget(grp1)
 
         # 2. Capture & Map
-        grp2 = QGroupBox("Step 2: Scanning")
+        grp2 = QGroupBox("Step 2: Scanning & Processing")
         glay2 = QVBoxLayout(grp2)
         glay2.setSpacing(10)  # Add space to prevent overlap
         glay2.setContentsMargins(10, 15, 10, 10)
@@ -1636,12 +1645,28 @@ class VisionPipelineGUI(QMainWindow):
         mode_row.addWidget(self._simple_mode_combo, 1)
         glay2.addLayout(mode_row)
 
-        btn2 = QPushButton("SCAN — Capture && Process")
+        btn2 = QPushButton("SCAN — Capture && Run Mode")
         btn2.setFixedHeight(45)
-        btn2.setStyleSheet("background:#a6e3a1; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
+        btn2.setStyleSheet("background:#cba6f7; color:#11111b; font-weight:bold; font-size:14px; border-radius:6px;")
         def _capture_and_map():
             _set_status("[CAP] Capturing frame...", "#89dceb")
-            self._ros_log.append("<b style='color:#a6e3a1'>[Simple Run] Requesting Frame Capture...</b>")
+            self._ros_log.append("<b style='color:#cba6f7'>[Simple Run] Requesting Frame Capture...</b>")
+            
+            # Start selected mode's processing node and switch tabs
+            mode = self._simple_mode_combo.currentData()
+            if mode == "manual":
+                self._btn_manual_line._start()
+                if hasattr(self, '_main_tabs') and hasattr(self, '_manual_tab_index'):
+                    self._main_tabs.setCurrentIndex(self._manual_tab_index)
+            elif mode == "yolo":
+                self._btn_yolo._start()
+                if hasattr(self, '_main_tabs') and hasattr(self, '_vis_tab_index'):
+                    self._main_tabs.setCurrentIndex(self._vis_tab_index)
+            elif mode == "color":
+                self._btn_color_node._start()
+                if hasattr(self, '_main_tabs') and hasattr(self, '_vis_tab_index'):
+                    self._main_tabs.setCurrentIndex(self._vis_tab_index)
+
             if not self._ros_node:
                 self._ros_log.append("ROS node offline.")
                 _set_status("❌ ROS node offline.", "#f38ba8")
@@ -2041,6 +2066,7 @@ class VisionPipelineGUI(QMainWindow):
             vis_tab.addTab(frame, title)
 
         tabs.addTab(vis_tab, "👁  Visual Outputs")
+        self._vis_tab_index = tabs.indexOf(vis_tab)
 
         # ── Tab 2: Manual Red Line ─────────────────────────────────────────
         manual_tab = QWidget()
