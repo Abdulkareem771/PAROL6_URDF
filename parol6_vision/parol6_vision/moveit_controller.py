@@ -102,7 +102,7 @@ class MoveItController(Node):
         # consecutive IK solutions in compute_cartesian_path.  0.0 disables
         # the check entirely — that is the root cause of random elbow flips.
         # 5.0 rad is generous enough for PAROL6 but still blocks large flips.
-        self.declare_parameter('cartesian_jump_threshold', 5.0)
+        
         
         # Process offsets
         self.declare_parameter('approach_distance', 0.15)  # 15cm: weld surface ~z=0.045m → approach at z=0.195m (inside workspace)
@@ -406,13 +406,11 @@ class MoveItController(Node):
             self.get_logger().error("All Cartesian planning attempts failed")
             if self.enable_joint_waypoint_fallback:
                 self.get_logger().warn("Falling back to joint-space waypoint execution")
-                # Fallback must execute on its own (plan+execute inside loop)
-                if not self.execute_trajectory_action(home_traj):
+                weld_traj = self.execute_waypoint_fallback(path, start_state_traj=approach_traj)
+                if not weld_traj:
                     return False
-                if not self.execute_trajectory_action(approach_traj):
-                    return False
-                return self.execute_waypoint_fallback(path)
-            return False
+            else:
+                return False
 
         # ── EXECUTION PHASE (all plans ready, execute back-to-back) ──────────
         self.get_logger().info("All phases planned! Starting seamless execution…")
@@ -668,17 +666,21 @@ class MoveItController(Node):
             f"(dt={dt:.3f}s/pt, total={total_time:.1f}s)"
         )
 
-    def execute_waypoint_fallback(self, path: Path) -> bool:
+    def execute_waypoint_fallback(self, path: Path, start_state_traj=None):
         """
         Fallback execution path:
         - Select a coarse subset of waypoints.
-        - Move with joint-space planning to each waypoint.
-        This trades smooth Cartesian motion for robustness.
+        - Plan joint-space moves incrementally to each waypoint, seeded by the previous state.
+        - Stitch all segments into a single RobotTrajectory.
+        - Re-time linearly over Euclidean distance.
         """
+        from moveit_msgs.msg import RobotTrajectory
+        from trajectory_msgs.msg import JointTrajectoryPoint
+
         total = len(path.poses)
         if total == 0:
             self.get_logger().error("Waypoint fallback received empty path")
-            return False
+            return None
 
         desired = max(2, self.joint_waypoint_fallback_count)
         if total <= desired:
@@ -687,9 +689,12 @@ class MoveItController(Node):
             indices = sorted({int(i * (total - 1) / (desired - 1)) for i in range(desired)})
 
         self.get_logger().info(
-            f"Waypoint fallback: executing {len(indices)}/{total} sampled waypoints"
+            f"Waypoint fallback: pre-planning {len(indices)}/{total} sampled waypoints"
         )
-        prev_traj = None  # seed IK family forward so OMPL stays in the same elbow config
+        prev_traj = start_state_traj
+        stitched_traj = RobotTrajectory()
+        stitched_traj.joint_trajectory.joint_names = []
+
         for n, idx in enumerate(indices, start=1):
             pose_stamped = copy.deepcopy(path.poses[idx])
             
@@ -699,13 +704,13 @@ class MoveItController(Node):
             radius_xy = math.hypot(px, py)
             
             self.get_logger().info(f"Checking reachability for fallback point {n}/{len(indices)} (index={idx})...")
-            # Plan position-only move seeded from the PREVIOUS waypoint's end state.
-            # Seeding is critical: without it OMPL picks a fresh IK solution at each
-            # waypoint (possibly a different elbow config) causing random-looking motion.
+            
+            # Here we enforce orientation constraint to avoid OMPL exploding into 
+            # unreachable goal manifolds when the point is at the workspace limit.
             plan_traj = self.plan_pose(
                 pose_stamped,
                 start_state_traj=prev_traj,
-                use_orientation_constraint=False,
+                use_orientation_constraint=True,
             )
             is_reachable = (plan_traj is not None)
             
@@ -713,24 +718,55 @@ class MoveItController(Node):
                 f"Waypoint fallback {n}/{len(indices)} (index={idx}):\n"
                 f"  Pose: x={px:.4f}, y={py:.4f}, z={pz:.4f}\n"
                 f"  XY Radius: {radius_xy:.4f}m\n"
-                f"  Reachable (Position-Only IK): {'YES' if is_reachable else 'NO'}"
+                f"  Reachable (Joint IK + Orientation): {'YES' if is_reachable else 'NO'}"
             )
             
             if not is_reachable:
                 self.get_logger().error(f"Waypoint fallback aborted: target unreachable at index={idx}")
-                return False
+                return None
 
-            ok = self.execute_trajectory_action(plan_traj)
-            if not ok:
-                self.get_logger().error(
-                    f"Waypoint fallback failed at sampled point {n}/{len(indices)} (index={idx})"
-                )
-                return False
-            # Advance the IK seed so the next plan starts from this waypoint's config
+            # Initialize stitched trajectory joint names from the first valid plan
+            if not stitched_traj.joint_trajectory.joint_names:
+                stitched_traj.joint_trajectory.joint_names = plan_traj.joint_trajectory.joint_names
+
+            # Append all points except the first one (which overlaps with previous trajectory's end state)
+            points_to_add = plan_traj.joint_trajectory.points[1:] if stitched_traj.joint_trajectory.points else plan_traj.joint_trajectory.points
+            
+            for pt in points_to_add:
+                new_pt = JointTrajectoryPoint()
+                new_pt.positions = pt.positions
+                # Strip velocities/accelerations to force smooth spline interpolation in ROS control
+                new_pt.velocities = []
+                new_pt.accelerations = []
+                stitched_traj.joint_trajectory.points.append(new_pt)
+
             prev_traj = plan_traj
 
-        self.get_logger().info("Waypoint fallback execution completed")
-        return True
+        self.get_logger().info("Stitched continuous trajectory. Re-timing for constant feed rate...")
+        
+        # Now re-time the stitched trajectory based on Euclidean distance
+        # Approximate path length by summing distances between target indices
+        path_length = 0.0
+        for i in range(1, len(indices)):
+            p1 = path.poses[indices[i-1]].pose.position
+            p2 = path.poses[indices[i]].pose.position
+            # Need math.sqrt here or math.hypot for 3 args is math.dist
+            path_length += math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2 + (p2.z - p1.z)**2)
+            
+        weld_vel = float(self.get_parameter('weld_velocity').value)
+        total_time = path_length / weld_vel if weld_vel > 0 else 5.0
+        pts_count = len(stitched_traj.joint_trajectory.points)
+        
+        dt_per_pt = total_time / pts_count if pts_count > 0 else 0.5
+        dt_per_pt = max(0.05, dt_per_pt)  # floor at 50ms to prevent dangerously fast motion
+        
+        from builtin_interfaces.msg import Duration as RosDuration
+        for i, pt in enumerate(stitched_traj.joint_trajectory.points):
+            t_sec = (i + 1) * dt_per_pt
+            pt.time_from_start = RosDuration(sec=int(t_sec), nanosec=int((t_sec % 1) * 1e9))
+
+        self.get_logger().info(f"Fallback trajectory ready: {pts_count} pts continuously flowing over {total_time:.1f}s")
+        return stitched_traj
 
     def _extract_end_state(self, trajectory):
         """

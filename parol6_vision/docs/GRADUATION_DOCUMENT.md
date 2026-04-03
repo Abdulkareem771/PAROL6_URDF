@@ -777,7 +777,7 @@ Cartesian path planning can fail due to kinematic singularities, joint limits, o
 | 2 | 5 mm | 95% | Relaxed step to skip micro-singularities |
 | 3 | 10 mm | 90% | Coarse "get the job done" mode |
 
-If all Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, the node falls back to **joint-space moves to a coarse subset of waypoints** (`joint_waypoint_fallback_count`, default 8).
+If all Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, the node defaults to continuous **joint-space execution to a coarse subset of waypoints** (`joint_waypoint_fallback_count`, default 8). The controller pre-plans collision-free movements sequentially across the sampled waypoints and automatically stitches them into a single uninterrupted `RobotTrajectory`. Boundary velocities and accelerations are dynamically stripped while timestamps are scaled precisely to ensure a smooth continuous quintic/cubic spline motion matching the intended `weld_velocity`.
 
 > *"To overcome the inherent brittleness of Cartesian trajectory generation in constrained environments, a hierarchical fallback strategy was implemented. This dynamically adjusts the discretization resolution (2mm to 10mm), prioritizing geometric fidelity while ensuring system reliability."*
 

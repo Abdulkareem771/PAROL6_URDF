@@ -187,6 +187,7 @@ Allows the GUI to inject a path bypassing the camera pipeline. The GUI publishes
 | `approach_distance` default: `0.05` → `0.15` m | Weld seam projected at z ≈ 0.045 m in `base_link`. With 5 cm offset, approach was at z=0.095 m — below workspace_min z=0.10 m. OMPL rejected all goal samples. At 15 cm, approach is at z ≈ 0.195 m, safely inside the reachable zone |
 | **Coordinate-Aware Logging** | Planning logs now output 4-decimal precision X, Y, Z coordinates and the frame_id. This allows immediate identification of the failing waypoint in RViz. |
 | **Path Offset Injection** | Added `path_offset_x/y/z` parameters. These are applied in `path_callback` by shifting every waypoint pose before storage. Allows for +/- 50mm fine-tuning of the weld bead without re-scanning. |
+| **Continuous Waypoint Fallback** | Replaced point-by-point execution logic. Fallback trajectories are now fully pre-planned, grouped, and stitched into a single `RobotTrajectory` with recomputed timing. Removes stop-and-go jerking by allowing `joint_trajectory_controller` to smoothly spline joints at constant `weld_velocity`. |
 
 ### `vision_pipeline_gui.py`
 

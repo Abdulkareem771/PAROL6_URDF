@@ -157,6 +157,17 @@ Then the problem has moved from "goal reachability" to "path-following feasibili
 - reduce waypoint density
 - rely on joint-waypoint fallback if needed
 
+#### Waypoint Fallback (Continuous Trajectory Stitching)
+If Cartesian path planning fails completely (e.g., due to micro-singularities or tight collision tolerances), the controller defaults to `execute_waypoint_fallback`. 
+
+Rather than sending individual point-to-point move commands (which forces the robot to make a hard stop at each point), the fallback logic now:
+1. Samples a coarse subset of the weld path waypoints.
+2. Performs standard joint-space planning (`plan_pose()`) sequentially to ensure each segment connects with a valid IK solution seeded from the prior state.
+3. Automatically **stitches** all trajectory segments into a single massive `RobotTrajectory`.
+4. Strips boundary `velocities` and `accelerations` and applies dynamic re-timestamping proportional to the `weld_velocity` over computed Cartesian arc lengths.
+
+This produces a **non-stop, continuous quintic/cubic spline** movement across the workpiece, significantly improving weld bead consistency even under total Cartesian planning failure.
+
 ---
 
 ## 7. Useful Logs
