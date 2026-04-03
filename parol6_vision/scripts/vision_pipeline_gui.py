@@ -466,10 +466,36 @@ class ManualCanvas(QGraphicsView):
         self._mask_item = self._scene.addPixmap(QPixmap())
         self._mask_item.setZValue(1)
 
-        self._placeholder = QLabel("Load an image above to start drawing red lines.")
+        self._placeholder = QLabel("Load an image above to start drawing red lines.\nTip: Scroll or click ➕/➖ to zoom. Middle-click to pan.")
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setStyleSheet(f"color:{C['text2']}; font-size:13px;")
         self._placeholder_proxy = self._scene.addWidget(self._placeholder)
+
+        # -- Pan & Zoom overlay --
+        self._panning = False
+        self._pan_start = None
+        
+        self._zoom_panel = QWidget(self)
+        self._zoom_panel.setStyleSheet(f"background:{C['panel']}; border:1px solid {C['border']}; border-radius:4px;")
+        z_lay = QHBoxLayout(self._zoom_panel)
+        z_lay.setContentsMargins(2, 2, 2, 2)
+        z_lay.setSpacing(2)
+        
+        btn_in = QPushButton("Zoom In ➕")
+        btn_out = QPushButton("Zoom Out ➖")
+        btn_fit = QPushButton("Fit 🔲")
+        
+        for b in (btn_in, btn_out, btn_fit):
+            b.setStyleSheet(f"background:{C['bg']}; color:{C['text']}; border:none; padding:6px 10px; border-radius:2px;")
+            b.setCursor(Qt.PointingHandCursor)
+            z_lay.addWidget(b)
+            
+        btn_in.clicked.connect(lambda: self.scale(1.15, 1.15))
+        btn_out.clicked.connect(lambda: self.scale(1/1.15, 1/1.15))
+        btn_fit.clicked.connect(lambda: self.fitInView(self.sceneRect(), Qt.KeepAspectRatio) if not self.sceneRect().isEmpty() else None)
+        
+        self._zoom_panel.move(10, 10)
+        self._zoom_panel.show();
 
     # -- public API -----------------------------------------------------------
     def set_brush(self, px: int) -> None:
@@ -640,6 +666,13 @@ class ManualCanvas(QGraphicsView):
             super().wheelEvent(event)
 
     def mousePressEvent(self, ev) -> None:
+        if ev.button() == Qt.MiddleButton:
+            self._panning = True
+            self._pan_start = ev.pos()
+            self.viewport().setCursor(Qt.ClosedHandCursor)
+            ev.accept()
+            return
+
         if self._mask_arr is None:
             super().mousePressEvent(ev)
             return
@@ -690,6 +723,14 @@ class ManualCanvas(QGraphicsView):
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev) -> None:
+        if self._panning and self._pan_start is not None:
+            delta = ev.pos() - self._pan_start
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            self._pan_start = ev.pos()
+            ev.accept()
+            return
+            
         if self._drawing and self._last_pt is not None:
             sp = self.mapToScene(ev.pos())
             self._draw(self._last_pt, sp)
@@ -699,6 +740,13 @@ class ManualCanvas(QGraphicsView):
         super().mouseMoveEvent(ev)
 
     def mouseReleaseEvent(self, ev) -> None:
+        if ev.button() == Qt.MiddleButton and self._panning:
+            self._panning = False
+            self._pan_start = None
+            self._update_cursor()
+            ev.accept()
+            return
+            
         if ev.button() == Qt.LeftButton and self._drawing:
             self._drawing = False
             self._last_pt = None
