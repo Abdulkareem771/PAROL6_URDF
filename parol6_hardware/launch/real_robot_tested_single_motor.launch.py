@@ -169,8 +169,8 @@ def generate_launch_description():
     # NODE 5: rviz2
     # =====================================================================
     rviz_config_file = os.path.join(
-        get_package_share_directory("parol6_moveit_config"),
-        "rviz", "moveit.rviz"
+        get_package_share_directory("parol6_vision"),
+        "config", "vision_debug.rviz"
     )
     rviz_node = Node(
         package="rviz2",

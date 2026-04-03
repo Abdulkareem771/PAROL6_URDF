@@ -102,7 +102,7 @@ class MoveItController(Node):
         # consecutive IK solutions in compute_cartesian_path.  0.0 disables
         # the check entirely — that is the root cause of random elbow flips.
         # 5.0 rad is generous enough for PAROL6 but still blocks large flips.
-        
+        self.declare_parameter('cartesian_jump_threshold', 5.0)
         
         # Process offsets
         self.declare_parameter('approach_distance', 0.15)  # 15cm: weld surface ~z=0.045m → approach at z=0.195m (inside workspace)
