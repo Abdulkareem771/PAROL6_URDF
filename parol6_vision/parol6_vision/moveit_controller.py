@@ -404,11 +404,10 @@ class MoveItController(Node):
             path, start_state_traj=approach_traj
         )
         if weld_traj:
-            # Densify: TOTG compresses 188 IK waypoints to ~46 trajectory pts.
-            # The JointTrajectoryController spline-interpolates between these
-            # in joint space, which doesn't preserve Cartesian linearity.
-            # Densify back to ~50 Hz to keep the spline close to the circle.
-            self._densify_cartesian_trajectory(weld_traj, max_segment_dt=0.02)
+            # Densify logic removed: MoveIt's TOTG points are already optimized!
+            # The JointTrajectoryController natively uses cubic splines to execute them smoothly.
+            # Manually forcing linear densification caused jitter/shaking on real hardware.
+            pass
         if not weld_traj:
             if self.enable_joint_waypoint_fallback:
                 self.get_logger().warn("Falling back to joint-space waypoint execution")

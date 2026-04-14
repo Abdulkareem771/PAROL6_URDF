@@ -1,19 +1,19 @@
 joint_limits:
   joint_L1:
     has_velocity_limits: true
-    max_velocity: 3.0  # Conservative: ~40% of 7.85 rad/s theoretical max
+    max_velocity: 0.60  # Match firmware 0.65 rad/s (fixed clipping)
     has_acceleration_limits: true
-    max_acceleration: 2.0  # Prevents excessive mechanical stress on gearbox
+    max_acceleration: 0.6  # Prevent J1 jerk
   joint_L2:
     has_velocity_limits: true
-    max_velocity: 0.5  # Match firmware 0.5 rad/s
+    max_velocity: 0.40  # Match firmware 0.5 rad/s
     has_acceleration_limits: true
-    max_acceleration: 0.5
+    max_acceleration: 0.40
   joint_L3:
     has_velocity_limits: true
-    max_velocity: 0.8  # Match firmware 0.8 rad/s
+    max_velocity: 0.40  # Match firmware 0.6 rad/s (fixed clipping)
     has_acceleration_limits: true
-    max_acceleration: 0.8
+    max_acceleration: 0.40
   joint_L4:
     has_velocity_limits: true
     max_velocity: 1.5  # Match firmware 1.5 rad/s

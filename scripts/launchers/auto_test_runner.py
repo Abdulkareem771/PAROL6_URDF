@@ -188,7 +188,7 @@ class AutoTestRunner(Node):
         
         # Center of reachable test area for XY-plane patterns (tabletop):
         # Shifted outwards (+X) and low (+Z) to draw on the ground plane
-        cx, cy, cz = 0.29, 0.0, 0.005
+        cx, cy, cz = 0.27, 0.0, 0.15
         points = []
 
         if shape == 'Straight':

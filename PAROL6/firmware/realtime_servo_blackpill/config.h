@@ -247,9 +247,9 @@ static const int ENCODER_DIR_SIGN[NUM_MOTORS] = { 1, 1, 1, 1, 1, 1 };
 #define FEEDBACK_FREQUENCY_HZ 50
 #define FEEDBACK_PERIOD_MS    (1000 / FEEDBACK_FREQUENCY_HZ)
 
-static const float Kp[NUM_MOTORS] = { 2.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f };
+static const float Kp[NUM_MOTORS] = { 3.0f, 2.0f, 2.0f, 2.0f, 2.0f, 2.0f };
 static const float Kd[NUM_MOTORS] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 0.5f, 0.5f, 0.6f, 1.5f, 1.5f, 1.5f };
+static const float MAX_JOINT_VELOCITIES[NUM_MOTORS] = { 0.6f, 0.4f, 0.4f, 1.5f, 1.5f, 1.5f };
 
 #define VELOCITY_DEADBAND       0.02f
 #define POSITION_ERROR_LIMIT    0.5f
