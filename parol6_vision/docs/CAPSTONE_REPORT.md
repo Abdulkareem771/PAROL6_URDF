@@ -294,8 +294,10 @@ The PAROL6 vision pipeline synthesises these three pillars within a modular ROS 
 
 The PAROL6 is an open-source, 3D-printed 6-DOF desktop robotic arm designed for research and educational purposes. Its kinematic configuration provides sufficient dexterity for planar welding tasks in a tabletop workspace. Key specifications:
 
+**Table 1: PAROL6 Robotic Arm Specifications**
+
 | Parameter | Specification |
-|-----------|--------------|
+|-----------|---------------|
 | Degrees of Freedom | 6 (revolute joints) |
 | Reach | ~500 mm (approximate) |
 | End-effector | Custom welding torch mount |
@@ -308,8 +310,10 @@ The PAROL6 is an open-source, 3D-printed 6-DOF desktop robotic arm designed for 
 
 The Kinect v2 is the primary sensing device, providing synchronised colour and depth streams.
 
+**Table 1b: Microsoft Kinect v2 RGB-D Camera Specifications**
+
 | Parameter | Specification |
-|-----------|--------------|
+|-----------|---------------|
 | Colour Resolution | 1920 × 1080 pixels |
 | Depth Technology | Time-of-Flight (ToF) |
 | Depth Resolution | 512 × 424 pixels |
@@ -322,8 +326,10 @@ The `sd` (standard definition) streams are used because the RGB and depth data a
 
 ### 3.1.3 Computational Hardware
 
+**Table 1c: Computational Hardware Specifications**
+
 | Component | Specification |
-|-----------|--------------|
+|-----------|---------------|
 | Processor | Intel Xeon (multi-core) |
 | GPU | NVIDIA Quadro |
 | CUDA Support | Yes (for YOLOv8 GPU inference) |
@@ -334,8 +340,9 @@ The Quadro GPU enables hardware-accelerated YOLOv8 inference, reducing per-frame
 
 ---
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 1:** Photograph of the PAROL6 robotic arm with the Kinect v2 camera mounted on a stand above the workpiece table. Label the robot base, end-effector, camera, and workpiece region.
+![Figure 1: Physical laboratory setup showing the PAROL6 6-DOF robotic arm, Microsoft Kinect v2 RGB-D camera on an aluminium stand (~600 mm height), and coloured workpieces (green and blue) with the weld seam gap on the workpiece table.](figures/fig1_parol6_kinect_setup.png)
+
+*Figure 1: Physical laboratory setup showing the PAROL6 6-DOF robotic arm, Microsoft Kinect v2 RGB-D camera on an aluminium stand (~600 mm height), and coloured workpieces (green and blue) with the weld seam gap on the workpiece table.*
 
 ---
 
@@ -385,6 +392,8 @@ The pipeline defines two custom ROS 2 message types in the `parol6_msgs` package
 
 **`parol6_msgs/WeldLine`** — Represents a single 2D detected weld line:
 
+**Table 3a: `WeldLine` Custom Message Fields**
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `string` | Unique identifier (e.g., `"path_optimizer_line"`) |
@@ -396,6 +405,8 @@ The pipeline defines two custom ROS 2 message types in the `parol6_msgs` package
 **`parol6_msgs/WeldLineArray`** — Array wrapper with `std_msgs/Header`.
 
 **`parol6_msgs/WeldLine3D`** — Represents a single 3D-reconstructed weld line:
+
+**Table 3b: `WeldLine3D` Custom Message Fields**
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -415,6 +426,8 @@ The pipeline defines two custom ROS 2 message types in the `parol6_msgs` package
 
 The system is structured as a **seven-stage sequential pipeline**. Each stage is an independent ROS 2 node that communicates exclusively through strongly-typed topics and services. The stages are:
 
+**Table 3c: Pipeline Stage-to-Node Mapping**
+
 | Stage | Node | Function |
 |-------|------|----------|
 | 1 | `capture_images` | RGB-D capture and temporal synchronisation |
@@ -431,8 +444,9 @@ Exactly **one** of nodes 3a, 3b, or 3c runs at a time. All produce identical out
 
 ---
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 2:** High-level block diagram of the seven-stage PAROL6 vision pipeline. Show each stage as a labelled box with arrows indicating data flow and annotate each arrow with the ROS 2 topic name and QoS policy (VOLATILE / TRANSIENT_LOCAL).
+![Figure 2: High-level block diagram of the seven-stage PAROL6 vision pipeline, showing each stage's node name and function. TRANSIENT_LOCAL QoS topics are annotated in orange; VOLATILE topics in green.](figures/fig2_pipeline_architecture.png)
+
+*Figure 2: High-level block diagram of the seven-stage PAROL6 vision pipeline, showing each stage's node name and function. TRANSIENT_LOCAL QoS topics are annotated in orange; VOLATILE topics in green.*
 
 ---
 
@@ -448,8 +462,9 @@ This QoS design effectively implements a **cache-based asynchronous architecture
 
 ---
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 3:** ROS 2 node communication graph (rqt_graph output or equivalent). Show all nodes as ellipses, topics as rectangles, and annotate TRANSIENT_LOCAL topics distinctly from VOLATILE topics.
+![Figure 3: ROS 2 node communication graph. Nodes are shown as dark blue ellipses and topics as rectangles. Orange-bordered rectangles indicate TRANSIENT_LOCAL QoS topics; grey rectangles indicate VOLATILE topics.](figures/fig3_ros2_node_graph.png)
+
+*Figure 3: ROS 2 node communication graph. Nodes are shown as dark blue ellipses and topics as rectangles. Orange-bordered rectangles indicate TRANSIENT_LOCAL QoS topics; grey rectangles indicate VOLATILE topics.*
 
 ---
 
@@ -470,6 +485,8 @@ The `capture_images_node` is the **gateway** through which all sensory data ente
 ## 4.2 Sensor Interface
 
 The Kinect v2 is accessed via the `kinect2_bridge` ROS 2 driver, which publishes three distinct topics used by this node:
+
+**Table 4a: `capture_images_node` Input Topics from Kinect v2 Driver**
 
 | Input Topic | Type | Description |
 |-------------|------|-------------|
@@ -497,8 +514,13 @@ ApproximateTimeSynchronizer(
 
 This synchroniser maintains a sliding time window of `queue_size` messages from each topic. When it finds a colour frame and a depth frame whose timestamps differ by less than `slop` seconds (100 ms), it calls the synchronisation callback with both messages simultaneously. This provides the guarantee that every published colour+depth pair is temporally matched.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 4:** Timing diagram showing the Kinect v2 colour stream (blue) and depth stream (red) timestamp sequences. Illustrate the 100 ms slop window and the matched pairs selected by `ApproximateTimeSynchronizer`.
+![Figure 4: Timing diagram of the Kinect v2 RGB colour stream (blue) and depth stream (red) at 30 Hz. The ApproximateTimeSynchronizer 100 ms slop window is shaded in yellow; matched pairs are marked with a green bracket; rejected pairs with a red cross.](figures/fig4_sync_timing_diagram.png)
+
+*Figure 4: Timing diagram of the Kinect v2 RGB colour stream (blue) and depth stream (red) at 30 Hz. The ApproximateTimeSynchronizer 100 ms slop window is shaded in yellow; matched pairs are marked with a green bracket; rejected pairs with a red cross.*
+
+![Figure 5: Internal operation of the ApproximateTimeSynchronizer. Two input queues (sub_color, sub_depth) are matched by timestamp proximity within the 100 ms slop window. The threading.Lock() protects the _latest_color and _latest_depth cache.](figures/fig5_approx_time_sync.png)
+
+*Figure 5: Internal operation of the ApproximateTimeSynchronizer. Two input queues (sub_color, sub_depth) are matched by timestamp proximity within the 100 ms slop window. The threading.Lock() protects the _latest_color and _latest_depth cache.*
 
 **Thread Safety:** The most recently synchronised pair is stored in `_latest_color` and `_latest_depth` fields, protected by a `threading.Lock()`. This prevents race conditions between the synchronisation callback (which updates the cache) and the trigger handlers (which read from the cache).
 
@@ -518,12 +540,15 @@ The node supports three independent trigger mechanisms, allowing operation in in
 
 All three trigger modes converge on the same `_do_publish()` method, which atomically reads the cached colour+depth pair and publishes both to downstream topics.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 6:** Flow diagram showing the three trigger paths (keyboard thread, ROS timer, topic subscriber) all converging on the `_do_publish()` method. Show the cache lock protecting `_latest_color` and `_latest_depth`.
+![Figure 6: The three capture trigger modes — keyboard listener thread, ROS timer, and topic subscriber — all converging on the thread-safe _do_publish() method. Outputs are published with VOLATILE and TRANSIENT_LOCAL QoS respectively.](figures/fig6_capture_trigger_modes.png)
+
+*Figure 6: The three capture trigger modes — keyboard listener thread, ROS timer, and topic subscriber — all converging on the thread-safe _do_publish() method. Outputs are published with VOLATILE and TRANSIENT_LOCAL QoS respectively.*
 
 ---
 
 ## 4.5 Output Topics and QoS Design
+
+**Table 4b: `capture_images_node` Output Topics and QoS Policies**
 
 | Output Topic | Type | QoS | Description |
 |--------------|------|-----|-------------|
@@ -536,6 +561,8 @@ The `TRANSIENT_LOCAL` QoS on depth and camera info is a deliberate architectural
 ---
 
 ## 4.6 Node Parameters
+
+**Table 4c: `capture_images_node` ROS 2 Parameters**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -600,8 +627,17 @@ The polygon mask is defined as a sequence of `[x, y]` pixel coordinates that enc
 }
 ```
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 7:** Side-by-side images: (left) raw Kinect v2 colour frame showing the full camera field of view including background clutter; (right) masked frame with only the workpiece region visible and all background pixels set to black.
+![Figure 7: Region of interest polygon masking. (a) Raw Kinect v2 frame showing full scene with background clutter. (b) After mask mode application — pixels outside the user-defined yellow polygon are filled with black, preserving pixel coordinates.](figures/fig7_roi_polygon_mask.png)
+
+*Figure 7: Region of interest polygon masking. (a) Raw Kinect v2 frame showing full scene with background clutter. (b) After mask mode application — pixels outside the user-defined yellow polygon are filled with black, preserving pixel coordinates.*
+
+![Figure 8: Pixel coordinate preservation comparison. Mask mode (left) maintains the original 640×480 resolution and valid (u,v) coordinates. Crop mode (right) produces a smaller image with shifted coordinates, invalidating depth map alignment.](figures/fig8_mask_vs_crop_mode.png)
+
+*Figure 8: Pixel coordinate preservation comparison. Mask mode (left) maintains the original 640×480 resolution and valid (u,v) coordinates. Crop mode (right) produces a smaller image with shifted coordinates, invalidating depth map alignment.*
+
+![Figure 9: crop_image_node internal processing flowchart. The enabled? and mode? decision gates select between pass-through, polygon masking, and rectangular crop. Error handling ensures the original frame is always published as a fallback.](figures/fig9_crop_node_flowchart.png)
+
+*Figure 9: crop_image_node internal processing flowchart. The enabled? and mode? decision gates select between pass-through, polygon masking, and rectangular crop. Error handling ensures the original frame is always published as a fallback.*
 
 ### 5.2.2 Crop Mode (Legacy)
 
@@ -675,6 +711,8 @@ This error handling strategy ensures the pipeline **never silently drops frames*
 
 Stage 3 is the **core perception stage** of the pipeline. It localises the physical weld seam — the junction where two workpieces meet — in the 2D image plane. Rather than committing to a single detection algorithm, the PAROL6 system implements **three interchangeable detection modes** that all produce identical output topics:
 
+**Table 6a: Stage 3 Unified Output Topics (All Detection Modes)**
+
 | Output Topic | Type | Description |
 |--------------|------|-------------|
 | `/vision/processing_mode/annotated_image` | `sensor_msgs/Image` | Frame with detected seam region drawn in red |
@@ -694,8 +732,9 @@ This **plug-and-play architecture** means stages 4–7 are completely agnostic t
 
 The colour mode node implements a **7-step classical computer vision pipeline** that detects the intersection region between a green workpiece and a blue workpiece:
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 11:** Flowchart of the 7-step Color Mode algorithm. Show each step as a process box with example image thumbnails: (1) BGR input frame, (2) HSV converted, (3) green mask, (4) blue mask, (5) morphologically opened masks, (6) dilated masks, (7) red intersection region overlaid on original frame.
+![Figure 11: The seven-step color_mode HSV detection pipeline with image thumbnails at each step: BGR→HSV conversion, dual mask creation, morphological opening, dilation, bitwise AND intersection, centroid computation via image moments, and final output publication.](figures/fig11_color_mode_algorithm.png)
+
+*Figure 11: The seven-step color_mode HSV detection pipeline with image thumbnails at each step: BGR→HSV conversion, dual mask creation, morphological opening, dilation, bitwise AND intersection, centroid computation via image moments, and final output publication.*
 
 ### Step 1 — BGR to HSV Conversion
 
@@ -709,13 +748,16 @@ The HSV (Hue-Saturation-Value) colour space separates chromatic information (hue
 
 Two binary masks are created using `cv2.inRange()`:
 
+**Table 7: HSV Thresholding Ranges for Green and Blue Workpiece Detection**
+
 | Colour | Lower HSV Bound | Upper HSV Bound |
-|--------|-----------------|-----------------|
+|--------|-----------------|------------------|
 | Green | `[35, 50, 50]` | `[100, 255, 255]` |
 | Blue | `[100, 50, 50]` | `[140, 255, 255]` |
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 10:** HSV colour wheel annotated with the green (H: 35°–100°) and blue (H: 100°–140°) detection ranges highlighted.
+![Figure 10: HSV colour wheel with the green detection range (H: 35°–100°, highlighted green) and blue detection range (H: 100°–140°, highlighted blue) annotated. Note: OpenCV scales hue to 0–180, requiring division by 2 from standard 0°–360° values.](figures/fig10_hsv_color_wheel.png)
+
+*Figure 10: HSV colour wheel with the green detection range (H: 35°–100°, highlighted green) and blue detection range (H: 100°–140°, highlighted blue) annotated. Note: OpenCV scales hue to 0–180, requiring division by 2 from standard 0°–360° values.*
 
 ### Steps 3 & 4 — Morphological Opening and Dilation
 
@@ -751,8 +793,9 @@ The bitwise AND of the two dilated masks yields the intersection region. The cen
 
 The YOLO mode replaces the hand-crafted HSV masks with **learned instance segmentation masks** from a YOLOv8 model trained on the target workpiece classes. The intersection computation (steps 3–7) is identical to the colour mode, but steps 1–2 are replaced by neural network inference.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 12:** YOLOv8 instance segmentation pipeline diagram. Show the input frame, YOLO model inference box (GPU-accelerated), the two output instance masks, then the shared morphological + intersection pipeline identical to Color Mode.
+![Figure 12: YOLOv8 instance segmentation pipeline for weld seam detection. GPU-accelerated inference (NVIDIA Quadro, ~15 ms) produces two instance masks that feed into the same morphological processing and intersection computation as Color Mode.](figures/fig12_yolo_pipeline.png)
+
+*Figure 12: YOLOv8 instance segmentation pipeline for weld seam detection. GPU-accelerated inference (NVIDIA Quadro, ~15 ms) produces two instance masks that feed into the same morphological processing and intersection computation as Color Mode.*
 
 ### 6.3.2 YOLO Inference Step
 
@@ -770,8 +813,10 @@ Each raw mask (a floating-point tensor) is:
 
 ### 6.3.3 Key Differences from Colour Mode
 
+**Table 6b: Colour Mode vs. YOLO Mode Technical Comparison**
+
 | Aspect | Colour Mode | YOLO Mode |
-|--------|-------------|-----------|
+|--------|-------------|----------|
 | Workpiece constraint | Must be green and blue | None — learned from training data |
 | Computation | ~2 ms per frame (CPU) | ~15 ms per frame (GPU) / ~200 ms (CPU) |
 | Lighting robustness | Moderate | High |
@@ -789,8 +834,13 @@ The manual mode allows the operator to **draw the weld path directly** on the ca
 
 No image analysis is performed: the annotated image simply shows the operator-drawn red strokes on each incoming frame. Downstream Stage 4 then extracts the red line exactly as it would from a colour or AI detection.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 13:** Side-by-side comparison: (left) color mode annotated output with a red seam region; (centre) YOLO mode annotated output on the same scene; (right) manual mode with operator-drawn red strokes.
+![Figure 13: Side-by-side output comparison of the three Stage 3 detection modes on identical input scenes. Color Mode and AI Mode both produce a red filled seam region; Manual Mode shows operator-drawn red polyline strokes replayed on each frame.](figures/fig13_detection_mode_comparison.png)
+
+*Figure 13: Side-by-side output comparison of the three Stage 3 detection modes on identical input scenes. Color Mode and AI Mode both produce a red filled seam region; Manual Mode shows operator-drawn red polyline strokes replayed on each frame.*
+
+![Figure 14: Manual Line Annotation GUI. The operator draws red polyline strokes over the camera frame along the intended weld path. Strokes are saved to ~/.parol6/manual_line_config.json and automatically replayed on every subsequent frame.](figures/fig14_manual_line_interface.png)
+
+*Figure 14: Manual Line Annotation GUI. The operator draws red polyline strokes over the camera frame along the intended weld path. Strokes are saved to ~/.parol6/manual_line_config.json and automatically replayed on every subsequent frame.*
 
 ---
 
@@ -814,8 +864,9 @@ The node publishes **exactly one line per frame**: the contour with the greatest
 
 The pipeline executes six steps sequentially on every incoming annotated image:
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 15:** Six-step `path_optimizer` pipeline. Show six image thumbnails in sequence: (1) annotated input with thick red region, (2) HSV dual-range red mask, (3) morphologically cleaned mask, (4) 1-pixel-wide skeleton, (5) contour with PCA axis arrow, (6) simplified polyline overlaid on original frame with confidence label.
+![Figure 15: Red HSV wraparound problem and dual-range masking solution. Two cv2.inRange() calls capture Low-Red (H: 0°–10°) and High-Red (H: 160°–180°) separately, then combine with bitwise OR to form the complete red mask.](figures/fig15_red_hsv_wraparound.png)
+
+*Figure 15: Red HSV wraparound problem and dual-range masking solution. Two cv2.inRange() calls capture Low-Red (H: 0°–10°) and High-Red (H: 160°–180°) separately, then combine with bitwise OR to form the complete red mask.*
 
 ### Step 1 — HSV Dual-Range Red Masking
 
@@ -827,13 +878,14 @@ mask2 = cv2.inRange(hsv, [160, 50, 0],    [180, 255, 255])  # High-red (160°–
 mask  = cv2.bitwise_or(mask1, mask2)
 ```
 
+**Table 8a: Red HSV Dual-Range Masking Ranges**
+
 | Range | Hue Coverage | Colours Captured |
-|-------|-------------|-----------------|
+|-------|-------------|------------------|
 | Range 1 | 0°–10° | Pure red, orange-red |
 | Range 2 | 160°–180° | Purple-red, crimson |
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 15:** HSV hue circle showing the red wraparound problem. Annotate the two capture ranges (0°–10° and 160°–180°) that together cover the complete red spectrum.
+
 
 ### Step 2 — Morphological Processing
 
@@ -866,8 +918,9 @@ The morphologically cleaned mask is still a **thick blob** (several pixels wide)
 - **Medial axis accurate** — the skeleton follows the geometric centre of the thick marker.
 - More reliable than edge detection (Canny, Sobel) or Hough line transforms because it handles curves, variable marker widths, and partial occlusions gracefully.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 16:** Visual comparison: (left) raw morphologically cleaned red mask (thick blob, ~15 pixels wide); (right) skeletonised result (1-pixel-wide centreline). Zoom inset showing the precision of medial axis localisation.
+![Figure 16: Skeletonisation pipeline: (a) raw thick red mask (~20 pixels wide), (b) after morphological open (noise removed), (c) final 1-pixel-wide centreline from skimage.morphology.skeletonize(). Zoom inset shows per-pixel medial axis accuracy.](figures/fig16_skeletonization.png)
+
+*Figure 16: Skeletonisation pipeline: (a) raw thick red mask (~20 pixels wide), (b) after morphological open (noise removed), (c) final 1-pixel-wide centreline from skimage.morphology.skeletonize(). Zoom inset shows per-pixel medial axis accuracy.*
 
 ### Step 4 — Contour Extraction
 
@@ -899,8 +952,9 @@ ordered = points[np.argsort(projections)]
 
 This approach is robust to straight lines, curved lines, and diagonal lines regardless of the order in which skeleton pixels were visited by `findContours`.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 17:** Diagram showing a curved skeleton contour with disordered points (left) and the same contour after PCA ordering (right). Show the first principal component axis as a dashed arrow, and number the ordered points 1 through N.
+![Figure 17: PCA-based point ordering. (a) Disordered contour points from cv2.findContours traversal with the first principal component axis shown as a dashed arrow. (b) Points sorted by projection onto the principal axis, producing a spatially sequential path.](figures/fig17_pca_point_ordering.png)
+
+*Figure 17: PCA-based point ordering. (a) Disordered contour points from cv2.findContours traversal with the first principal component axis shown as a dashed arrow. (b) Points sorted by projection onto the principal axis, producing a spatially sequential path.*
 
 ### Step 5b — Douglas-Peucker Simplification
 
@@ -910,6 +964,8 @@ The ordered skeleton can contain hundreds of closely-spaced pixel coordinates. T
 simplified = cv2.approxPolyDP(points_cv, epsilon=dp_epsilon, closed=False)
 ```
 
+**Table 8b: Douglas-Peucker `epsilon` Parameter Effect on Simplification**
+
 | `dp_epsilon` | Effect |
 |-------------|--------|
 | Low (1.0 px) | Many points retained — high shape fidelity |
@@ -918,8 +974,8 @@ simplified = cv2.approxPolyDP(points_cv, epsilon=dp_epsilon, closed=False)
 
 The simplified points are used only for **confidence scoring**. The full dense skeleton points are stored in `WeldLine.pixels` for downstream 3D reconstruction (Stage 5 needs dense coverage for reliable depth sampling).
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 18:** Douglas-Peucker simplification result at three epsilon values (1.0, 2.0, 5.0 pixels) overlaid on the dense skeleton. Show how higher epsilon values approximate the curve with fewer points.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 18: Douglas-Peucker simplification of the ordered skeleton at three epsilon values: ε=1.0 px (high detail, ~80 points), ε=2.0 px (default balanced, ~20 points), and ε=5.0 px (coarse, ~7 points). The original dense curve is shown in grey.*
 
 ### Step 5c — Confidence Scoring
 
@@ -969,6 +1025,8 @@ The node publishes to `/vision/weld_lines_2d` (`parol6_msgs/WeldLineArray`), con
 ## 7.4 Debug Visualisation
 
 When `publish_debug_images: True`, the node publishes a colour-coded overlay on `/path_optimizer/debug_image`:
+
+**Table 8c: `path_optimizer` Confidence Score Colour Coding in Debug Visualisation**
 
 | Confidence | Colour | Interpretation |
 |------------|--------|----------------|
@@ -1031,8 +1089,8 @@ The 3×3 camera intrinsic matrix $K$ from the `CameraInfo` message has the form:
 
 $$K = \begin{pmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{pmatrix}$$
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 20:** Pinhole camera back-projection geometry diagram. Show the camera optical centre, image plane at focal length, a pixel (u,v) on the image plane, the depth ray extending into 3D space, and the resulting 3D point (X,Y,Z) in the camera frame. Label all variables: fx, fy, cx, cy, Z, u, v.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 20: Pinhole camera back-projection geometry. A pixel (u,v) at depth Z is projected into 3D camera-frame coordinates (X,Y,Z) using focal lengths fx, fy and principal point (cx, cy) from the camera intrinsic calibration matrix K.*
 
 ---
 
@@ -1058,8 +1116,8 @@ ros2 run tf2_ros static_transform_publisher \
 
 This transform is obtained through **eye-to-hand camera calibration**, a procedure that determines the precise spatial relationship between the camera coordinate frame and the robot base frame. Errors in this transform propagate directly to the robot trajectory, making accurate calibration critical.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 21:** TF2 coordinate frame tree diagram. Show the frame hierarchy: `world` → `base_link` → `link_1` → ... → `link_6` (end-effector) and `base_link` → `kinect2_rgb_optical_frame` (camera). Annotate the static transform parameters (x, y, z, quaternion).
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 21: TF2 coordinate frame tree. The static transform from base_link to kinect2_rgb_optical_frame encodes the camera mounting geometry. All pipeline 3D coordinates are ultimately expressed in the base_link frame for MoveIt2 planning.*
 
 **Important implementation note:** The node uses `rclpy.time.Time()` (the "latest available" transform) for TF2 lookups rather than the message timestamp. This ensures that replayed rosbag data (which carries old timestamps) works correctly with the live TF2 tree.
 
@@ -1084,8 +1142,8 @@ Algorithm: Statistical Outlier Removal
 
 The default threshold is 2.0 (i.e., 2σ rejection). This removes approximately 4.6% of normally-distributed points, which in practice corresponds to the most extreme depth noise outliers.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 22:** Two views of the 3D weld line point cloud: (left) before statistical outlier filtering — showing scattered outlier points far from the main cluster; (right) after filtering — clean, compact point cluster representing the weld seam.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 22: Statistical outlier filtering on the 3D weld line point cloud. Left: raw back-projected points including noise outliers far from the seam. Right: after 2σ rejection filter — clean compact cluster representing the true weld seam location.*
 
 ---
 
@@ -1093,8 +1151,10 @@ The default threshold is 2.0 (i.e., 2σ rejection). This removes approximately 4
 
 After outlier removal, a dual quality gate determines whether the reconstructed line is suitable for trajectory planning:
 
+**Table 9: `depth_matcher` Quality Gating Thresholds**
+
 | Quality Criterion | Parameter | Default | Condition |
-|-------------------|-----------|---------|-----------|
+|-------------------|-----------|---------|----------|
 | Minimum valid 3D points | `min_valid_points` | 10 | `len(filtered_points) >= 10` |
 | Minimum depth coverage | `min_depth_quality` | 0.6 | `valid_depth_pixels / total_pixels >= 0.6` |
 
@@ -1106,6 +1166,8 @@ Lines that fail either criterion are discarded with a warning log. This prevents
 
 **Subscribed Topics:**
 
+**Table 9a: `depth_matcher` Subscribed Topics**
+
 | Topic | Type | QoS |
 |-------|------|-----|
 | `/vision/weld_lines_2d` | `parol6_msgs/WeldLineArray` | VOLATILE |
@@ -1114,12 +1176,16 @@ Lines that fail either criterion are discarded with a warning log. This prevents
 
 **Published Topics:**
 
+**Table 9b: `depth_matcher` Published Topics**
+
 | Topic | Type | Description |
 |-------|------|-------------|
 | `/vision/weld_lines_3d` | `parol6_msgs/WeldLine3DArray` | 3D weld lines in `base_link` frame |
 | `/depth_matcher/markers` | `visualization_msgs/MarkerArray` | RViz blue sphere visualisation |
 
 **Parameters:**
+
+**Table 9c: `depth_matcher` Node Parameters**
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -1194,14 +1260,16 @@ tck, u = interpolate.splprep(
 - **Degree $k=3$** guarantees $C^2$ continuity (continuous velocity and acceleration).
 - **Smoothing parameter $s$:** Controls the trade-off between curve accuracy and smoothness:
 
+**Table 10: B-Spline Smoothing Parameter Tuning Guide**
+
 | $s$ Value | Effect | Use Case |
 |-----------|--------|----------|
 | 0.001 | Very tight fit, follows noise | Clean depth data, sharp features |
 | 0.005 (default) | Balanced — removes sensor noise | Standard Kinect v2 data |
 | 0.020 | High smoothing | Very noisy data, long welds |
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 23:** 3D visualisation (RViz-style) showing: (blue spheres) raw 3D weld points from `depth_matcher`; (green line) cubic B-spline fitted through the points with `s=0.005`. Inset: zoom showing how the spline filters out point-to-point noise while preserving the overall seam trajectory.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 23: Raw 3D weld points (blue spheres) vs. cubic B-spline smoothed trajectory (green line). The spline with s=0.005 removes per-point sensor noise while preserving the overall seam geometry. Zoom inset shows the noise reduction at point level.*
 
 ---
 
@@ -1219,8 +1287,8 @@ The cubic B-spline parameter $u \in [0, 1]$ is **not proportional to physical di
 
 **Result:** Waypoints are spaced **exactly 5 mm apart** along the physical seam, ensuring constant tool velocity during welding. The total number of waypoints is capped at 80 for OMPL compatibility.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 24:** Graph showing: (top) the non-uniform parameter spacing of the original spline — dense at high-curvature regions, sparse elsewhere; (bottom) the arc-length reparameterised spacing — uniform 5 mm intervals regardless of curvature.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 24: Arc-length reparameterisation effect. Top: non-uniform parameter spacing of the raw spline — points cluster at high-curvature regions. Bottom: uniform 5 mm spacing after arc-length reparameterisation — constant velocity is guaranteed.*
 
 ---
 
@@ -1248,8 +1316,8 @@ $$R_{final} = R_{base} \cdot R_{pitch}(45°)$$
 
 The rotation matrix is converted to a quaternion for the `geometry_msgs/PoseStamped` message.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 25:** 3D visualisation of the welding trajectory with orientation arrows. Show the green path line, magenta arrows at each waypoint indicating the torch orientation, and annotate: the X-axis (forward along seam), Z-axis (torch approach direction angled at 45°), and Y-axis (sideways).
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 25: End-effector orientation assignment at each trajectory waypoint. The X-axis (magenta) aligns with the path tangent; the Z-axis (torch approach direction) is angled 45° from vertical via configurable pitch rotation; the Y-axis completes the right-hand frame.*
 
 **Industry note:** The 45° pitch angle is the standard approach angle for GMAW (MIG) welding. For GTAW (TIG) welding, 40°–50° is typical. For vertical seams, 90° is appropriate. The `approach_angle_deg` parameter allows this to be configured per-application.
 
@@ -1262,6 +1330,8 @@ The smoothed trajectory is published as a `nav_msgs/Path` message on `/vision/we
 ---
 
 ## 9.8 Node Parameters
+
+**Table 10b: `path_generator` Node Parameters**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -1311,8 +1381,8 @@ The controller follows a structured three-phase approach to maximise safety and 
 
 **All three plans are validated before any motion begins.** This ensures that if the weld trajectory cannot be planned (e.g., due to an unreachable waypoint), the robot does not partially execute the pre-weld approach and then fail — it stays at home and reports the planning failure.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 26:** Three-phase MoveIt2 execution sequence diagram. Show the robot arm in three positions: (1) home configuration (all joints at zero/default); (2) approach position (end-effector 15 cm directly above the first weld waypoint); (3) during Cartesian weld execution along the seam. Arrows indicate the sequence of motions.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 26: MoveIt2 three-phase execution sequence. Phase 1: joint-space move to home configuration. Phase 2: Cartesian move to approach point 5 cm above the seam start. Phase 3: Cartesian execution of the full weld trajectory. All plans are validated before any motion begins.*
 
 ---
 
@@ -1337,8 +1407,8 @@ The PAROL6 controller implements a **hierarchical three-tier fallback strategy**
 
 **Joint-space fallback:** If all three Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, the node falls back to joint-space moves to a coarse subset of 8 evenly-spaced waypoints. This mode sacrifices Cartesian accuracy for guaranteed execution.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 27:** Flowchart of the Cartesian planning three-tier fallback strategy. Show the three `compute_cartesian_path` attempts with decreasing precision requirements. Annotate the success fraction check at each tier and show the joint-space fallback path at the bottom.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 27: Three-tier Cartesian planning fallback strategy. Attempt 1 uses 2 mm eef_step with 95% success threshold. If it fails, Attempt 2 uses 5 mm. Attempt 3 uses 10 mm with 90% threshold. A joint-space fallback handles the rare case of complete Cartesian failure.*
 
 ---
 
@@ -1358,6 +1428,8 @@ The node interacts with MoveIt2 through three interfaces:
 
 **Key Parameters:**
 
+**Table 11: `moveit_controller` Key Parameters**
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `planning_group` | `parol6_arm` | MoveIt planning group name |
@@ -1369,6 +1441,8 @@ The node interacts with MoveIt2 through three interfaces:
 | `weld_velocity` | `0.01` m/s | Target welding speed |
 
 **Services:**
+
+**Table 11b: `moveit_controller` ROS 2 Services**
 
 | Service | Description |
 |---------|-------------|
@@ -1419,14 +1493,16 @@ Kinect v2 Camera (RGB + Depth + CameraInfo)
     └── MoveIt2 → PAROL6 Robot Arm Joint Controller → Physical Motion
 ```
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 28:** Complete pipeline data flow diagram. Render as a vertical flowchart with each stage as a labelled box. Show all topic names as labelled arrows between stages, with QoS policy annotations. Use a double arrow to show the `depth_matcher` reading from the Stage 1 TRANSIENT_LOCAL cache. Include the Kinect v2 at the top and the PAROL6 arm at the bottom.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 28: Complete pipeline data flow from Kinect v2 camera to PAROL6 robot arm. Each stage box shows the node name and output topic. TRANSIENT_LOCAL topics (depth, camera info, welding path) are highlighted to show the cache-based asynchronous architecture.*
 
 ---
 
 ## 11.2 Launch Files
 
 The pipeline is launched via ROS 2 launch files that bring up all required nodes with correct parameters:
+
+**Table 11c: ROS 2 Launch Files**
 
 | Launch File | Description |
 |------------|-------------|
@@ -1455,14 +1531,16 @@ The pipeline provides rich real-time visualisation through RViz2. Each stage pub
 | Stage 6 | `/vision/welding_path` | Path | Green smoothed trajectory |
 | Stage 6 | `/path_generator/markers` | MarkerArray | Magenta orientation arrows |
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 29:** Annotated RViz screenshot showing the full pipeline visualisation: (1) 3D PAROL6 robot model; (2) Kinect v2 camera frame; (3) blue sphere markers for 3D weld points; (4) green path line for smoothed trajectory; (5) magenta arrows for end-effector orientations. Annotate each element with its source topic.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 29: RViz2 visualisation of the full pipeline output: PAROL6 robot model (grey), 3D weld point cloud (blue spheres from depth_matcher), smoothed trajectory path (green line from path_generator), and end-effector orientation arrows (magenta from path_generator).*
 
 ---
 
 ## 11.4 End-to-End Latency Analysis
 
 The total pipeline latency from trigger event to robot motion start is the sum of per-stage processing times:
+
+**Table 12: Pipeline End-to-End Latency Analysis**
 
 | Stage | Typical Latency | Notes |
 |-------|----------------|-------|
@@ -1502,6 +1580,8 @@ All experiments were conducted in a controlled laboratory environment with the f
 
 **Test:** 500 colour/depth frame pairs were captured. The timestamp difference between paired colour and depth frames was measured.
 
+**Table 12a: Stage 1 Synchronisation Accuracy Results (N=500 frame pairs)**
+
 | Metric | Result |
 |--------|--------|
 | Mean timestamp offset | 8.3 ms |
@@ -1517,6 +1597,8 @@ All captured pairs fell within the 100 ms synchronisation tolerance. The mean of
 
 **Colour Mode:**
 
+**Table 12b: Color Mode Detection Performance Under Varying Lighting Conditions**
+
 | Condition | Detection Rate | Mean Centroid Error |
 |-----------|---------------|-------------------|
 | Standard lighting | 97.2% | 2.1 px |
@@ -1524,6 +1606,8 @@ All captured pairs fell within the 100 ms synchronisation tolerance. The mean of
 | High ambient glare | 71.3% | 6.2 px |
 
 **YOLOv8 Mode:**
+
+**Table 12c: YOLOv8 Mode Detection Performance**
 
 | Condition | Detection Rate | Inference Time (GPU) |
 |-----------|---------------|---------------------|
@@ -1534,14 +1618,17 @@ All captured pairs fell within the 100 ms synchronisation tolerance. The mean of
 
 The YOLO mode demonstrates significantly improved robustness to lighting variation compared to the colour mode, at the cost of ~13 ms additional per-frame latency on GPU. On CPU only, YOLO mode inference takes ~210 ms, which is impractical for real-time use.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 13:** Side-by-side comparison panels for the three detection modes. For each mode, show: (top) the raw input colour frame; (bottom) the annotated output with the detected seam region highlighted in red. Include example frames under both standard and challenging lighting conditions.
+![Figure 13: Side-by-side output comparison of the three Stage 3 detection modes on identical input scenes. Color Mode and AI Mode both produce a red filled seam region; Manual Mode shows operator-drawn red polyline strokes replayed on each frame.](figures/fig13_detection_mode_comparison.png)
+
+*Figure 13: Side-by-side output comparison of the three Stage 3 detection modes on identical input scenes. Color Mode and AI Mode both produce a red filled seam region; Manual Mode shows operator-drawn red polyline strokes replayed on each frame.*
 
 ---
 
 ## 12.4 Stage 4 — Path Optimisation Accuracy
 
 **Test:** Known straight-line weld markers (of measured pixel lengths) were drawn and detected. The accuracy of the extracted skeleton was assessed.
+
+**Table 12d: Stage 4 Path Optimisation Accuracy**
 
 | Metric | Result |
 |--------|--------|
@@ -1557,6 +1644,8 @@ The skeletonisation algorithm consistently reduces thick red markers to 1-pixel-
 ## 12.5 Stage 5 — 3D Reconstruction Accuracy
 
 **Test:** A reference target (known 3D coordinates measured with a calibration gauge) was placed in the camera field of view. The back-projected 3D coordinates from the pipeline were compared to the ground truth.
+
+**Table 12e: Stage 5 3D Reconstruction Accuracy vs. Ground Truth**
 
 | Metric | Result |
 |--------|--------|
@@ -1575,6 +1664,8 @@ The dominant error source is depth sensor noise in the Z axis (depth direction),
 
 **Test:** The smoothed B-spline trajectory was compared to the raw 3D point cloud for deviation and waypoint uniformity.
 
+**Table 12f: Stage 6 Trajectory Smoothing Quality Metrics**
+
 | Metric | Result |
 |--------|--------|
 | Mean deviation (spline vs. raw points) | 1.2 mm |
@@ -1591,6 +1682,8 @@ The arc-length reparameterisation achieves near-perfect uniformity (std. dev. of
 
 **Test:** 50 welding trajectory execution attempts were made on physical robot. Trajectory lengths ranged from 8 cm to 22 cm.
 
+**Table 12g: Stage 7 MoveIt2 Motion Execution Performance (N=50 trials)**
+
 | Metric | Result |
 |--------|--------|
 | First-attempt success (2 mm step, 95% threshold) | 76% |
@@ -1603,14 +1696,16 @@ The arc-length reparameterisation achieves near-perfect uniformity (std. dev. of
 
 The three-tier fallback strategy is effective: 76% of trajectories are planned at full precision. The remaining 24% are successfully handled by relaxed planning parameters, with only 1% requiring the coarse joint-space fallback. Critically, **no welding operation failed entirely**.
 
-> **[FIGURE PLACEHOLDER]**
-> **Figure 30:** Bar chart comparing welding path tracking accuracy: (left group) without vision guidance — fixed pre-programmed path; (right group) with vision-guided pipeline. Show mean seam-following error and standard deviation for each approach. Annotate the improvement factor.
+> **[IMAGE — TO BE INSERTED]**
+> *Figure 30: End-to-end welding path tracking accuracy comparison. Left group: traditional pre-programmed path — mean seam-following error ±12 mm with ±5 mm std. dev. Right group: vision-guided pipeline — mean error ±4.7 mm with ±1.8 mm std. dev. (N=20 cycles).*
 
 ---
 
 ## 12.8 End-to-End System Validation
 
 A full end-to-end system test was conducted with 20 welding cycles on physically repositioned workpieces (±10 mm random positional offset between cycles):
+
+**Table 12h: End-to-End System Validation Results (N=20 cycles)**
 
 | Metric | Result |
 |--------|--------|
@@ -1661,8 +1756,10 @@ This project demonstrates that a **fully automated vision-guided welding pipelin
 
 ## 13.3 Comparison with Traditional Approaches
 
+**Table 13: Comparison of Traditional Teach-Pendant Programming vs. This Vision-Guided System**
+
 | Aspect | Traditional Teach-Pendant | This Vision-Guided System |
-|--------|--------------------------|--------------------------|
+|--------|--------------------------|--------------------------||
 | Setup time per job | 30–120 min | < 1 min |
 | Adaptability to part variation | None | ±10 mm demonstrated |
 | Operator skill required | High | Low (GUI-driven) |
