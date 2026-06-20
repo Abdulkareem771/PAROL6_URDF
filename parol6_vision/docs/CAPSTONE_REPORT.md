@@ -974,8 +974,9 @@ simplified = cv2.approxPolyDP(points_cv, epsilon=dp_epsilon, closed=False)
 
 The simplified points are used only for **confidence scoring**. The full dense skeleton points are stored in `WeldLine.pixels` for downstream 3D reconstruction (Stage 5 needs dense coverage for reliable depth sampling).
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 18: Douglas-Peucker simplification of the ordered skeleton at three epsilon values: ε=1.0 px (high detail, ~80 points), ε=2.0 px (default balanced, ~20 points), and ε=5.0 px (coarse, ~7 points). The original dense curve is shown in grey.*
+![Figure 18: Douglas-Peucker simplification of the ordered skeleton at three epsilon values: ε=1.0 px (high detail, ~80 points), ε=2.0 px (default balanced, ~20 points), and ε=5.0 px (coarse, ~7 points). The original dense curve is shown in grey.](figures/fig18_douglas_peucker.png)
+
+*Figure 18: Douglas-Peucker simplification of the ordered skeleton at three epsilon values: ε=1.0 px (high detail, ~80 points), ε=2.0 px (default balanced, ~20 points), and ε=5.0 px (coarse, ~7 points). The original dense curve is shown in grey.*
 
 ### Step 5c — Confidence Scoring
 
@@ -993,6 +994,10 @@ where $\Delta\theta$ are the angular differences between consecutive simplified 
 
 **Final Confidence:**
 $$\text{confidence} = \text{retention} \times \text{continuity}$$
+
+![Figure 19: path_optimizer confidence scoring pipeline. Retention ratio measures how much of the original red signal survived morphological processing. Continuity score penalises angular variance between Douglas-Peucker segments. Final confidence = retention × continuity.](figures/fig19_confidence_scoring.png)
+
+*Figure 19: path_optimizer confidence scoring pipeline. Retention ratio measures how much of the original red signal survived morphological processing. Continuity score penalises angular variance between Douglas-Peucker segments. Final confidence = retention × continuity.*
 
 ### Step 6 — Best-Line Selection
 
@@ -1089,8 +1094,9 @@ The 3×3 camera intrinsic matrix $K$ from the `CameraInfo` message has the form:
 
 $$K = \begin{pmatrix} f_x & 0 & c_x \\ 0 & f_y & c_y \\ 0 & 0 & 1 \end{pmatrix}$$
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 20: Pinhole camera back-projection geometry. A pixel (u,v) at depth Z is projected into 3D camera-frame coordinates (X,Y,Z) using focal lengths fx, fy and principal point (cx, cy) from the camera intrinsic calibration matrix K.*
+![Figure 20: Pinhole camera back-projection geometry. A pixel (u,v) at depth Z is projected into 3D camera-frame coordinates (X,Y,Z) using focal lengths fx, fy and principal point (cx, cy) from the camera intrinsic calibration matrix K.](figures/fig20_pinhole_backprojection.png)
+
+*Figure 20: Pinhole camera back-projection geometry. A pixel (u,v) at depth Z is projected into 3D camera-frame coordinates (X,Y,Z) using focal lengths fx, fy and principal point (cx, cy) from the camera intrinsic calibration matrix K.*
 
 ---
 
@@ -1116,8 +1122,9 @@ ros2 run tf2_ros static_transform_publisher \
 
 This transform is obtained through **eye-to-hand camera calibration**, a procedure that determines the precise spatial relationship between the camera coordinate frame and the robot base frame. Errors in this transform propagate directly to the robot trajectory, making accurate calibration critical.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 21: TF2 coordinate frame tree. The static transform from base_link to kinect2_rgb_optical_frame encodes the camera mounting geometry. All pipeline 3D coordinates are ultimately expressed in the base_link frame for MoveIt2 planning.*
+![Figure 21: TF2 coordinate frame tree. The static transform from base_link to kinect2_rgb_optical_frame encodes the camera mounting geometry. All pipeline 3D coordinates are ultimately expressed in the base_link frame for MoveIt2 planning.](figures/fig21_tf2_frame_tree.png)
+
+*Figure 21: TF2 coordinate frame tree. The static transform from base_link to kinect2_rgb_optical_frame encodes the camera mounting geometry. All pipeline 3D coordinates are ultimately expressed in the base_link frame for MoveIt2 planning.*
 
 **Important implementation note:** The node uses `rclpy.time.Time()` (the "latest available" transform) for TF2 lookups rather than the message timestamp. This ensures that replayed rosbag data (which carries old timestamps) works correctly with the live TF2 tree.
 
@@ -1142,8 +1149,9 @@ Algorithm: Statistical Outlier Removal
 
 The default threshold is 2.0 (i.e., 2σ rejection). This removes approximately 4.6% of normally-distributed points, which in practice corresponds to the most extreme depth noise outliers.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 22: Statistical outlier filtering on the 3D weld line point cloud. Left: raw back-projected points including noise outliers far from the seam. Right: after 2σ rejection filter — clean compact cluster representing the true weld seam location.*
+![Figure 22: Statistical outlier filtering on the 3D weld line point cloud. Left: raw back-projected points including noise outliers far from the seam. Right: after 2σ rejection filter — clean compact cluster representing the true weld seam location.](figures/fig22_outlier_filtering.png)
+
+*Figure 22: Statistical outlier filtering on the 3D weld line point cloud. Left: raw back-projected points including noise outliers far from the seam. Right: after 2σ rejection filter — clean compact cluster representing the true weld seam location.*
 
 ---
 
@@ -1268,8 +1276,9 @@ tck, u = interpolate.splprep(
 | 0.005 (default) | Balanced — removes sensor noise | Standard Kinect v2 data |
 | 0.020 | High smoothing | Very noisy data, long welds |
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 23: Raw 3D weld points (blue spheres) vs. cubic B-spline smoothed trajectory (green line). The spline with s=0.005 removes per-point sensor noise while preserving the overall seam geometry. Zoom inset shows the noise reduction at point level.*
+![Figure 23: Raw 3D weld points (blue spheres) vs. cubic B-spline smoothed trajectory (green line). The spline with s=0.005 removes per-point sensor noise while preserving the overall seam geometry. Zoom inset shows the noise reduction at point level.](figures/fig23_bspline_smoothing.png)
+
+*Figure 23: Raw 3D weld points (blue spheres) vs. cubic B-spline smoothed trajectory (green line). The spline with s=0.005 removes per-point sensor noise while preserving the overall seam geometry. Zoom inset shows the noise reduction at point level.*
 
 ---
 
@@ -1287,8 +1296,9 @@ The cubic B-spline parameter $u \in [0, 1]$ is **not proportional to physical di
 
 **Result:** Waypoints are spaced **exactly 5 mm apart** along the physical seam, ensuring constant tool velocity during welding. The total number of waypoints is capped at 80 for OMPL compatibility.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 24: Arc-length reparameterisation effect. Top: non-uniform parameter spacing of the raw spline — points cluster at high-curvature regions. Bottom: uniform 5 mm spacing after arc-length reparameterisation — constant velocity is guaranteed.*
+![Figure 24: Arc-length reparameterisation effect. Top: non-uniform parameter spacing of the raw spline — points cluster at high-curvature regions. Bottom: uniform 5 mm spacing after arc-length reparameterisation — constant velocity is guaranteed.](figures/fig24_arc_length_resampling.png)
+
+*Figure 24: Arc-length reparameterisation effect. Top: non-uniform parameter spacing of the raw spline — points cluster at high-curvature regions. Bottom: uniform 5 mm spacing after arc-length reparameterisation — constant velocity is guaranteed.*
 
 ---
 
@@ -1316,8 +1326,9 @@ $$R_{final} = R_{base} \cdot R_{pitch}(45°)$$
 
 The rotation matrix is converted to a quaternion for the `geometry_msgs/PoseStamped` message.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 25: End-effector orientation assignment at each trajectory waypoint. The X-axis (magenta) aligns with the path tangent; the Z-axis (torch approach direction) is angled 45° from vertical via configurable pitch rotation; the Y-axis completes the right-hand frame.*
+![Figure 25: End-effector orientation assignment at each trajectory waypoint. The X-axis (red) aligns with the path tangent; the Z-axis (torch approach direction) is angled 45° from vertical via configurable pitch rotation; the Y-axis (blue) completes the right-hand frame.](figures/fig25_orientation_assignment.png)
+
+*Figure 25: End-effector orientation assignment at each trajectory waypoint. The X-axis (red) aligns with the path tangent; the Z-axis (torch approach direction) is angled 45° from vertical via configurable pitch rotation; the Y-axis (blue) completes the right-hand frame.*
 
 **Industry note:** The 45° pitch angle is the standard approach angle for GMAW (MIG) welding. For GTAW (TIG) welding, 40°–50° is typical. For vertical seams, 90° is appropriate. The `approach_angle_deg` parameter allows this to be configured per-application.
 
@@ -1381,8 +1392,9 @@ The controller follows a structured three-phase approach to maximise safety and 
 
 **All three plans are validated before any motion begins.** This ensures that if the weld trajectory cannot be planned (e.g., due to an unreachable waypoint), the robot does not partially execute the pre-weld approach and then fail — it stays at home and reports the planning failure.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 26: MoveIt2 three-phase execution sequence. Phase 1: joint-space move to home configuration. Phase 2: Cartesian move to approach point 5 cm above the seam start. Phase 3: Cartesian execution of the full weld trajectory. All plans are validated before any motion begins.*
+![Figure 26: MoveIt2 three-phase execution sequence. Phase 1: joint-space move to home configuration. Phase 2: Cartesian move to approach point 5 cm above the seam start. Phase 3: Cartesian execution of the full weld trajectory. All plans are validated before any motion begins.](figures/fig26_moveit_execution_phases.png)
+
+*Figure 26: MoveIt2 three-phase execution sequence. Phase 1: joint-space move to home configuration. Phase 2: Cartesian move to approach point 5 cm above the seam start. Phase 3: Cartesian execution of the full weld trajectory. All plans are validated before any motion begins.*
 
 ---
 
@@ -1407,8 +1419,9 @@ The PAROL6 controller implements a **hierarchical three-tier fallback strategy**
 
 **Joint-space fallback:** If all three Cartesian attempts fail and `enable_joint_waypoint_fallback` is `True`, the node falls back to joint-space moves to a coarse subset of 8 evenly-spaced waypoints. This mode sacrifices Cartesian accuracy for guaranteed execution.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 27: Three-tier Cartesian planning fallback strategy. Attempt 1 uses 2 mm eef_step with 95% success threshold. If it fails, Attempt 2 uses 5 mm. Attempt 3 uses 10 mm with 90% threshold. A joint-space fallback handles the rare case of complete Cartesian failure.*
+![Figure 27: Three-tier Cartesian planning fallback strategy. Attempt 1 uses 2 mm eef_step with 95% success threshold. If it fails, Attempt 2 uses 5 mm. Attempt 3 uses 10 mm with 90% threshold. A joint-space fallback handles the rare case of complete Cartesian failure.](figures/fig27_cartesian_fallback.png)
+
+*Figure 27: Three-tier Cartesian planning fallback strategy. Attempt 1 uses 2 mm eef_step with 95% success threshold. If it fails, Attempt 2 uses 5 mm. Attempt 3 uses 10 mm with 90% threshold. A joint-space fallback handles the rare case of complete Cartesian failure.*
 
 ---
 
@@ -1493,8 +1506,9 @@ Kinect v2 Camera (RGB + Depth + CameraInfo)
     └── MoveIt2 → PAROL6 Robot Arm Joint Controller → Physical Motion
 ```
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 28: Complete pipeline data flow from Kinect v2 camera to PAROL6 robot arm. Each stage box shows the node name and output topic. TRANSIENT_LOCAL topics (depth, camera info, welding path) are highlighted to show the cache-based asynchronous architecture.*
+![Figure 28: Complete pipeline data flow from Kinect v2 camera to PAROL6 robot arm. Each stage box shows the node name and output topic. TRANSIENT_LOCAL topics (orange) implement the cache-based asynchronous architecture decoupling capture from processing timing.](figures/fig28_complete_dataflow.png)
+
+*Figure 28: Complete pipeline data flow from Kinect v2 camera to PAROL6 robot arm. Each stage box shows the node name and output topic. TRANSIENT_LOCAL topics (orange) implement the cache-based asynchronous architecture decoupling capture from processing timing.*
 
 ---
 
@@ -1531,8 +1545,9 @@ The pipeline provides rich real-time visualisation through RViz2. Each stage pub
 | Stage 6 | `/vision/welding_path` | Path | Green smoothed trajectory |
 | Stage 6 | `/path_generator/markers` | MarkerArray | Magenta orientation arrows |
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 29: RViz2 visualisation of the full pipeline output: PAROL6 robot model (grey), 3D weld point cloud (blue spheres from depth_matcher), smoothed trajectory path (green line from path_generator), and end-effector orientation arrows (magenta from path_generator).*
+![Figure 29: RViz2 visualisation of the full pipeline output: PAROL6 robot model (grey), 3D weld point cloud (blue spheres from depth_matcher), smoothed trajectory path (green line from path_generator), and end-effector orientation arrows (magenta from path_generator).](figures/fig29_rviz_visualization.png)
+
+*Figure 29: RViz2 visualisation of the full pipeline output: PAROL6 robot model (grey), 3D weld point cloud (blue spheres from depth_matcher), smoothed trajectory path (green line from path_generator), and end-effector orientation arrows (magenta from path_generator).*
 
 ---
 
@@ -1696,8 +1711,9 @@ The arc-length reparameterisation achieves near-perfect uniformity (std. dev. of
 
 The three-tier fallback strategy is effective: 76% of trajectories are planned at full precision. The remaining 24% are successfully handled by relaxed planning parameters, with only 1% requiring the coarse joint-space fallback. Critically, **no welding operation failed entirely**.
 
-> **[IMAGE — TO BE INSERTED]**
-> *Figure 30: End-to-end welding path tracking accuracy comparison. Left group: traditional pre-programmed path — mean seam-following error ±12 mm with ±5 mm std. dev. Right group: vision-guided pipeline — mean error ±4.7 mm with ±1.8 mm std. dev. (N=20 cycles).*
+![Figure 30: Weld path tracking accuracy comparison (N=20 cycles). Traditional teach-pendant: 12.0 ± 5.0 mm mean seam-following error (exceeds 8 mm typical weld bead width). Vision-guided pipeline: 4.7 ± 1.8 mm — a 2.6× improvement.](figures/fig30_weld_quality_comparison.png)
+
+*Figure 30: Weld path tracking accuracy comparison (N=20 cycles). Traditional teach-pendant: 12.0 ± 5.0 mm mean seam-following error (exceeds 8 mm typical weld bead width). Vision-guided pipeline: 4.7 ± 1.8 mm — a 2.6× improvement.*
 
 ---
 
